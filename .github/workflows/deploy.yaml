@@ -63,6 +63,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: FERALFILE_DISPLAY
+          projectName: ${{ vars.CLOUDFLARE_PROJECT_ID }}
           directory: out
           wranglerVersion: "3"
