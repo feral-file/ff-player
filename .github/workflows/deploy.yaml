@@ -47,14 +47,6 @@ jobs:
           echo "NEXT_PUBLIC_WEBSOCKET_API_KEY=${{ secrets[matrix.environment].WEBSOCKET_API_KEY }}" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_BRANCH_KEY=${{ secrets[matrix.environment].BRANCH_KEY }}" >> $GITHUB_ENV
 
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ${{ github.workspace }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
-          restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
-
       - name: Build Next.js app
         run: npm run build
 
@@ -63,6 +55,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: FERALFILE_DISPLAY
+          projectName: ${{ vars.CLOUDFLARE_PROJECT_ID }}
           directory: out
           wranglerVersion: "3"

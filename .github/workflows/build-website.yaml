@@ -1,0 +1,51 @@
+name: Build
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  build:
+    name: Build
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        environment: [Development, Production]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: ./package-lock.json
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Set environment variables for ${{ matrix.environment }}
+      run: |
+        echo "NEXT_PUBLIC_INDEXER_MAINNET_URL=${{ vars[matrix.environment].INDEXER_MAINNET_URL }}" >> $GITHUB_ENV
+        echo "NEXT_PUBLIC_AUTONOMY_IPFS_PREFIX=${{ vars[matrix.environment].AUTONOMY_IPFS_PREFIX }}" >> $GITHUB_ENV
+        echo "NEXT_PUBLIC_FERAL_FILE_ASSET_URL=${{ vars[matrix.environment].FERAL_FILE_ASSET_URL }}" >> $GITHUB_ENV
+        echo "NEXT_PUBLIC_API_URL=${{ vars[matrix.environment].API_URL }}" >> $GITHUB_ENV
+        echo "NEXT_PUBLIC_PUB_DOC_URL=${{ vars[matrix.environment].PUB_DOC_URL }}" >> $GITHUB_ENV
+        echo "NEXT_PUBLIC_WEBSOCKET_URL=${{ vars[matrix.environment].WEBSOCKET_URL }}" >> $GITHUB_ENV
+        echo "NEXT_PUBLIC_WEBSOCKET_API_KEY=${{ secrets[matrix.environment].WEBSOCKET_API_KEY }}" >> $GITHUB_ENV
+        echo "NEXT_PUBLIC_BRANCH_KEY=${{ secrets[matrix.environment].BRANCH_KEY }}" >> $GITHUB_ENV
+
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ${{ github.workspace }}/.next/cache
+        key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
+        restore-keys: |
+          ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
+
+    - name: Build Next.js app
+      run: npm run build
