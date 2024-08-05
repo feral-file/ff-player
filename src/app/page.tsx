@@ -1,19 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import QRCode from 'qrcode.react';
+import { useState, useEffect, useRef } from 'react';
 import { detect, BrowserInfo } from 'detect-browser';
 import useWebSocket from '../utils/WebSocketManager';
 import DeviceManager from '../utils/DeviceManager';
-import Image from 'next/image';
+import { Artwork } from '@/utils/types';
+import ArtworkPlayer from './artworkPlayer';
+import HomePage from './homePage';
+import ArtworkService from '@/utils/ArtworkService';
+
 
 const Home = () => {
   const [branchLink, setBranchLink] = useState<string | null>(null);
   const [deviceName, setDeviceName] = useState<string>('Unknown Device');
-  const { locationID, topicID } = useWebSocket(
+  const { locationID, topicID, castInfo } = useWebSocket(
     `${process.env.NEXT_PUBLIC_WEBSOCKET_URL!}/api/connection`,
     process.env.NEXT_PUBLIC_API_KEY!
   );
+  const artworkService = useRef(new ArtworkService());
+  const [artworks, setArtworks] = useState<Artwork[]>([]);
+  const [currentArtwork, setCurrentArtwork] = useState<Artwork | null>(null);
+  const [castStatus, setCastStatus] = useState<boolean | null>(false);
+  const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -28,6 +36,7 @@ const Home = () => {
     if (locationID && topicID) {
       DeviceManager.setLocationId(locationID);
       DeviceManager.setTopicId(topicID);
+      DeviceManager.setName(deviceName);
       const generateBranchLink = async () => {
         const url = await DeviceManager.getOrGenerateBranchLink();
         setBranchLink(url);
@@ -36,36 +45,73 @@ const Home = () => {
     }
   }, [locationID, topicID]);
 
-  return (
-    <div style={{ display: 'flex', height: '100vh' }}>
-      <div style={{ flex: 1, backgroundColor: '#2C2C2C', color: '#FFFFFF', padding: '2rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-        <div>
-          <Image src="/feralfile-logo.png" alt="Feral File Logo" width={200} height={50} />
-          <h1>Display exhibitions and your collection to any screen</h1>
-          <p>Open the Feral File app on your phone to sync your collection.</p>
-          <h2>Display Name: {deviceName}</h2>
-        </div>
-        <div>
-          {branchLink ? (
-            <div>
-              <h2>Scan the QR code to connect:</h2>
-              <QRCode value={branchLink} size={256} />
-              <p>{branchLink}</p>
-            </div>
-          ) : (
-            <p>Connecting...</p>
-          )}
-        </div>
-        <div>
-          <p>Aleksandra Jovanić</p>
-          <p>The Space in Between</p>
-        </div>
+  useEffect(() => {
+
+    const fetchArtworks = async () => {
+      try {
+        const artworks = await artworkService.current.getFeaturedArtworks();
+        if (artworks) {
+          setArtworks(artworks);
+          setCurrentArtwork(artworks[0]);
+        }
+      } catch (error) {
+        console.log('Error fetching artworks:', error);
+
+      }
+    };
+    fetchArtworks();
+  }, []);
+
+  useEffect(() => {
+    if (artworks.length > 0) {
+      let index = 0;
+      const interval = setInterval(() => {
+        setCurrentArtwork(artworks[index]);
+        index = (index + 1) % artworks.length;
+      }, 60 * 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [artworks]);
+
+  useEffect(() => {
+    if (castInfo) {
+      const getNftTokens = async (ids: string[]) => {
+        if (!ids.length) {
+          return;
+        }
+        try {
+          const data = await artworkService.current.queryTokens(ids);
+          if (data) {
+            setCastPreviewURL(data.tokens[0].asset.metadata.project.latest.previewURL);
+            setCastStatus(true);
+          }
+        } catch (error) {
+          console.log('Error fetching NFT tokens:', error);
+        }
+
+      };
+      console.log('Cast Info:', castInfo);
+      const assetIds = castInfo.artworks.map((artwork: any) => artwork.token.id);
+      getNftTokens(assetIds);
+    }
+  }, [castInfo]);
+
+  if (castStatus) {
+    return (
+      <div style={{width: '100vw', height: '100vh'}}>
+        <ArtworkPlayer previewURL={castPreviewURL!} />
       </div>
-      <div style={{ flex: 2, position: 'relative' }}>
-        <Image src="/artwork.png" alt="Artwork" layout="fill" objectFit="cover" />
-      </div>
-    </div>
-  );
+    )
+  } else {
+    return (
+      <HomePage
+        deviceName={deviceName!}
+        branchLink={branchLink!}
+        currentArtwork={currentArtwork!}
+      />
+    );
+  }
 };
 
 export default Home;

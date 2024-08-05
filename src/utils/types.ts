@@ -9,27 +9,26 @@ export interface CommandRequest {
 }
 
 export enum CastCommand {
-  connect = 'connect',
-  disconnect = 'disconnect',
-  checkStatus = 'checkStatus',
-  castListArtwork = 'castListArtwork',
-  cancelCasting = 'cancelCasting',
-  appendArtworkToCastingList = 'appendArtworkToCastingList',
-  pauseCasting = 'pauseCasting',
-  resumeCasting = 'resumeCasting',
-  nextArtwork = 'nextArtwork',
-  previousArtwork = 'previousArtwork',
-  moveToArtwork = 'moveToArtwork',
-  updateDuration = 'updateDuration',
-  castExhibition = 'castExhibition',
-  rotate = 'rotate',
-  tapGesture = 'tapGesture',
-  dragGesture = 'dragGesture',
-  setCursorOffset = 'setCursorOffset',
-  getCursorOffset = 'getCursorOffset',
-  sendKeyboardEvent = 'sendKeyboardEvent',
+  connect = "connect",
+  disconnect = "disconnect",
+  checkStatus = "checkStatus",
+  castListArtwork = "castListArtwork",
+  cancelCasting = "cancelCasting",
+  appendArtworkToCastingList = "appendArtworkToCastingList",
+  pauseCasting = "pauseCasting",
+  resumeCasting = "resumeCasting",
+  nextArtwork = "nextArtwork",
+  previousArtwork = "previousArtwork",
+  moveToArtwork = "moveToArtwork",
+  updateDuration = "updateDuration",
+  castExhibition = "castExhibition",
+  rotate = "rotate",
+  tapGesture = "tapGesture",
+  dragGesture = "dragGesture",
+  setCursorOffset = "setCursorOffset",
+  getCursorOffset = "getCursorOffset",
+  sendKeyboardEvent = "sendKeyboardEvent",
 }
-
 
 export interface Reply {
   ok: boolean;
@@ -124,3 +123,65 @@ export interface KeyboardEventRequest {
   code: number;
 }
 export interface KeyboardEventReply extends Reply {}
+
+export interface Artwork {
+  id: string;
+  seriesID: string;
+  index: number;
+  previewURI: string;
+  thumbnailURI: string;
+  series?: Series;
+  artistAlias?: string;
+}
+
+export interface Series {
+  id: string;
+  previewFile?: FileInfo;
+  artistID: string;
+  title: string;
+}
+
+export interface FileInfo {
+  filename: string;
+  uri: string;
+  status: string;
+  version: string;
+}
+
+export enum SeriesPreviewHTMLTag {
+  iframe = "iframe",
+  iframePDF = "iframePDF",
+  object = "object",
+  video = "video",
+  audio = "audio",
+  image = "image",
+  stream = "stream",
+}
+
+export const FileUseIframe: string[] = ["html", "text/html"];
+export const FileUseIframePDF: string[] = ["pdf", "application/pdf"];
+export const FileUseObject: string[] = ["txt"];
+export const FileUseVideo: string[] = [
+  "mp4",
+  "mov",
+  "wmv",
+  "quicktime",
+  "avi",
+  "webm",
+  "mkv",
+];
+export const FileUseAudio: string[] = ["mp3", "m4a", "wav", "wma", "aac"];
+export const FileUseImage: string[] = [
+  "png",
+  "jpg",
+  "jpeg",
+  "bmp",
+  "gif",
+  "svg",
+  "application/xml",
+];
+export const MIMETypeUseStream: string[] = ["application/x-mpegurl"];
+export const MIMETypeVideo = "video/*";
+export const MIMETypeAudio = "audio/*";
+export const MIMETypeImage = "image/*";
+export const MIMETypeObject = "text/csv";
