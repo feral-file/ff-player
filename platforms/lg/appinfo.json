@@ -1,0 +1,13 @@
+{
+  "id": "com.feralfile.display",
+  "version": "1.0.0",
+  "vendor": "Feral File",
+  "type": "web",
+  "main": "index.html",
+  "title": "Feral File Display",
+  "icon": "logo.png",
+  "appDescription": "Feral File Display",
+  "category": "media",
+  "largeIcon": "logo.png",
+  "iconColor": "#ffffff"
+}
