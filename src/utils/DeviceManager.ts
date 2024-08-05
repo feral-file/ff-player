@@ -60,10 +60,10 @@ class DeviceManager {
       return null;
     }
     return {
-      deviceId,
+      device_id: deviceId,
       locationId,
       topicId,
-      name: name || "",
+      device_name: name || "",
       platform: "web",
     };
   }
