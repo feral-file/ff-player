@@ -1,4 +1,4 @@
-name: Lint CSS
+name: Lint JS
 
 on:
   pull_request:
