@@ -26,4 +26,8 @@ Sentry.init({
       blockAllMedia: true,
     }),
   ],
+
+  environment: process.env.NEXT_PUBLIC_ENVIRONMENT || 'Local',
+
+  transport: Sentry.makeBrowserOfflineTransport(Sentry.makeFetchTransport),
 });
