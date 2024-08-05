@@ -38,7 +38,7 @@ jobs:
       - name: Replace URL in template and build
         run: |
           cd platforms/lg
-          envsubst < webos-app/index.html.tpl > index.html
+          envsubst < index.html.tpl > index.html
           ares-package .
 
       - name: Upload package
