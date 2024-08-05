@@ -2,19 +2,6 @@ node_modules
 .DS_Store
 .next
 .env.local
-.idea/*
 out
-platforms/samsung/build/*
-platforms/samsung/.idea/*
-platforms/samsung/android/*
-platforms/samsung/ios/*
-platforms/samsung/linux/*
-platforms/samsung/windows/*
-platforms/samsung/macos/*
-platforms/samsung/web/*
-platforms/samsung/.env
-platforms/samsung/.dart_tool/*
-
-platforms/samsung/.flutter-plugins-dependencies
-platforms/samsung/.flutter-plugins
-platforms/samsung/.vscode/*
+# Sentry Config File
+.env.sentry-build-plugin
