@@ -48,6 +48,8 @@ jobs:
           echo "NEXT_PUBLIC_BRANCH_KEY=${{ secrets[matrix.environment].BRANCH_KEY }}" >> $GITHUB_ENV
 
       - name: Build Next.js app
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: npm run build
 
       - name: Publish to Cloudflare Pages
