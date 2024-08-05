@@ -1,14 +1,14 @@
-import { v4 as uuidv4 } from 'uuid';
-import createBranchLink from './createBranchLink';
+import { v4 as uuidv4 } from "uuid";
+import createBranchLink from "./createBranchLink";
 
 class DeviceManager {
   static instance = new DeviceManager();
 
-  private readonly deviceIdKey = 'deviceId';
-  private readonly locationIdKey = 'locationId';
-  private readonly topicIdKey = 'topicId';
-  private readonly nameKey = 'name';
-  private readonly branchLinkKey = 'branchLink';
+  private readonly deviceIdKey = "deviceId";
+  private readonly locationIdKey = "locationId";
+  private readonly topicIdKey = "topicId";
+  private readonly nameKey = "name";
+  private readonly branchLinkKey = "branchLink";
 
   private getFromLocalStorage(key: string): string | null {
     return localStorage.getItem(key);
@@ -63,8 +63,8 @@ class DeviceManager {
       deviceId,
       locationId,
       topicId,
-      name: name || '',
-      platform: 'web'
+      name: name || "",
+      platform: "web",
     };
   }
 
@@ -101,8 +101,8 @@ class DeviceManager {
         return null;
       }
       const data = {
-        source: 'feralfile_display',
-        device: deviceInfo
+        source: "feralfile_display",
+        device: deviceInfo,
       };
       return createBranchLink(data);
     } catch (e) {
