@@ -151,7 +151,7 @@ class CanvasService {
     this.clientDeviceInfo = request.clientDevice;
     this.castInfo = {
       artworks: [],
-      deviceInfo, // Assign the website’s device info to castInfo
+      // deviceInfo, // Assign the website’s device info to castInfo
       startTime: Date.now(),
     };
     console.log("_connected device:", this.castInfo.deviceInfo);

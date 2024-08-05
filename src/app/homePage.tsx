@@ -4,8 +4,26 @@ import QRCode from "qrcode.react"
 import ArtworkPlayer from "./artworkPlayer"
 import { useEffect, useState } from "react"
 
+const STANDARD_HEIGHT = 1080;
+
+
 const HomePage = ({deviceName, branchLink, currentArtwork}: {deviceName: string, branchLink: string, currentArtwork: Artwork}) => {
   const [previewURL, setPreviewURL] = useState<string | null>(null);
+  const [screenRatio, setScreenRatio] = useState<number>(1);
+
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const resizeHandler = () => {
+        const height = window.innerHeight;
+        const ratio = height / STANDARD_HEIGHT;
+        setScreenRatio(ratio);
+      };
+
+      resizeHandler();
+
+    }
+  })
 
   useEffect(() => {
     const formatPreviewURL = (previewURI: string) => {
@@ -23,15 +41,15 @@ return (
   <div style={{ display: 'flex', height: '100vh' }}>
   <div style={{ flex: 1, backgroundColor: '#2C2C2C', color: '#FFFFFF', padding: '2rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
     <div>
-      <Image src="/feralfile-logo.svg" alt="Feral File Logo" width={288} height={23} />
-      <h1 style={{fontSize: 48, paddingTop: 80}}>Display exhibitions and your collection to any screen</h1>
-      <p style={{fontSize: 22, paddingTop: 40}}>Open the Feral File app on your phone to sync your collection.</p>
-      <h2 style={{fontSize: 22, fontWeight: 'bold', paddingTop: 40}}>Display Name: {deviceName}</h2>
+      <Image src="/feralfile-logo.svg" alt="Feral File Logo" width={288 * screenRatio} height={23 * screenRatio} />
+      <h1 style={{fontSize: 48 * screenRatio, paddingTop: 80 * screenRatio}}>Display exhibitions and your collection to any screen</h1>
+      <p style={{fontSize: 22 * screenRatio, paddingTop: 40 * screenRatio}}>Open the Feral File app on your phone to sync your collection.</p>
+      <h2 style={{fontSize: 22 * screenRatio, fontWeight: 'bold', paddingTop: 40 * screenRatio}}>Display Name: {deviceName}</h2>
     </div>
     <div>
       {branchLink ? (
-        <div style={{padding: 10, backgroundColor: 'white', width: 'fit-content'}}>
-          <QRCode value={branchLink} size={250} />
+        <div style={{padding: 10 * screenRatio, backgroundColor: 'white', width: 'fit-content'}}>
+          <QRCode value={branchLink} size={250 * screenRatio} />
         </div>
       ) : (
         <p>Connecting...</p>
