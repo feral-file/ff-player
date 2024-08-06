@@ -121,8 +121,11 @@ const Home = () => {
     }
   }, [castInfo]);
 
-  AppState.postMessage("loaded");
-  Rotate.postMessage("clockwise");
+  useEffect(() => {
+    (window as any).KeyEvent = {
+      handlePlatformEvent: KeyEvent.handlePlatformEvent,
+    };
+  }, []);
 
   useEffect(() => {
     if (currentIndex < 0) {
