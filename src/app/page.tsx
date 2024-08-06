@@ -102,6 +102,7 @@ const Home = () => {
 
   useEffect(() => {
     if (castInfo) {
+      console.log("Cast Command:", castInfo.castCommand);
       switch (castInfo.castCommand) {
         case CastCommand.castListArtwork: {
           setDisplayComingSoon(false); // Temporary display coming soon
