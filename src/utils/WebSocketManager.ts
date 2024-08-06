@@ -1,15 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import ReconnectingWebSocket from "reconnecting-websocket";
 import CanvasService from "./CanvasService";
-import { WebsocketEvent } from "./types";
+import { CastInfo } from "./types";
 
 const useWebSocket = (url: string, apiKey: string) => {
   const [locationID, setLocationID] = useState<string | null>(null);
   const [topicID, setTopicID] = useState<string | null>(null);
-  const [castInfo, setCastInfo] = useState<any | null>(null);
-  const [websocketEvent, setWebsocketEvent] = useState<
-    WebsocketEvent | undefined
-  >();
+  const [castInfo, setCastInfo] = useState<CastInfo | null>(null);
   const ws = useRef<ReconnectingWebSocket | null>(null);
   const canvasService = useRef(new CanvasService());
 
@@ -39,11 +36,9 @@ const useWebSocket = (url: string, apiKey: string) => {
           localStorage.setItem("topicID", data.message.topicID);
         } else {
           console.log("Received:", data);
-          const responseMessage = await canvasService.current.processMessage(
-            event
-          );
+          const responseMessage =
+            await canvasService.current.processMessage(event);
           setCastInfo(canvasService.current.getCastInfo());
-          setWebsocketEvent(canvasService.current.getWebsocketEvent());
           if (responseMessage) {
             ws.current?.send(JSON.stringify(responseMessage));
           }
@@ -68,7 +63,7 @@ const useWebSocket = (url: string, apiKey: string) => {
     };
   }, [url, apiKey]);
 
-  return { locationID, topicID, castInfo, websocketEvent };
+  return { locationID, topicID, castInfo };
 };
 
 export default useWebSocket;

@@ -33,7 +33,6 @@ const ArtworkPlayer = ({previewURL}: {previewURL: string}) => {
       try {
         const response = await fetch(previewURL, {method: 'HEAD'});
         const contentType = response.headers.get('Content-Type');
-        console.log('Content-Type:', contentType);
         compareToGetFileType(contentType!);
       } catch (error) {
         console.log('Error get content-type', error);
@@ -47,7 +46,7 @@ const ArtworkPlayer = ({previewURL}: {previewURL: string}) => {
   }, [previewURL])
 
   return (
-    <div style={{display: 'flex', width: '100%', height: '100%'}}>
+    <div style={{display: 'flex', width: '100%', height: '100%', backgroundColor: '#000000'}}>
       {previewType === null && (<img style={{width: '100%', height: '100%', objectFit: 'contain'}} src="/ff-loading.gif"></img>)}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (
         <img style={{width: '100%', height: '100%', objectFit: 'contain'}} src={previewURL} alt="Artwork" />)}

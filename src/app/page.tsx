@@ -6,24 +6,29 @@ import useWebSocket from "../utils/WebSocketManager";
 import DeviceManager from "../utils/DeviceManager";
 import {
   Artwork,
-  EventType,
+  CastCommand,
   PlayArtworkV2,
   PlaylistToken,
 } from "@/utils/types";
 import ArtworkPlayer from "./artworkPlayer";
 import HomePage from "./homePage";
+import OnboardingPage from "./onboardingPage";
 import ArtworkService from "@/utils/ArtworkService";
 import { getIndex } from "@/utils/Playlist";
+import ComingSoonPage from "./commingSoonPage";
 import { AppState, Rotate, KeyEvent } from "@/utils/platform";
+
+const STANDARD_HEIGHT = 1080;
 
 const Home = () => {
   const [branchLink, setBranchLink] = useState<string | null>(null);
   const [deviceName, setDeviceName] = useState<string>("Unknown Device");
-  const { locationID, topicID, castInfo, websocketEvent } = useWebSocket(
+  const { locationID, topicID, castInfo } = useWebSocket(
     `${process.env.NEXT_PUBLIC_WEBSOCKET_URL!}/api/connection`,
     process.env.NEXT_PUBLIC_API_KEY!
   );
   const artworkService = useRef(new ArtworkService());
+  const [screenRatio, setScreenRatio] = useState<number>(1);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [currentArtwork, setCurrentArtwork] = useState<Artwork | null>(null);
   const [castStatus, setCastStatus] = useState<boolean | null>(false);
@@ -31,6 +36,14 @@ const Home = () => {
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [playlist, setPlaylist] = useState<PlaylistToken[]>([]);
   const [startTime, setStartTime] = useState<number>(0);
+  const [displayComingSoon, setDisplayComingSoon] = useState<boolean>(false);
+  const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
+
+  const [startPlayArtworkTime, setStartPlayArtworkTime] = useState<number>(0);
+  const [endPlayArtworkTime, setEndPlayArtworkTime] = useState<number>(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
+    undefined
+  );
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -53,6 +66,18 @@ const Home = () => {
       generateBranchLink();
     }
   }, [locationID, topicID]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const resizeHandler = () => {
+        const height = window.innerHeight;
+        const ratio = height / STANDARD_HEIGHT;
+        setScreenRatio(ratio);
+      };
+
+      resizeHandler();
+    }
+  });
 
   useEffect(() => {
     const fetchArtworks = async () => {
@@ -83,41 +108,95 @@ const Home = () => {
 
   useEffect(() => {
     if (castInfo) {
-      const getNftTokens = async (ids: string[]) => {
-        if (!ids.length) {
-          return;
-        }
-        try {
-          const data = await artworkService.current.queryTokens(ids);
-          const artworks = castInfo?.artworks;
-          if (data) {
-            const previewData: Map<string, string> = new Map();
-            data.tokens.forEach((token: any) => {
-              previewData.set(
-                token.indexID,
-                token.asset.metadata.project.latest.previewURL
-              );
-            });
-            const updatedArtworks = artworks.map((artwork: any) => {
-              return {
-                ...artwork,
-                previewURL: previewData.get(artwork.token.id),
-              };
-            });
-            setPlaylist(updatedArtworks);
-            setStartTime(castInfo.startTime);
-            const i = getIndex(updatedArtworks, castInfo?.startTime);
-            setCurrentIndex(i);
+      console.log("--------------");
+      console.log("Cast Command:", castInfo);
+      console.log("--------------");
+
+      switch (castInfo.castCommand) {
+        case CastCommand.castListArtwork: {
+          setDisplayComingSoon(false); // Temporary display coming soon
+          setDisplayOnboarding(false);
+          const getNftTokens = async (ids: string[]) => {
+            if (!ids.length) {
+              return;
+            }
+            try {
+              const data = await artworkService.current.queryTokens(ids);
+              const artworks = castInfo?.artworks;
+              if (!artworks) {
+                return;
+              }
+
+              if (data) {
+                const previewData: Map<string, string> = new Map();
+                data.tokens.forEach((token: any) => {
+                  previewData.set(
+                    token.indexID,
+                    token.asset.metadata.project.latest.previewURL
+                  );
+                });
+                const updatedArtworks = artworks.map((artwork: any) => {
+                  return {
+                    ...artwork,
+                    previewURL: previewData.get(artwork.token.id),
+                  };
+                });
+                setPlaylist(updatedArtworks);
+                if (castInfo.startTime) {
+                  setStartTime(castInfo.startTime);
+                  const i = getIndex(updatedArtworks, castInfo?.startTime);
+                  setCurrentIndex(i);
+                }
+              }
+            } catch (error) {
+              console.log("Error fetching NFT tokens:", error);
+            }
+          };
+          console.log("Cast Info:", castInfo);
+          if (castInfo.artworks) {
+            const assetIds = castInfo.artworks.map(
+              (artwork: any) => artwork.token.id
+            );
+            getNftTokens(assetIds);
           }
-        } catch (error) {
-          console.log("Error fetching NFT tokens:", error);
+          break;
         }
-      };
-      console.log("Cast Info:", castInfo);
-      const assetIds = castInfo.artworks.map(
-        (artwork: any) => artwork.token.id
-      );
-      getNftTokens(assetIds);
+
+        case CastCommand.castExhibition: {
+          // Temporary display coming soon
+          setDisplayComingSoon(true);
+          setTimeout(() => {
+            setDisplayComingSoon(false);
+          }, 1000 * 15);
+          break;
+        }
+
+        case CastCommand.connect: {
+          if (
+            !DeviceManager.isPreviouslyConnectedDevice(
+              castInfo?.deviceInfo?.device_id
+            )
+          ) {
+            setDisplayOnboarding(true);
+            DeviceManager.addPreviouslyConnectedDeviceId(
+              castInfo?.deviceInfo?.device_id
+            );
+          }
+          break;
+        }
+
+        case CastCommand.nextArtwork: {
+          handleNext();
+          break;
+        }
+
+        case CastCommand.previousArtwork: {
+          handlePrevious();
+          break;
+        }
+      }
+    } else {
+      setCastStatus(false);
     }
   }, [castInfo]);
 
@@ -140,68 +219,76 @@ const Home = () => {
     const currentPlaylist = playlist[index];
     setCastPreviewURL(currentPlaylist.previewURL);
     setCastStatus(true);
-    const interval = setInterval(() => {
-      setCurrentIndex((currentIndex) => (currentIndex + 1) % playlist.length);
-    }, currentPlaylist.duration);
+    const currentTime = Date.now();
+    setStartPlayArtworkTime(currentTime);
+    setEndPlayArtworkTime(currentTime + currentPlaylist.duration);
+    startInterval(currentPlaylist.duration);
 
-    return () => clearInterval(interval);
+    return () => clearInterval(intervalRef.current);
   }, [currentIndex, playlist]);
 
-  useEffect(() => {
-    if (!websocketEvent) {
+  const handleNext = () => {
+    const currentTime = Date.now();
+    setStartTime(startTime - (currentTime - startPlayArtworkTime));
+    clearTimer();
+    setCurrentIndex((currentIndex) => (currentIndex + 1) % playlist.length);
+  };
+
+  const startInterval = (duration: number) => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    intervalRef.current = setInterval(() => {
+      const i = getIndex(playlist, startTime);
+      setCurrentIndex(i);
+    }, duration);
+  };
+
+  const clearTimer = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = undefined;
+    }
+  };
+
+  const handlePrevious = () => {
+    const currentTime = Date.now();
+    setStartTime(startTime + (currentTime - startPlayArtworkTime));
+    clearTimer();
+
+    if (currentIndex === 0) {
+      setCurrentIndex(playlist.length - 1);
       return;
     }
 
-    switch (websocketEvent.type) {
-      case EventType.next: {
-        setCurrentIndex((currentIndex) => (currentIndex + 1) % playlist.length);
-        break;
-      }
+    setCurrentIndex((currentIndex) => (currentIndex - 1) % playlist.length);
+  };
 
-      case EventType.previous: {
-        if (currentIndex === 0) {
-          setCurrentIndex(playlist.length - 1);
-          return;
-        }
-
-        setCurrentIndex((currentIndex) => (currentIndex - 1) % playlist.length);
-        break;
-      }
-
-      case EventType.updateDuration: {
-        const artworks: PlayArtworkV2[] =
-          websocketEvent.value as PlayArtworkV2[];
-        const mapDuration = new Map<string, number>();
-        artworks.forEach((artwork: any) => {
-          mapDuration.set(artwork.token.id, artwork.duration);
-        });
-        const updatedPlaylist = playlist.map((playlistToken: PlaylistToken) => {
-          return {
-            ...playlistToken,
-            duration: mapDuration.get(playlistToken.token.id) || 0,
-          };
-        });
-        setPlaylist(updatedPlaylist);
-        break;
-      }
-    }
-  }, [websocketEvent]);
-
-  if (castStatus) {
-    return (
-      <div style={{ width: "100vw", height: "100vh" }}>
-        <ArtworkPlayer previewURL={castPreviewURL!} />
-      </div>
-    );
-  } else {
-    return (
-      <HomePage
-        deviceName={deviceName!}
-        branchLink={branchLink!}
-        currentArtwork={currentArtwork!}
-      />
-    );
-  }
+  return (
+    <>
+      {displayComingSoon && <ComingSoonPage screenRatio={screenRatio} />}
+      {displayOnboarding && (
+        <OnboardingPage
+          screenRatio={screenRatio}
+          branchLink={branchLink!}
+          connectedDeviceName={castInfo?.deviceInfo?.device_name}
+          displayName={deviceName!}
+        />
+      )}
+      {castStatus ? (
+        <div style={{ width: "100vw", height: "100vh" }}>
+          <ArtworkPlayer previewURL={castPreviewURL!} />
+        </div>
+      ) : (
+        <HomePage
+          screenRatio={screenRatio}
+          deviceName={deviceName!}
+          branchLink={branchLink!}
+          currentArtwork={currentArtwork!}
+        />
+      )}
+    </>
+  );
 };
 
 export default Home;

@@ -34,27 +34,20 @@ import {
   SetCursorOffsetReply,
   KeyboardEventRequest,
   KeyboardEventReply,
-  WebsocketEvent as WebsocketEvent,
-  EventType,
   CastInfo,
 } from "./types";
 
 import DeviceManager from "./DeviceManager";
 
 class CanvasService {
-  private castInfo: CastInfo | undefined = undefined;
+  private castInfo: CastInfo | null = null;
   private clientDeviceInfo: any = null;
   private timer: any = null;
-  private websocketEvent: WebsocketEvent | undefined;
 
   constructor() {}
 
   public getCastInfo() {
     return this.castInfo;
-  }
-
-  public getWebsocketEvent() {
-    return this.websocketEvent;
   }
 
   public async processMessage(event: MessageEvent) {
@@ -101,6 +94,20 @@ class CanvasService {
     command: CastCommand,
     requestJson: any
   ): Promise<Reply> {
+    if (this.castInfo) {
+      this.castInfo = {
+        ...this.castInfo,
+        castCommand: command,
+      };
+    } else {
+      this.castInfo = {
+        castCommand: command,
+      };
+    }
+    console.log("------------");
+    console.log("commandHandler", this.castInfo);
+    console.log("------------");
+
     switch (command) {
       case CastCommand.connect:
         return this.connect(requestJson);
@@ -159,10 +166,13 @@ class CanvasService {
     this.clientDeviceInfo = request.clientDevice;
     this.castInfo = {
       artworks: [],
-      // deviceInfo, // Assign the website’s device info to castInfo
+      deviceInfo: {
+        device_id: this.clientDeviceInfo.device_id,
+        device_name: this.clientDeviceInfo.device_name,
+      },
       startTime: Date.now(),
     };
-    console.log("_connected device:", this.castInfo.deviceInfo);
+    console.log("_connected device:", this.clientDeviceInfo);
     return { ok: true };
   }
 
@@ -209,10 +219,6 @@ class CanvasService {
     request: NextArtworkRequest
   ): Promise<NextArtworkReply> {
     console.log("nextArtwork", request);
-    this.websocketEvent = {
-      type: EventType.next,
-      value: true,
-    };
     return { ok: true };
   }
 
@@ -234,10 +240,6 @@ class CanvasService {
     request: PreviousArtworkRequest
   ): Promise<PreviousArtworkReply> {
     console.log("previousArtwork", request);
-    this.websocketEvent = {
-      type: EventType.previous,
-      value: true,
-    };
     return { ok: true };
   }
 
@@ -252,10 +254,11 @@ class CanvasService {
     request: UpdateDurationRequest
   ): Promise<UpdateDurationReply> {
     console.log("updateDuration", request);
-    this.websocketEvent = {
-      type: EventType.updateDuration,
-      value: request.artworks,
+    this.castInfo = {
+      ...this.castInfo,
+      artworks: request.artworks,
     };
+
     return {
       ok: true,
       startTime: Date.now(),
@@ -306,7 +309,7 @@ class CanvasService {
 
   private onDisconnect() {
     console.log("onDisconnect");
-    this.castInfo = undefined;
+    this.castInfo = null;
   }
 
   private setTimer(state: any, onNext: Function | null) {

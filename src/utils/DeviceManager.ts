@@ -9,6 +9,8 @@ class DeviceManager {
   private readonly topicIdKey = "topicId";
   private readonly nameKey = "name";
   private readonly branchLinkKey = "branchLink";
+  private readonly previouslyConnectedDeviceIdsKey =
+    "previouslyConnectedDeviceIds";
 
   private getFromLocalStorage(key: string): string | null {
     return localStorage.getItem(key);
@@ -49,6 +51,38 @@ class DeviceManager {
 
   public getName(): string | null {
     return this.getFromLocalStorage(this.nameKey);
+  }
+
+  public setPreviouslyConnectedDeviceIds(deviceIds: string[]): void {
+    this.setToLocalStorage(
+      this.previouslyConnectedDeviceIdsKey,
+      JSON.stringify(deviceIds)
+    );
+  }
+
+  public getPreviouslyConnectedDeviceIds(): string[] {
+    const deviceIdsJson = this.getFromLocalStorage(
+      this.previouslyConnectedDeviceIdsKey
+    );
+    if (!deviceIdsJson) {
+      return [];
+    }
+    return JSON.parse(deviceIdsJson);
+  }
+
+  public addPreviouslyConnectedDeviceId(deviceId: string): void {
+    const deviceIds = this.getPreviouslyConnectedDeviceIds();
+    deviceIds.push(deviceId);
+    this.setPreviouslyConnectedDeviceIds(deviceIds);
+  }
+
+  public clearPreviouslyConnectedDeviceIds(): void {
+    this.setPreviouslyConnectedDeviceIds([]);
+  }
+
+  public isPreviouslyConnectedDevice(deviceId: string): boolean {
+    const deviceIds = this.getPreviouslyConnectedDeviceIds();
+    return deviceIds.includes(deviceId);
   }
 
   public getDeviceInfo() {

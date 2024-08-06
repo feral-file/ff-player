@@ -4,7 +4,8 @@ export function getIndex(
   playlistTokens: PlaylistToken[],
   startTime: number
 ): number {
-  let index = -1;
+  // Return first artwork if duration is 0
+  let index = 0;
   const currentTime = Date.now();
   let elapsedTime = currentTime - startTime;
 

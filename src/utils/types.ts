@@ -195,22 +195,10 @@ export interface PlaylistToken {
   };
 }
 
-export enum EventType {
-  next,
-  previous,
-  pause,
-  resume,
-  updateDuration,
-}
-export interface WebsocketEvent {
-  type: EventType;
-  value: boolean | string | number | PlayArtworkV2[];
-}
-
 export interface CastInfo {
-  artworks: PlayArtworkV2[];
-  startTime: number;
-  type?: EventType;
+  artworks?: PlayArtworkV2[];
+  startTime?: number;
+  castCommand?: CastCommand;
   deviceInfo?: any;
   exhibitionId?: string;
 }

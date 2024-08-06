@@ -4,33 +4,15 @@ import QRCode from "qrcode.react"
 import ArtworkPlayer from "./artworkPlayer"
 import { useEffect, useState } from "react"
 
-const STANDARD_HEIGHT = 1080;
-
-
-const HomePage = ({deviceName, branchLink, currentArtwork}: {deviceName: string, branchLink: string, currentArtwork: Artwork}) => {
+const HomePage = ({screenRatio, deviceName, branchLink, currentArtwork}: {screenRatio: number, deviceName: string, branchLink: string, currentArtwork: Artwork}) => {
   const [previewURL, setPreviewURL] = useState<string | null>(null);
-  const [screenRatio, setScreenRatio] = useState<number>(1);
-
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const resizeHandler = () => {
-        const height = window.innerHeight;
-        const ratio = height / STANDARD_HEIGHT;
-        setScreenRatio(ratio);
-      };
-
-      resizeHandler();
-
-    }
-  })
 
   useEffect(() => {
     const formatPreviewURL = (previewURI: string) => {
       if (previewURI.startsWith('https')) {
         return previewURI;
       } else {
-        return `${process.env.NEXT_PUBLIC_CLOUD_FRONT_ENDPOINT}${previewURI}`;
+        return `${process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL!}/${previewURI}`;
       }
     }
     if (currentArtwork) {
@@ -38,7 +20,7 @@ const HomePage = ({deviceName, branchLink, currentArtwork}: {deviceName: string,
     }
   }, [currentArtwork])
 return (
-  <div style={{ display: 'flex', height: '100vh' }}>
+  <div style={{ display: 'flex', height: '100vh', position: 'relative'}}>
   <div style={{ flex: 1, backgroundColor: '#2C2C2C', color: '#FFFFFF', padding: '2rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
     <div>
       <Image src="/feralfile-logo.svg" alt="Feral File Logo" width={288 * screenRatio} height={23 * screenRatio} />
