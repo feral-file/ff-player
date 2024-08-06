@@ -20,7 +20,7 @@ const HomePage = ({screenRatio, deviceName, branchLink, currentArtwork}: {screen
     }
   }, [currentArtwork])
 return (
-  <div style={{ display: 'flex', height: '100vh' }}>
+  <div style={{ display: 'flex', height: '100vh', position: 'relative'}}>
   <div style={{ flex: 1, backgroundColor: '#2C2C2C', color: '#FFFFFF', padding: '2rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
     <div>
       <Image src="/feralfile-logo.svg" alt="Feral File Logo" width={288 * screenRatio} height={23 * screenRatio} />

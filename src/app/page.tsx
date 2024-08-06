@@ -35,6 +35,7 @@ const Home = () => {
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [playlist, setPlaylist] = useState<PlaylistToken[]>([]);
   const [startTime, setStartTime] = useState<number>(0);
+  const [displayComingSoon, setDisplayComingSoon] = useState<boolean>(false);
 
 
   useEffect(() => {
@@ -103,6 +104,7 @@ const Home = () => {
     if (castInfo) {
       switch (castInfo.castCommand) {
         case CastCommand.castListArtwork: {
+          setDisplayComingSoon(false); // Temporary display coming soon
           const getNftTokens = async (ids: string[]) => {
             if (!ids.length) {
               return;
@@ -147,6 +149,15 @@ const Home = () => {
             getNftTokens(assetIds);
           }
         }
+
+        default: {
+          // Temporary display coming soon
+          setDisplayComingSoon(true);
+          setTimeout(() => {
+            setDisplayComingSoon(false);
+          }, 1000 * 15);
+          return;
+        }
       }
     }
   }, [castInfo]);
@@ -171,30 +182,28 @@ const Home = () => {
     return () => clearInterval(interval);
   }, [currentIndex, playlist]);
 
-  if (castStatus) {
-    return (
-      <div style={{ width: "100vw", height: "100vh" }}>
-        <ArtworkPlayer previewURL={castPreviewURL!} />
-      </div>
-    );
-  } else {
-    return (
-      <>
-        <HomePage
-          screenRatio={screenRatio}
-          deviceName={deviceName!}
-          branchLink={branchLink!}
-          currentArtwork={currentArtwork!}
-        />
-        {/* <ComingSoonPage
-          screenRatio={screenRatio}/> */}
-        {/* <OnboardingPage
-          screenRatio={screenRatio}
-          branchLink={branchLink!}
-        /> */}
-      </>
-    );
-  }
+  return (
+    <>
+      {displayComingSoon && <ComingSoonPage screenRatio={screenRatio} />}
+      {castStatus ?
+        <div style={{ width: "100vw", height: "100vh" }}>
+          <ArtworkPlayer previewURL={castPreviewURL!} />
+        </div>
+      : <>
+          <HomePage
+            screenRatio={screenRatio}
+            deviceName={deviceName!}
+            branchLink={branchLink!}
+            currentArtwork={currentArtwork!}
+          />
+          {/* <OnboardingPage
+            screenRatio={screenRatio}
+            branchLink={branchLink!}
+          /> */}
+        </>
+      }
+    </>
+  )
 };
 
 export default Home;
