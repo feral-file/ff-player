@@ -33,7 +33,6 @@ const ArtworkPlayer = ({previewURL}: {previewURL: string}) => {
       try {
         const response = await fetch(previewURL, {method: 'HEAD'});
         const contentType = response.headers.get('Content-Type');
-        console.log('Content-Type:', contentType);
         compareToGetFileType(contentType!);
       } catch (error) {
         console.log('Error get content-type', error);

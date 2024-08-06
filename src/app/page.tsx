@@ -36,6 +36,7 @@ const Home = () => {
   const [playlist, setPlaylist] = useState<PlaylistToken[]>([]);
   const [startTime, setStartTime] = useState<number>(0);
   const [displayComingSoon, setDisplayComingSoon] = useState<boolean>(false);
+  const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
 
 
   useEffect(() => {
@@ -102,10 +103,14 @@ const Home = () => {
 
   useEffect(() => {
     if (castInfo) {
-      console.log("Cast Command:", castInfo.castCommand);
+      console.log('--------------');
+      console.log("Cast Command:", castInfo);
+      console.log('--------------');
+
       switch (castInfo.castCommand) {
         case CastCommand.castListArtwork: {
           setDisplayComingSoon(false); // Temporary display coming soon
+          setDisplayOnboarding(false);
           const getNftTokens = async (ids: string[]) => {
             if (!ids.length) {
               return;
@@ -149,17 +154,28 @@ const Home = () => {
             );
             getNftTokens(assetIds);
           }
+          break;
         }
 
-        default: {
+        case CastCommand.castExhibition: {
           // Temporary display coming soon
           setDisplayComingSoon(true);
           setTimeout(() => {
             setDisplayComingSoon(false);
           }, 1000 * 15);
-          return;
+          break;
+        }
+
+        case CastCommand.connect: {
+          if (!DeviceManager.isPreviouslyConnectedDevice(castInfo?.deviceInfo?.device_id)) {
+            setDisplayOnboarding(true);
+            DeviceManager.addPreviouslyConnectedDeviceId(castInfo?.deviceInfo?.device_id);
+          }
+          break;
         }
       }
+    } else {
+      setCastStatus(false);
     }
   }, [castInfo]);
 
@@ -186,22 +202,17 @@ const Home = () => {
   return (
     <>
       {displayComingSoon && <ComingSoonPage screenRatio={screenRatio} />}
+      {displayOnboarding && <OnboardingPage screenRatio={screenRatio} branchLink={branchLink!} connectedDeviceName={castInfo?.deviceInfo?.device_name} displayName={deviceName!}/>}
       {castStatus ?
         <div style={{ width: "100vw", height: "100vh" }}>
           <ArtworkPlayer previewURL={castPreviewURL!} />
         </div>
-      : <>
-          <HomePage
-            screenRatio={screenRatio}
-            deviceName={deviceName!}
-            branchLink={branchLink!}
-            currentArtwork={currentArtwork!}
-          />
-          {/* <OnboardingPage
-            screenRatio={screenRatio}
-            branchLink={branchLink!}
-          /> */}
-        </>
+      : <HomePage
+          screenRatio={screenRatio}
+          deviceName={deviceName!}
+          branchLink={branchLink!}
+          currentArtwork={currentArtwork!}
+        />
       }
     </>
   )

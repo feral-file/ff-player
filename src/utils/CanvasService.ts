@@ -101,6 +101,9 @@ class CanvasService {
         castCommand: command,
       };
     }
+    console.log("------------");
+    console.log("commandHandler", this.castInfo);
+    console.log("------------");
 
     switch (command) {
       case CastCommand.connect:
@@ -160,10 +163,13 @@ class CanvasService {
     this.clientDeviceInfo = request.clientDevice;
     this.castInfo = {
       artworks: [],
-      // deviceInfo, // Assign the website’s device info to castInfo
+      deviceInfo: {
+        device_id: this.clientDeviceInfo.device_id,
+        device_name: this.clientDeviceInfo.device_name,
+      },
       startTime: Date.now(),
     };
-    console.log("_connected device:", this.castInfo.deviceInfo);
+    console.log("_connected device:", this.clientDeviceInfo);
     return { ok: true };
   }
 
