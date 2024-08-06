@@ -14,6 +14,7 @@ import ArtworkPlayer from "./artworkPlayer";
 import HomePage from "./homePage";
 import ArtworkService from "@/utils/ArtworkService";
 import { getIndex } from "@/utils/Playlist";
+import { AppState, Rotate, KeyEvent } from "@/utils/platform";
 
 const Home = () => {
   const [branchLink, setBranchLink] = useState<string | null>(null);
@@ -119,6 +120,9 @@ const Home = () => {
       getNftTokens(assetIds);
     }
   }, [castInfo]);
+
+  AppState.postMessage("loaded");
+  Rotate.postMessage("clockwise");
 
   useEffect(() => {
     if (currentIndex < 0) {
