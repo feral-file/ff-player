@@ -12,7 +12,7 @@ const HomePage = ({screenRatio, deviceName, branchLink, currentArtwork}: {screen
       if (previewURI.startsWith('https')) {
         return previewURI;
       } else {
-        return `${process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL}${previewURI}`;
+        return `${process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL!}/${previewURI}`;
       }
     }
     if (currentArtwork) {

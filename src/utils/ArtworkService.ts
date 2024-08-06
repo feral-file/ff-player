@@ -6,7 +6,7 @@ import axios from "axios";
 class ArtworkService {
   public async getFeaturedArtworks(): Promise<Artwork[]> {
     const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_API_URL}/artworks/featured`
+      `${process.env.NEXT_PUBLIC_API_URL!}/api/artworks/featured`
     );
     const artworks = response.data.result as Artwork[];
     if (artworks) {
@@ -19,7 +19,7 @@ class ArtworkService {
 
   private fetchArtist = async (artistID?: string) => {
     const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_API_URL}/accounts/${artistID}`
+      `${process.env.NEXT_PUBLIC_API_URL!}/api/accounts/${artistID}`
     );
 
     return response.data.result.alias;
