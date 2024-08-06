@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:device_info_plus_tizen/device_info_plus_tizen.dart';
 import 'package:feralfile_display_tizen/model/js_message.dart';
 import 'package:feralfile_display_tizen/service/configuration_service.dart';
 import 'package:feralfile_display_tizen/utils/config_manager.dart';
@@ -82,8 +83,20 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
         setState(() {
           _isLoading = false;
         });
+        unawaited(_setDeviceName());
       },
     ));
+  }
+
+  Future<void> _setDeviceName() async {
+    DeviceInfoPluginTizen deviceInfo = DeviceInfoPluginTizen();
+    TizenDeviceInfo tizenInfo = await deviceInfo.tizenInfo;
+    final name = tizenInfo.modelName ?? 'Samsung TV';
+    await Future.delayed(const Duration(seconds: 1), () async {
+      await _webViewController.runJavaScript('''
+        DeviceName.handlePlatformEvent('"$name"');
+      ''');
+    });
   }
 
   void _addJavaScriptChannel() {

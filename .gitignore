@@ -16,3 +16,6 @@ platforms/samsung/.env
 platforms/samsung/.flutter-plugins-dependencies
 platforms/samsung/.flutter-plugins
 platforms/samsung/.dart_tool/*
+platforms/samsung/.vscode/*
+
+

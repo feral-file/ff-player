@@ -4,9 +4,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:device_info_plus_tizen/device_info_plus_tizen.dart';
 import 'package:feralfile_display_tizen/app_router.dart';
-import 'package:feralfile_display_tizen/service/configuration_service.dart';
 import 'package:feralfile_display_tizen/service/navigation_service.dart';
 import 'package:feralfile_display_tizen/service/remote_config_service.dart';
 import 'package:feralfile_display_tizen/utils/config_manager.dart';
@@ -33,11 +31,6 @@ Future<void> main() async {
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
     await setup();
-
-    DeviceInfoPluginTizen deviceInfo = DeviceInfoPluginTizen();
-    TizenDeviceInfo tizenInfo = await deviceInfo.tizenInfo;
-    final name = tizenInfo.modelName ?? 'Samsung TV';
-    unawaited(injector<ConfigurationService>().setString('device_name', name));
 
     // Init logger
     // Logger.root.level = Level.INFO;
