@@ -9,6 +9,7 @@ import {
   CastCommand,
   PlayArtworkV2,
   PlaylistToken,
+  ViewMode,
 } from "@/utils/types";
 import ArtworkPlayer from "./artworkPlayer";
 import HomePage from "./homePage";
@@ -29,6 +30,7 @@ const Home = () => {
   );
   const artworkService = useRef(new ArtworkService());
   const [screenRatio, setScreenRatio] = useState<number>(1);
+  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.landscape);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [currentArtwork, setCurrentArtwork] = useState<Artwork | null>(null);
   const [castStatus, setCastStatus] = useState<boolean | null>(false);
@@ -51,6 +53,21 @@ const Home = () => {
       if (browser) {
         setDeviceName(`${browser.os} - ${browser.name} ${browser.version}`);
       }
+
+      const resizeHandler = () => {
+        let minSize;
+        if (window.innerHeight > window.innerWidth) {
+          setViewMode(ViewMode.portrait);
+          minSize = window.innerWidth;
+        } else {
+          setViewMode(ViewMode.landscape);
+          minSize = window.innerHeight
+        }
+
+        setScreenRatio(minSize / STANDARD_HEIGHT);
+      };
+
+      resizeHandler();
     }
   }, []);
 
@@ -66,18 +83,6 @@ const Home = () => {
       generateBranchLink();
     }
   }, [locationID, topicID]);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const resizeHandler = () => {
-        const height = window.innerHeight;
-        const ratio = height / STANDARD_HEIGHT;
-        setScreenRatio(ratio);
-      };
-
-      resizeHandler();
-    }
-  });
 
   useEffect(() => {
     const fetchArtworks = async () => {
@@ -285,6 +290,7 @@ const Home = () => {
       ) : (
         <HomePage
           screenRatio={screenRatio}
+          viewMode={viewMode}
           deviceName={deviceName!}
           branchLink={branchLink!}
           currentArtwork={currentArtwork!}
