@@ -6,7 +6,7 @@ import useWebSocket from "../utils/WebSocketManager";
 import DeviceManager from "../utils/DeviceManager";
 import {
   Artwork,
-  EventType,
+  CastCommand,
   PlayArtworkV2,
   PlaylistToken,
 } from "@/utils/types";
@@ -18,7 +18,7 @@ import { getIndex } from "@/utils/Playlist";
 const Home = () => {
   const [branchLink, setBranchLink] = useState<string | null>(null);
   const [deviceName, setDeviceName] = useState<string>("Unknown Device");
-  const { locationID, topicID, castInfo, websocketEvent } = useWebSocket(
+  const { locationID, topicID, castInfo } = useWebSocket(
     `${process.env.NEXT_PUBLIC_WEBSOCKET_URL!}/api/connection`,
     process.env.NEXT_PUBLIC_API_KEY!
   );
@@ -82,41 +82,53 @@ const Home = () => {
 
   useEffect(() => {
     if (castInfo) {
-      const getNftTokens = async (ids: string[]) => {
-        if (!ids.length) {
-          return;
-        }
-        try {
-          const data = await artworkService.current.queryTokens(ids);
-          const artworks = castInfo?.artworks;
-          if (data) {
-            const previewData: Map<string, string> = new Map();
-            data.tokens.forEach((token: any) => {
-              previewData.set(
-                token.indexID,
-                token.asset.metadata.project.latest.previewURL
-              );
-            });
-            const updatedArtworks = artworks.map((artwork: any) => {
-              return {
-                ...artwork,
-                previewURL: previewData.get(artwork.token.id),
-              };
-            });
-            setPlaylist(updatedArtworks);
-            setStartTime(castInfo.startTime);
-            const i = getIndex(updatedArtworks, castInfo?.startTime);
-            setCurrentIndex(i);
+      switch (castInfo.castCommand) {
+        case CastCommand.castListArtwork: {
+          const getNftTokens = async (ids: string[]) => {
+            if (!ids.length) {
+              return;
+            }
+            try {
+              const data = await artworkService.current.queryTokens(ids);
+              const artworks = castInfo?.artworks;
+              if (!artworks) {
+                return;
+              }
+
+              if (data) {
+                const previewData: Map<string, string> = new Map();
+                data.tokens.forEach((token: any) => {
+                  previewData.set(
+                    token.indexID,
+                    token.asset.metadata.project.latest.previewURL
+                  );
+                });
+                const updatedArtworks = artworks.map((artwork: any) => {
+                  return {
+                    ...artwork,
+                    previewURL: previewData.get(artwork.token.id),
+                  };
+                });
+                setPlaylist(updatedArtworks);
+                if (castInfo.startTime) {
+                  setStartTime(castInfo.startTime);
+                  const i = getIndex(updatedArtworks, castInfo?.startTime);
+                  setCurrentIndex(i);
+                }
+              }
+            } catch (error) {
+              console.log("Error fetching NFT tokens:", error);
+            }
+          };
+          console.log("Cast Info:", castInfo);
+          if (castInfo.artworks) {
+            const assetIds = castInfo.artworks.map(
+              (artwork: any) => artwork.token.id
+            );
+            getNftTokens(assetIds);
           }
-        } catch (error) {
-          console.log("Error fetching NFT tokens:", error);
         }
-      };
-      console.log("Cast Info:", castInfo);
-      const assetIds = castInfo.artworks.map(
-        (artwork: any) => artwork.token.id
-      );
-      getNftTokens(assetIds);
+      }
     }
   }, [castInfo]);
 
@@ -139,46 +151,6 @@ const Home = () => {
 
     return () => clearInterval(interval);
   }, [currentIndex, playlist]);
-
-  useEffect(() => {
-    if (!websocketEvent) {
-      return;
-    }
-
-    switch (websocketEvent.type) {
-      case EventType.next: {
-        setCurrentIndex((currentIndex) => (currentIndex + 1) % playlist.length);
-        break;
-      }
-
-      case EventType.previous: {
-        if (currentIndex === 0) {
-          setCurrentIndex(playlist.length - 1);
-          return;
-        }
-
-        setCurrentIndex((currentIndex) => (currentIndex - 1) % playlist.length);
-        break;
-      }
-
-      case EventType.updateDuration: {
-        const artworks: PlayArtworkV2[] =
-          websocketEvent.value as PlayArtworkV2[];
-        const mapDuration = new Map<string, number>();
-        artworks.forEach((artwork: any) => {
-          mapDuration.set(artwork.token.id, artwork.duration);
-        });
-        const updatedPlaylist = playlist.map((playlistToken: PlaylistToken) => {
-          return {
-            ...playlistToken,
-            duration: mapDuration.get(playlistToken.token.id) || 0,
-          };
-        });
-        setPlaylist(updatedPlaylist);
-        break;
-      }
-    }
-  }, [websocketEvent]);
 
   if (castStatus) {
     return (
