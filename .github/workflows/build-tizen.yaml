@@ -71,6 +71,7 @@ jobs:
 
       - name: Write secrets to .env file
         run: |
+          cd platforms/samsung
           echo "PUB_DOC_URL = ${{ vars.PUB_DOC_URL }}" >> .env
 
       - name: Install Flutter dependencies and build app
