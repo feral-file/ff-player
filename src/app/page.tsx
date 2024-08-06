@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { detect, BrowserInfo } from "detect-browser";
-import useWebSocket from "../utils/WebSocketManager";
-import DeviceManager from "../utils/DeviceManager";
+import { useState, useEffect, useRef } from 'react';
+import { detect, BrowserInfo } from 'detect-browser';
+import useWebSocket from '../utils/WebSocketManager';
+import DeviceManager from '../utils/DeviceManager';
 import {
   Artwork,
   CastCommand,
@@ -12,8 +12,12 @@ import {
 } from "@/utils/types";
 import ArtworkPlayer from "./artworkPlayer";
 import HomePage from "./homePage";
+import OnboardingPage from './onboardingPage';
 import ArtworkService from "@/utils/ArtworkService";
 import { getIndex } from "@/utils/Playlist";
+import ComingSoonPage from './commingSoonPage';
+
+const STANDARD_HEIGHT = 1080;
 
 const Home = () => {
   const [branchLink, setBranchLink] = useState<string | null>(null);
@@ -23,6 +27,7 @@ const Home = () => {
     process.env.NEXT_PUBLIC_API_KEY!
   );
   const artworkService = useRef(new ArtworkService());
+  const [screenRatio, setScreenRatio] = useState<number>(1);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [currentArtwork, setCurrentArtwork] = useState<Artwork | null>(null);
   const [castStatus, setCastStatus] = useState<boolean | null>(false);
@@ -30,6 +35,7 @@ const Home = () => {
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [playlist, setPlaylist] = useState<PlaylistToken[]>([]);
   const [startTime, setStartTime] = useState<number>(0);
+
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -52,6 +58,19 @@ const Home = () => {
       generateBranchLink();
     }
   }, [locationID, topicID]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const resizeHandler = () => {
+        const height = window.innerHeight;
+        const ratio = height / STANDARD_HEIGHT;
+        setScreenRatio(ratio);
+      };
+
+      resizeHandler();
+
+    }
+  })
 
   useEffect(() => {
     const fetchArtworks = async () => {
@@ -160,11 +179,20 @@ const Home = () => {
     );
   } else {
     return (
-      <HomePage
-        deviceName={deviceName!}
-        branchLink={branchLink!}
-        currentArtwork={currentArtwork!}
-      />
+      <>
+        <HomePage
+          screenRatio={screenRatio}
+          deviceName={deviceName!}
+          branchLink={branchLink!}
+          currentArtwork={currentArtwork!}
+        />
+        {/* <ComingSoonPage
+          screenRatio={screenRatio}/> */}
+        {/* <OnboardingPage
+          screenRatio={screenRatio}
+          branchLink={branchLink!}
+        /> */}
+      </>
     );
   }
 };

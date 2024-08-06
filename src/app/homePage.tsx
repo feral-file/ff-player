@@ -4,26 +4,8 @@ import QRCode from "qrcode.react"
 import ArtworkPlayer from "./artworkPlayer"
 import { useEffect, useState } from "react"
 
-const STANDARD_HEIGHT = 1080;
-
-
-const HomePage = ({deviceName, branchLink, currentArtwork}: {deviceName: string, branchLink: string, currentArtwork: Artwork}) => {
+const HomePage = ({screenRatio, deviceName, branchLink, currentArtwork}: {screenRatio: number, deviceName: string, branchLink: string, currentArtwork: Artwork}) => {
   const [previewURL, setPreviewURL] = useState<string | null>(null);
-  const [screenRatio, setScreenRatio] = useState<number>(1);
-
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const resizeHandler = () => {
-        const height = window.innerHeight;
-        const ratio = height / STANDARD_HEIGHT;
-        setScreenRatio(ratio);
-      };
-
-      resizeHandler();
-
-    }
-  })
 
   useEffect(() => {
     const formatPreviewURL = (previewURI: string) => {

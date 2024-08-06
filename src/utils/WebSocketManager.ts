@@ -36,9 +36,8 @@ const useWebSocket = (url: string, apiKey: string) => {
           localStorage.setItem("topicID", data.message.topicID);
         } else {
           console.log("Received:", data);
-          const responseMessage = await canvasService.current.processMessage(
-            event
-          );
+          const responseMessage =
+            await canvasService.current.processMessage(event);
           setCastInfo(canvasService.current.getCastInfo());
           if (responseMessage) {
             ws.current?.send(JSON.stringify(responseMessage));
