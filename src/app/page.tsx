@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { detect, BrowserInfo } from 'detect-browser';
-import useWebSocket from '../utils/WebSocketManager';
-import DeviceManager from '../utils/DeviceManager';
+import { useState, useEffect, useRef } from "react";
+import { detect, BrowserInfo } from "detect-browser";
+import useWebSocket from "../utils/WebSocketManager";
+import DeviceManager from "../utils/DeviceManager";
 import {
   Artwork,
   CastCommand,
@@ -12,10 +12,10 @@ import {
 } from "@/utils/types";
 import ArtworkPlayer from "./artworkPlayer";
 import HomePage from "./homePage";
-import OnboardingPage from './onboardingPage';
+import OnboardingPage from "./onboardingPage";
 import ArtworkService from "@/utils/ArtworkService";
 import { getIndex } from "@/utils/Playlist";
-import ComingSoonPage from './commingSoonPage';
+import ComingSoonPage from "./commingSoonPage";
 
 const STANDARD_HEIGHT = 1080;
 
@@ -38,6 +38,11 @@ const Home = () => {
   const [displayComingSoon, setDisplayComingSoon] = useState<boolean>(false);
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
 
+  const [startPlayArtworkTime, setStartPlayArtworkTime] = useState<number>(0);
+  const [endPlayArtworkTime, setEndPlayArtworkTime] = useState<number>(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
+    undefined
+  );
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -62,7 +67,7 @@ const Home = () => {
   }, [locationID, topicID]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const resizeHandler = () => {
         const height = window.innerHeight;
         const ratio = height / STANDARD_HEIGHT;
@@ -70,9 +75,8 @@ const Home = () => {
       };
 
       resizeHandler();
-
     }
-  })
+  });
 
   useEffect(() => {
     const fetchArtworks = async () => {
@@ -103,9 +107,9 @@ const Home = () => {
 
   useEffect(() => {
     if (castInfo) {
-      console.log('--------------');
+      console.log("--------------");
       console.log("Cast Command:", castInfo);
-      console.log('--------------');
+      console.log("--------------");
 
       switch (castInfo.castCommand) {
         case CastCommand.castListArtwork: {
@@ -167,10 +171,26 @@ const Home = () => {
         }
 
         case CastCommand.connect: {
-          if (!DeviceManager.isPreviouslyConnectedDevice(castInfo?.deviceInfo?.device_id)) {
+          if (
+            !DeviceManager.isPreviouslyConnectedDevice(
+              castInfo?.deviceInfo?.device_id
+            )
+          ) {
             setDisplayOnboarding(true);
-            DeviceManager.addPreviouslyConnectedDeviceId(castInfo?.deviceInfo?.device_id);
+            DeviceManager.addPreviouslyConnectedDeviceId(
+              castInfo?.deviceInfo?.device_id
+            );
           }
+          break;
+        }
+
+        case CastCommand.nextArtwork: {
+          handleNext();
+          break;
+        }
+
+        case CastCommand.previousArtwork: {
+          handlePrevious();
           break;
         }
       }
@@ -192,30 +212,76 @@ const Home = () => {
     const currentPlaylist = playlist[index];
     setCastPreviewURL(currentPlaylist.previewURL);
     setCastStatus(true);
-    const interval = setInterval(() => {
-      setCurrentIndex((currentIndex) => (currentIndex + 1) % playlist.length);
-    }, currentPlaylist.duration);
+    const currentTime = Date.now();
+    setStartPlayArtworkTime(currentTime);
+    setEndPlayArtworkTime(currentTime + currentPlaylist.duration);
+    startInterval(currentPlaylist.duration);
 
-    return () => clearInterval(interval);
+    return () => clearInterval(intervalRef.current);
   }, [currentIndex, playlist]);
+
+  const handleNext = () => {
+    const currentTime = Date.now();
+    setStartTime(startTime - (currentTime - startPlayArtworkTime));
+    clearTimer();
+    setCurrentIndex((currentIndex) => (currentIndex + 1) % playlist.length);
+  };
+
+  const startInterval = (duration: number) => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    intervalRef.current = setInterval(() => {
+      const i = getIndex(playlist, startTime);
+      setCurrentIndex(i);
+    }, duration);
+  };
+
+  const clearTimer = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = undefined;
+    }
+  };
+
+  const handlePrevious = () => {
+    const currentTime = Date.now();
+    setStartTime(startTime + (currentTime - startPlayArtworkTime));
+    clearTimer();
+
+    if (currentIndex === 0) {
+      setCurrentIndex(playlist.length - 1);
+      return;
+    }
+
+    setCurrentIndex((currentIndex) => (currentIndex - 1) % playlist.length);
+  };
 
   return (
     <>
       {displayComingSoon && <ComingSoonPage screenRatio={screenRatio} />}
-      {displayOnboarding && <OnboardingPage screenRatio={screenRatio} branchLink={branchLink!} connectedDeviceName={castInfo?.deviceInfo?.device_name} displayName={deviceName!}/>}
-      {castStatus ?
+      {displayOnboarding && (
+        <OnboardingPage
+          screenRatio={screenRatio}
+          branchLink={branchLink!}
+          connectedDeviceName={castInfo?.deviceInfo?.device_name}
+          displayName={deviceName!}
+        />
+      )}
+      {castStatus ? (
         <div style={{ width: "100vw", height: "100vh" }}>
           <ArtworkPlayer previewURL={castPreviewURL!} />
         </div>
-      : <HomePage
+      ) : (
+        <HomePage
           screenRatio={screenRatio}
           deviceName={deviceName!}
           branchLink={branchLink!}
           currentArtwork={currentArtwork!}
         />
-      }
+      )}
     </>
-  )
+  );
 };
 
 export default Home;

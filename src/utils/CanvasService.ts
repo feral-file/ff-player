@@ -95,7 +95,10 @@ class CanvasService {
     requestJson: any
   ): Promise<Reply> {
     if (this.castInfo) {
-      this.castInfo.castCommand = command;
+      this.castInfo = {
+        ...this.castInfo,
+        castCommand: command,
+      };
     } else {
       this.castInfo = {
         castCommand: command,
