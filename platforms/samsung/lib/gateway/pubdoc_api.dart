@@ -14,6 +14,6 @@ part 'pubdoc_api.g.dart';
 abstract class PubdocAPI {
   factory PubdocAPI(Dio dio, {String baseUrl}) = _PubdocAPI;
 
-  @GET('/configs/postcard/postcard_configs.json')
+  @GET('/configs/display_app/configs.json')
   Future<String> getConfigs();
 }

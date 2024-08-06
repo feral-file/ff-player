@@ -7,6 +7,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:feralfile_display_tizen/app_router.dart';
 import 'package:feralfile_display_tizen/service/navigation_service.dart';
 import 'package:feralfile_display_tizen/service/remote_config_service.dart';
+import 'package:feralfile_display_tizen/service/update_manager.dart';
 import 'package:feralfile_display_tizen/utils/config_manager.dart';
 import 'package:feralfile_display_tizen/utils/injector.dart';
 import 'package:feralfile_display_tizen/utils/log.dart';
@@ -39,6 +40,8 @@ Future<void> main() async {
     // });
 
     await injector<RemoteConfigService>().loadConfigs();
+
+    UpdateManager(injector(), injector()).start();
 
     connectivitySubscription =
         connectivity.onConnectivityChanged.listen((result) async {

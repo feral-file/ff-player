@@ -57,4 +57,12 @@ class NavigationService {
       content: Text(message),
     ));
   }
+
+  void pushReplacementNamed(String routeName, {Object? arguments}) {
+    if (context == null) {
+      return;
+    }
+    unawaited(Navigator.of(context!)
+        .pushReplacementNamed(routeName, arguments: arguments));
+  }
 }

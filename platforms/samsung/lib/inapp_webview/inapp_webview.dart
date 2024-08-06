@@ -38,16 +38,19 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) =>
+      Scaffold(
         body: Focus(
           focusNode: _focusNode,
           onKeyEvent: (node, event) {
             if (event is KeyDownEvent) {
-              log.info('key down: ${event.logicalKey.keyLabel}');
+              log.info(
+                  'key down: ${event.logicalKey.keyId} '
+                      '${event.logicalKey.keyLabel}');
               event.logicalKey.toString();
               unawaited(_webViewController.runJavaScript(
-                  'KeyEvent.handlePlatformEvent(${event.logicalKey.keyId}_'
-                  '${event.logicalKey.keyLabel});'));
+                  'KeyEvent.handlePlatformEvent("${event.logicalKey.keyId}_'
+                      '${event.logicalKey.keyLabel}");'));
               return KeyEventResult.handled;
             }
             return KeyEventResult.ignored;
@@ -56,7 +59,7 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
             children: [
               WebViewWidget(
                 controller: _webViewController,
-                key: Key(widget.payload.url),
+                key: Key(widget.payload.key),
               ),
               if (_isLoading) loadingWidget(context),
             ],
@@ -92,9 +95,9 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
     DeviceInfoPluginTizen deviceInfo = DeviceInfoPluginTizen();
     TizenDeviceInfo tizenInfo = await deviceInfo.tizenInfo;
     final name = tizenInfo.modelName ?? 'Samsung TV';
-    await Future.delayed(const Duration(seconds: 1), () async {
+    await Future.delayed(const Duration(seconds: 2), () async {
       await _webViewController.runJavaScript('''
-        DeviceName.handlePlatformEvent('"$name"');
+        DeviceName.handlePlatformEvent("$name");
       ''');
     });
   }
@@ -102,85 +105,86 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
   void _addJavaScriptChannel() {
     _webViewController.addJavaScriptChannel('AppState',
         onMessageReceived: (message) {
-      log.info('app state: ${message.message}');
-      if (message.message == 'loading') {
-        setState(() {
-          _isLoading = true;
+          log.info('app state: ${message.message}');
+          if (message.message == 'loading') {
+            setState(() {
+              _isLoading = true;
+            });
+          } else if (message.message == 'loaded') {
+            log.info('loaded');
+            setState(() {
+              _isLoading = false;
+            });
+          }
         });
-      } else if (message.message == 'loaded') {
-        log.info('loaded');
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    });
     _webViewController.addJavaScriptChannel('Rotate',
         onMessageReceived: (message) {
-      log.info('rotate: ${message.message}');
-      final rotate = message.message;
-      ConfigManager.instance.quarterTurns.value +=
+          log.info('rotate: ${message.message}');
+          final rotate = message.message;
+          ConfigManager.instance.quarterTurns.value +=
           rotate == 'clockwise' ? 1 : -1;
-    });
+        });
   }
 
   Future<void> _addConfigHandler() async {
     final config = injector<ConfigurationService>();
     await _webViewController.addJavaScriptChannel('Config',
         onMessageReceived: (message) async {
-      log.info('config: ${message.message}');
-      late JsMessageSend response;
-      try {
-        final jsMessage =
+          log.info('config: ${message.message}');
+          late JsMessageSend response;
+          try {
+            final jsMessage =
             JsMessageReceived.fromJson(jsonDecode(message.message));
-        final handler = jsMessage.handler;
-        final id = jsMessage.id;
-        final receivedData = jsMessage.data;
-        final key = receivedData['key'];
+            final handler = jsMessage.handler;
+            final id = jsMessage.id;
+            final receivedData = jsMessage.data;
+            final key = receivedData['key'];
 
-        switch (handler) {
-          case 'getString':
-            final value = config.getString(key);
-            response = JsMessageSend(id: id, data: value);
+            switch (handler) {
+              case 'getString':
+                final value = config.getString(key);
+                response = JsMessageSend(id: id, data: value);
 
-          case 'setString':
-            final value = receivedData['value'] as String;
-            await config.setString(key, value);
-            response = JsMessageSend(id: id, data: null);
+              case 'setString':
+                final value = receivedData['value'] as String;
+                await config.setString(key, value);
+                response = JsMessageSend(id: id, data: null);
 
-          case 'getListString':
-            final value = config.getListString(key);
-            response = JsMessageSend(id: id, data: value);
+              case 'getListString':
+                final value = config.getListString(key);
+                response = JsMessageSend(id: id, data: value);
 
-          case 'setListString':
-            final value = receivedData['value'] as List<String>;
-            await config.setListString(key, value);
-            response = JsMessageSend(id: id, data: null);
+              case 'setListString':
+                final value = receivedData['value'] as List<String>;
+                await config.setListString(key, value);
+                response = JsMessageSend(id: id, data: null);
 
-          case 'appendListString':
-            final value = receivedData['value'] as List<String>;
-            await config.appendListString(key, value);
-            response = JsMessageSend(id: id, data: null);
+              case 'appendListString':
+                final value = receivedData['value'] as List<String>;
+                await config.appendListString(key, value);
+                response = JsMessageSend(id: id, data: null);
 
-          case 'removeListString':
-            final value = receivedData['value'] as List<String>;
-            await config.removeListString(key, value);
-            response = JsMessageSend(id: id, data: null);
+              case 'removeListString':
+                final value = receivedData['value'] as List<String>;
+                await config.removeListString(key, value);
+                response = JsMessageSend(id: id, data: null);
 
-          default:
-            response = JsMessageSend.errorResponse(id, 'Unknown handler');
-        }
-        await _webViewController.runJavaScript('''
+              default:
+                response = JsMessageSend.errorResponse(id, 'Unknown handler');
+            }
+            await _webViewController.runJavaScript('''
           Config.handlePlatformEvent('${jsonEncode(response)}');
         ''');
-      } catch (e) {
-        log.info('error: $e');
-      }
-    });
+          } catch (e) {
+            log.info('error: $e');
+          }
+        });
   }
 }
 
 class InAppWebViewPayload {
   final String url;
+  final String key;
 
-  InAppWebViewPayload(this.url);
+  InAppWebViewPayload(this.url, this.key);
 }

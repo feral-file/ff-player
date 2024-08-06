@@ -7,26 +7,20 @@ import 'package:feralfile_display_tizen/utils/log.dart';
 abstract class RemoteConfigService {
   Future<void> loadConfigs();
 
-  bool getBool(final ConfigGroup group, final ConfigKey key);
-
   T getConfig<T>(final ConfigGroup group, final ConfigKey key, T defaultValue);
+
+  String? getString(final ConfigGroup group, final ConfigKey key);
 }
 
 class RemoteConfigServiceImpl implements RemoteConfigService {
   RemoteConfigServiceImpl(this._pubdocAPI);
 
-  static const String keyRights = 'rights';
   final PubdocAPI _pubdocAPI;
 
   static const Map<String, dynamic> _defaults = <String, dynamic>{
-    'exhibition': {
-      'john_gerrard': {
-        'contract_address': '0x9D57f2e1A8c864009ed0C980E2d31aa5EB42f820',
-        'exhibition_id': '50fb6756-80a9-46e4-b70c-380c32dfcc77',
-      }
-    },
-    'display_app_url': {
-      'tizen': 'https://feralfile-display-prod.pages.dev/',
+    'tizen': {
+      'url': 'https://feralfile-display-prod.pages.dev/',
+      'gitHash': '1434d96c8ce703c4ed6d1485e18a5296a406bcdb'
     }
   };
 
@@ -40,18 +34,6 @@ class RemoteConfigServiceImpl implements RemoteConfigService {
       log.info('RemoteConfigService: loadConfigs: $_configs');
     } catch (e) {
       log.info('RemoteConfigService: loadConfigs: $e');
-    }
-  }
-
-  @override
-  bool getBool(final ConfigGroup group, final ConfigKey key) {
-    if (_configs == null) {
-      unawaited(loadConfigs());
-      return _defaults[group.getString]![key.getString] as bool;
-    } else {
-      return _configs![group.getString]?[key.getString] as bool? ??
-          _defaults[group.getString]?[key.getString] as bool? ??
-          false;
     }
   }
 
@@ -77,47 +59,40 @@ class RemoteConfigServiceImpl implements RemoteConfigService {
       return _getConfig(_configs!, group, key, defaultValue);
     }
   }
+
+  @override
+  String? getString(final ConfigGroup group, final ConfigKey key) {
+    if (_configs == null) {
+      unawaited(loadConfigs());
+      _defaults[group.getString]?[key.getString] as String?;
+    }
+
+    return _configs?[group.getString]?[key.getString] as String?;
+  }
 }
 
-enum ConfigGroup {
-  exhibition,
-  johnGerrard,
-  displayAppUrl,
-}
+enum ConfigGroup { tizen }
 
 // ConfigGroup getString extension
 extension ConfigGroupExtension on ConfigGroup {
   String get getString {
     switch (this) {
-      case ConfigGroup.exhibition:
-        return 'exhibition';
-      case ConfigGroup.johnGerrard:
-        return 'john_gerrard';
-      case ConfigGroup.displayAppUrl:
-        return 'display_app_url';
+      case ConfigGroup.tizen:
+        return 'tizen';
     }
   }
 }
 
-enum ConfigKey {
-  johnGerrard,
-  customNote,
-  crawl,
-  tizen,
-}
+enum ConfigKey { url, gitHash }
 
 // ConfigKey getString extension
 extension ConfigKeyExtension on ConfigKey {
   String get getString {
     switch (this) {
-      case ConfigKey.johnGerrard:
-        return 'john_gerrard';
-      case ConfigKey.customNote:
-        return 'custom_notes';
-      case ConfigKey.crawl:
-        return 'crawl';
-      case ConfigKey.tizen:
-        return 'tizen';
+      case ConfigKey.url:
+        return 'url';
+      case ConfigKey.gitHash:
+        return 'gitHash';
     }
   }
 }

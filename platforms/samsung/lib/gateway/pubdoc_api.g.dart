@@ -31,7 +31,7 @@ class _PubdocAPI implements PubdocAPI {
     )
         .compose(
           _dio.options,
-          '/configs/postcard/postcard_configs.json',
+          '/configs/display_app/configs.json',
           queryParameters: queryParameters,
           data: _data,
         )
