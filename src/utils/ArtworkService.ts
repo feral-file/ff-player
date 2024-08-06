@@ -29,7 +29,7 @@ class ArtworkService {
     try {
       const client = createApolloClient();
       const { data } = await client.query({
-        query: gql`{tokens(ids: ["${ids.join(",")}"], offset: 0, size: 10)
+        query: gql`{tokens(ids: ["${ids.join('","')}"], offset: 0, size: 10)
               {
                 id
                 blockchain

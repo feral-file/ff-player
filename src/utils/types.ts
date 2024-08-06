@@ -185,3 +185,32 @@ export const MIMETypeVideo = "video/*";
 export const MIMETypeAudio = "audio/*";
 export const MIMETypeImage = "image/*";
 export const MIMETypeObject = "text/csv";
+
+export interface PlaylistToken {
+  artwork: Artwork;
+  duration: number;
+  previewURL: string;
+  token: {
+    id: string;
+  };
+}
+
+export enum EventType {
+  next,
+  previous,
+  pause,
+  resume,
+  updateDuration,
+}
+export interface WebsocketEvent {
+  type: EventType;
+  value: boolean | string | number | PlayArtworkV2[];
+}
+
+export interface CastInfo {
+  artworks: PlayArtworkV2[];
+  startTime: number;
+  type?: EventType;
+  deviceInfo?: any;
+  exhibitionId?: string;
+}

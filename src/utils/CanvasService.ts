@@ -34,19 +34,27 @@ import {
   SetCursorOffsetReply,
   KeyboardEventRequest,
   KeyboardEventReply,
+  WebsocketEvent as WebsocketEvent,
+  EventType,
+  CastInfo,
 } from "./types";
 
 import DeviceManager from "./DeviceManager";
 
 class CanvasService {
-  private castInfo: any = null;
+  private castInfo: CastInfo | undefined = undefined;
   private clientDeviceInfo: any = null;
   private timer: any = null;
+  private websocketEvent: WebsocketEvent | undefined;
 
   constructor() {}
 
   public getCastInfo() {
     return this.castInfo;
+  }
+
+  public getWebsocketEvent() {
+    return this.websocketEvent;
   }
 
   public async processMessage(event: MessageEvent) {
@@ -201,6 +209,10 @@ class CanvasService {
     request: NextArtworkRequest
   ): Promise<NextArtworkReply> {
     console.log("nextArtwork", request);
+    this.websocketEvent = {
+      type: EventType.next,
+      value: true,
+    };
     return { ok: true };
   }
 
@@ -222,6 +234,10 @@ class CanvasService {
     request: PreviousArtworkRequest
   ): Promise<PreviousArtworkReply> {
     console.log("previousArtwork", request);
+    this.websocketEvent = {
+      type: EventType.previous,
+      value: true,
+    };
     return { ok: true };
   }
 
@@ -236,6 +252,10 @@ class CanvasService {
     request: UpdateDurationRequest
   ): Promise<UpdateDurationReply> {
     console.log("updateDuration", request);
+    this.websocketEvent = {
+      type: EventType.updateDuration,
+      value: request.artworks,
+    };
     return {
       ok: true,
       startTime: Date.now(),
@@ -286,7 +306,7 @@ class CanvasService {
 
   private onDisconnect() {
     console.log("onDisconnect");
-    this.castInfo = null;
+    this.castInfo = undefined;
   }
 
   private setTimer(state: any, onNext: Function | null) {
