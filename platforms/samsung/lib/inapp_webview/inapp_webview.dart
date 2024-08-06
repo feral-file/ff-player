@@ -66,6 +66,10 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
   void _initWebview() {
     final url = widget.payload.url;
     log.info('load url: $url');
+    _addJavaScriptChannel();
+    _addConfigHandler();
+
+    _webViewController.loadRequest(Uri.parse(url));
 
     _webViewController.setJavaScriptMode(JavaScriptMode.unrestricted);
     _webViewController.setBackgroundColor(Colors.black);
@@ -80,10 +84,6 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
         });
       },
     ));
-    _addJavaScriptChannel();
-    _addConfigHandler();
-
-    _webViewController.loadRequest(Uri.parse(url));
   }
 
   void _addJavaScriptChannel() {
