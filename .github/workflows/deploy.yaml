@@ -52,7 +52,7 @@ jobs:
 
       - name: Write the current version hash
         run: |
-          echo "{\"version\": \"$(git rev-parse HEAD)\"}" > public/version.json
+          echo "{\"version\": \"$(git rev-parse HEAD)\"}" > out/version.json
 
       - name: Publish to Cloudflare Pages
         uses: cloudflare/pages-action@v1
