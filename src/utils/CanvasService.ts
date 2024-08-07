@@ -51,7 +51,7 @@ class CanvasService {
   }
 
   public async processMessage(event: MessageEvent) {
-    console.log("processMessage", event);
+    console.log("processMessage", JSON.stringify(event));
 
     const webSocketMessage: WebSocketMessage = JSON.parse(event.data);
     const messageData = JSON.parse(webSocketMessage.message);
@@ -66,19 +66,22 @@ class CanvasService {
 
     const commandStr = messageData.command;
     if (!commandStr) {
-      console.error("Command not found in the message:", messageData);
+      console.error(
+        "Command not found in the message:",
+        JSON.stringify(messageData)
+      );
       return;
     }
 
     const command = CastCommand[commandStr as keyof typeof CastCommand];
     if (!command) {
-      console.error("Invalid command:", commandStr);
+      console.error("Invalid command:", JSON.stringify(commandStr));
       return;
     }
 
     const requestJson = messageData.request;
 
-    console.log(`Received command: ${commandStr}`);
+    console.log(`Received command: ${JSON.stringify(commandStr)}`);
 
     const reply = await this.commandHandler(command, requestJson);
 
@@ -104,9 +107,6 @@ class CanvasService {
         castCommand: command,
       };
     }
-    console.log("------------");
-    console.log("commandHandler", this.castInfo);
-    console.log("------------");
 
     switch (command) {
       case CastCommand.connect:
@@ -154,7 +154,7 @@ class CanvasService {
   }
 
   private async connect(request: ConnectRequestV2): Promise<ConnectReplyV2> {
-    console.log("connect", request);
+    console.log("connect", JSON.stringify(request));
 
     const deviceInfo = DeviceManager.getDeviceInfo(); // Get the website’s device info
 
@@ -172,12 +172,12 @@ class CanvasService {
       },
       startTime: Date.now(),
     };
-    console.log("_connected device:", this.clientDeviceInfo);
+    console.log("_connected device:", JSON.stringify(this.clientDeviceInfo));
     return { ok: true };
   }
 
   private async disconnect(request: any): Promise<DisconnectReplyV2> {
-    console.log("disconnect", request);
+    console.log("disconnect", JSON.stringify(request));
     this.onDisconnect();
     return { ok: true };
   }
@@ -185,7 +185,7 @@ class CanvasService {
   private async status(
     request: CheckDeviceStatusRequest
   ): Promise<CheckDeviceStatusReply> {
-    console.log("checkStatus", request);
+    console.log("checkStatus", JSON.stringify(request));
     return {
       ok: true,
       startTime: Date.now(),
@@ -206,7 +206,7 @@ class CanvasService {
   private async castListArtwork(
     request: CastListArtworkRequest
   ): Promise<CastListArtworkReply> {
-    console.log("castListArtwork", request);
+    console.log("castListArtwork", JSON.stringify(request));
     this.castInfo = {
       ...this.castInfo,
       artworks: request.artworks,

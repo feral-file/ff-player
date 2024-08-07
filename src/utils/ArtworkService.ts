@@ -135,10 +135,10 @@ class ArtworkService {
               }
             }`,
       });
-      console.log("NFT Tokens:", data);
+      console.log("NFT Tokens:", JSON.stringify(data));
       return data;
     } catch (error) {
-      console.log("Error querying tokens:", error);
+      console.log("Error querying tokens:", JSON.stringify(error));
     }
 
     return null;

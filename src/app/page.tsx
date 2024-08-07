@@ -93,7 +93,7 @@ const Home = () => {
           setCurrentArtwork(artworks[0]);
         }
       } catch (error) {
-        console.log("Error fetching artworks:", error);
+        console.log("Error fetching artworks:", JSON.stringify(error));
       }
     };
     fetchArtworks();
@@ -114,7 +114,7 @@ const Home = () => {
   useEffect(() => {
     if (castInfo) {
       console.log("--------------");
-      console.log("Cast Command:", castInfo);
+      console.log("Cast Command:", JSON.stringify(castInfo));
       console.log("--------------");
 
       switch (castInfo.castCommand) {
@@ -154,10 +154,9 @@ const Home = () => {
                 }
               }
             } catch (error) {
-              console.log("Error fetching NFT tokens:", error);
+              console.log("Error fetching NFT tokens:", JSON.stringify(error));
             }
           };
-          console.log("Cast Info:", castInfo);
           if (castInfo.artworks) {
             const assetIds = castInfo.artworks.map(
               (artwork: any) => artwork.token.id
