@@ -4,10 +4,20 @@
   "vendor": "Feral File",
   "type": "web",
   "main": "index.html",
-  "title": "Feral File Display",
-  "icon": "logo.png",
+  "title": "Feral File",
+  "icon": "assets/icon.png",
   "appDescription": "Feral File Display",
   "category": "media",
-  "largeIcon": "logo.png",
-  "iconColor": "#ffffff"
+  "largeIcon": "assets/iconLarge.png",
+  "iconColor": "#000000",
+  "splashBackground": "assets/splash.png",
+  "splashColor": "#111111",
+  "splashFitModeOnPortrait": "width",
+  "requiredMemory": 1000,
+  "supportPortraitMode": true,
+  "transparent": false,
+  "screenSaverProperties": {
+    "preferredType": 3
+  },
+  "useGalleryMode": true
 }
