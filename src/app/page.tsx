@@ -17,7 +17,12 @@ import OnboardingPage from "./onboardingPage";
 import ArtworkService from "@/utils/ArtworkService";
 import { getIndex } from "@/utils/Playlist";
 import ComingSoonPage from "./commingSoonPage";
-import { KeyEvent, DeviceName } from "@/utils/platform";
+import {
+  KeyEvent,
+  DeviceName,
+  TizenConfigService,
+  Config,
+} from "@/utils/platform";
 
 const STANDARD_HEIGHT = 1080;
 
@@ -46,6 +51,8 @@ const Home = () => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
+  const [didRegisterPlatformEvents, setDidRegisterPlatformEvents] =
+    useState<boolean>(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -61,7 +68,7 @@ const Home = () => {
           minSize = window.innerWidth;
         } else {
           setViewMode(ViewMode.landscape);
-          minSize = window.innerHeight
+          minSize = window.innerHeight;
         }
 
         setScreenRatio(minSize / STANDARD_HEIGHT);
@@ -211,7 +218,19 @@ const Home = () => {
     (window as any).DeviceName = {
       handlePlatformEvent: DeviceName.handlePlatformEvent,
     };
+    (window as any).Config = {
+      handlePlatformEvent: Config.handlePlatformEvent,
+    };
+    setDidRegisterPlatformEvents(true);
   }, []);
+
+  if (didRegisterPlatformEvents) {
+    console.log("fetching device name");
+    new TizenConfigService().getString("device_name").then((deviceName) => {
+      console.log("complete future with deviceName", deviceName);
+      setDeviceName(deviceName);
+    });
+  }
 
   try {
     (window as any).AppState.postMessage("loaded");
