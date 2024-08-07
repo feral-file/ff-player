@@ -16,7 +16,7 @@ import OnboardingPage from "./onboardingPage";
 import ArtworkService from "@/utils/ArtworkService";
 import { getIndex } from "@/utils/Playlist";
 import ComingSoonPage from "./commingSoonPage";
-import { AppState, Rotate, KeyEvent, DeviceName } from "@/utils/platform";
+import { KeyEvent, DeviceName } from "@/utils/platform";
 
 const STANDARD_HEIGHT = 1080;
 
@@ -208,6 +208,10 @@ const Home = () => {
       handlePlatformEvent: DeviceName.handlePlatformEvent,
     };
   }, []);
+
+  try {
+    (window as any).AppState.postMessage("loaded");
+  } catch (error) {}
 
   useEffect(() => {
     if (currentIndex < 0) {
