@@ -62,7 +62,7 @@ const ArtworkPlayer = ({previewURL}: {previewURL: string}) => {
       {previewURL && previewType === SeriesPreviewHTMLTag.object && (
         <object style={{width: '100%', height: '100%'}} data={previewURL} type="text/html" onLoad={loadedSource}>Not supported</object>)}
       {previewURL && previewType === SeriesPreviewHTMLTag.video && (
-        <video style={{width: '100%', height: '100%'}} onLoadedData={loadedSource} autoPlay={true} preload="true" loop={true} src={previewURL}></video>)}
+        <video style={{width: '100%', height: '100%'}} onLoadedData={loadedSource} autoPlay muted loop playsInline crossOrigin="anonymous"><source src={previewURL}></source></video>)}
       {previewURL && previewType === SeriesPreviewHTMLTag.audio && (
         <audio  autoPlay={true} loop={true}><source src={previewURL} onLoadedData={loadedSource}></source></audio>)}
       {previewURL && (previewType === SeriesPreviewHTMLTag.iframe || previewType === SeriesPreviewHTMLTag.iframePDF) && (
