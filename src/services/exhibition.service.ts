@@ -5,7 +5,7 @@ import { Exhibition, Series } from "@/models";
 export class ExhibitionService {
   public async getExhibition(id: string) {
     try {
-      if (id == SOURCE_EXHIBITION_ID || true) {
+      if (id == SOURCE_EXHIBITION_ID) {
         return await this.getSourceExhibition();
       }
 

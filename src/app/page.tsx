@@ -24,7 +24,7 @@ import {
   TizenConfigService,
   Config,
 } from "@/utils/platform";
-import { ExhibitionService } from "@/services";
+import { navigate } from "./actions";
 
 const STANDARD_HEIGHT = 1080;
 
@@ -38,7 +38,6 @@ const Home = () => {
 
   // services
   const artworkService = useRef(new ArtworkService());
-  const exhibitionService = useRef(new ExhibitionService());
 
   // states
   const [screenRatio, setScreenRatio] = useState<number>(1);
@@ -181,11 +180,6 @@ const Home = () => {
         }
 
         case CastCommand.castExhibition: {
-          // Temporary display coming soon
-          setDisplayComingSoon(true);
-          setTimeout(() => {
-            setDisplayComingSoon(false);
-          }, 1000 * 15);
           castExhibition();
           break;
         }
@@ -313,16 +307,11 @@ const Home = () => {
     const catalogID = castInfo!.catalogId;
     const screen = castInfo!.catalog;
     console.log("Cast Exhibition:", exhibitionID, catalogID, screen);
-    if (exhibitionID) {
-      const exhibition = await exhibitionService.current.getExhibition(
-        exhibitionID
-      );
-      console.log("Exhibition:", exhibition);
-    }
 
     try {
       switch (screen) {
         case ExhibitionCatalog.home: {
+          navigate(`/exhibitions?id=${exhibitionID}`);
           break;
         }
 
