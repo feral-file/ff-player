@@ -1,5 +1,7 @@
+import { KeyCodes } from "@/constants";
 import DeviceManager from "./DeviceManager";
 import { v4 as uuidv4 } from "uuid";
+import { Event, EventEmitter } from "./EventEmitter";
 
 class PlatformEventReceiver {
   static handlePlatformEvent(event: string) {
@@ -10,7 +12,11 @@ class PlatformEventReceiver {
 export class KeyEvent extends PlatformEventReceiver {
   static override handlePlatformEvent(event: string) {
     super.handlePlatformEvent(event);
-    console.log(`Handling key event: ${event}`);
+    const [keyId, keyLabel] = event.split("_");
+    console.log(`Handling key event: ${keyId} - ${keyLabel}`);
+    if (parseInt(keyId) === KeyCodes.escape) {
+      EventEmitter.emit(Event.escape);
+    }
   }
 }
 
