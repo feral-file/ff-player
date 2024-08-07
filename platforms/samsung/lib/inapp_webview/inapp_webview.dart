@@ -72,6 +72,7 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
     log.info('load url: $url');
     _addJavaScriptChannel();
     _addConfigHandler();
+    _webViewController.setUserAgent('tizen_webview');
 
     _webViewController.loadRequest(Uri.parse(url));
 
