@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 const ArtworkPlayer = ({previewURL}: {previewURL: string}) => {
   const [previewType, setPreviewType] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
 
   function compareToGetFileType(type: string) {
     if (!type) {
@@ -41,23 +42,29 @@ const ArtworkPlayer = ({previewURL}: {previewURL: string}) => {
     };
 
     if (previewURL) {
+      setLoading(true);
+      setPreviewType(null);
       detectPreviewType(previewURL);
     }
   }, [previewURL])
 
+  const loadedSource = () => {
+    setLoading(false);
+  }
+
   return (
     <div style={{display: 'flex', width: '100%', height: '100%', backgroundColor: '#000000'}}>
-      {previewType === null && (<img style={{width: '100%', height: '100%', objectFit: 'contain'}} src="/ff-loading.gif"></img>)}
+      {(previewType === null || loading) && (<div style={{width: '100%', height: '100%', display: 'flex', position: 'absolute', top: 0}}><img style={{width: '100%', height: '100%', objectFit: 'contain'}} src="/ff-loading.gif"></img></div>)}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (
-        <img style={{width: '100%', height: '100%', objectFit: 'contain'}} src={previewURL} alt="Artwork" />)}
+        <img style={{width: '100%', height: '100%', objectFit: 'contain'}} src={previewURL} alt="Artwork" onLoad={loadedSource}/>)}
       {previewURL && previewType === SeriesPreviewHTMLTag.object && (
-        <object style={{width: '100%', height: '100%'}} data={previewURL} type="text/html">Not supported</object>)}
+        <object style={{width: '100%', height: '100%'}} data={previewURL} type="text/html" onLoad={loadedSource}>Not supported</object>)}
       {previewURL && previewType === SeriesPreviewHTMLTag.video && (
-        <video style={{width: '100%', height: '100%'}} autoPlay={true} loop={true}><source src={previewURL}></source></video>)}
+        <video style={{width: '100%', height: '100%'}} autoPlay={true} loop={true} onLoad={loadedSource}><source src={previewURL}></source></video>)}
       {previewURL && previewType === SeriesPreviewHTMLTag.audio && (
-        <audio  autoPlay={true} loop={true}><source src={previewURL}></source></audio>)}
+        <audio  autoPlay={true} loop={true}><source src={previewURL} onLoad={loadedSource}></source></audio>)}
       {previewURL && (previewType === SeriesPreviewHTMLTag.iframe || previewType === SeriesPreviewHTMLTag.iframePDF) && (
-        <iframe style={{width: '100%', height: '100%'}} src={previewURL}></iframe>)}
+        <iframe style={{width: '100%', height: '100%'}} src={previewURL} onLoad={loadedSource}></iframe>)}
     </div>
   );
 };

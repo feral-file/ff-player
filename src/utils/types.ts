@@ -202,3 +202,8 @@ export interface CastInfo {
   deviceInfo?: any;
   exhibitionId?: string;
 }
+
+export enum ViewMode {
+  landscape = "landscape",
+  portrait = "portrait",
+}
