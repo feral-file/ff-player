@@ -96,7 +96,7 @@ class MyApp extends StatelessWidget {
             navigatorObservers: [
               routeObserver,
             ],
-            initialRoute: AppRouter.inAppWebViewScreen,
+            initialRoute: AppRouter.homePage,
             onGenerateRoute: AppRouter.onGenerateRoute,
           ),
           builder: (context, value, child) => RotatedBox(
