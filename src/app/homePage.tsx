@@ -42,8 +42,8 @@ return (
             )}
           </div>
           <div>
-            <p>{currentArtwork?.artistAlias}</p>
-            <p>{currentArtwork?.series?.title}</p>
+            <p style={{fontSize: 16 * screenRatio}}>{currentArtwork?.artistAlias}</p>
+            <p style={{fontSize: 16 * screenRatio, fontWeight: 'bold', fontStyle: 'italic'}}>{currentArtwork?.series?.title}</p>
           </div>
         </div>
       </div>
