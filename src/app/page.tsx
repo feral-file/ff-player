@@ -40,6 +40,7 @@ const Home = () => {
 
   const [startPlayArtworkTime, setStartPlayArtworkTime] = useState<number>(0);
   const [endPlayArtworkTime, setEndPlayArtworkTime] = useState<number>(0);
+  const [keyboardCode, setKeyboardCode] = useState<number>(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
@@ -184,6 +185,12 @@ const Home = () => {
           break;
         }
 
+        case CastCommand.sendKeyboardEvent: {
+          console.log("Keyboard Event:", castInfo.value);
+          setKeyboardCode(castInfo.value);
+          break;
+        }
+
         case CastCommand.nextArtwork: {
           handleNext();
           break;
@@ -270,7 +277,10 @@ const Home = () => {
       )}
       {castStatus ? (
         <div style={{ width: "100vw", height: "100vh" }}>
-          <ArtworkPlayer previewURL={castPreviewURL!} />
+          <ArtworkPlayer
+            previewURL={castPreviewURL!}
+            keyboardCode={keyboardCode}
+          />
         </div>
       ) : (
         <HomePage

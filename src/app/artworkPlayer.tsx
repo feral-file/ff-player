@@ -1,7 +1,26 @@
-import { FileUseAudio, FileUseIframe, FileUseIframePDF, FileUseImage, FileUseObject, FileUseVideo, MIMETypeAudio, MIMETypeImage, MIMETypeObject, MIMETypeUseStream, MIMETypeVideo, SeriesPreviewHTMLTag } from "@/utils/types";
+import {
+  FileUseAudio,
+  FileUseIframe,
+  FileUseIframePDF,
+  FileUseImage,
+  FileUseObject,
+  FileUseVideo,
+  MIMETypeAudio,
+  MIMETypeImage,
+  MIMETypeObject,
+  MIMETypeUseStream,
+  MIMETypeVideo,
+  SeriesPreviewHTMLTag,
+} from "@/utils/types";
 import { useEffect, useState } from "react";
 
-const ArtworkPlayer = ({previewURL}: {previewURL: string}) => {
+const ArtworkPlayer = ({
+  previewURL,
+  keyboardCode,
+}: {
+  previewURL: string;
+  keyboardCode: number;
+}) => {
   const [previewType, setPreviewType] = useState<string | null>(null);
 
   function compareToGetFileType(type: string) {
@@ -29,35 +48,105 @@ const ArtworkPlayer = ({previewURL}: {previewURL: string}) => {
   }
 
   useEffect(() => {
+    if (keyboardCode) {
+      triggerKeyInIframe(keyboardCode);
+    }
+  }, [keyboardCode]);
+
+  const triggerKeyInIframe = (keyCode: number) => {
+    // This function to trigger keydown event in iframe
+    // But it's not working in this case
+
+    return;
+    // const iframe = document.getElementById("ff-iframe") as HTMLIFrameElement;
+    // if (!iframe) {
+    //   return;
+    // }
+    // const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    // if (iframeDoc) {
+    //   const event = new KeyboardEvent("keydown", {
+    //     keyCode: keyCode,
+    //     which: keyCode,
+    //     bubbles: true,
+    //     cancelable: true,
+    //   });
+    //   iframeDoc.dispatchEvent(event);
+    // }
+  };
+
+  useEffect(() => {
     const detectPreviewType = async (previewURL: string) => {
       try {
-        const response = await fetch(previewURL, {method: 'HEAD'});
-        const contentType = response.headers.get('Content-Type');
+        const response = await fetch(previewURL, { method: "HEAD" });
+        const contentType = response.headers.get("Content-Type");
         compareToGetFileType(contentType!);
       } catch (error) {
-        console.log('Error get content-type', error);
-
+        console.log("Error get content-type", error);
       }
     };
 
     if (previewURL) {
       detectPreviewType(previewURL);
     }
-  }, [previewURL])
+  }, [previewURL]);
 
   return (
-    <div style={{display: 'flex', width: '100%', height: '100%', backgroundColor: '#000000'}}>
-      {previewType === null && (<img style={{width: '100%', height: '100%', objectFit: 'contain'}} src="/ff-loading.gif"></img>)}
+    <div
+      style={{
+        display: "flex",
+        width: "100%",
+        height: "100%",
+        backgroundColor: "#000000",
+      }}
+    >
+      {previewType === null && (
+        <img
+          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          src="/ff-loading.gif"
+        ></img>
+      )}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (
-        <img style={{width: '100%', height: '100%', objectFit: 'contain'}} src={previewURL} alt="Artwork" />)}
+        <img
+          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          src={previewURL}
+          alt="Artwork"
+        />
+      )}
       {previewURL && previewType === SeriesPreviewHTMLTag.object && (
-        <object style={{width: '100%', height: '100%'}} data={previewURL} type="text/html">Not supported</object>)}
+        <object
+          style={{ width: "100%", height: "100%" }}
+          data={previewURL}
+          type="text/html"
+        >
+          Not supported
+        </object>
+      )}
       {previewURL && previewType === SeriesPreviewHTMLTag.video && (
-        <video style={{width: '100%', height: '100%'}} autoPlay={true} loop={true}><source src={previewURL}></source></video>)}
+        <video
+          style={{ width: "100%", height: "100%" }}
+          autoPlay={true}
+          loop={true}
+        >
+          <source src={previewURL}></source>
+        </video>
+      )}
       {previewURL && previewType === SeriesPreviewHTMLTag.audio && (
-        <audio  autoPlay={true} loop={true}><source src={previewURL}></source></audio>)}
-      {previewURL && (previewType === SeriesPreviewHTMLTag.iframe || previewType === SeriesPreviewHTMLTag.iframePDF) && (
-        <iframe style={{width: '100%', height: '100%'}} src={previewURL}></iframe>)}
+        <audio autoPlay={true} loop={true}>
+          <source src={previewURL}></source>
+        </audio>
+      )}
+      {previewURL &&
+        (previewType === SeriesPreviewHTMLTag.iframe ||
+          previewType === SeriesPreviewHTMLTag.iframePDF) && (
+          <iframe
+            style={{ width: "100%", height: "100%" }}
+            src={previewURL}
+            id="ff-iframe"
+            sandbox="allow-scripts allow-same-origin"
+            referrerPolicy="no-referrer"
+            allow=""
+          ></iframe>
+        )}
     </div>
   );
 };

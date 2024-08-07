@@ -201,4 +201,5 @@ export interface CastInfo {
   castCommand?: CastCommand;
   deviceInfo?: any;
   exhibitionId?: string;
+  value?: any;
 }

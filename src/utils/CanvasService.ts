@@ -304,6 +304,10 @@ class CanvasService {
     request: KeyboardEventRequest
   ): Promise<KeyboardEventReply> {
     console.log("keyboardEvent", request);
+    this.castInfo = {
+      ...this.castInfo,
+      value: request.code,
+    };
     return { ok: true };
   }
 
