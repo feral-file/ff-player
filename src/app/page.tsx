@@ -7,6 +7,7 @@ import DeviceManager from "../utils/DeviceManager";
 import {
   Artwork,
   CastCommand,
+  ExhibitionCatalog,
   PlayArtworkV2,
   PlaylistToken,
   ViewMode,
@@ -23,6 +24,7 @@ import {
   TizenConfigService,
   Config,
 } from "@/utils/platform";
+import { ExhibitionService } from "@/services";
 
 const STANDARD_HEIGHT = 1080;
 
@@ -33,7 +35,12 @@ const Home = () => {
     `${process.env.NEXT_PUBLIC_WEBSOCKET_URL!}/api/connection`,
     process.env.NEXT_PUBLIC_API_KEY!
   );
+
+  // services
   const artworkService = useRef(new ArtworkService());
+  const exhibitionService = useRef(new ExhibitionService());
+
+  // states
   const [screenRatio, setScreenRatio] = useState<number>(1);
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.landscape);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
@@ -179,6 +186,7 @@ const Home = () => {
           setTimeout(() => {
             setDisplayComingSoon(false);
           }, 1000 * 15);
+          castExhibition();
           break;
         }
 
@@ -298,6 +306,46 @@ const Home = () => {
     }
 
     setCurrentIndex((currentIndex) => (currentIndex - 1) % playlist.length);
+  };
+
+  const castExhibition = async () => {
+    const exhibitionID = castInfo!.exhibitionId;
+    const catalogID = castInfo!.catalogId;
+    const screen = castInfo!.catalog;
+    console.log("Cast Exhibition:", exhibitionID, catalogID, screen);
+    if (exhibitionID) {
+      const exhibition = await exhibitionService.current.getExhibition(
+        exhibitionID
+      );
+      console.log("Exhibition:", exhibition);
+    }
+
+    try {
+      switch (screen) {
+        case ExhibitionCatalog.home: {
+          break;
+        }
+
+        case ExhibitionCatalog.curatorNote: {
+          break;
+        }
+
+        case ExhibitionCatalog.resource: {
+          break;
+        }
+
+        case ExhibitionCatalog.resourceDetail: {
+          break;
+        }
+
+        case ExhibitionCatalog.artwork: {
+          break;
+        }
+
+        default:
+          break;
+      }
+    } catch (error) {}
   };
 
   return (
