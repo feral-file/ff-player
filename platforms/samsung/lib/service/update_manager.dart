@@ -12,9 +12,6 @@ class UpdateManager {
 
   UpdateManager(this._remoteConfigService, this._navigationService);
 
-  /// check for updates every 30 minutes
-  static const int _interval = 30;
-
   Future<void> _checkForUpdates() async {
     final String currentHash = _remoteConfigService.getConfig(
         ConfigGroup.tizen, ConfigKey.gitHash, '');
@@ -40,7 +37,12 @@ class UpdateManager {
   }
 
   void start() {
-    Timer.periodic(const Duration(minutes: _interval), (timer) async {
+    final String intervalSetting = _remoteConfigService.getConfig(
+        ConfigGroup.tizen, ConfigKey.updateInterval, '');
+
+    final interval = int.parse(intervalSetting);
+
+    Timer.periodic(Duration(minutes: interval), (timer) async {
       await _checkForUpdates();
     });
   }
