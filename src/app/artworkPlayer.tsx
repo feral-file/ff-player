@@ -56,7 +56,7 @@ const ArtworkPlayer = ({previewURL}: {previewURL: string}) => {
 
   return (
     <div style={{display: 'flex', width: '100%', height: '100%', backgroundColor: '#000000'}}>
-      {(previewType === null || loading) && (<div style={{width: '100%', height: '100%', backgroundColor: '#000000', display: 'flex', position: 'absolute', top: 0, zIndex: 2}}><img style={{width: '100%', height: '100%', objectFit: 'contain'}} src="/ff-loading.gif"></img></div>)}
+      {/* {(previewType === null || loading) && (<div style={{width: '100%', height: '100%', backgroundColor: '#000000', display: 'flex', position: 'absolute', top: 0, zIndex: 2}}><img style={{width: '100%', height: '100%', objectFit: 'contain'}} src="/ff-loading.gif"></img></div>)} */}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (
         <img style={{width: '100%', height: '100%', objectFit: 'contain'}} src={previewURL} alt="Artwork" onLoad={loadedSource}/>)}
       {previewURL && previewType === SeriesPreviewHTMLTag.object && (
