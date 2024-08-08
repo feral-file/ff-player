@@ -7,6 +7,7 @@ import DeviceManager from '../utils/DeviceManager';
 import {
   Artwork,
   CastCommand,
+  Daily,
   PlayArtworkV2,
   PlaylistToken,
   ViewMode,
@@ -24,6 +25,7 @@ import {
   Config,
 } from '@/utils/platform';
 import { useSearchParams } from 'next/navigation';
+import DailyService from '@/utils/DailyService';
 
 const STANDARD_HEIGHT = 1080;
 
@@ -35,6 +37,7 @@ const Home = () => {
     process.env.NEXT_PUBLIC_API_KEY!
   );
   const artworkService = useRef(new ArtworkService());
+  const dailyService = useRef(new DailyService());
   const [screenRatio, setScreenRatio] = useState<number>(1);
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.landscape);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
@@ -53,6 +56,7 @@ const Home = () => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
+  const [dailies, setDailies] = useState<Daily[]>([]);
   const [didRegisterPlatformEvents, setDidRegisterPlatformEvents] =
     useState<boolean>(false);
   const searchParams = useSearchParams();
@@ -222,6 +226,11 @@ const Home = () => {
             break;
           }
 
+          case CastCommand.castDaily: {
+            handleCastDaily();
+            break;
+          }
+
           case CastCommand.nextArtwork: {
             handleNext();
             break;
@@ -312,6 +321,73 @@ const Home = () => {
     }
 
     setCurrentIndex(currentIndex => (currentIndex - 1) % playlist.length);
+  };
+
+  // Handle cast daily
+  const handleCastDaily = async () => {
+    const daily = await dailyService.current.getUpcomingDaily();
+    if (!daily) {
+      return;
+    }
+    const ids = daily.map((d: Daily) => {
+      switch (d.blockchain) {
+        case 'ethereum': {
+          return `eth-${d.contractAddress}-${d.tokenID}`;
+        }
+
+        case 'bitmark': {
+          return `bmk--${d.tokenID}`;
+        }
+
+        case 'tezos': {
+          return `tez-${d.contractAddress}-${d.tokenID}`;
+        }
+
+        default: {
+          return '';
+        }
+      }
+    });
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    const data = await artworkService.current.queryTokens(ids);
+    const previewData: Map<string, string> = new Map();
+    data.tokens.forEach((token: any) => {
+      previewData.set(token.id, token.asset.metadata.project.latest.previewURL);
+    });
+
+    const dailies = daily.map((d: Daily) => {
+      return {
+        ...d,
+        previewURL: previewData.get(d.tokenID),
+      };
+    });
+
+    if (dailies.length > 0) {
+      const now = Date.now();
+      const currentDisplayTime = new Date(dailies[0].displayTime);
+      let nextDisplayTime = currentDisplayTime.setDate(
+        currentDisplayTime.getDate() + 1
+      );
+      if (dailies.length > 1 && dailies[1].displayTime) {
+        nextDisplayTime = new Date(dailies[1].displayTime).getTime();
+      }
+
+      const delay = nextDisplayTime - now;
+      if (dailies[0].previewURL) {
+        setCastPreviewURL(dailies[0].previewURL);
+        setCastStatus(true);
+      }
+
+      const interval = setInterval(() => {
+        handleCastDaily();
+      }, delay);
+
+      return () => clearInterval(interval);
+    }
   };
 
   return (
