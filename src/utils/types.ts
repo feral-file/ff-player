@@ -203,3 +203,8 @@ export interface CastInfo {
   exhibitionId?: string;
   value?: any;
 }
+
+export enum ViewMode {
+  landscape = "landscape",
+  portrait = "portrait",
+}

@@ -1,0 +1,64 @@
+.view {
+  .container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+    position: relative;
+    .info {
+      background-color: #2C2C2C;
+      color: #ffffff;
+      padding: 2rem;
+      display: flex;
+      .top {
+        h1 {
+          line-height: 1.1;
+        }
+      }
+      .bottom {
+        display: flex;
+        flex-direction: column;
+        .qrcode {
+          display: flex;
+          flex-direction: column;
+        }
+      }
+    }
+  }
+}
+
+.landscape {
+  @extend .view;
+  .container {
+    flex-direction: row;
+    .info {
+      flex-direction: column;
+      width: 27%;
+
+      .bottom {
+        height: 100%;
+        justify-content: space-between;
+      }
+    }
+  }
+}
+
+.portrait {
+  @extend .view;
+  .container {
+    flex-direction: column-reverse;
+    .info {
+      gap: 2em;
+      justify-content: space-between;
+      .top {
+        width: 45%;
+      }
+      .bottom {
+        align-items: flex-end;
+        flex-direction: column-reverse;
+        .qrcode {
+          align-items: flex-end;
+        }
+      }
+    }
+  }
+}

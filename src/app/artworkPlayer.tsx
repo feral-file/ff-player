@@ -22,6 +22,7 @@ const ArtworkPlayer = ({
   keyboardCode: number;
 }) => {
   const [previewType, setPreviewType] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
 
   function compareToGetFileType(type: string) {
     if (!type) {
@@ -80,15 +81,23 @@ const ArtworkPlayer = ({
         const response = await fetch(previewURL, { method: "HEAD" });
         const contentType = response.headers.get("Content-Type");
         compareToGetFileType(contentType!);
+        console.log("Content-Type:", contentType);
       } catch (error) {
         console.log("Error get content-type", error);
       }
     };
 
     if (previewURL) {
+      setLoading(true);
+      setPreviewType(null);
       detectPreviewType(previewURL);
     }
   }, [previewURL]);
+
+  const loadedSource = () => {
+    console.log("loaded source");
+    setLoading(false);
+  };
 
   return (
     <div
@@ -99,17 +108,30 @@ const ArtworkPlayer = ({
         backgroundColor: "#000000",
       }}
     >
-      {previewType === null && (
-        <img
-          style={{ width: "100%", height: "100%", objectFit: "contain" }}
-          src="/ff-loading.gif"
-        ></img>
+      {(previewType === null || loading) && (
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            backgroundColor: "#000000",
+            display: "flex",
+            position: "absolute",
+            top: 0,
+            zIndex: 2,
+          }}
+        >
+          <img
+            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            src="/ff-loading.gif"
+          ></img>
+        </div>
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (
         <img
           style={{ width: "100%", height: "100%", objectFit: "contain" }}
           src={previewURL}
           alt="Artwork"
+          onLoad={loadedSource}
         />
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.object && (
@@ -117,6 +139,7 @@ const ArtworkPlayer = ({
           style={{ width: "100%", height: "100%" }}
           data={previewURL}
           type="text/html"
+          onLoad={loadedSource}
         >
           Not supported
         </object>
@@ -124,15 +147,19 @@ const ArtworkPlayer = ({
       {previewURL && previewType === SeriesPreviewHTMLTag.video && (
         <video
           style={{ width: "100%", height: "100%" }}
-          autoPlay={true}
-          loop={true}
+          onLoadedData={loadedSource}
+          autoPlay
+          muted
+          loop
+          playsInline
+          crossOrigin="anonymous"
         >
           <source src={previewURL}></source>
         </video>
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.audio && (
         <audio autoPlay={true} loop={true}>
-          <source src={previewURL}></source>
+          <source src={previewURL} onLoadedData={loadedSource}></source>
         </audio>
       )}
       {previewURL &&
@@ -141,10 +168,8 @@ const ArtworkPlayer = ({
           <iframe
             style={{ width: "100%", height: "100%" }}
             src={previewURL}
-            id="ff-iframe"
-            sandbox="allow-scripts allow-same-origin"
-            referrerPolicy="no-referrer"
-            allow=""
+            onLoad={loadedSource}
+            sandbox="allow-same-origin allow-scripts"
           ></iframe>
         )}
     </div>

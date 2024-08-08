@@ -9,6 +9,7 @@ import {
   CastCommand,
   PlayArtworkV2,
   PlaylistToken,
+  ViewMode,
 } from "@/utils/types";
 import ArtworkPlayer from "./artworkPlayer";
 import HomePage from "./homePage";
@@ -16,6 +17,12 @@ import OnboardingPage from "./onboardingPage";
 import ArtworkService from "@/utils/ArtworkService";
 import { getIndex } from "@/utils/Playlist";
 import ComingSoonPage from "./commingSoonPage";
+import {
+  KeyEvent,
+  DeviceName,
+  TizenConfigService,
+  Config,
+} from "@/utils/platform";
 
 const STANDARD_HEIGHT = 1080;
 
@@ -28,6 +35,7 @@ const Home = () => {
   );
   const artworkService = useRef(new ArtworkService());
   const [screenRatio, setScreenRatio] = useState<number>(1);
+  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.landscape);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [currentArtwork, setCurrentArtwork] = useState<Artwork | null>(null);
   const [castStatus, setCastStatus] = useState<boolean | null>(false);
@@ -44,6 +52,8 @@ const Home = () => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
+  const [didRegisterPlatformEvents, setDidRegisterPlatformEvents] =
+    useState<boolean>(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -51,6 +61,21 @@ const Home = () => {
       if (browser) {
         setDeviceName(`${browser.os} - ${browser.name} ${browser.version}`);
       }
+
+      const resizeHandler = () => {
+        let minSize;
+        if (window.innerHeight > window.innerWidth) {
+          setViewMode(ViewMode.portrait);
+          minSize = window.innerWidth;
+        } else {
+          setViewMode(ViewMode.landscape);
+          minSize = window.innerHeight;
+        }
+
+        setScreenRatio(minSize / STANDARD_HEIGHT);
+      };
+
+      resizeHandler();
     }
   }, []);
 
@@ -68,18 +93,6 @@ const Home = () => {
   }, [locationID, topicID]);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const resizeHandler = () => {
-        const height = window.innerHeight;
-        const ratio = height / STANDARD_HEIGHT;
-        setScreenRatio(ratio);
-      };
-
-      resizeHandler();
-    }
-  });
-
-  useEffect(() => {
     const fetchArtworks = async () => {
       try {
         const artworks = await artworkService.current.getFeaturedArtworks();
@@ -88,7 +101,7 @@ const Home = () => {
           setCurrentArtwork(artworks[0]);
         }
       } catch (error) {
-        console.log("Error fetching artworks:", error);
+        console.log("Error fetching artworks:", JSON.stringify(error));
       }
     };
     fetchArtworks();
@@ -109,7 +122,7 @@ const Home = () => {
   useEffect(() => {
     if (castInfo) {
       console.log("--------------");
-      console.log("Cast Command:", castInfo);
+      console.log("Cast Command:", JSON.stringify(castInfo));
       console.log("--------------");
 
       switch (castInfo.castCommand) {
@@ -149,10 +162,9 @@ const Home = () => {
                 }
               }
             } catch (error) {
-              console.log("Error fetching NFT tokens:", error);
+              console.log("Error fetching NFT tokens:", JSON.stringify(error));
             }
           };
-          console.log("Cast Info:", castInfo);
           if (castInfo.artworks) {
             const assetIds = castInfo.artworks.map(
               (artwork: any) => artwork.token.id
@@ -205,6 +217,31 @@ const Home = () => {
       setCastStatus(false);
     }
   }, [castInfo]);
+
+  useEffect(() => {
+    (window as any).KeyEvent = {
+      handlePlatformEvent: KeyEvent.handlePlatformEvent,
+    };
+    (window as any).DeviceName = {
+      handlePlatformEvent: DeviceName.handlePlatformEvent,
+    };
+    (window as any).Config = {
+      handlePlatformEvent: Config.handlePlatformEvent,
+    };
+    setDidRegisterPlatformEvents(true);
+  }, []);
+
+  if (didRegisterPlatformEvents) {
+    console.log("fetching device name");
+    new TizenConfigService().getString("device_name").then((deviceName) => {
+      console.log("complete future with deviceName", deviceName);
+      setDeviceName(deviceName);
+    });
+  }
+
+  try {
+    (window as any).AppState.postMessage("loaded");
+  } catch (error) {}
 
   useEffect(() => {
     if (currentIndex < 0) {
@@ -285,6 +322,7 @@ const Home = () => {
       ) : (
         <HomePage
           screenRatio={screenRatio}
+          viewMode={viewMode}
           deviceName={deviceName!}
           branchLink={branchLink!}
           currentArtwork={currentArtwork!}
