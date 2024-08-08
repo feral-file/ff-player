@@ -24,7 +24,13 @@ import {
   TizenConfigService,
   Config,
 } from "@/utils/platform";
-import { navigate } from "./actions";
+import ExhibitionHall from "./exhibitions/exhibitionPlayer";
+
+const enum CastState {
+  None, // Not casting
+  Artwork, // Displaying artwork, playlist, dallies
+  Exhibition, // Displaying exhibition
+}
 
 const STANDARD_HEIGHT = 1080;
 
@@ -40,11 +46,11 @@ const Home = () => {
   const artworkService = useRef(new ArtworkService());
 
   // states
+  const [castState, setCastState] = useState<CastState>(CastState.Artwork);
   const [screenRatio, setScreenRatio] = useState<number>(1);
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.landscape);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [currentArtwork, setCurrentArtwork] = useState<Artwork | null>(null);
-  const [castStatus, setCastStatus] = useState<boolean | null>(false);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [playlist, setPlaylist] = useState<PlaylistToken[]>([]);
@@ -209,7 +215,7 @@ const Home = () => {
         }
       }
     } else {
-      setCastStatus(false);
+      setCastState(CastState.None);
     }
   }, [castInfo]);
 
@@ -256,7 +262,7 @@ const Home = () => {
     const index = currentIndex % playlist.length;
     const currentPlaylist = playlist[index];
     setCastPreviewURL(currentPlaylist.previewURL);
-    setCastStatus(true);
+    setCastState(CastState.Artwork);
     const currentTime = Date.now();
     setStartPlayArtworkTime(currentTime);
     setEndPlayArtworkTime(currentTime + currentPlaylist.duration);
@@ -303,38 +309,13 @@ const Home = () => {
   };
 
   const castExhibition = async () => {
-    const exhibitionID = castInfo!.exhibitionId;
-    const catalogID = castInfo!.catalogId;
-    const screen = castInfo!.catalog;
-    console.log("Cast Exhibition:", exhibitionID, catalogID, screen);
-
-    try {
-      switch (screen) {
-        case ExhibitionCatalog.home: {
-          navigate(`/exhibitions?id=${exhibitionID}`);
-          break;
-        }
-
-        case ExhibitionCatalog.curatorNote: {
-          break;
-        }
-
-        case ExhibitionCatalog.resource: {
-          break;
-        }
-
-        case ExhibitionCatalog.resourceDetail: {
-          break;
-        }
-
-        case ExhibitionCatalog.artwork: {
-          break;
-        }
-
-        default:
-          break;
-      }
-    } catch (error) {}
+    console.log(
+      "Cast Exhibition:",
+      castInfo!.exhibitionId,
+      castInfo!.catalogId,
+      castInfo!.catalog
+    );
+    setCastState(CastState.Exhibition);
   };
 
   return (
@@ -348,17 +329,25 @@ const Home = () => {
           displayName={deviceName!}
         />
       )}
-      {castStatus ? (
-        <div style={{ width: "100vw", height: "100vh" }}>
-          <ArtworkPlayer previewURL={castPreviewURL!} />
-        </div>
-      ) : (
+      {castState === CastState.None && (
         <HomePage
           screenRatio={screenRatio}
           viewMode={viewMode}
           deviceName={deviceName!}
           branchLink={branchLink!}
           currentArtwork={currentArtwork!}
+        />
+      )}
+      {castState === CastState.Artwork && (
+        <div style={{ width: "100vw", height: "100vh" }}>
+          <ArtworkPlayer previewURL={castPreviewURL!} />
+        </div>
+      )}
+      {castState === CastState.Exhibition && (
+        <ExhibitionHall
+          exhibitionID={castInfo?.exhibitionId}
+          catalogID={castInfo?.catalogId}
+          screen={castInfo?.catalog}
         />
       )}
     </>

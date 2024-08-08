@@ -41,11 +41,13 @@ export class ExhibitionService {
 
     try {
       console.log(
-        `${process.env.NEXT_PUBLIC_PUB_DOC_URL!}/source_exhibition/exhibition.json`
+        `${process.env
+          .NEXT_PUBLIC_PUB_DOC_URL!}/source_exhibition/exhibition.json`
       );
 
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_PUB_DOC_URL!}/source_exhibition/exhibition.json`
+        `${process.env
+          .NEXT_PUBLIC_PUB_DOC_URL!}/source_exhibition/exhibition.json`
       );
       console.log("response", response);
 

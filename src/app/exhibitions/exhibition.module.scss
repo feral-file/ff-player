@@ -47,4 +47,29 @@
       }
     }
   }
+
+  .posts {
+    width: 100%;
+    height: 100vh;
+    font-size: 22px;
+    .postList {
+      position: relative;
+      height: 100%;
+      .swiper {
+        height: 100%;
+      }
+    }
+  }
+}
+
+.fadeInBottom {
+  animation: fadeInBottom 0.2s ease-in-out;
+}
+
+@keyframes fadeInBottom {
+  from {
+      opacity: 0;
+      transform: translateY(100%);
+  }
+  to { opacity: 1 }
 }

@@ -3,7 +3,7 @@ import { Exhibition } from "./exhibition.model";
 export interface Post {
   id?: string;
   exhibitionID?: string;
-  type?: PostType;
+  type: PostType;
   title?: string;
   content?: string;
   dateTime?: string;
@@ -15,12 +15,20 @@ export interface Post {
   author?: string;
   exhibition?: Exhibition;
   coverURI?: string;
+
+  // Custom fields
+  mediaType?: PostMediaType;
+  thumbUrls?: string[];
+  videoUrl?: string;
+  date?: string;
+  time?: string;
 }
 
 export enum PostType {
+  Note = "note",
+  CloseUp = "close-up",
   Event = "event",
   News = "news",
-  CloseUp = "close-up",
   Schedule = "schedule",
   WhitePaper = "white-paper",
 }
@@ -28,4 +36,9 @@ export enum PostType {
 export enum PostMediaType {
   Image = "image",
   Video = "video",
+}
+
+export enum YoutubeThumbnailVariants {
+  highQuality = "maxresdefault", // Higher quality - May or may not exist
+  mediumQuality = "mqdefault", // Lower quality - Guaranteed to exist
 }
