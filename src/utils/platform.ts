@@ -92,8 +92,8 @@ export class Config extends PlatformEventReceiver {
   }
 }
 
-interface PlatformConfigService {
-  getString(key: string): Promise<string>;
+export interface PlatformConfigService {
+  getString(key: string): Promise<string | null>;
 
   setString(key: string, value: string): Promise<any>;
 }
@@ -153,5 +153,15 @@ export class TizenConfigService implements PlatformConfigService {
     FutureManager.instance.appendFuture(id, future);
 
     return future.promise;
+  }
+}
+
+export class WebConfigService implements PlatformConfigService {
+  async getString(key: string): Promise<string | null> {
+    return localStorage.getItem(key);
+  }
+
+  async setString(key: string, value: string): Promise<void> {
+    localStorage.setItem(key, value);
   }
 }

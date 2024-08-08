@@ -1,8 +1,35 @@
 import { v4 as uuidv4 } from "uuid";
 import createBranchLink from "./createBranchLink";
+import {
+  AndroidConfigService,
+  PlatformConfigService,
+  TizenConfigService,
+  WebConfigService,
+} from "./platform";
 
 class DeviceManager {
   static instance = new DeviceManager();
+  private _configService: PlatformConfigService | null = null;
+
+  get configService(): PlatformConfigService {
+    if (!this._configService) {
+      this._configService = this.createConfigService();
+    }
+    return this._configService;
+  }
+
+  private createConfigService(): PlatformConfigService {
+    console.log(`creating PlatformConfigService instance`);
+    const platform = localStorage.getItem("platform");
+    switch (platform) {
+      case "android":
+        return new AndroidConfigService();
+      case "tizen":
+        return new TizenConfigService();
+      default:
+        return new WebConfigService();
+    }
+  }
 
   private readonly deviceIdKey = "deviceId";
   private readonly locationIdKey = "locationId";
@@ -12,16 +39,16 @@ class DeviceManager {
   private readonly previouslyConnectedDeviceIdsKey =
     "previouslyConnectedDeviceIds";
 
-  private getFromLocalStorage(key: string): string | null {
-    return localStorage.getItem(key);
+  private async getFromLocalStorage(key: string): Promise<string | null> {
+    return await this.configService.getString(key);
   }
 
   private setToLocalStorage(key: string, value: string): void {
-    localStorage.setItem(key, value);
+    this.configService.setString(key, value);
   }
 
-  public getDeviceId(): string | null {
-    let deviceId = this.getFromLocalStorage(this.deviceIdKey);
+  public async getDeviceId(): Promise<string | null> {
+    let deviceId = await this.getFromLocalStorage(this.deviceIdKey);
     if (!deviceId) {
       deviceId = uuidv4();
       this.setToLocalStorage(this.deviceIdKey, deviceId!);
@@ -33,24 +60,24 @@ class DeviceManager {
     this.setToLocalStorage(this.locationIdKey, locationId);
   }
 
-  public getLocationId(): string | null {
-    return this.getFromLocalStorage(this.locationIdKey);
+  public async getLocationId(): Promise<string | null> {
+    return await this.getFromLocalStorage(this.locationIdKey);
   }
 
   public setTopicId(topicId: string): void {
     this.setToLocalStorage(this.topicIdKey, topicId);
   }
 
-  public getTopicId(): string | null {
-    return this.getFromLocalStorage(this.topicIdKey);
+  public async getTopicId(): Promise<string | null> {
+    return await this.getFromLocalStorage(this.topicIdKey);
   }
 
   public setName(name: string): void {
     this.setToLocalStorage(this.nameKey, name);
   }
 
-  public getName(): string | null {
-    return this.getFromLocalStorage(this.nameKey);
+  public async getName(): Promise<string | null> {
+    return await this.getFromLocalStorage(this.nameKey);
   }
 
   public setPreviouslyConnectedDeviceIds(deviceIds: string[]): void {
@@ -60,8 +87,8 @@ class DeviceManager {
     );
   }
 
-  public getPreviouslyConnectedDeviceIds(): string[] {
-    const deviceIdsJson = this.getFromLocalStorage(
+  public async getPreviouslyConnectedDeviceIds(): Promise<string[]> {
+    const deviceIdsJson = await this.getFromLocalStorage(
       this.previouslyConnectedDeviceIdsKey
     );
     if (!deviceIdsJson) {
@@ -70,8 +97,8 @@ class DeviceManager {
     return JSON.parse(deviceIdsJson);
   }
 
-  public addPreviouslyConnectedDeviceId(deviceId: string): void {
-    const deviceIds = this.getPreviouslyConnectedDeviceIds();
+  public async addPreviouslyConnectedDeviceId(deviceId: string): Promise<void> {
+    const deviceIds = await this.getPreviouslyConnectedDeviceIds();
     deviceIds.push(deviceId);
     this.setPreviouslyConnectedDeviceIds(deviceIds);
   }
@@ -80,16 +107,16 @@ class DeviceManager {
     this.setPreviouslyConnectedDeviceIds([]);
   }
 
-  public isPreviouslyConnectedDevice(deviceId: string): boolean {
-    const deviceIds = this.getPreviouslyConnectedDeviceIds();
+  public async isPreviouslyConnectedDevice(deviceId: string): Promise<boolean> {
+    const deviceIds = await this.getPreviouslyConnectedDeviceIds();
     return deviceIds.includes(deviceId);
   }
 
-  public getDeviceInfo() {
-    const deviceId = this.getDeviceId();
-    const locationId = this.getLocationId();
-    const topicId = this.getTopicId();
-    const name = this.getName();
+  public async getDeviceInfo() {
+    const deviceId = await this.getDeviceId();
+    const locationId = await this.getLocationId();
+    const topicId = await this.getTopicId();
+    const name = await this.getName();
     if (!locationId || !topicId) {
       return null;
     }
@@ -102,23 +129,23 @@ class DeviceManager {
     };
   }
 
-  private keyWithDevice(key: string): string {
-    const device = this.getDeviceInfo();
+  private async keyWithDevice(key: string): Promise<string> {
+    const device = await this.getDeviceInfo();
     return `${key}_${device?.locationId}_${device?.topicId}`;
   }
 
-  public setBranchLink(branchLink: string): void {
-    const key = this.keyWithDevice(this.branchLinkKey);
+  public async setBranchLink(branchLink: string): Promise<void> {
+    const key = await this.keyWithDevice(this.branchLinkKey);
     this.setToLocalStorage(key, branchLink);
   }
 
-  public getBranchLink(): string | null {
-    const key = this.keyWithDevice(this.branchLinkKey);
-    return this.getFromLocalStorage(key);
+  public async getBranchLink(): Promise<string | null> {
+    const key = await this.keyWithDevice(this.branchLinkKey);
+    return await this.getFromLocalStorage(key);
   }
 
   public async getOrGenerateBranchLink(): Promise<string | null> {
-    let branchLink = this.getBranchLink();
+    let branchLink = await this.getBranchLink();
     if (!branchLink) {
       branchLink = await this.generateBranchLink();
       if (branchLink) {
