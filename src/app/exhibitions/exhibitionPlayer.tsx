@@ -120,18 +120,22 @@ const ExhibitionHall = ({
       }
 
       const index = posts.findIndex((post) => post.id === id);
-      setPostIndex(index + 1); // +1 to count the curator note
+      setPostIndex(index);
     };
 
     if (screen !== undefined) {
       setSection(screen);
 
-      if (screen === ExhibitionCatalog.curatorNote) {
-        setPostIndex(0);
-      } else if (screen === ExhibitionCatalog.resource) {
-        getPostIndexByID(catalogID!);
-      } else if (screen === ExhibitionCatalog.artwork) {
-        getPreviewSource(catalogID!);
+      switch (screen) {
+        case ExhibitionCatalog.curatorNote:
+          setPostIndex(0);
+          break;
+        case ExhibitionCatalog.resource:
+          getPostIndexByID(catalogID!);
+          break;
+        case ExhibitionCatalog.artwork:
+          getPreviewSource(catalogID!);
+          break;
       }
     }
   }, [screen]);

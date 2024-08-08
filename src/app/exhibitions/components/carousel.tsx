@@ -6,7 +6,7 @@ import "swiper/scss/effect-coverflow";
 import "swiper/scss/effect-fade";
 import styles from "./carousel.module.scss";
 import { formatDateTime } from "@/utils/ui/formatDate";
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { setTimeout } from "timers";
 
 interface CarouselProps {
@@ -28,10 +28,11 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, onLoad }) => {
       depth: 480,
       modifier: 1,
       slideShadows: false,
-      scale: 0.8,
+      scale: 0.5,
     },
+    loop: true,
   };
-  const swiper = new Swiper(".swiper", swiperParams);
+  let swiper: Swiper;
 
   useEffect(() => {
     for (const item of items) {
@@ -44,10 +45,14 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, onLoad }) => {
   }, [items]);
 
   useEffect(() => {
-    if (swiper) {
-      console.log("slide to", index);
-      swiper.slideTo(index);
+    if (!swiper) {
+      swiper = new Swiper(".swiper", swiperParams);
     }
+    setTimeout(() => {
+      if (swiper && index !== undefined) {
+        swiper.slideTo(index);
+      }
+    }, 300);
   }, [index]);
 
   useEffect(() => {
@@ -71,29 +76,42 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, onLoad }) => {
           >
             {item.type === PostType.Note && (
               <div className={styles.card}>
-                <p>Curators note</p>
-                <p>{item.title}</p>
-                <p dangerouslySetInnerHTML={{ __html: item.content! }}></p>
+                <p className={styles.type}>Curators note</p>
+                <p className={styles.postTitle}>{item.title}</p>
+                <p
+                  className={styles.content}
+                  dangerouslySetInnerHTML={{ __html: item.content! }}
+                ></p>
               </div>
             )}
 
             {item.type === PostType.CloseUp && (
               <div className={styles.card}>
-                <p>Close up</p>
+                <p className={styles.type}>Close up</p>
                 <img src={item.coverURI} alt="close up thumbnail" />
-                <p>{item.title}</p>
-                {item.author && <p>by {item.author}</p>}
+                <p className={styles.postTitle}>{item.title}</p>
+                {item.author && (
+                  <p className={styles.subContent}>by {item.author}</p>
+                )}
               </div>
             )}
 
             {[PostType.Event, PostType.News].includes(item.type) && (
               <div className={styles.card}>
-                <p>{item.type === PostType.Event ? "Event" : "News"}</p>
+                <p className={styles.type}>
+                  {item.type === PostType.Event ? "Event" : "News"}
+                </p>
                 <img src={item.coverURI} alt="event thumbnail" />
-                <p>{item.title}</p>
-                {item.date && <p>Date: {item.date}</p>}
-                {item.time && <p>Time: {item.time}</p>}
-                {item.author && <p>by {item.author}</p>}
+                <p className={styles.postTitle}>{item.title}</p>
+                {item.date && (
+                  <p className={styles.content}>Date: {item.date}</p>
+                )}
+                {item.time && (
+                  <p className={styles.content}>Time: {item.time}</p>
+                )}
+                {item.author && (
+                  <p className={styles.subContent}>by {item.author}</p>
+                )}
               </div>
             )}
           </div>
