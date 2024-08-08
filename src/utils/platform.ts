@@ -93,7 +93,7 @@ export class TizenConfigService implements PlatformConfigService {
     };
     // fire event to tizen
     try {
-      (window as any).ConfigService.postMessage(JSON.stringify(request));
+      (window as any).ConfigService?.postMessage(JSON.stringify(request));
       console.log(`Sent request to Tizen ${JSON.stringify(request)}`);
     } catch (e) {
       console.error(`Failed to send request to Tizen: ${e}`);

@@ -89,7 +89,7 @@ const Home = () => {
       };
       generateBranchLink();
     }
-  }, [locationID, topicID]);
+  }, [locationID, topicID, deviceName]);
 
   useEffect(() => {
     const fetchArtworks = async () => {
@@ -205,6 +205,12 @@ const Home = () => {
           handlePrevious();
           break;
         }
+
+        case CastCommand.rotate: {
+          try {
+            (window as any).Rotate?.postMessage("clockwise");
+          } catch (error) {}
+        }
       }
     } else {
       setCastStatus(false);
@@ -233,7 +239,7 @@ const Home = () => {
   }
 
   try {
-    (window as any).AppState.postMessage("loaded");
+    (window as any).AppState?.postMessage("loaded");
   } catch (error) {}
 
   useEffect(() => {
