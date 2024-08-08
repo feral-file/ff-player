@@ -1,34 +1,35 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useRef } from "react";
-import { detect, BrowserInfo } from "detect-browser";
-import useWebSocket from "../utils/WebSocketManager";
-import DeviceManager from "../utils/DeviceManager";
+import { useState, useEffect, useRef } from 'react';
+import { detect, BrowserInfo } from 'detect-browser';
+import useWebSocket from '../utils/WebSocketManager';
+import DeviceManager from '../utils/DeviceManager';
 import {
   Artwork,
   CastCommand,
   PlayArtworkV2,
   PlaylistToken,
   ViewMode,
-} from "@/utils/types";
-import ArtworkPlayer from "./artworkPlayer";
-import HomePage from "./homePage";
-import OnboardingPage from "./onboardingPage";
-import ArtworkService from "@/utils/ArtworkService";
-import { getIndex } from "@/utils/Playlist";
-import ComingSoonPage from "./commingSoonPage";
+} from '@/utils/types';
+import ArtworkPlayer from './artworkPlayer';
+import HomePage from './homePage';
+import OnboardingPage from './onboardingPage';
+import ArtworkService from '@/utils/ArtworkService';
+import { getIndex } from '@/utils/Playlist';
+import ComingSoonPage from './commingSoonPage';
 import {
   KeyEvent,
   DeviceName,
   TizenConfigService,
   Config,
-} from "@/utils/platform";
+} from '@/utils/platform';
+import { useSearchParams } from 'next/navigation';
 
 const STANDARD_HEIGHT = 1080;
 
 const Home = () => {
   const [branchLink, setBranchLink] = useState<string | null>(null);
-  const [deviceName, setDeviceName] = useState<string>("Unknown Device");
+  const [deviceName, setDeviceName] = useState<string>('Unknown Device');
   const { locationID, topicID, castInfo } = useWebSocket(
     `${process.env.NEXT_PUBLIC_WEBSOCKET_URL!}/api/connection`,
     process.env.NEXT_PUBLIC_API_KEY!
@@ -54,9 +55,18 @@ const Home = () => {
   );
   const [didRegisterPlatformEvents, setDidRegisterPlatformEvents] =
     useState<boolean>(false);
+  const searchParams = useSearchParams();
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (typeof window !== 'undefined') {
+      const platform = searchParams.get('platform');
+      console.log('get platform from query', platform);
+      localStorage.setItem('platform', platform as string);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
       const browser = detect() as BrowserInfo;
       if (browser) {
         setDeviceName(`${browser.os} - ${browser.name} ${browser.version}`);
@@ -101,7 +111,7 @@ const Home = () => {
           setCurrentArtwork(artworks[0]);
         }
       } catch (error) {
-        console.log("Error fetching artworks:", JSON.stringify(error));
+        console.log('Error fetching artworks:', JSON.stringify(error));
       }
     };
     fetchArtworks();
@@ -121,98 +131,109 @@ const Home = () => {
 
   useEffect(() => {
     if (castInfo) {
-      console.log("--------------");
-      console.log("Cast Command:", JSON.stringify(castInfo));
-      console.log("--------------");
+      const handleCastCommand = async () => {
+        console.log('--------------');
+        console.log('Cast Command:', JSON.stringify(castInfo));
+        console.log('--------------');
 
-      switch (castInfo.castCommand) {
-        case CastCommand.castListArtwork: {
-          setDisplayComingSoon(false); // Temporary display coming soon
-          setDisplayOnboarding(false);
-          const getNftTokens = async (ids: string[]) => {
-            if (!ids.length) {
-              return;
-            }
-            try {
-              const data = await artworkService.current.queryTokens(ids);
-              const artworks = castInfo?.artworks;
-              if (!artworks) {
+        switch (castInfo.castCommand) {
+          case CastCommand.castListArtwork: {
+            setDisplayComingSoon(false); // Temporary display coming soon
+            setDisplayOnboarding(false);
+            const getNftTokens = async (ids: string[]) => {
+              if (!ids.length) {
                 return;
               }
-
-              if (data) {
-                const previewData: Map<string, string> = new Map();
-                data.tokens.forEach((token: any) => {
-                  previewData.set(
-                    token.indexID,
-                    token.asset.metadata.project.latest.previewURL
-                  );
-                });
-                const updatedArtworks = artworks.map((artwork: any) => {
-                  return {
-                    ...artwork,
-                    previewURL: previewData.get(artwork.token.id),
-                  };
-                });
-                setPlaylist(updatedArtworks);
-                if (castInfo.startTime) {
-                  setStartTime(castInfo.startTime);
-                  const i = getIndex(updatedArtworks, castInfo?.startTime);
-                  setCurrentIndex(i);
+              try {
+                const data = await artworkService.current.queryTokens(ids);
+                const artworks = castInfo?.artworks;
+                if (!artworks) {
+                  return;
                 }
+
+                if (data) {
+                  const previewData: Map<string, string> = new Map();
+                  data.tokens.forEach((token: any) => {
+                    previewData.set(
+                      token.indexID,
+                      token.asset.metadata.project.latest.previewURL
+                    );
+                  });
+                  const updatedArtworks = artworks.map((artwork: any) => {
+                    return {
+                      ...artwork,
+                      previewURL: previewData.get(artwork.token.id),
+                    };
+                  });
+                  setPlaylist(updatedArtworks);
+                  if (castInfo.startTime) {
+                    setStartTime(castInfo.startTime);
+                    const i = getIndex(updatedArtworks, castInfo?.startTime);
+                    setCurrentIndex(i);
+                  }
+                }
+              } catch (error) {
+                console.log(
+                  'Error fetching NFT tokens:',
+                  JSON.stringify(error)
+                );
               }
-            } catch (error) {
-              console.log("Error fetching NFT tokens:", JSON.stringify(error));
+            };
+            if (castInfo.artworks) {
+              const assetIds = castInfo.artworks.map(
+                (artwork: any) => artwork.token.id
+              );
+              getNftTokens(assetIds);
             }
-          };
-          if (castInfo.artworks) {
-            const assetIds = castInfo.artworks.map(
-              (artwork: any) => artwork.token.id
-            );
-            getNftTokens(assetIds);
+            break;
           }
-          break;
-        }
 
-        case CastCommand.castExhibition: {
-          // Temporary display coming soon
-          setDisplayComingSoon(true);
-          setTimeout(() => {
-            setDisplayComingSoon(false);
-          }, 1000 * 15);
-          break;
-        }
-
-        case CastCommand.connect: {
-          if (
-            !DeviceManager.isPreviouslyConnectedDevice(
-              castInfo?.deviceInfo?.device_id
-            )
-          ) {
-            setDisplayOnboarding(true);
-            DeviceManager.addPreviouslyConnectedDeviceId(
-              castInfo?.deviceInfo?.device_id
-            );
+          case CastCommand.castExhibition: {
+            // Temporary display coming soon
+            setDisplayComingSoon(true);
+            setTimeout(() => {
+              setDisplayComingSoon(false);
+            }, 1000 * 15);
+            break;
           }
-          break;
-        }
 
-        case CastCommand.sendKeyboardEvent: {
-          console.log("Keyboard Event:", castInfo.value);
-          setKeyboardCode(castInfo.value);
-          break;
-        }
+          case CastCommand.sendKeyboardEvent: {
+            console.log('Keyboard Event:', castInfo.value);
+            setKeyboardCode(castInfo.value);
+            break;
+          }
 
-        case CastCommand.nextArtwork: {
-          handleNext();
-          break;
-        }
+          case CastCommand.nextArtwork: {
+            handleNext();
+            break;
+          }
 
-        case CastCommand.previousArtwork: {
-          handlePrevious();
-          break;
+          case CastCommand.connect: {
+            if (
+              !(await DeviceManager.isPreviouslyConnectedDevice(
+                castInfo?.deviceInfo?.device_id
+              ))
+            ) {
+              setDisplayOnboarding(true);
+              DeviceManager.addPreviouslyConnectedDeviceId(
+                castInfo?.deviceInfo?.device_id
+              );
+            }
+            break;
+          }
+
+          case CastCommand.nextArtwork: {
+            handleNext();
+            break;
+          }
+
+          case CastCommand.previousArtwork: {
+            handlePrevious();
+            break;
+          }
         }
-      }
+      };
+      handleCastCommand();
     } else {
       setCastStatus(false);
     }
@@ -231,16 +252,8 @@ const Home = () => {
     setDidRegisterPlatformEvents(true);
   }, []);
 
-  if (didRegisterPlatformEvents) {
-    console.log("fetching device name");
-    new TizenConfigService().getString("device_name").then((deviceName) => {
-      console.log("complete future with deviceName", deviceName);
-      setDeviceName(deviceName);
-    });
-  }
-
   try {
-    (window as any).AppState.postMessage("loaded");
+    (window as any).AppState.postMessage('loaded');
   } catch (error) {}
 
   useEffect(() => {
@@ -268,7 +281,7 @@ const Home = () => {
     const currentTime = Date.now();
     setStartTime(startTime - (currentTime - startPlayArtworkTime));
     clearTimer();
-    setCurrentIndex((currentIndex) => (currentIndex + 1) % playlist.length);
+    setCurrentIndex(currentIndex => (currentIndex + 1) % playlist.length);
   };
 
   const startInterval = (duration: number) => {
@@ -298,7 +311,7 @@ const Home = () => {
       return;
     }
 
-    setCurrentIndex((currentIndex) => (currentIndex - 1) % playlist.length);
+    setCurrentIndex(currentIndex => (currentIndex - 1) % playlist.length);
   };
 
   return (
@@ -313,7 +326,7 @@ const Home = () => {
         />
       )}
       {castStatus ? (
-        <div style={{ width: "100vw", height: "100vh" }}>
+        <div style={{ width: '100vw', height: '100vh' }}>
           <ArtworkPlayer
             previewURL={castPreviewURL!}
             keyboardCode={keyboardCode}

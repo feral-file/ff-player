@@ -23,16 +23,32 @@ export class DeviceName extends PlatformEventReceiver {
 }
 
 class Future<T> {
-  resolve!: (value: T | PromiseLike<T>) => void;
-  reject!: (reason?: any) => void;
-
   promise: Promise<T>;
+  private resolveFn!: (value: T) => void;
+  private rejectFn!: (reason?: any) => void;
+  private timeoutId: ReturnType<typeof setTimeout>;
+  private static readonly DEFAULT_TIMEOUT = 1000;
 
   constructor() {
-    this.promise = new Promise<T>((res, rej) => {
-      this.resolve = res;
-      this.reject = rej;
+    this.promise = new Promise<T>((resolve, reject) => {
+      this.resolveFn = resolve;
+      this.rejectFn = reject;
     });
+
+    this.timeoutId = setTimeout(() => {
+      this.reject("Operation timed out");
+    }, Future.DEFAULT_TIMEOUT);
+  }
+
+  resolve(value: T) {
+    clearTimeout(this.timeoutId);
+    this.resolveFn(value);
+  }
+
+  reject(reason?: any) {
+    console.log(`Rejecting future with reason: ${reason}`);
+    clearTimeout(this.timeoutId);
+    this.rejectFn(reason);
   }
 }
 
@@ -60,10 +76,15 @@ export class Config extends PlatformEventReceiver {
     console.log(`Handling set config event: ${event}`);
     const config = JSON.parse(event);
     const id = config.id;
+    const isOk = config.ok;
 
     const future = FutureManager.instance.getFuture(id);
     if (future) {
-      future.resolve(config.data);
+      if (isOk) {
+        future.resolve(config.data);
+      } else {
+        future.reject(config.errorMessage);
+      }
       FutureManager.instance.removeFuture(id);
     } else {
       console.error(`No future found for id: ${id}`);
@@ -71,14 +92,22 @@ export class Config extends PlatformEventReceiver {
   }
 }
 
-interface PlatformConfigService {
-  getString(key: string): Promise<string>;
+export interface PlatformConfigService {
+  getString(key: string): Promise<string | null>;
+
+  setString(key: string, value: string): Promise<any>;
 }
 
 export class AndroidConfigService implements PlatformConfigService {
   async getString(key: string): Promise<string> {
     return await (window as any).flutter_inappwebview.callHandler("getString", {
       data: key,
+    });
+  }
+
+  async setString(key: string, value: string): Promise<void> {
+    return await (window as any).flutter_inappwebview.callHandler("setString", {
+      data: { key: key, value: value },
     });
   }
 }
@@ -103,5 +132,36 @@ export class TizenConfigService implements PlatformConfigService {
     FutureManager.instance.appendFuture(id, future);
 
     return future.promise;
+  }
+
+  async setString(key: string, value: string): Promise<any> {
+    const id = uuidv4();
+    const request = {
+      id: id,
+      handler: "setString",
+      data: { key: key, value: value },
+    };
+    // fire event to tizen
+    try {
+      (window as any).ConfigService.postMessage(JSON.stringify(request));
+      console.log(`Sent request to Tizen ${JSON.stringify(request)}`);
+    } catch (e) {
+      console.error(`Failed to send request to Tizen: ${e}`);
+    }
+
+    const future = new Future<any>();
+    FutureManager.instance.appendFuture(id, future);
+
+    return future.promise;
+  }
+}
+
+export class WebConfigService implements PlatformConfigService {
+  async getString(key: string): Promise<string | null> {
+    return localStorage.getItem(key);
+  }
+
+  async setString(key: string, value: string): Promise<void> {
+    localStorage.setItem(key, value);
   }
 }
