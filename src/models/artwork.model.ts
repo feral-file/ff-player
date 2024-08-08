@@ -15,4 +15,13 @@ export interface Artwork {
   previewURI?: string;
   thumbnailURI?: string;
   series?: Series;
+  metadata?: ArtworkMetadata;
+}
+
+interface ArtworkMetadata {
+  previewCloudFlareURL?: string;
+  thumbnailCloudFlareURL?: string;
+  alternativePreviewURI?: string;
+  viewableAt?: string;
+  ts044MergedIndexes?: number[];
 }

@@ -1,14 +1,20 @@
 "use client";
 
-import { Exhibition, Series, ExhibitionType, Post, PostType } from "@/models";
+import {
+  Exhibition,
+  Series,
+  ExhibitionType,
+  Post,
+  PostType,
+  Artwork,
+} from "@/models";
 import { useEffect, useRef, useState } from "react";
-import { ExhibitionService } from "@/services/exhibition.service";
 import styles from "./exhibition.module.scss";
 import "./exhibition.module.scss";
 import { ExhibitionCatalog } from "@/utils/types";
-import { PostService } from "@/services/post.service";
 import Carousel from "./components/carousel";
 import ArtworkPlayer from "../artworkPlayer";
+import { ExhibitionService, SeriesService, PostService } from "@/services";
 
 const ExhibitionHall = ({
   exhibitionID,
@@ -27,12 +33,46 @@ const ExhibitionHall = ({
   >();
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [postIndex, setPostIndex] = useState<number>(0);
-  const [series, setSeries] = useState<Series[] | null>(null);
+  const [listSeries, setSeriesOverview] = useState<Series[]>([]);
+  const [artwork, setArtwork] = useState<Artwork>();
   const exhibitionService = useRef(new ExhibitionService());
   const postService = useRef(new PostService());
+  const seriesService = useRef(new SeriesService());
 
   const FERAL_FILE_ASSET_URL =
     process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL! + "/";
+
+  // For not minted exhibition
+  const getSeriesOverview = async (series: Series[]) => {
+    const seriesOverview: Series[] = series.sort((a, b) =>
+      a.displayIndex > b.displayIndex ? 1 : -1
+    );
+
+    const promises: Promise<Artwork[]>[] = [];
+    for (const s of seriesOverview) {
+      promises.push(seriesService.current.getArtworkOfSeries(s.id));
+    }
+
+    await Promise.all(promises).then((results) => {
+      for (const result of results) {
+        const index = results.indexOf(result);
+        seriesOverview[index].artworks = result;
+        seriesOverview[index].firstArtwork = result[0];
+      }
+    });
+
+    setSeriesOverview(seriesOverview);
+  };
+
+  const getPreviewSource = async (artworkID: string) => {
+    const artwork = await seriesService.current.getArtwork(artworkID);
+    if (!artwork) {
+      return;
+    }
+
+    artwork.previewURI = seriesService.current.getArtworkPreview(artwork);
+    setArtwork(artwork);
+  };
 
   useEffect(() => {
     // fetch exhibition detail
@@ -47,7 +87,7 @@ const ExhibitionHall = ({
 
       setExhibitionDetail(exhibition);
       fetchPosts(exhibition!);
-      setSeries(exhibition?.series!);
+      // getSeriesOverview(exhibition?.series!);
     };
 
     const fetchPosts = async (exhibition: Exhibition) => {
@@ -90,6 +130,8 @@ const ExhibitionHall = ({
         setPostIndex(0);
       } else if (screen === ExhibitionCatalog.resource) {
         getPostIndexByID(catalogID!);
+      } else if (screen === ExhibitionCatalog.artwork) {
+        getPreviewSource(catalogID!);
       }
     }
   }, [screen]);
@@ -152,10 +194,9 @@ const ExhibitionHall = ({
         )}
       {exhibitionDetail && pageSection === ExhibitionCatalog.artwork && (
         <div className={[styles.exhCard, styles.fadeInBottom].join(" ")}>
-          {series?.length &&
-            series.map((s) => (
-              <ArtworkPlayer key={s.id} previewURL={s.thumbnailURI!} />
-            ))}
+          {artwork?.previewURI && (
+            <ArtworkPlayer key={artwork.id} previewURL={artwork.previewURI!} />
+          )}
         </div>
       )}
     </div>

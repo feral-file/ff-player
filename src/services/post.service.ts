@@ -27,6 +27,10 @@ export class PostService {
 
   private formatPost(resource: Post) {
     try {
+      if (!resource.coverURI) {
+        return;
+      }
+
       const url = new URL(resource.coverURI!);
       if (url.hostname === new URL(YOUTUBE_URL).hostname) {
         const videoId = url.searchParams.get(YOUTUBE_VIDEO_QUERY_PARAM_KEY);
