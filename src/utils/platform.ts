@@ -95,7 +95,7 @@ export class Config extends PlatformEventReceiver {
 interface PlatformConfigService {
   getString(key: string): Promise<string>;
 
-  setString(key: string, value: string): Promise<void>;
+  setString(key: string, value: string): Promise<any>;
 }
 
 export class AndroidConfigService implements PlatformConfigService {
@@ -134,7 +134,7 @@ export class TizenConfigService implements PlatformConfigService {
     return future.promise;
   }
 
-  async setString(key: string, value: string): Promise<void> {
+  async setString(key: string, value: string): Promise<any> {
     const id = uuidv4();
     const request = {
       id: id,
@@ -149,7 +149,7 @@ export class TizenConfigService implements PlatformConfigService {
       console.error(`Failed to send request to Tizen: ${e}`);
     }
 
-    const future = new Future<void>();
+    const future = new Future<any>();
     FutureManager.instance.appendFuture(id, future);
 
     return future.promise;
