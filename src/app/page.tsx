@@ -23,6 +23,7 @@ import {
   TizenConfigService,
   Config,
 } from "@/utils/platform";
+import { useSearchParams } from "next/navigation";
 
 const STANDARD_HEIGHT = 1080;
 
@@ -53,6 +54,15 @@ const Home = () => {
   );
   const [didRegisterPlatformEvents, setDidRegisterPlatformEvents] =
     useState<boolean>(false);
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const platform = searchParams.get("platform");
+      console.log("get platform from query", platform);
+      localStorage.setItem("platform", platform as string);
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -120,92 +130,98 @@ const Home = () => {
 
   useEffect(() => {
     if (castInfo) {
-      console.log("--------------");
-      console.log("Cast Command:", JSON.stringify(castInfo));
-      console.log("--------------");
+      const handleCastCommand = async () => {
+        console.log("--------------");
+        console.log("Cast Command:", JSON.stringify(castInfo));
+        console.log("--------------");
 
-      switch (castInfo.castCommand) {
-        case CastCommand.castListArtwork: {
-          setDisplayComingSoon(false); // Temporary display coming soon
-          setDisplayOnboarding(false);
-          const getNftTokens = async (ids: string[]) => {
-            if (!ids.length) {
-              return;
-            }
-            try {
-              const data = await artworkService.current.queryTokens(ids);
-              const artworks = castInfo?.artworks;
-              if (!artworks) {
+        switch (castInfo.castCommand) {
+          case CastCommand.castListArtwork: {
+            setDisplayComingSoon(false); // Temporary display coming soon
+            setDisplayOnboarding(false);
+            const getNftTokens = async (ids: string[]) => {
+              if (!ids.length) {
                 return;
               }
-
-              if (data) {
-                const previewData: Map<string, string> = new Map();
-                data.tokens.forEach((token: any) => {
-                  previewData.set(
-                    token.indexID,
-                    token.asset.metadata.project.latest.previewURL
-                  );
-                });
-                const updatedArtworks = artworks.map((artwork: any) => {
-                  return {
-                    ...artwork,
-                    previewURL: previewData.get(artwork.token.id),
-                  };
-                });
-                setPlaylist(updatedArtworks);
-                if (castInfo.startTime) {
-                  setStartTime(castInfo.startTime);
-                  const i = getIndex(updatedArtworks, castInfo?.startTime);
-                  setCurrentIndex(i);
+              try {
+                const data = await artworkService.current.queryTokens(ids);
+                const artworks = castInfo?.artworks;
+                if (!artworks) {
+                  return;
                 }
+
+                if (data) {
+                  const previewData: Map<string, string> = new Map();
+                  data.tokens.forEach((token: any) => {
+                    previewData.set(
+                      token.indexID,
+                      token.asset.metadata.project.latest.previewURL
+                    );
+                  });
+                  const updatedArtworks = artworks.map((artwork: any) => {
+                    return {
+                      ...artwork,
+                      previewURL: previewData.get(artwork.token.id),
+                    };
+                  });
+                  setPlaylist(updatedArtworks);
+                  if (castInfo.startTime) {
+                    setStartTime(castInfo.startTime);
+                    const i = getIndex(updatedArtworks, castInfo?.startTime);
+                    setCurrentIndex(i);
+                  }
+                }
+              } catch (error) {
+                console.log(
+                  "Error fetching NFT tokens:",
+                  JSON.stringify(error)
+                );
               }
-            } catch (error) {
-              console.log("Error fetching NFT tokens:", JSON.stringify(error));
+            };
+            if (castInfo.artworks) {
+              const assetIds = castInfo.artworks.map(
+                (artwork: any) => artwork.token.id
+              );
+              getNftTokens(assetIds);
             }
-          };
-          if (castInfo.artworks) {
-            const assetIds = castInfo.artworks.map(
-              (artwork: any) => artwork.token.id
-            );
-            getNftTokens(assetIds);
+            break;
           }
-          break;
-        }
 
-        case CastCommand.castExhibition: {
-          // Temporary display coming soon
-          setDisplayComingSoon(true);
-          setTimeout(() => {
-            setDisplayComingSoon(false);
-          }, 1000 * 15);
-          break;
-        }
-
-        case CastCommand.connect: {
-          if (
-            !DeviceManager.isPreviouslyConnectedDevice(
-              castInfo?.deviceInfo?.device_id
-            )
-          ) {
-            setDisplayOnboarding(true);
-            DeviceManager.addPreviouslyConnectedDeviceId(
-              castInfo?.deviceInfo?.device_id
-            );
+          case CastCommand.castExhibition: {
+            // Temporary display coming soon
+            setDisplayComingSoon(true);
+            setTimeout(() => {
+              setDisplayComingSoon(false);
+            }, 1000 * 15);
+            break;
           }
-          break;
-        }
 
-        case CastCommand.nextArtwork: {
-          handleNext();
-          break;
-        }
+          case CastCommand.connect: {
+            if (
+              !(await DeviceManager.isPreviouslyConnectedDevice(
+                castInfo?.deviceInfo?.device_id
+              ))
+            ) {
+              setDisplayOnboarding(true);
+              DeviceManager.addPreviouslyConnectedDeviceId(
+                castInfo?.deviceInfo?.device_id
+              );
+            }
+            break;
+          }
 
-        case CastCommand.previousArtwork: {
-          handlePrevious();
-          break;
+          case CastCommand.nextArtwork: {
+            handleNext();
+            break;
+          }
+
+          case CastCommand.previousArtwork: {
+            handlePrevious();
+            break;
+          }
         }
-      }
+      };
+      handleCastCommand();
     } else {
       setCastStatus(false);
     }
@@ -223,20 +239,6 @@ const Home = () => {
     };
     setDidRegisterPlatformEvents(true);
   }, []);
-
-  if (didRegisterPlatformEvents) {
-    console.log("fetching device name");
-    const fetchDeviceName = async () => {
-      try {
-        const result = await new TizenConfigService().getString("device_name");
-        console.log("complete future with deviceName", result);
-        setDeviceName(result);
-      } catch (error) {
-        console.log("error fetching device name", error);
-      }
-    };
-    fetchDeviceName();
-  }
 
   try {
     (window as any).AppState.postMessage("loaded");
