@@ -232,10 +232,16 @@ const Home = () => {
 
   if (didRegisterPlatformEvents) {
     console.log("fetching device name");
-    new TizenConfigService().getString("device_name").then((deviceName) => {
-      console.log("complete future with deviceName", deviceName);
-      setDeviceName(deviceName);
-    });
+    const fetchDeviceName = async () => {
+      try {
+        const result = await new TizenConfigService().getString("device_name");
+        console.log("complete future with deviceName", result);
+        setDeviceName(result);
+      } catch (error) {
+        console.log("error fetching device name", error);
+      }
+    };
+    fetchDeviceName();
   }
 
   try {
