@@ -4,25 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import { detect, BrowserInfo } from 'detect-browser';
 import useWebSocket from '../utils/WebSocketManager';
 import DeviceManager from '../utils/DeviceManager';
-import {
-  Artwork,
-  CastCommand,
-  PlayArtworkV2,
-  PlaylistToken,
-  ViewMode,
-} from '@/utils/types';
+import { Artwork, CastCommand, PlaylistToken, ViewMode } from '@/utils/types';
 import ArtworkPlayer from './artworkPlayer';
 import HomePage from './homePage';
 import OnboardingPage from './onboardingPage';
 import ArtworkService from '@/utils/ArtworkService';
 import { getIndex } from '@/utils/Playlist';
 import ComingSoonPage from './commingSoonPage';
-import {
-  KeyEvent,
-  DeviceName,
-  TizenConfigService,
-  Config,
-} from '@/utils/platform';
+import { KeyEvent, DeviceName, Config } from '@/utils/platform';
 import { useSearchParams } from 'next/navigation';
 import { Event, EventEmitter } from '@/utils/EventEmitter';
 
@@ -60,7 +49,7 @@ const Home = () => {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const platform = searchParams.get('platform');
+      const platform = searchParams?.get('platform');
       console.log('get platform from query', platform);
       localStorage.setItem('platform', platform as string);
     }

@@ -18,6 +18,7 @@ class UpdateManager {
     // check for updates
     log.info('UpdateManager current hash: $currentHash');
     await _remoteConfigService.loadConfigs();
+
     final String newHash = _remoteConfigService.getConfig(
         ConfigGroup.tizen, ConfigKey.gitHash, '');
     log.info('UpdateManager new hash: $newHash');
@@ -32,7 +33,7 @@ class UpdateManager {
           duration: Duration(seconds: 5),
         ),
       );
-      _navigationService.pushReplacementNamed(AppRouter.inAppWebViewScreen);
+      _navigationService.pushNamedOrReplace(AppRouter.inAppWebViewScreen);
     }
   }
 
