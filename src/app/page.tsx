@@ -31,7 +31,7 @@ const STANDARD_HEIGHT = 1080;
 const Home = () => {
   const [branchLink, setBranchLink] = useState<string | null>(null);
   const [deviceName, setDeviceName] = useState<string>('Unknown Device');
-  const { locationID, topicID, castInfo } = useWebSocket(
+  const { locationID, topicID, castInfo, canvasService } = useWebSocket(
     `${process.env.NEXT_PUBLIC_WEBSOCKET_URL!}/api/connection`,
     process.env.NEXT_PUBLIC_API_KEY!
   );
@@ -83,6 +83,9 @@ const Home = () => {
       console.log('Escape key pressed');
       if (castStatusRef.current) {
         setCastStatus(false);
+        if (canvasService?.current != null) {
+          canvasService?.current?.disconnect({});
+        }
         clearTimer();
       }
     };
