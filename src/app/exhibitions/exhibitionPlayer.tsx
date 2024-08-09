@@ -15,6 +15,7 @@ import { ExhibitionCatalog, ViewMode } from '@/utils/types';
 import Carousel from './components/carousel/carousel';
 import ArtworkPlayer from '@/components/artworkPlayer';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
+import { getThumbnailCover } from '@/utils/youtube';
 
 const ExhibitionHall = ({
   exhibitionID,
@@ -84,6 +85,9 @@ const ExhibitionHall = ({
         content: exhibition?.noteBrief,
       } as Post;
       posts = [curatorNote, ...posts];
+      for (const post of posts) {
+        post.coverURI = getThumbnailCover(post.coverURI);
+      }
       setPosts(posts);
     };
 

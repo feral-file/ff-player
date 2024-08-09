@@ -9,7 +9,6 @@ import { formatDateTime } from '@/utils/ui/formatDate';
 import { useEffect, useState } from 'react';
 import { setTimeout } from 'timers';
 import { ViewMode } from '@/utils/types';
-import useFormatCoverUri from '@/hook/useFormatCoverUri';
 
 interface CarouselProps {
   items: Post[];
@@ -85,7 +84,6 @@ const Carousel: React.FC<CarouselProps> = ({
     <div className="swiper" style={{ height: '100%' }}>
       <div className="swiper-wrapper">
         {items.map((item, index) => {
-          const formattedCoverUri = useFormatCoverUri(item.coverURI);
           return (
             <div
               key={index}
@@ -125,8 +123,8 @@ const Carousel: React.FC<CarouselProps> = ({
                     style={{ fontSize: 22 * screenRatio }}>
                     Close up
                   </p>
-                  {formattedCoverUri && (
-                    <img src={formattedCoverUri} alt="close up thumbnail" />
+                  {item.coverURI && (
+                    <img src={item.coverURI} alt="close up thumbnail" />
                   )}
                   <p
                     className={styles.postTitle}
@@ -159,8 +157,8 @@ const Carousel: React.FC<CarouselProps> = ({
                       ? 'White paper'
                       : item.type}
                   </p>
-                  {formattedCoverUri && (
-                    <img src={formattedCoverUri} alt="event thumbnail" />
+                  {item.coverURI && (
+                    <img src={item.coverURI} alt="event thumbnail" />
                   )}
                   <p
                     className={styles.postTitle}
