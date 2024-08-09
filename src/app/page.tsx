@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { detect, BrowserInfo } from 'detect-browser';
-import useWebSocket from '../utils/WebSocketManager';
+import useWebSocket from '../services/WebSocketManager';
 import DeviceManager from '../utils/DeviceManager';
 import {
   Artwork,
@@ -16,22 +16,28 @@ import {
 import ArtworkPlayer from '../components/artworkPlayer';
 import HomePage from '../components/homePage';
 import OnboardingPage from '../components/onboardingPage';
-import ArtworkService from '@/utils/ArtworkService';
+import ArtworkService from '@/services/ArtworkService';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
 import ComingSoonPage from '../components/comingSoonPage';
 import { KeyEvent, DeviceName, Config } from '@/utils/platform';
-import DailyService from '@/utils/DailyService';
+import DailyService from '@/services/DailyService';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
+import { WebSocketContext } from '../context/WebSocketContext';
 
 const STANDARD_HEIGHT = 1080;
 
-const Home = () => {
+const Home: React.FC = () => {
+  const context = useContext(WebSocketContext);
+  if (!context) {
+    return <p>No WebSocket connection.</p>;
+  }
+
+  const data = context.data;
+  const { locationID, topicID, castInfo, canvasService } = data;
+
   const [branchLink, setBranchLink] = useState<string | null>(null);
   const [deviceName, setDeviceName] = useState<string>('');
-  const { locationID, topicID, castInfo, canvasService } = useWebSocket(
-    `${process.env.NEXT_PUBLIC_WEBSOCKET_URL!}/api/connection`,
-    process.env.NEXT_PUBLIC_API_KEY!
-  );
+
   const artworkService = useRef(new ArtworkService());
   const dailyService = useRef(new DailyService());
   const startPlayArtworkTime = useRef<number>(0);

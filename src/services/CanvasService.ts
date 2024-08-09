@@ -35,9 +35,9 @@ import {
   KeyboardEventRequest,
   KeyboardEventReply,
   CastInfo,
-} from './types';
+} from '../utils/types';
 
-import DeviceManager from './DeviceManager';
+import DeviceManager from '../utils/DeviceManager';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
