@@ -178,7 +178,7 @@ class CanvasService {
     return { ok: true };
   }
 
-  private async disconnect(request: any): Promise<DisconnectReplyV2> {
+  public async disconnect(request: any): Promise<DisconnectReplyV2> {
     console.log('disconnect', JSON.stringify(request));
     this.onDisconnect();
     return { ok: true };
