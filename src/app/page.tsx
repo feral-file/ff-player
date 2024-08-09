@@ -22,7 +22,6 @@ import { KeyEvent, DeviceName, Config } from '@/utils/platform';
 import DailyService from '@/services/DailyService';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { WebSocketContext } from '../context/WebSocketContext';
-
 const STANDARD_HEIGHT = 1080;
 
 const Home: React.FC = () => {
