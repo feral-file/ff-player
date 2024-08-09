@@ -13,12 +13,12 @@ import {
   PlaylistToken,
   ViewMode,
 } from '@/utils/types';
-import ArtworkPlayer from './artworkPlayer';
-import HomePage from './homePage';
-import OnboardingPage from './onboardingPage';
+import ArtworkPlayer from '../components/artworkPlayer';
+import HomePage from '../components/homePage';
+import OnboardingPage from '../components/onboardingPage';
 import ArtworkService from '@/utils/ArtworkService';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
-import ComingSoonPage from './comingSoonPage';
+import ComingSoonPage from '../components/comingSoonPage';
 import {
   KeyEvent,
   DeviceName,
