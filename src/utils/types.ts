@@ -64,6 +64,7 @@ export interface CheckDeviceStatusReply extends Reply {
   artworks: PlayArtworkV2[];
   connectedDevice?: DeviceInfoV2;
   exhibitionId?: string;
+  displayKey?: string;
 }
 export interface CastExhibitionRequest {
   exhibitionId: string;
@@ -205,6 +206,7 @@ export interface CastInfo {
   deviceInfo?: any;
   exhibitionId?: string;
   value?: any;
+  displayKey?: string;
 }
 
 export enum ViewMode {
@@ -222,6 +224,6 @@ export interface Daily {
 }
 
 export enum Orientation {
-  vertical = "vertical",
-  horizontal = "horizontal",
+  vertical = 'vertical',
+  horizontal = 'horizontal',
 }
