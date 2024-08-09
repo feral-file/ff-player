@@ -28,24 +28,26 @@ const STANDARD_HEIGHT = 1080;
 const Home: React.FC = () => {
   const context = useContext(AppContext);
   if (!context) {
-    return <p>No WebSocket connection.</p>;
+    return <p>There is no context.</p>;
   }
 
   const data = context.data;
   const { locationID, topicID, castInfo, canvasService } = data;
 
   const router = useRouter();
-  const firstInit = useRef(true);
+  const ranRef = useRef(false);
 
   useEffect(() => {
-    if (firstInit.current) {
-      if (!context.isFirstInit) {
-        context.setIsFirstInit(true);
-        firstInit.current = false;
-        router.push('/daily');
-      }
+    if (ranRef.current) {
+      return;
     }
-  }, [router]);
+
+    if (context.isFirstOpen) {
+      ranRef.current = true;
+      context.setIsFirstOpen(false);
+      router.push('/daily');
+    }
+  }, []);
 
   const [branchLink, setBranchLink] = useState<string | null>(null);
   const [deviceName, setDeviceName] = useState<string>('');

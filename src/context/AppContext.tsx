@@ -1,9 +1,18 @@
 'use client';
 
-import { MutableRefObject, ReactNode, createContext, useState } from 'react';
+import {
+  MutableRefObject,
+  ReactNode,
+  createContext,
+  use,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import CanvasService from '../services/CanvasService';
 import useWebSocket from '../services/WebSocketManager';
 import { CastInfo } from '@/utils/types';
+import { usePathname } from 'next/navigation';
 
 interface AppContextProps {
   children: ReactNode;
@@ -12,8 +21,8 @@ interface AppContextProps {
 interface AppContextValue {
   data: WebSocketMessage;
 
-  isFirstInit: boolean | null;
-  setIsFirstInit: (isFirstInit: boolean) => void;
+  isFirstOpen: boolean | null;
+  setIsFirstOpen: (value: boolean) => void;
 }
 
 interface WebSocketMessage {
@@ -23,6 +32,8 @@ interface WebSocketMessage {
   canvasService: MutableRefObject<CanvasService>;
 }
 
+let isFirstOpen: boolean | null = null;
+
 export const AppContext = createContext<AppContextValue | undefined>(undefined);
 
 export const AppProvider = ({ children }: AppContextProps) => {
@@ -31,10 +42,25 @@ export const AppProvider = ({ children }: AppContextProps) => {
     process.env.NEXT_PUBLIC_API_KEY!
   );
 
-  const [isFirstInit, setIsFirstInit] = useState<boolean>(false);
+  const pathname = usePathname();
+
+  if (isFirstOpen === null) {
+    if (pathname === '/') {
+      isFirstOpen = true;
+    } else {
+      isFirstOpen = false;
+    }
+  }
 
   return (
-    <AppContext.Provider value={{ data, isFirstInit, setIsFirstInit }}>
+    <AppContext.Provider
+      value={{
+        data,
+        isFirstOpen,
+        setIsFirstOpen: (value: boolean) => {
+          isFirstOpen = value;
+        },
+      }}>
       {children}
     </AppContext.Provider>
   );
