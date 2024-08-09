@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import CanvasService from './CanvasService';
-import { CastInfo } from './types';
 import { LocalStorageItem } from '@/constants';
+import { CastInfo } from '@/utils/types';
 
 let webSocketInstance: any = null;
 
@@ -47,8 +47,9 @@ const useWebSocket = (url: string, apiKey: string) => {
           );
           localStorage.setItem(LocalStorageItem.topicID, data.message.topicID);
         } else {
-          const responseMessage =
-            await canvasService.current.processMessage(event);
+          const responseMessage = await canvasService.current.processMessage(
+            event
+          );
           setCastInfo(canvasService.current.getCastInfo());
           if (responseMessage) {
             ws.current?.send(JSON.stringify(responseMessage));

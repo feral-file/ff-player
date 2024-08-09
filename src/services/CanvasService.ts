@@ -1,3 +1,4 @@
+import DeviceManager from '@/utils/DeviceManager';
 import {
   WebSocketMessage,
   CastCommand,
@@ -35,9 +36,8 @@ import {
   KeyboardEventRequest,
   KeyboardEventReply,
   CastInfo,
-} from './types';
+} from '../utils/types';
 
-import DeviceManager from './DeviceManager';
 import { LocalStorageItem } from '@/constants';
 
 class CanvasService {
@@ -63,6 +63,11 @@ class CanvasService {
     console.log('processMessage', JSON.stringify(event));
 
     const webSocketMessage: WebSocketMessage = JSON.parse(event.data);
+    if (!webSocketMessage || !webSocketMessage.message) {
+      console.error('Invalid message:', JSON.stringify(event.data));
+      return;
+    }
+
     const messageData = JSON.parse(webSocketMessage.message);
 
     if (

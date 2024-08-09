@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Daily } from './types';
+import { Daily } from '../utils/types';
 
 class DailyService {
   public async getUpcomingDaily(): Promise<Daily[]> {
