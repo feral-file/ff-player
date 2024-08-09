@@ -24,7 +24,6 @@ import {
   TizenConfigService,
   Config,
 } from '@/utils/platform';
-import { useSearchParams } from 'next/navigation';
 import DailyService from '@/utils/DailyService';
 
 const STANDARD_HEIGHT = 1080;
@@ -58,16 +57,12 @@ const Home = () => {
   );
   const [didRegisterPlatformEvents, setDidRegisterPlatformEvents] =
     useState<boolean>(false);
-  const searchParams = useSearchParams();
   const indexRef = useRef<number>(-1);
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const platform = searchParams.get('platform');
-      console.log('get platform from query', platform);
-      localStorage.setItem('platform', platform as string);
     }
   }, []);
 
