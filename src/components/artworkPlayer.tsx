@@ -19,7 +19,7 @@ const ArtworkPlayer = ({
   keyboardCode,
 }: {
   previewURL: string;
-  keyboardCode: number;
+  keyboardCode?: number;
 }) => {
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
