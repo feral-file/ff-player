@@ -1,3 +1,4 @@
+import DeviceManager from '@/utils/DeviceManager';
 import {
   WebSocketMessage,
   CastCommand,
@@ -35,10 +36,9 @@ import {
   KeyboardEventRequest,
   KeyboardEventReply,
   CastInfo,
-  ExhibitionCatalog,
-} from './types';
+} from '../utils/types';
 
-import DeviceManager from './DeviceManager';
+import { LocalStorageItem } from '@/constants';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -51,10 +51,23 @@ class CanvasService {
     return this.castInfo;
   }
 
+  public setCastInfo(castInfo: CastInfo | null) {
+    this.castInfo = castInfo;
+    localStorage.setItem(
+      LocalStorageItem.castInfo,
+      JSON.stringify(this.castInfo)
+    );
+  }
+
   public async processMessage(event: MessageEvent) {
     console.log('processMessage', JSON.stringify(event));
 
     const webSocketMessage: WebSocketMessage = JSON.parse(event.data);
+    if (!webSocketMessage || !webSocketMessage.message) {
+      console.error('Invalid message:', JSON.stringify(event.data));
+      return;
+    }
+
     const messageData = JSON.parse(webSocketMessage.message);
 
     if (
@@ -167,14 +180,14 @@ class CanvasService {
     }
 
     this.clientDeviceInfo = request.clientDevice;
-    this.castInfo = {
+    this.setCastInfo({
       artworks: [],
       deviceInfo: {
         device_id: this.clientDeviceInfo.device_id,
         device_name: this.clientDeviceInfo.device_name,
       },
       startTime: Date.now(),
-    };
+    });
     console.log('_connected device:', JSON.stringify(this.clientDeviceInfo));
     return { ok: true };
   }
@@ -220,11 +233,11 @@ class CanvasService {
     request: CastListArtworkRequest
   ): Promise<CastListArtworkReply> {
     console.log('castListArtwork', JSON.stringify(request));
-    this.castInfo = {
+    this.setCastInfo({
       ...this.castInfo,
       artworks: request.artworks,
       startTime: request.startTime ?? Date.now(),
-    };
+    });
     return { ok: true };
   }
 
@@ -270,10 +283,11 @@ class CanvasService {
     request: MoveToArtworkRequest
   ): Promise<MoveToArtworkReply> {
     console.log('moveToArtwork', request);
-    this.castInfo = {
+    this.setCastInfo({
       ...this.castInfo,
       value: request?.artwork?.token?.id,
-    };
+    });
+    console.log('---Kien---', this.castInfo);
     return { ok: true };
   }
 
@@ -281,10 +295,10 @@ class CanvasService {
     request: UpdateDurationRequest
   ): Promise<UpdateDurationReply> {
     console.log('updateDuration', request);
-    this.castInfo = {
+    this.setCastInfo({
       ...this.castInfo,
       artworks: request.artworks,
-    };
+    });
 
     return {
       ok: true,
@@ -331,16 +345,16 @@ class CanvasService {
     request: KeyboardEventRequest
   ): Promise<KeyboardEventReply> {
     console.log('keyboardEvent', request);
-    this.castInfo = {
+    this.setCastInfo({
       ...this.castInfo,
       value: request.code,
-    };
+    });
     return { ok: true };
   }
 
   private onDisconnect() {
     console.log('onDisconnect');
-    this.castInfo = null;
+    this.setCastInfo(null);
   }
 
   private setTimer(state: any, onNext: Function | null) {

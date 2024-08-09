@@ -29,7 +29,25 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
   final FocusNode _focusNode = FocusNode();
 
   bool _isLoading = true;
-  bool _isCasting = false;
+  bool _isBackAble = false;
+
+  static const _listAlwaysHandledKeys = [
+    LogicalKeyboardKey.arrowLeft,
+    LogicalKeyboardKey.arrowRight,
+    LogicalKeyboardKey.arrowUp,
+    LogicalKeyboardKey.arrowDown,
+    LogicalKeyboardKey.enter,
+    LogicalKeyboardKey.digit0,
+    LogicalKeyboardKey.digit1,
+    LogicalKeyboardKey.digit2,
+    LogicalKeyboardKey.digit3,
+    LogicalKeyboardKey.digit4,
+    LogicalKeyboardKey.digit5,
+    LogicalKeyboardKey.digit6,
+    LogicalKeyboardKey.digit7,
+    LogicalKeyboardKey.digit8,
+    LogicalKeyboardKey.digit9,
+  ];
 
   @override
   void initState() {
@@ -45,7 +63,19 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
           focusNode: _focusNode,
           onKeyEvent: (node, event) {
             log.info(event.toString());
-            if (_isCasting &&
+
+            if (event is KeyDownEvent) {
+              unawaited(_webViewController.runJavaScriptReturningResult(
+                  'KeyEvent.handlePlatformEvent("${event.logicalKey.keyId}_'
+                  '${event.logicalKey.keyLabel}");'));
+            }
+
+            if (_listAlwaysHandledKeys.contains(event.logicalKey)) {
+              log.info('KeyEventResult.handled');
+              return KeyEventResult.handled;
+            }
+
+            if (_isBackAble &&
                 event.logicalKey.keyId == LogicalKeyboardKey.escape.keyId) {
               if (event is KeyDownEvent) {
                 unawaited(_webViewController.runJavaScriptReturningResult(
@@ -53,9 +83,11 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
                     '${event.logicalKey.keyLabel}");'));
               }
 
+              log.info('KeyEventResult.handled');
               return KeyEventResult.handled;
             }
 
+            log.info('KeyEventResult.ignored');
             return KeyEventResult.ignored;
           },
           child: Stack(
@@ -119,10 +151,10 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
             break;
           }
 
-        case 'castStatusChanged':
+        case 'backAbleChanged':
           {
-            final isCasting = appStateMessage.data as bool;
-            _isCasting = isCasting;
+            final isBackAble = appStateMessage.data as bool;
+            _isBackAble = isBackAble;
             break;
           }
 

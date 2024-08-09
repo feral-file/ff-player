@@ -1,7 +1,7 @@
-import { Artwork } from "./types";
-import { gql } from "@apollo/client";
-import createApolloClient from "@/utils/ApolloClient";
-import axios from "axios";
+import { Artwork } from '../utils/types';
+import { gql } from '@apollo/client';
+import createApolloClient from '@/utils/ApolloClient';
+import axios from 'axios';
 
 class ArtworkService {
   public async getFeaturedArtworks(): Promise<Artwork[]> {
@@ -135,10 +135,10 @@ class ArtworkService {
               }
             }`,
       });
-      console.log("NFT Tokens:", JSON.stringify(data));
+      console.log('NFT Tokens:', JSON.stringify(data));
       return data;
     } catch (error) {
-      console.log("Error querying tokens:", JSON.stringify(error));
+      console.log('Error querying tokens:', JSON.stringify(error));
     }
 
     return null;
