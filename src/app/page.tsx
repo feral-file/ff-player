@@ -49,7 +49,7 @@ const Home = () => {
   const artworkService = useRef(new ArtworkService());
 
   // states
-  const [castState, setCastState] = useState<CastState>(CastState.Artwork);
+  const [castState, setCastState] = useState<CastState>(CastState.None);
   const dailyService = useRef(new DailyService());
   const startPlayArtworkTime = useRef<number>(0);
   const endPlayArtworkTime = useRef<number>(0);
