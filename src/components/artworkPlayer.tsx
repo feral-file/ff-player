@@ -12,7 +12,7 @@ import {
   MIMETypeVideo,
   SeriesPreviewHTMLTag,
 } from '@/utils/types';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -23,6 +23,7 @@ const ArtworkPlayer = ({
 }) => {
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const videRef = useRef<HTMLVideoElement>(null);
 
   function compareToGetFileType(type: string) {
     if (!type) {
@@ -99,6 +100,14 @@ const ArtworkPlayer = ({
     setLoading(false);
   };
 
+  useEffect(() => {
+    if (previewType === SeriesPreviewHTMLTag.video && videRef.current) {
+      videRef.current.play().catch(error => {
+        console.log('Error play video', error);
+      });
+    }
+  });
+
   return (
     <div
       style={{
@@ -146,6 +155,7 @@ const ArtworkPlayer = ({
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.video && (
         <video
+          ref={videRef}
           style={{ width: '100%', height: '100%' }}
           onLoadedData={loadedSource}
           autoPlay
