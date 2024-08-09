@@ -49,20 +49,23 @@ const HomePage = ({
                   width={288 * screenRatio}
                   height={23 * screenRatio}
                 />
+                <h1
+                  style={{
+                    fontSize: 48 * screenRatio,
+                    paddingTop: 80 * screenRatio,
+                  }}>
+                  Display exhibitions and your collection to any screen
+                </h1>
+                <p
+                  style={{
+                    fontSize: 22 * screenRatio,
+                    paddingTop: 40 * screenRatio,
+                  }}>
+                  Open the Feral File app on your phone to sync your collection.
+                </p>
               </div>
               <div className={clsx(styles.bottom)}>
                 <div className={clsx(styles.qrcode)}>
-                  <h2
-                    style={{
-                      fontSize: 22 * screenRatio,
-                      fontWeight: 'bold',
-                      paddingTop: 40 * screenRatio,
-                      paddingBottom:
-                        (viewMode === ViewMode.landscape ? 80 : 40) *
-                        screenRatio,
-                    }}>
-                    Display Name: {deviceName}
-                  </h2>
                   {branchLink ? (
                     <div
                       style={{
