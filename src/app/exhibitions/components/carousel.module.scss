@@ -6,34 +6,28 @@
   align-items: flex-start;
   gap: 45px;
   border-radius: 20px;
-  background: var(--Dark-Grey, #2E2E2E);
+  background: var(--Dark-Grey, #2e2e2e);
 
   .type {
-    color: #FFF;
-    font-size: 16px;
+    color: #fff;
     font-style: normal;
     font-weight: 400;
     line-height: 140%; /* 30.8px */
+    text-transform: capitalize;
   }
 
   .postTitle {
-    color: #FFF;
-    font-size: 20px;
+    color: #fff;
     font-style: normal;
     font-weight: 700;
     line-height: 140%; /* 44.8px */
   }
 
   .content {
-    color: #FFF;
-    font-size: 18px;
+    color: #fff;
     font-style: normal;
     font-weight: 400;
     line-height: 140%;
-  }
-
-  .subContent {
-    font-size: 16px;
   }
 }
 

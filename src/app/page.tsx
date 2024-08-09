@@ -469,12 +469,6 @@ const Home = () => {
   };
 
   const castExhibition = async () => {
-    console.log(
-      'Cast Exhibition:',
-      castInfo!.exhibitionId,
-      castInfo!.catalogId,
-      castInfo!.catalog
-    );
     setCastState(CastState.Exhibition);
   };
 
@@ -537,6 +531,8 @@ const Home = () => {
       )}
       {castState === CastState.Exhibition && (
         <ExhibitionHall
+          viewMode={viewMode}
+          screenRatio={screenRatio}
           exhibitionID={castInfo?.exhibitionId}
           catalogID={castInfo?.catalogId}
           screen={castInfo?.catalog}
