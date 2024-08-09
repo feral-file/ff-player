@@ -1,4 +1,4 @@
-import { PlaylistToken } from "./types";
+import { PlaylistToken } from './types';
 
 export function getIndex(
   playlistTokens: PlaylistToken[],
@@ -26,4 +26,21 @@ export function getIndex(
   }
 
   return index;
+}
+
+export function calculateStartTime(
+  playlistTokens: PlaylistToken[],
+  index: number,
+  elapsedTime?: number
+): number {
+  let startTime = Date.now();
+  for (let i = 0; i < index; i++) {
+    startTime -= playlistTokens[i].duration || 0;
+  }
+
+  if (elapsedTime) {
+    startTime -= elapsedTime;
+  }
+
+  return startTime;
 }

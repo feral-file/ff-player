@@ -9,25 +9,26 @@ export interface CommandRequest {
 }
 
 export enum CastCommand {
-  connect = "connect",
-  disconnect = "disconnect",
-  checkStatus = "checkStatus",
-  castListArtwork = "castListArtwork",
-  cancelCasting = "cancelCasting",
-  appendArtworkToCastingList = "appendArtworkToCastingList",
-  pauseCasting = "pauseCasting",
-  resumeCasting = "resumeCasting",
-  nextArtwork = "nextArtwork",
-  previousArtwork = "previousArtwork",
-  moveToArtwork = "moveToArtwork",
-  updateDuration = "updateDuration",
-  castExhibition = "castExhibition",
-  rotate = "rotate",
-  tapGesture = "tapGesture",
-  dragGesture = "dragGesture",
-  setCursorOffset = "setCursorOffset",
-  getCursorOffset = "getCursorOffset",
-  sendKeyboardEvent = "sendKeyboardEvent",
+  connect = 'connect',
+  disconnect = 'disconnect',
+  checkStatus = 'checkStatus',
+  castListArtwork = 'castListArtwork',
+  cancelCasting = 'cancelCasting',
+  appendArtworkToCastingList = 'appendArtworkToCastingList',
+  pauseCasting = 'pauseCasting',
+  resumeCasting = 'resumeCasting',
+  nextArtwork = 'nextArtwork',
+  previousArtwork = 'previousArtwork',
+  moveToArtwork = 'moveToArtwork',
+  updateDuration = 'updateDuration',
+  castExhibition = 'castExhibition',
+  rotate = 'rotate',
+  tapGesture = 'tapGesture',
+  dragGesture = 'dragGesture',
+  setCursorOffset = 'setCursorOffset',
+  getCursorOffset = 'getCursorOffset',
+  sendKeyboardEvent = 'sendKeyboardEvent',
+  castDaily = 'castDaily',
 }
 
 export interface Reply {
@@ -132,6 +133,8 @@ export interface Artwork {
   thumbnailURI: string;
   series?: Series;
   artistAlias?: string;
+  blockchain?: string;
+  contractAddress?: string;
 }
 
 export interface Series {
@@ -149,42 +152,42 @@ export interface FileInfo {
 }
 
 export enum SeriesPreviewHTMLTag {
-  iframe = "iframe",
-  iframePDF = "iframePDF",
-  object = "object",
-  video = "video",
-  audio = "audio",
-  image = "image",
-  stream = "stream",
+  iframe = 'iframe',
+  iframePDF = 'iframePDF',
+  object = 'object',
+  video = 'video',
+  audio = 'audio',
+  image = 'image',
+  stream = 'stream',
 }
 
-export const FileUseIframe: string[] = ["html", "text/html"];
-export const FileUseIframePDF: string[] = ["pdf", "application/pdf"];
-export const FileUseObject: string[] = ["txt"];
+export const FileUseIframe: string[] = ['html', 'text/html'];
+export const FileUseIframePDF: string[] = ['pdf', 'application/pdf'];
+export const FileUseObject: string[] = ['txt'];
 export const FileUseVideo: string[] = [
-  "mp4",
-  "mov",
-  "wmv",
-  "quicktime",
-  "avi",
-  "webm",
-  "mkv",
+  'mp4',
+  'mov',
+  'wmv',
+  'quicktime',
+  'avi',
+  'webm',
+  'mkv',
 ];
-export const FileUseAudio: string[] = ["mp3", "m4a", "wav", "wma", "aac"];
+export const FileUseAudio: string[] = ['mp3', 'm4a', 'wav', 'wma', 'aac'];
 export const FileUseImage: string[] = [
-  "png",
-  "jpg",
-  "jpeg",
-  "bmp",
-  "gif",
-  "svg",
-  "application/xml",
+  'png',
+  'jpg',
+  'jpeg',
+  'bmp',
+  'gif',
+  'svg',
+  'application/xml',
 ];
-export const MIMETypeUseStream: string[] = ["application/x-mpegurl"];
-export const MIMETypeVideo = "video/*";
-export const MIMETypeAudio = "audio/*";
-export const MIMETypeImage = "image/*";
-export const MIMETypeObject = "text/csv";
+export const MIMETypeUseStream: string[] = ['application/x-mpegurl'];
+export const MIMETypeVideo = 'video/*';
+export const MIMETypeAudio = 'audio/*';
+export const MIMETypeImage = 'image/*';
+export const MIMETypeObject = 'text/csv';
 
 export interface PlaylistToken {
   artwork: Artwork;
@@ -201,9 +204,19 @@ export interface CastInfo {
   castCommand?: CastCommand;
   deviceInfo?: any;
   exhibitionId?: string;
+  value?: any;
 }
 
 export enum ViewMode {
-  landscape = "landscape",
-  portrait = "portrait",
+  landscape = 'landscape',
+  portrait = 'portrait',
+}
+
+export interface Daily {
+  id: string;
+  blockchain: string;
+  contractAddress: string;
+  displayTime: string;
+  tokenID: string;
+  previewURL?: string;
 }
