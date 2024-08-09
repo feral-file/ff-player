@@ -32,7 +32,7 @@ interface WebSocketMessage {
   canvasService: MutableRefObject<CanvasService>;
 }
 
-let isFirstOpen: boolean | null = null;
+export let isFirstOpen: boolean | null = null;
 
 export const AppContext = createContext<AppContextValue | undefined>(undefined);
 
