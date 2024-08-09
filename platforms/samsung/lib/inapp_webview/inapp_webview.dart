@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_tizen/webview_flutter_tizen.dart';
 
 class InAppWebViewPage extends StatefulWidget {
   final InAppWebViewPayload payload;
@@ -75,6 +76,7 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
     log.info('load url: $url');
     _addJavaScriptChannel();
     _addConfigHandler();
+    _webViewController.tizenEnginePolicy = true;
 
     _webViewController.loadRequest(Uri.parse(url));
 
