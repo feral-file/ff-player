@@ -31,7 +31,7 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
   bool _isLoading = true;
   bool _isBackAble = false;
 
-  static const _listHandledKeys = [
+  static const _listAlwaysHandledKeys = [
     LogicalKeyboardKey.arrowLeft,
     LogicalKeyboardKey.arrowRight,
     LogicalKeyboardKey.arrowUp,
@@ -70,8 +70,8 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
                   '${event.logicalKey.keyLabel}");'));
             }
 
-            if (_listHandledKeys.contains(event.logicalKey)) {
-              print('KeyEventResult.handled');
+            if (_listAlwaysHandledKeys.contains(event.logicalKey)) {
+              log.info('KeyEventResult.handled');
               return KeyEventResult.handled;
             }
 
@@ -83,11 +83,11 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
                     '${event.logicalKey.keyLabel}");'));
               }
 
-              print('KeyEventResult.handled');
+              log.info('KeyEventResult.handled');
               return KeyEventResult.handled;
             }
 
-            print('KeyEventResult.ignored');
+            log.info('KeyEventResult.ignored');
             return KeyEventResult.ignored;
           },
           child: Stack(
