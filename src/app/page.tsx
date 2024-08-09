@@ -22,6 +22,7 @@ import MessageModal from '../components/messageModal';
 import { KeyEvent, DeviceName, Config } from '@/utils/platform';
 import DailyService from '@/utils/DailyService';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
+import { useRouter } from 'next/navigation';
 
 const STANDARD_HEIGHT = 1080;
 
@@ -65,6 +66,14 @@ const Home = () => {
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== 'undefined' && navigator.onLine
   );
+  const router = useRouter();
+
+  useEffect(() => {
+    // navigate to test page after 5 seconds
+    setTimeout(() => {
+      router.push('/test');
+    }, 5000);
+  });
 
   useEffect(() => {
     castStatusRef.current = castStatus;
