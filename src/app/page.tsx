@@ -173,6 +173,7 @@ const Home = () => {
           case CastCommand.castListArtwork: {
             setDisplayComingSoon(false); // Temporary display coming soon
             setDisplayOnboarding(false);
+            setCurrentIndex(-1);
             const getNftTokens = async (ids: string[]) => {
               if (!ids.length) {
                 return;
