@@ -16,7 +16,7 @@ import ArtworkPlayer from './artworkPlayer';
 import HomePage from './homePage';
 import OnboardingPage from './onboardingPage';
 import ArtworkService from '@/utils/ArtworkService';
-import { getIndex } from '@/utils/Playlist';
+import { calculateStartTime, getIndex } from '@/utils/Playlist';
 import ComingSoonPage from './commingSoonPage';
 import {
   KeyEvent,
@@ -38,6 +38,8 @@ const Home = () => {
   );
   const artworkService = useRef(new ArtworkService());
   const dailyService = useRef(new DailyService());
+  const startPlayArtworkTime = useRef<number>(0);
+  const endPlayArtworkTime = useRef<number>(0);
   const [screenRatio, setScreenRatio] = useState<number>(1);
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.landscape);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
@@ -50,16 +52,16 @@ const Home = () => {
   const [displayComingSoon, setDisplayComingSoon] = useState<boolean>(false);
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
 
-  const [startPlayArtworkTime, setStartPlayArtworkTime] = useState<number>(0);
-  const [endPlayArtworkTime, setEndPlayArtworkTime] = useState<number>(0);
   const [keyboardCode, setKeyboardCode] = useState<number>(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
-  const [dailies, setDailies] = useState<Daily[]>([]);
   const [didRegisterPlatformEvents, setDidRegisterPlatformEvents] =
     useState<boolean>(false);
   const searchParams = useSearchParams();
+  const indexRef = useRef<number>(-1);
+  const elapsedTimeRef = useRef<number>(0);
+  const remainTimeRef = useRef<number>(0);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -207,11 +209,6 @@ const Home = () => {
             break;
           }
 
-          case CastCommand.nextArtwork: {
-            handleNext();
-            break;
-          }
-
           case CastCommand.connect: {
             if (
               !(await DeviceManager.isPreviouslyConnectedDevice(
@@ -238,6 +235,23 @@ const Home = () => {
 
           case CastCommand.previousArtwork: {
             handlePrevious();
+            break;
+          }
+
+          case CastCommand.updateDuration: {
+            if (castInfo.artworks) {
+              handleUpdateDuration(castInfo.artworks);
+            }
+            break;
+          }
+
+          case CastCommand.pauseCasting: {
+            handlePauseCasting();
+            break;
+          }
+
+          case CastCommand.resumeCasting: {
+            handleResumeCasting();
             break;
           }
         }
@@ -274,23 +288,80 @@ const Home = () => {
       return;
     }
 
+    if (indexRef.current === currentIndex) {
+      return;
+    }
+
+    indexRef.current = currentIndex;
+
     const index = currentIndex % playlist.length;
     const currentPlaylist = playlist[index];
     setCastPreviewURL(currentPlaylist.previewURL);
     setCastStatus(true);
     const currentTime = Date.now();
-    setStartPlayArtworkTime(currentTime);
-    setEndPlayArtworkTime(currentTime + currentPlaylist.duration);
+    startPlayArtworkTime.current = currentTime;
+    endPlayArtworkTime.current = currentTime + currentPlaylist.duration;
     startInterval(currentPlaylist.duration);
-
-    return () => clearInterval(intervalRef.current);
   }, [currentIndex, playlist]);
 
   const handleNext = () => {
-    const currentTime = Date.now();
-    setStartTime(startTime - (currentTime - startPlayArtworkTime));
+    const i = (currentIndex + 1) % playlist.length;
+    const st = calculateStartTime(playlist, i);
+    setStartTime(st);
     clearTimer();
-    setCurrentIndex(currentIndex => (currentIndex + 1) % playlist.length);
+    setCurrentIndex(i);
+  };
+
+  const handlePrevious = () => {
+    let i: number;
+    if (currentIndex === 0) {
+      i = playlist.length - 1;
+    } else {
+      i = (currentIndex - 1) % playlist.length;
+    }
+
+    const st = calculateStartTime(playlist, i);
+    setStartTime(st);
+    clearTimer();
+    setCurrentIndex(i);
+  };
+
+  const handleUpdateDuration = (artworks: PlayArtworkV2[]) => {
+    const durationMap = new Map<string, number>();
+    artworks.forEach((a: PlayArtworkV2) => {
+      durationMap.set(a.id, a.duration);
+    });
+
+    const updatedPlaylist = playlist.map((p: PlaylistToken, i: number) => {
+      return {
+        ...p,
+        duration: artworks[i].duration,
+      };
+    });
+
+    const i = currentIndex % playlist.length;
+    let remainTime = Date.now() - startPlayArtworkTime.current;
+    const st = calculateStartTime(updatedPlaylist, i, remainTime + 100);
+    setStartTime(st);
+
+    setPlaylist(updatedPlaylist);
+  };
+
+  const handlePauseCasting = () => {
+    clearTimer();
+    const now = Date.now();
+    elapsedTimeRef.current = now - startPlayArtworkTime.current;
+    remainTimeRef.current = endPlayArtworkTime.current - now;
+  };
+
+  const handleResumeCasting = () => {
+    const st = calculateStartTime(
+      playlist,
+      currentIndex,
+      elapsedTimeRef.current
+    );
+    setStartTime(st);
+    startInterval(remainTimeRef.current);
   };
 
   const startInterval = (duration: number) => {
@@ -308,19 +379,6 @@ const Home = () => {
       clearInterval(intervalRef.current);
       intervalRef.current = undefined;
     }
-  };
-
-  const handlePrevious = () => {
-    const currentTime = Date.now();
-    setStartTime(startTime + (currentTime - startPlayArtworkTime));
-    clearTimer();
-
-    if (currentIndex === 0) {
-      setCurrentIndex(playlist.length - 1);
-      return;
-    }
-
-    setCurrentIndex(currentIndex => (currentIndex - 1) % playlist.length);
   };
 
   // Handle cast daily
