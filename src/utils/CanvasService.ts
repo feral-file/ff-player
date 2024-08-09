@@ -254,6 +254,11 @@ class CanvasService {
     request: MoveToArtworkRequest
   ): Promise<MoveToArtworkReply> {
     console.log('moveToArtwork', request);
+    this.castInfo = {
+      ...this.castInfo,
+      value: request?.artwork?.token?.id,
+    };
+    console.log('---Kien---', this.castInfo);
     return { ok: true };
   }
 

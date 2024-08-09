@@ -240,6 +240,11 @@ const Home = () => {
             break;
           }
 
+          case CastCommand.moveToArtwork: {
+            handleMoveToArtwork(castInfo.value);
+            break;
+          }
+
           case CastCommand.updateDuration: {
             if (castInfo.artworks) {
               handleUpdateDuration(castInfo.artworks);
@@ -374,6 +379,19 @@ const Home = () => {
     );
     setStartTime(st);
     startInterval(remainTimeRef.current);
+  };
+
+  const handleMoveToArtwork = (tokenID: string) => {
+    const index = playlist.findIndex(
+      (p: PlaylistToken) => p.token?.id === tokenID
+    );
+    if (index < 0) {
+      return;
+    }
+    const st = calculateStartTime(playlist, index);
+    setStartTime(st);
+    clearTimer();
+    setCurrentIndex(index);
   };
 
   const startInterval = (duration: number) => {
