@@ -21,12 +21,12 @@ import ComingSoonPage from '../components/comingSoonPage';
 import { KeyEvent, DeviceName, Config } from '@/utils/platform';
 import DailyService from '@/services/DailyService';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
-import { WebSocketContext } from '../context/WebSocketContext';
+import { AppContext } from '../context/AppContext';
 import { useRouter } from 'next/navigation';
 const STANDARD_HEIGHT = 1080;
 
 const Home: React.FC = () => {
-  const context = useContext(WebSocketContext);
+  const context = useContext(AppContext);
   if (!context) {
     return <p>No WebSocket connection.</p>;
   }
@@ -39,12 +39,10 @@ const Home: React.FC = () => {
 
   useEffect(() => {
     if (firstInit.current) {
-      firstInit.current = false;
-      const isFirstInit = localStorage.getItem('isFirstInit');
-      if (!isFirstInit) {
-        localStorage.setItem('isFirstInit', 'true');
+      if (!context.isFirstInit) {
+        context.setIsFirstInit(true);
+        firstInit.current = false;
         router.push('/daily');
-        return;
       }
     }
   }, [router]);
