@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest package="com.bitmark.autonomy.canvas" version="1.2.4" api-version="6.0" xmlns="http://tizen.org/ns/packages">
+<manifest package="com.bitmark.feralfile.display" version="1.0.0" api-version="6.0" xmlns="http://tizen.org/ns/packages">
     <profile name="common"/>
-    <ui-application appid="com.bitmark.autonomy.canvas" exec="Runner.dll" type="dotnet" multiple="false" nodisplay="false" taskmanage="true">
+    <ui-application appid="com.bitmark.feralfile.display" exec="Runner.dll" type="dotnet" multiple="false" nodisplay="false" taskmanage="true">
         <label>Feral File</label>
         <icon>ic_launcher.png</icon>
         <metadata key="http://tizen.org/metadata/prefer_dotnet_aot" value="true"/>
