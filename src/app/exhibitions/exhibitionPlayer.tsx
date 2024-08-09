@@ -120,7 +120,10 @@ const ExhibitionHall = ({
   }, [screen]);
 
   return (
-    <div className={styles.mainContainer}>
+    <div
+      className={
+        viewMode === ViewMode.landscape ? styles.landscape : styles.portrait
+      }>
       {exhibitionDetail && pageSection === ExhibitionCatalog.home && (
         <div
           className={[styles.exhCard].join(' ')}
