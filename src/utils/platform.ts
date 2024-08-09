@@ -1,7 +1,7 @@
-import { KeyCodes } from "@/constants";
-import DeviceManager from "./DeviceManager";
-import { v4 as uuidv4 } from "uuid";
-import { Event, EventEmitter } from "./EventEmitter";
+import { KeyCodes } from '@/constants';
+import DeviceManager from './DeviceManager';
+import { v4 as uuidv4 } from 'uuid';
+import { Event, EventEmitter } from './EventEmitter';
 
 class PlatformEventReceiver {
   static handlePlatformEvent(event: string) {
@@ -12,7 +12,7 @@ class PlatformEventReceiver {
 export class KeyEvent extends PlatformEventReceiver {
   static override handlePlatformEvent(event: string) {
     super.handlePlatformEvent(event);
-    const [keyId, keyLabel] = event.split("_");
+    const [keyId, keyLabel] = event.split('_');
     console.log(`Handling key event: ${keyId} - ${keyLabel}`);
     if (parseInt(keyId) === KeyCodes.escape) {
       EventEmitter.emit(Event.escape);
@@ -42,7 +42,7 @@ class Future<T> {
     });
 
     this.timeoutId = setTimeout(() => {
-      this.reject("Operation timed out");
+      this.reject('Operation timed out');
     }, Future.DEFAULT_TIMEOUT);
   }
 
@@ -106,13 +106,13 @@ export interface PlatformConfigService {
 
 export class AndroidConfigService implements PlatformConfigService {
   async getString(key: string): Promise<string> {
-    return await (window as any).flutter_inappwebview.callHandler("getString", {
+    return await (window as any).flutter_inappwebview.callHandler('getString', {
       data: key,
     });
   }
 
   async setString(key: string, value: string): Promise<void> {
-    return await (window as any).flutter_inappwebview.callHandler("setString", {
+    return await (window as any).flutter_inappwebview.callHandler('setString', {
       data: { key: key, value: value },
     });
   }
@@ -123,7 +123,7 @@ export class TizenConfigService implements PlatformConfigService {
     const id = uuidv4();
     const request = {
       id: id,
-      handler: "getString",
+      handler: 'getString',
       data: { key: key },
     };
     // fire event to tizen
@@ -144,7 +144,7 @@ export class TizenConfigService implements PlatformConfigService {
     const id = uuidv4();
     const request = {
       id: id,
-      handler: "setString",
+      handler: 'setString',
       data: { key: key, value: value },
     };
     // fire event to tizen
