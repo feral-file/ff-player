@@ -102,9 +102,9 @@ const HomePage = ({
             </div>
           </div>
         </div>
-      </div>
-      <div className={clsx(styles.viewer)}>
-        <ArtworkPlayer previewURL={previewURL!} keyboardCode={0} />
+        <div className={clsx(styles.viewer)}>
+          <ArtworkPlayer previewURL={previewURL!} keyboardCode={0} />
+        </div>
       </div>
     </div>
   );
