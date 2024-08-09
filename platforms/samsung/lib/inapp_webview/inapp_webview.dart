@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_tizen/webview_flutter_tizen.dart';
 
 class InAppWebViewPage extends StatefulWidget {
   final InAppWebViewPayload payload;
@@ -58,6 +59,7 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Colors.transparent,
         body: Focus(
           autofocus: true,
           focusNode: _focusNode,
@@ -108,6 +110,7 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
     _addJavaScriptChannel();
     _addConfigHandler();
 
+    _webViewController.tizenEnginePolicy = true;
     _webViewController.loadRequest(Uri.parse(url));
 
     _webViewController.setJavaScriptMode(JavaScriptMode.unrestricted);
