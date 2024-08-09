@@ -62,9 +62,7 @@ const Home = () => {
   const indexRef = useRef<number>(-1);
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
-  const [isOnline, setIsOnline] = useState(
-    typeof navigator !== 'undefined' && navigator.onLine
-  );
+  const [isOnline, setIsOnline] = useState<boolean>(true);
 
   useEffect(() => {
     castStatusRef.current = castStatus;
@@ -100,6 +98,10 @@ const Home = () => {
   }, []);
 
   useEffect(() => {
+    function updateNetworkStatus() {
+      setIsOnline(navigator.onLine);
+    }
+
     if (typeof window !== 'undefined') {
       const browser = detect() as BrowserInfo;
       if (browser) {
@@ -122,19 +124,15 @@ const Home = () => {
       };
 
       resizeHandler();
+
+      window.addEventListener('online', updateNetworkStatus);
+      window.addEventListener('offline', updateNetworkStatus);
+
+      return () => {
+        window.removeEventListener('online', updateNetworkStatus);
+        window.removeEventListener('offline', updateNetworkStatus);
+      };
     }
-
-    function updateNetworkStatus() {
-      setIsOnline(navigator.onLine);
-    }
-
-    window.addEventListener('online', updateNetworkStatus);
-    window.addEventListener('offline', updateNetworkStatus);
-
-    return () => {
-      window.removeEventListener('online', updateNetworkStatus);
-      window.removeEventListener('offline', updateNetworkStatus);
-    };
   }, []);
 
   useEffect(() => {
