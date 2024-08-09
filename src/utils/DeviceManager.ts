@@ -1,11 +1,11 @@
-import { v4 as uuidv4 } from "uuid";
-import createBranchLink from "./createBranchLink";
+import { v4 as uuidv4 } from 'uuid';
+import createBranchLink from './createBranchLink';
 import {
   AndroidConfigService,
   PlatformConfigService,
   TizenConfigService,
   WebConfigService,
-} from "./platform";
+} from './platform';
 
 class DeviceManager {
   static instance = new DeviceManager();
@@ -20,24 +20,24 @@ class DeviceManager {
 
   private createConfigService(): PlatformConfigService {
     console.log(`creating PlatformConfigService instance`);
-    const platform = localStorage.getItem("platform");
+    const platform = localStorage.getItem('platform');
     switch (platform) {
-      case "android":
+      case 'android':
         return new AndroidConfigService();
-      case "tizen":
+      case 'tizen':
         return new TizenConfigService();
       default:
         return new WebConfigService();
     }
   }
 
-  private readonly deviceIdKey = "deviceId";
-  private readonly locationIdKey = "locationId";
-  private readonly topicIdKey = "topicId";
-  private readonly nameKey = "name";
-  private readonly branchLinkKey = "branchLink";
+  private readonly deviceIdKey = 'deviceId';
+  private readonly locationIdKey = 'locationId';
+  private readonly topicIdKey = 'topicId';
+  private readonly nameKey = 'name';
+  private readonly branchLinkKey = 'branchLink';
   private readonly previouslyConnectedDeviceIdsKey =
-    "previouslyConnectedDeviceIds";
+    'previouslyConnectedDeviceIds';
 
   private async getFromLocalStorage(key: string): Promise<string | null> {
     return await this.configService.getString(key);
@@ -124,8 +124,8 @@ class DeviceManager {
       deviceId,
       locationId,
       topicId,
-      name: name || "",
-      platform: "web",
+      name: name || '',
+      platform: 'web',
     };
   }
 
@@ -157,12 +157,12 @@ class DeviceManager {
 
   public async generateBranchLink(): Promise<string | null> {
     try {
-      const deviceInfo = this.getDeviceInfo();
+      const deviceInfo = await this.getDeviceInfo();
       if (!deviceInfo) {
         return null;
       }
       const data = {
-        source: "feralfile_display",
+        source: 'feralfile_display',
         device: deviceInfo,
       };
       return createBranchLink(data);

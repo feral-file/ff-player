@@ -87,7 +87,7 @@ const ExhibitionHall = ({
       setPosts(posts);
     };
 
-    if (exhibitionID && !exhibitionDetail) {
+    if (exhibitionID && exhibitionDetail?.id !== exhibitionID) {
       fetchExhibitionDetail();
     }
   }, [exhibitionID]);
