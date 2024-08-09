@@ -124,11 +124,13 @@ const ArtworkPlayer = ({
             width: '100%',
             height: '100%',
             backgroundColor: '#000000',
+            color: '#ffffff',
             display: 'flex',
             position: 'absolute',
             zIndex: 2,
             justifyContent: 'center',
             alignItems: 'center',
+            fontSize: 32,
           }}>
           Loading...
           {/* <img
