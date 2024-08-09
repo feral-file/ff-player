@@ -20,7 +20,8 @@ class UpdateManager {
     log.info('UpdateManager current hash: $currentHash');
     final String currentIntervalDuration = _remoteConfigService.getConfig(
         ConfigGroup.tizen, ConfigKey.updateInterval, '');
-    log.info('UpdateManager current interval duration: $currentIntervalDuration');
+    log.info(
+        'UpdateManager current interval duration: $currentIntervalDuration');
     await _remoteConfigService.loadConfigs();
 
     final String newHash = _remoteConfigService.getConfig(
@@ -46,7 +47,8 @@ class UpdateManager {
           duration: Duration(seconds: 5),
         ),
       );
-      _navigationService.pushNamedOrReplace(AppRouter.inAppWebViewScreen);
+      _navigationService.pushNamedOrReplace(AppRouter.inAppWebViewScreen,
+          arguments: true);
     }
   }
 

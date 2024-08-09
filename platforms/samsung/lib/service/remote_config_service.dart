@@ -21,7 +21,7 @@ class RemoteConfigServiceImpl implements RemoteConfigService {
     'tizen': {
       'url': 'https://feralfile-display-prod.pages.dev/',
       'gitHash': '1434d96c8ce703c4ed6d1485e18a5296a406bcdb',
-      'updateInterval': '3'
+      'updateInterval': '30'
     }
   };
 

@@ -12,12 +12,21 @@ class AppRouter {
     switch (settings.name) {
       case inAppWebViewScreen:
       case homePage:
-        final url = injector<RemoteConfigService>().getConfig(ConfigGroup.tizen,
-            ConfigKey.url, 'https://feralfile-display-prod.pages.dev/');
+        final isRefresh = settings.arguments as bool? ?? false;
+        String url = injector<RemoteConfigService>().getConfig(
+            ConfigGroup.tizen,
+            ConfigKey.url,
+            'https://feralfile-display-prod.pages.dev/');
+        if (isRefresh) {
+          if (url.contains('?')) {
+            url = '$url&refresh=true';
+          } else {
+            url = '$url?refresh=true';
+          }
+        }
         final gitHash = injector<RemoteConfigService>()
             .getConfig(ConfigGroup.tizen, ConfigKey.gitHash, '');
-        final payload = InAppWebViewPayload(
-            'http://192.168.31.31:4200/', '${url}_$gitHash');
+        final payload = InAppWebViewPayload(url, '${url}_$gitHash');
         return PageTransition(
           type: PageTransitionType.fade,
           curve: Curves.easeIn,
