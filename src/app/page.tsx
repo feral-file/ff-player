@@ -18,7 +18,7 @@ import HomePage from '../components/homePage';
 import OnboardingPage from '../components/onboardingPage';
 import ArtworkService from '@/utils/ArtworkService';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
-import ComingSoonPage from '../components/comingSoonPage';
+import MessageModal from '../components/messageModal';
 import { KeyEvent, DeviceName, Config } from '@/utils/platform';
 import DailyService from '@/utils/DailyService';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
@@ -62,6 +62,9 @@ const Home = () => {
   const indexRef = useRef<number>(-1);
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== 'undefined' && navigator.onLine
+  );
 
   useEffect(() => {
     castStatusRef.current = castStatus;
@@ -120,6 +123,18 @@ const Home = () => {
 
       resizeHandler();
     }
+
+    function updateNetworkStatus() {
+      setIsOnline(navigator.onLine);
+    }
+
+    window.addEventListener('online', updateNetworkStatus);
+    window.addEventListener('offline', updateNetworkStatus);
+
+    return () => {
+      window.removeEventListener('online', updateNetworkStatus);
+      window.removeEventListener('offline', updateNetworkStatus);
+    };
   }, []);
 
   useEffect(() => {
@@ -539,7 +554,15 @@ const Home = () => {
         justifyContent: 'center',
         alignItems: 'center',
       }}>
-      {displayComingSoon && <ComingSoonPage screenRatio={screenRatio} />}
+      {displayComingSoon && (
+        <MessageModal screenRatio={screenRatio} message="Coming soon..." />
+      )}
+      {!isOnline && (
+        <MessageModal
+          screenRatio={screenRatio}
+          message="Internet connection lost. Reconnecting..."
+        />
+      )}
       {displayOnboarding && (
         <OnboardingPage
           screenRatio={screenRatio}
