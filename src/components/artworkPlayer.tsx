@@ -115,7 +115,7 @@ const ArtworkPlayer = ({
             height: '100%',
             backgroundColor: '#000000',
             display: 'flex',
-            position: 'relative',
+            position: 'absolute',
             zIndex: 2,
             justifyContent: 'center',
             alignItems: 'center',

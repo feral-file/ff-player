@@ -173,7 +173,7 @@ const Home = () => {
           case CastCommand.castListArtwork: {
             setDisplayComingSoon(false); // Temporary display coming soon
             setDisplayOnboarding(false);
-            setCurrentIndex(-1);
+            indexRef.current = -1;
             const getNftTokens = async (ids: string[]) => {
               if (!ids.length) {
                 return;
@@ -534,7 +534,7 @@ const Home = () => {
             ? '50vw center'
             : 'center 50vh'
         }`,
-        transition: 'all 0.2s',
+        transition: 'transform 0.2s',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
