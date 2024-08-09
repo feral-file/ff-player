@@ -19,8 +19,11 @@ class DeviceManager {
   }
 
   private createConfigService(): PlatformConfigService {
-    console.log(`creating PlatformConfigService instance`);
     const platform = localStorage.getItem('platform');
+
+    console.log(
+      `creating PlatformConfigService instance for platform: ${platform}`
+    );
     switch (platform) {
       case 'android':
         return new AndroidConfigService();
@@ -34,7 +37,7 @@ class DeviceManager {
   private readonly deviceIdKey = 'deviceId';
   private readonly locationIdKey = 'locationId';
   private readonly topicIdKey = 'topicId';
-  private readonly nameKey = 'name';
+  private readonly nameKey = 'device_name';
   private readonly branchLinkKey = 'branchLink';
   private readonly previouslyConnectedDeviceIdsKey =
     'previouslyConnectedDeviceIds';
