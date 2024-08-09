@@ -21,10 +21,10 @@ import { KeyEvent, DeviceName, Config } from '@/utils/platform';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { AppSettings } from '@/constants';
 import AppService from '@/services/app.service';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AppContext } from '@/context/AppContext';
 import ArtworkService from '@/services/ArtworkService';
 import DailyService from '@/services/DailyService';
-import { useRouter } from 'next/navigation';
 
 const STANDARD_HEIGHT = 1080;
 
@@ -51,7 +51,6 @@ const Home: React.FC = () => {
       router.push('/daily');
     }
   }, []);
-
   const [branchLink, setBranchLink] = useState<string | null>(null);
   const [deviceName, setDeviceName] = useState<string>('');
   const artworkService = useRef(new ArtworkService());
@@ -85,6 +84,12 @@ const Home: React.FC = () => {
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
   const [isOnline, setIsOnline] = useState<boolean>(true);
+
+  const query = useSearchParams();
+  useEffect(() => {
+    const platform = query.get('platform') ?? '';
+    localStorage.setItem('platform', platform);
+  });
 
   useEffect(() => {
     castStatusRef.current = castStatus;
@@ -352,6 +357,18 @@ const Home: React.FC = () => {
     };
     setDidRegisterPlatformEvents(true);
   }, []);
+
+  useEffect(() => {
+    if (didRegisterPlatformEvents) {
+      console.log('Registering platform events');
+      DeviceManager.getName().then(name => {
+        console.log('Device Name:', name);
+        if (name) {
+          setDeviceName(name);
+        }
+      });
+    }
+  }, [didRegisterPlatformEvents]);
 
   try {
     (window as any).AppState.postMessage(

@@ -20,8 +20,11 @@ class DeviceManager {
   }
 
   private createConfigService(): PlatformConfigService {
-    console.log(`creating PlatformConfigService instance`);
     const platform = localStorage.getItem(LocalStorageItem.platform);
+
+    console.log(
+      `creating PlatformConfigService instance for platform: ${platform}`
+    );
     switch (platform) {
       case Platform.android:
         return new AndroidConfigService();
@@ -31,6 +34,14 @@ class DeviceManager {
         return new WebConfigService();
     }
   }
+
+  private readonly deviceIdKey = 'deviceId';
+  private readonly locationIdKey = 'locationId';
+  private readonly topicIdKey = 'topicId';
+  private readonly nameKey = 'device_name';
+  private readonly branchLinkKey = 'branchLink';
+  private readonly previouslyConnectedDeviceIdsKey =
+    'previouslyConnectedDeviceIds';
 
   private async getFromLocalStorage(key: string): Promise<string | null> {
     return await this.configService.getString(key);
