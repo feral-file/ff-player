@@ -19,10 +19,12 @@ import { calculateStartTime, getIndex } from '@/utils/Playlist';
 import MessageModal from '../components/messageModal';
 import { KeyEvent, DeviceName, Config } from '@/utils/platform';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
+import { AppSettings } from '@/constants';
+import AppService from '@/services/app.service';
 import { AppContext } from '@/context/AppContext';
-import { useRouter } from 'next/navigation';
 import ArtworkService from '@/services/ArtworkService';
 import DailyService from '@/services/DailyService';
+import { useRouter } from 'next/navigation';
 
 const STANDARD_HEIGHT = 1080;
 
@@ -89,7 +91,7 @@ const Home: React.FC = () => {
     try {
       (window as any).AppState.postMessage(
         JSON.stringify({
-          handler: 'castStatusChanged',
+          handler: 'backAbleChanged',
           data: castStatusRef.current,
         })
       );
@@ -100,7 +102,7 @@ const Home: React.FC = () => {
     const handleEscapeKey = () => {
       console.log('Escape key pressed');
       if (castStatusRef.current) {
-        setCastStatus(false);
+        refreshData();
         if (canvasService?.current != null) {
           canvasService?.current?.disconnect({});
         }
@@ -156,7 +158,7 @@ const Home: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (locationID && topicID && deviceName) {
+    if (locationID && topicID) {
       DeviceManager.setLocationId(locationID);
       DeviceManager.setTopicId(topicID);
       DeviceManager.setName(deviceName);
@@ -334,7 +336,7 @@ const Home: React.FC = () => {
       };
       handleCastCommand();
     } else {
-      setCastStatus(false);
+      refreshData();
     }
   }, [castInfo]);
 
@@ -540,6 +542,35 @@ const Home: React.FC = () => {
       return () => clearInterval(interval);
     }
   };
+
+  const refreshData = () => {
+    setCastStatus(false);
+    setCurrentIndex(-1);
+    indexRef.current = -1;
+    setArtworks([]);
+    setCurrentArtwork(null);
+    setPlaylist([]);
+    setStartTime(0);
+  };
+
+  const checkVersion = async () => {
+    const currentVersion = await AppService.getCurrentVersion();
+    const newVersion = await AppService.getVersion();
+    console.log('Current Version:', currentVersion);
+    console.log('New Version:', newVersion);
+    if (newVersion !== currentVersion) {
+      window.location.reload();
+    }
+  };
+
+  useEffect(() => {
+    checkVersion();
+    const intervalID = setInterval(async () => {
+      checkVersion();
+    }, AppSettings.VERSION_CHECK_INTERVAL_DURATION);
+
+    return () => clearInterval(intervalID);
+  }, []);
 
   return (
     <div
