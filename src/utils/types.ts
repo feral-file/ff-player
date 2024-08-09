@@ -207,3 +207,8 @@ export enum ViewMode {
   landscape = "landscape",
   portrait = "portrait",
 }
+
+export enum Orientation {
+  vertical = "vertical",
+  horizontal = "horizontal",
+}

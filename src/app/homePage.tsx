@@ -47,7 +47,7 @@ return (
           </div>
         </div>
       </div>
-      <div style={{ flex: 2, position: 'relative' }}>
+      <div className={clsx(styles.viewer)}>
         <ArtworkPlayer previewURL={previewURL!} />
       </div>
     </div>

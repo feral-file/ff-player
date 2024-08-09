@@ -7,6 +7,7 @@ import DeviceManager from "../utils/DeviceManager";
 import {
   Artwork,
   CastCommand,
+  Orientation,
   PlayArtworkV2,
   PlaylistToken,
   ViewMode,
@@ -28,7 +29,7 @@ const STANDARD_HEIGHT = 1080;
 
 const Home = () => {
   const [branchLink, setBranchLink] = useState<string | null>(null);
-  const [deviceName, setDeviceName] = useState<string>("Unknown Device");
+  const [deviceName, setDeviceName] = useState<string>('');
   const { locationID, topicID, castInfo } = useWebSocket(
     `${process.env.NEXT_PUBLIC_WEBSOCKET_URL!}/api/connection`,
     process.env.NEXT_PUBLIC_API_KEY!
@@ -53,6 +54,8 @@ const Home = () => {
   );
   const [didRegisterPlatformEvents, setDidRegisterPlatformEvents] =
     useState<boolean>(false);
+  const [rotateRadius, setRotateRadius] = useState<number>(0);
+  const [screenOrientation, setScreenOrientation] = useState<Orientation>(Orientation.horizontal);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -66,9 +69,11 @@ const Home = () => {
         if (window.innerHeight > window.innerWidth) {
           setViewMode(ViewMode.portrait);
           minSize = window.innerWidth;
+          setScreenOrientation(Orientation.vertical);
         } else {
           setViewMode(ViewMode.landscape);
           minSize = window.innerHeight;
+          setScreenOrientation(Orientation.horizontal);
         }
 
         setScreenRatio(minSize / STANDARD_HEIGHT);
@@ -79,7 +84,7 @@ const Home = () => {
   }, []);
 
   useEffect(() => {
-    if (locationID && topicID) {
+    if (locationID && topicID && deviceName) {
       DeviceManager.setLocationId(locationID);
       DeviceManager.setTopicId(topicID);
       DeviceManager.setName(deviceName);
@@ -207,9 +212,10 @@ const Home = () => {
         }
 
         case CastCommand.rotate: {
-          try {
-            (window as any).Rotate?.postMessage("clockwise");
-          } catch (error) {}
+          setViewMode(viewMode === ViewMode.landscape ? ViewMode.portrait : ViewMode.landscape);
+          setRotateRadius(rotateRadius + 90);
+
+          break;
         }
       }
     } else {
@@ -307,7 +313,11 @@ const Home = () => {
   };
 
   return (
-    <>
+    <div style={{
+      width: ((screenOrientation === Orientation.vertical && rotateRadius % 180 !== 90) || (screenOrientation === Orientation.horizontal && rotateRadius % 180 === 0)) ? '100vw' : '100vh',
+      height: (screenOrientation === Orientation.vertical && rotateRadius % 180 !== 90) || (screenOrientation === Orientation.horizontal && rotateRadius % 180 === 0) ? '100vh' : '100vw',
+      transform: `rotate(${-rotateRadius}deg) `, transformOrigin: `${(screenOrientation === Orientation.vertical && (rotateRadius % 360) !== 90 ||  (screenOrientation === Orientation.horizontal && (rotateRadius % 360) !== 90)) ? '50vw center' : 'center 50vh'}`,
+      transition: 'all 0.2s', display: 'flex', justifyContent: 'center', alignItems: 'center', }}>
       {displayComingSoon && <ComingSoonPage screenRatio={screenRatio} />}
       {displayOnboarding && (
         <OnboardingPage
@@ -318,7 +328,7 @@ const Home = () => {
         />
       )}
       {castStatus ? (
-        <div style={{ width: "100vw", height: "100vh" }}>
+        <div style={{ width: '100%', height: '100%' }}>
           <ArtworkPlayer previewURL={castPreviewURL!} />
         </div>
       ) : (
@@ -330,7 +340,7 @@ const Home = () => {
           currentArtwork={currentArtwork!}
         />
       )}
-    </>
+    </div>
   );
 };
 
