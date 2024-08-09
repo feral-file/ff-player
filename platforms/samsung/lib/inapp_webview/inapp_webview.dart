@@ -41,6 +41,7 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Colors.transparent,
         body: Focus(
           autofocus: true,
           focusNode: _focusNode,
