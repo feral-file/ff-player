@@ -1,0 +1,13 @@
+import axios from 'axios';
+import { Daily } from './types';
+
+class DailyService {
+  public async getUpcomingDaily(): Promise<Daily[]> {
+    const response = await axios.get(
+      `${process.env.NEXT_PUBLIC_API_URL!}/api/dailies/upcoming`
+    );
+    return response.data.result as Daily[];
+  }
+}
+
+export default DailyService;
