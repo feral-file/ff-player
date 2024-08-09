@@ -36,9 +36,9 @@ import {
   KeyboardEventReply,
   CastInfo,
   ExhibitionCatalog,
-} from "./types";
+} from './types';
 
-import DeviceManager from "./DeviceManager";
+import DeviceManager from './DeviceManager';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -52,14 +52,14 @@ class CanvasService {
   }
 
   public async processMessage(event: MessageEvent) {
-    console.log("processMessage", JSON.stringify(event));
+    console.log('processMessage', JSON.stringify(event));
 
     const webSocketMessage: WebSocketMessage = JSON.parse(event.data);
     const messageData = JSON.parse(webSocketMessage.message);
 
     if (
-      webSocketMessage.messageID.startsWith("system") ||
-      webSocketMessage.messageID === "ping"
+      webSocketMessage.messageID.startsWith('system') ||
+      webSocketMessage.messageID === 'ping'
     ) {
       // Handle system messages or ping-pong messages
       return;
@@ -68,7 +68,7 @@ class CanvasService {
     const commandStr = messageData.command;
     if (!commandStr) {
       console.error(
-        "Command not found in the message:",
+        'Command not found in the message:',
         JSON.stringify(messageData)
       );
       return;
@@ -76,7 +76,7 @@ class CanvasService {
 
     const command = CastCommand[commandStr as keyof typeof CastCommand];
     if (!command) {
-      console.error("Invalid command:", JSON.stringify(commandStr));
+      console.error('Invalid command:', JSON.stringify(commandStr));
       return;
     }
 
@@ -148,6 +148,8 @@ class CanvasService {
         return this.getCursorOffset(requestJson);
       case CastCommand.sendKeyboardEvent:
         return this.keyboardEvent(requestJson);
+      case CastCommand.castDaily:
+        return this.castDaily(requestJson);
       default:
         console.error(`Unknown command: ${command}`);
         return { ok: false };
@@ -155,12 +157,12 @@ class CanvasService {
   }
 
   private async connect(request: ConnectRequestV2): Promise<ConnectReplyV2> {
-    console.log("connect", JSON.stringify(request));
+    console.log('connect', JSON.stringify(request));
 
-    const deviceInfo = DeviceManager.getDeviceInfo(); // Get the website’s device info
+    const deviceInfo = await DeviceManager.getDeviceInfo(); // Get the website’s device info
 
     if (!deviceInfo) {
-      console.error("Device info is not available");
+      console.error('Device info is not available');
       return { ok: false };
     }
 
@@ -173,12 +175,12 @@ class CanvasService {
       },
       startTime: Date.now(),
     };
-    console.log("_connected device:", JSON.stringify(this.clientDeviceInfo));
+    console.log('_connected device:', JSON.stringify(this.clientDeviceInfo));
     return { ok: true };
   }
 
   private async disconnect(request: any): Promise<DisconnectReplyV2> {
-    console.log("disconnect", JSON.stringify(request));
+    console.log('disconnect', JSON.stringify(request));
     this.onDisconnect();
     return { ok: true };
   }
@@ -186,7 +188,7 @@ class CanvasService {
   private async status(
     request: CheckDeviceStatusRequest
   ): Promise<CheckDeviceStatusReply> {
-    console.log("checkStatus", JSON.stringify(request));
+    console.log('checkStatus', JSON.stringify(request));
     return {
       ok: true,
       startTime: Date.now(),
@@ -200,7 +202,7 @@ class CanvasService {
     request: CastExhibitionRequest
   ): Promise<CastExhibitionReply> {
     if (!request.exhibitionId) {
-      console.error("Exhibition ID is required");
+      console.error('Exhibition ID is required');
       return { ok: false };
     }
 
@@ -216,7 +218,7 @@ class CanvasService {
   private async castListArtwork(
     request: CastListArtworkRequest
   ): Promise<CastListArtworkReply> {
-    console.log("castListArtwork", JSON.stringify(request));
+    console.log('castListArtwork', JSON.stringify(request));
     this.castInfo = {
       ...this.castInfo,
       artworks: request.artworks,
@@ -225,45 +227,50 @@ class CanvasService {
     return { ok: true };
   }
 
+  private async castDaily(request: any): Promise<Reply> {
+    console.log('castDaily', request);
+    return { ok: true };
+  }
+
   private async nextArtwork(
     request: NextArtworkRequest
   ): Promise<NextArtworkReply> {
-    console.log("nextArtwork", request);
+    console.log('nextArtwork', request);
     return { ok: true };
   }
 
   private async pauseCasting(
     request: PauseCastingRequest
   ): Promise<PauseCastingReply> {
-    console.log("pauseCasting", request);
+    console.log('pauseCasting', request);
     return { ok: true };
   }
 
   private async resumeCasting(
     request: ResumeCastingRequest
   ): Promise<ResumeCastingReply> {
-    console.log("resumeCasting", request);
+    console.log('resumeCasting', request);
     return { ok: true };
   }
 
   private async previousArtwork(
     request: PreviousArtworkRequest
   ): Promise<PreviousArtworkReply> {
-    console.log("previousArtwork", request);
+    console.log('previousArtwork', request);
     return { ok: true };
   }
 
   private async moveToArtwork(
     request: MoveToArtworkRequest
   ): Promise<MoveToArtworkReply> {
-    console.log("moveToArtwork", request);
+    console.log('moveToArtwork', request);
     return { ok: true };
   }
 
   private async updateDuration(
     request: UpdateDurationRequest
   ): Promise<UpdateDurationReply> {
-    console.log("updateDuration", request);
+    console.log('updateDuration', request);
     this.castInfo = {
       ...this.castInfo,
       artworks: request.artworks,
@@ -277,26 +284,26 @@ class CanvasService {
   }
 
   private async rotate(request: RotateRequest): Promise<RotateReply> {
-    console.log("rotate", request);
+    console.log('rotate', request);
     return { ok: true, degree: 0 };
   }
 
   private async tapGesture(request: TapGestureRequest): Promise<GestureReply> {
-    console.log("tapGesture", request);
+    console.log('tapGesture', request);
     return { ok: true };
   }
 
   private async dragGesture(
     request: DragGestureRequest
   ): Promise<GestureReply> {
-    console.log("dragGesture", request);
+    console.log('dragGesture', request);
     return { ok: true };
   }
 
   private async getCursorOffset(
     request: GetCursorOffsetRequest
   ): Promise<GetCursorOffsetReply> {
-    console.log("getCursorOffset", request);
+    console.log('getCursorOffset', request);
     return {
       ok: true,
       cursorOffset: { dx: 0, dy: 0, coefficientX: 1, coefficientY: 1 },
@@ -306,24 +313,28 @@ class CanvasService {
   private async setCursorOffset(
     request: SetCursorOffsetRequest
   ): Promise<SetCursorOffsetReply> {
-    console.log("setCursorOffset", request);
+    console.log('setCursorOffset', request);
     return { ok: true };
   }
 
   private async keyboardEvent(
     request: KeyboardEventRequest
   ): Promise<KeyboardEventReply> {
-    console.log("keyboardEvent", request);
+    console.log('keyboardEvent', request);
+    this.castInfo = {
+      ...this.castInfo,
+      value: request.code,
+    };
     return { ok: true };
   }
 
   private onDisconnect() {
-    console.log("onDisconnect");
+    console.log('onDisconnect');
     this.castInfo = null;
   }
 
   private setTimer(state: any, onNext: Function | null) {
-    console.log("setTimer", state);
+    console.log('setTimer', state);
     this.cancelTimer();
     if (state.artworks.length <= 1) {
       return;
@@ -334,7 +345,7 @@ class CanvasService {
     const remainingDuration =
       currentArtwork.duration - (Date.now() - artworkStartTime);
     if (remainingDuration <= 0) return;
-    console.log("setTimer: remainingDuration", remainingDuration);
+    console.log('setTimer: remainingDuration', remainingDuration);
     this.timer = setTimeout(() => {
       if (onNext) onNext();
     }, remainingDuration - 1000);

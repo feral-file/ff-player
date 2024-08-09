@@ -92,8 +92,8 @@ export class Config extends PlatformEventReceiver {
   }
 }
 
-interface PlatformConfigService {
-  getString(key: string): Promise<string>;
+export interface PlatformConfigService {
+  getString(key: string): Promise<string | null>;
 
   setString(key: string, value: string): Promise<any>;
 }
@@ -122,7 +122,7 @@ export class TizenConfigService implements PlatformConfigService {
     };
     // fire event to tizen
     try {
-      (window as any).ConfigService.postMessage(JSON.stringify(request));
+      (window as any).ConfigService?.postMessage(JSON.stringify(request));
       console.log(`Sent request to Tizen ${JSON.stringify(request)}`);
     } catch (e) {
       console.error(`Failed to send request to Tizen: ${e}`);
@@ -153,5 +153,15 @@ export class TizenConfigService implements PlatformConfigService {
     FutureManager.instance.appendFuture(id, future);
 
     return future.promise;
+  }
+}
+
+export class WebConfigService implements PlatformConfigService {
+  async getString(key: string): Promise<string | null> {
+    return localStorage.getItem(key);
+  }
+
+  async setString(key: string, value: string): Promise<void> {
+    localStorage.setItem(key, value);
   }
 }
