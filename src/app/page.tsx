@@ -37,7 +37,7 @@ const Home = () => {
   const startPlayArtworkTime = useRef<number>(0);
   const endPlayArtworkTime = useRef<number>(0);
   const [screenRatio, setScreenRatio] = useState<number>(1);
-  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.landscape);
+  const [viewMode, setViewMode] = useState<ViewMode>();
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [currentArtwork, setCurrentArtwork] = useState<Artwork | null>(null);
   const [castStatus, setCastStatus] = useState<boolean | null>(false);
@@ -558,7 +558,7 @@ const Home = () => {
       ) : (
         <HomePage
           screenRatio={screenRatio}
-          viewMode={viewMode}
+          viewMode={viewMode!}
           deviceName={deviceName!}
           branchLink={branchLink!}
           currentArtwork={currentArtwork!}

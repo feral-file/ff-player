@@ -107,6 +107,7 @@ const ArtworkPlayer = ({
         height: '100%',
         backgroundColor: '#000000',
         justifyContent: 'center',
+        position: 'relative',
       }}>
       {(previewType === null || loading) && (
         <div
