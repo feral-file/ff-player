@@ -69,6 +69,7 @@ const HomePage = ({
                   {branchLink ? (
                     <div
                       style={{
+                        marginTop: 40 * screenRatio,
                         padding: 10 * screenRatio,
                         backgroundColor: 'white',
                         width: 'fit-content',
