@@ -44,7 +44,7 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
           autofocus: true,
           focusNode: _focusNode,
           onKeyEvent: (node, event) {
-            print(event);
+            log.info(event.toString());
             if (_isCasting &&
                 event.logicalKey.keyId == LogicalKeyboardKey.escape.keyId) {
               if (event is KeyDownEvent) {

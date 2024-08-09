@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 class UpdateManager {
   final RemoteConfigService _remoteConfigService;
   final NavigationService _navigationService;
+  Timer? _timer;
 
   UpdateManager(this._remoteConfigService, this._navigationService);
 
@@ -17,11 +18,23 @@ class UpdateManager {
         ConfigGroup.tizen, ConfigKey.gitHash, '');
     // check for updates
     log.info('UpdateManager current hash: $currentHash');
+    final String currentIntervalDuration = _remoteConfigService.getConfig(
+        ConfigGroup.tizen, ConfigKey.updateInterval, '');
+    log.info('UpdateManager current interval duration: $currentIntervalDuration');
     await _remoteConfigService.loadConfigs();
 
     final String newHash = _remoteConfigService.getConfig(
         ConfigGroup.tizen, ConfigKey.gitHash, '');
     log.info('UpdateManager new hash: $newHash');
+    final String newIntervalDuration = _remoteConfigService.getConfig(
+        ConfigGroup.tizen, ConfigKey.updateInterval, '');
+    log.info('UpdateManager new interval duration: $newIntervalDuration');
+
+    if (newIntervalDuration != currentIntervalDuration) {
+      cancelTimer();
+      start(duration: int.parse(newIntervalDuration));
+    }
+
     if (currentHash != newHash) {
       log.info('UpdateManager: _checkForUpdates: new version detected');
       if (_navigationService.context == null) {
@@ -37,14 +50,28 @@ class UpdateManager {
     }
   }
 
-  void start() {
-    final String intervalSetting = _remoteConfigService.getConfig(
-        ConfigGroup.tizen, ConfigKey.updateInterval, '');
+  void start({int? duration}) {
+    late int interval;
+    if (duration != null) {
+      interval = duration;
+    } else {
+      final String intervalSetting = _remoteConfigService.getConfig(
+          ConfigGroup.tizen, ConfigKey.updateInterval, '');
+      interval = int.parse(intervalSetting);
+    }
 
-    final interval = int.parse(intervalSetting);
+    if (_timer?.isActive ?? false) {
+      _timer!.cancel();
+    }
 
-    Timer.periodic(Duration(minutes: interval), (timer) async {
+    _timer = Timer.periodic(Duration(minutes: interval), (timer) async {
       await _checkForUpdates();
     });
+  }
+
+  void cancelTimer() {
+    if (_timer?.isActive ?? false) {
+      _timer!.cancel();
+    }
   }
 }
