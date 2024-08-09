@@ -118,10 +118,12 @@ const ArtworkPlayer = ({
             position: 'relative',
             zIndex: 2,
             justifyContent: 'center',
+            alignItems: 'center',
           }}>
-          <img
+          Loading...
+          {/* <img
             style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-            src="/ff-loading.gif"></img>
+            src="/ff-loading.gif"></img> */}
         </div>
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (
