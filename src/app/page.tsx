@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { detect, BrowserInfo } from 'detect-browser';
-import useWebSocket from '../services/WebSocketManager';
 import DeviceManager from '../utils/DeviceManager';
 import {
   Artwork,

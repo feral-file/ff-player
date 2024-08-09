@@ -1,8 +1,8 @@
 'use client';
 
 import ArtworkPlayer from '@/components/artworkPlayer';
-import ArtworkService from '@/utils/ArtworkService';
-import DailyService from '@/utils/DailyService';
+import ArtworkService from '@/services/ArtworkService';
+import DailyService from '@/services/DailyService';
 import { Daily } from '@/utils/types';
 import { useEffect, useRef, useState } from 'react';
 
