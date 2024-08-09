@@ -24,6 +24,7 @@ import DailyService from '@/utils/DailyService';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { AppSettings } from '@/constants';
 import AppService from '@/services/app.service';
+import { useSearchParams } from 'next/navigation';
 
 const STANDARD_HEIGHT = 1080;
 
@@ -65,6 +66,12 @@ const Home = () => {
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
   const [isOnline, setIsOnline] = useState<boolean>(true);
+
+  const query = useSearchParams();
+  useEffect(() => {
+    const platform = query.get('platform') ?? '';
+    localStorage.setItem('platform', platform);
+  });
 
   useEffect(() => {
     castStatusRef.current = castStatus;
@@ -332,6 +339,18 @@ const Home = () => {
     };
     setDidRegisterPlatformEvents(true);
   }, []);
+
+  useEffect(() => {
+    if (didRegisterPlatformEvents) {
+      console.log('Registering platform events');
+      DeviceManager.getName().then(name => {
+        console.log('Device Name:', name);
+        if (name) {
+          setDeviceName(name);
+        }
+      });
+    }
+  }, [didRegisterPlatformEvents]);
 
   try {
     (window as any).AppState.postMessage(

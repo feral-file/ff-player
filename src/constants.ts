@@ -9,7 +9,7 @@ export enum LocalStorageItem {
   topicID = 'topicID',
   platform = 'platform',
   castInfo = 'castInfo',
-  name = 'name',
+  name = 'device_name',
   branchLink = 'branchLink',
   previouslyConnectedDeviceIds = 'previouslyConnectedDeviceIds',
 }
