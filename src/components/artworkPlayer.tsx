@@ -146,7 +146,6 @@ const ArtworkPlayer = ({
           style={{ width: '100%', height: '100%' }}
           onLoadedData={loadedSource}
           autoPlay
-          muted
           loop
           playsInline
           crossOrigin="anonymous">
