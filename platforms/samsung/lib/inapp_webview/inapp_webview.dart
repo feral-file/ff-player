@@ -55,7 +55,6 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
     super.initState();
     unawaited(WakelockPlus.enable());
     _initWebview();
-    _webViewController.tizenEnginePolicy = true;
   }
 
   @override
@@ -111,6 +110,7 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
     _addJavaScriptChannel();
     _addConfigHandler();
 
+    _webViewController.tizenEnginePolicy = true;
     _webViewController.loadRequest(Uri.parse(url));
 
     _webViewController.setJavaScriptMode(JavaScriptMode.unrestricted);
