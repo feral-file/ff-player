@@ -1,7 +1,10 @@
-import { useState, useEffect, useRef } from "react";
-import ReconnectingWebSocket from "reconnecting-websocket";
-import CanvasService from "./CanvasService";
-import { CastInfo } from "./types";
+import { useState, useEffect, useRef } from 'react';
+import ReconnectingWebSocket from 'reconnecting-websocket';
+import CanvasService from './CanvasService';
+import { CastInfo } from './types';
+import { LocalStorageItem } from '@/constants';
+
+let webSocketInstance: any = null;
 
 const useWebSocket = (url: string, apiKey: string) => {
   const [locationID, setLocationID] = useState<string | null>(null);
@@ -14,26 +17,35 @@ const useWebSocket = (url: string, apiKey: string) => {
     if (!url || !apiKey) return;
 
     const connect = () => {
-      const storedLocationID = localStorage.getItem("locationID");
-      const storedTopicID = localStorage.getItem("topicID");
-
       let wsUrl = `${url}?apiKey=${apiKey}`;
+      const storedLocationID = localStorage.getItem(
+        LocalStorageItem.locationID
+      );
+      const storedTopicID = localStorage.getItem(LocalStorageItem.topicID);
       if (storedLocationID) wsUrl += `&locationID=${storedLocationID}`;
       if (storedTopicID) wsUrl += `&topicID=${storedTopicID}`;
 
-      ws.current = new ReconnectingWebSocket(wsUrl);
+      const castInfo = localStorage.getItem(LocalStorageItem.castInfo);
+      if (castInfo) {
+        canvasService.current.setCastInfo(JSON.parse(castInfo));
+        setCastInfo(JSON.parse(castInfo) as CastInfo);
+      }
 
+      ws.current = new ReconnectingWebSocket(wsUrl);
       ws.current.onopen = () => {
-        console.log("WebSocket connected");
+        console.log('WebSocket connected');
       };
 
-      ws.current.onmessage = async (event) => {
+      ws.current.onmessage = async event => {
         const data = JSON.parse(event.data);
-        if (data.messageID === "system") {
+        if (data.messageID === 'system') {
           setLocationID(data.message.locationID);
           setTopicID(data.message.topicID);
-          localStorage.setItem("locationID", data.message.locationID);
-          localStorage.setItem("topicID", data.message.topicID);
+          localStorage.setItem(
+            LocalStorageItem.locationID,
+            data.message.locationID
+          );
+          localStorage.setItem(LocalStorageItem.topicID, data.message.topicID);
         } else {
           const responseMessage =
             await canvasService.current.processMessage(event);
@@ -44,12 +56,12 @@ const useWebSocket = (url: string, apiKey: string) => {
         }
       };
 
-      ws.current.onerror = (error) => {
-        console.error("WebSocket error:", error);
+      ws.current.onerror = error => {
+        console.error('WebSocket error:', error);
       };
 
       ws.current.onclose = () => {
-        console.log("WebSocket disconnected, attempting to reconnect...");
+        console.log('WebSocket disconnected, attempting to reconnect...');
       };
     };
 
