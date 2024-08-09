@@ -12,7 +12,7 @@ class AppService {
   }
 
   public static async getCurrentVersion() {
-    if (this.currentVersion == null) {
+    if (!this.currentVersion) {
       this.currentVersion = await this.getVersion();
     }
 

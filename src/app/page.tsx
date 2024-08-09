@@ -71,7 +71,7 @@ const Home = () => {
     try {
       (window as any).AppState.postMessage(
         JSON.stringify({
-          handler: 'castStatusChanged',
+          handler: 'backAbleChanged',
           data: castStatusRef.current,
         })
       );
