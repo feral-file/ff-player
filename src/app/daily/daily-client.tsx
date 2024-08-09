@@ -3,6 +3,7 @@
 import ArtworkPlayer from '@/components/artworkPlayer';
 import ArtworkService from '@/services/ArtworkService';
 import DailyService from '@/services/DailyService';
+import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Daily } from '@/utils/types';
 import { useEffect, useRef, useState } from 'react';
 
@@ -16,6 +17,29 @@ export default function DailyClient() {
 
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [dailies, setDailies] = useState<Daily[]>([]);
+
+  useEffect(() => {
+    try {
+      (window as any).AppState.postMessage(
+        JSON.stringify({
+          handler: 'backAbleChanged',
+          data: true,
+        })
+      );
+    } catch (error) {}
+
+    const handleEscapeKey = () => {
+      history.back();
+    };
+
+    EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+    EventEmitter.subscribe(Event.escape, handleEscapeKey);
+
+    // Cleanup the event listener on component unmount
+    return () => {
+      EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+    };
+  }, []);
 
   useEffect(() => {
     if (effectRan.current) {
