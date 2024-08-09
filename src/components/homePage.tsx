@@ -1,7 +1,7 @@
 import { Artwork, ViewMode } from '@/utils/types';
 import Image from 'next/image';
 import QRCode from 'qrcode.react';
-import ArtworkPlayer from './artworkPlayer';
+import ArtworkPlayer from '../components/artworkPlayer';
 import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import styles from '../styles/global.module.scss';
