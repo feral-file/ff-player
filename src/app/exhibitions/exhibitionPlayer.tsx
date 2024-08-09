@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import styles from './exhibition.module.scss';
 import './exhibition.module.scss';
 import { ExhibitionCatalog, ViewMode } from '@/utils/types';
-import Carousel from './components/carousel';
+import Carousel from './components/carousel/carousel';
 import ArtworkPlayer from '@/components/artworkPlayer';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
 
@@ -61,8 +61,9 @@ const ExhibitionHall = ({
         return;
       }
 
-      const exhibition =
-        await exhibitionService.current.getExhibition(exhibitionID);
+      const exhibition = await exhibitionService.current.getExhibition(
+        exhibitionID
+      );
 
       setExhibitionDetail(exhibition);
       fetchPosts(exhibition!);
