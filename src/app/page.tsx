@@ -18,7 +18,7 @@ import HomePage from '../components/homePage';
 import OnboardingPage from '../components/onboardingPage';
 import ArtworkService from '@/utils/ArtworkService';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
-import ComingSoonPage from '../components/comingSoonPage';
+import MessageModal from '../components/messageModal';
 import { KeyEvent, DeviceName, Config } from '@/utils/platform';
 import DailyService from '@/utils/DailyService';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
@@ -39,7 +39,7 @@ const Home = () => {
   const startPlayArtworkTime = useRef<number>(0);
   const endPlayArtworkTime = useRef<number>(0);
   const [screenRatio, setScreenRatio] = useState<number>(1);
-  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.landscape);
+  const [viewMode, setViewMode] = useState<ViewMode>();
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [currentArtwork, setCurrentArtwork] = useState<Artwork | null>(null);
   const [castStatus, setCastStatus] = useState<boolean | null>(false);
@@ -64,6 +64,7 @@ const Home = () => {
   const indexRef = useRef<number>(-1);
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
+  const [isOnline, setIsOnline] = useState<boolean>(true);
 
   useEffect(() => {
     castStatusRef.current = castStatus;
@@ -99,6 +100,10 @@ const Home = () => {
   }, []);
 
   useEffect(() => {
+    function updateNetworkStatus() {
+      setIsOnline(navigator.onLine);
+    }
+
     if (typeof window !== 'undefined') {
       const browser = detect() as BrowserInfo;
       if (browser) {
@@ -121,6 +126,14 @@ const Home = () => {
       };
 
       resizeHandler();
+
+      window.addEventListener('online', updateNetworkStatus);
+      window.addEventListener('offline', updateNetworkStatus);
+
+      return () => {
+        window.removeEventListener('online', updateNetworkStatus);
+        window.removeEventListener('offline', updateNetworkStatus);
+      };
     }
   }, []);
 
@@ -175,6 +188,7 @@ const Home = () => {
           case CastCommand.castListArtwork: {
             setDisplayComingSoon(false); // Temporary display coming soon
             setDisplayOnboarding(false);
+            indexRef.current = -1;
             const getNftTokens = async (ids: string[]) => {
               if (!ids.length) {
                 return;
@@ -564,12 +578,20 @@ const Home = () => {
             ? '50vw center'
             : 'center 50vh'
         }`,
-        transition: 'all 0.2s',
+        transition: 'transform 0.2s',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
       }}>
-      {displayComingSoon && <ComingSoonPage screenRatio={screenRatio} />}
+      {displayComingSoon && (
+        <MessageModal screenRatio={screenRatio} message="Coming soon..." />
+      )}
+      {!isOnline && (
+        <MessageModal
+          screenRatio={screenRatio}
+          message="Internet connection lost. Reconnecting..."
+        />
+      )}
       {displayOnboarding && (
         <OnboardingPage
           screenRatio={screenRatio}
@@ -588,7 +610,7 @@ const Home = () => {
       ) : (
         <HomePage
           screenRatio={screenRatio}
-          viewMode={viewMode}
+          viewMode={viewMode!}
           deviceName={deviceName!}
           branchLink={branchLink!}
           currentArtwork={currentArtwork!}

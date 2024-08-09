@@ -203,6 +203,7 @@ class CanvasService {
       artworks: this.castInfo?.artworks ?? [],
       connectedDevice: this.castInfo?.deviceInfo,
       exhibitionId: this.castInfo?.exhibitionId,
+      displayKey: this.castInfo?.displayKey,
     };
   }
 
@@ -228,6 +229,11 @@ class CanvasService {
 
   private async castDaily(request: any): Promise<Reply> {
     console.log('castDaily', request);
+    this.castInfo = {
+      ...this.castInfo,
+      displayKey: 'daily_work',
+    };
+
     return { ok: true };
   }
 

@@ -19,9 +19,9 @@ class RemoteConfigServiceImpl implements RemoteConfigService {
 
   static const Map<String, dynamic> _defaults = <String, dynamic>{
     'tizen': {
-      'url': 'https://feralfile-display-prod.pages.dev/',
+      'url': 'https://feralfile-display-prod.pages.dev?platform=tizen',
       'gitHash': '1434d96c8ce703c4ed6d1485e18a5296a406bcdb',
-      'updateInterval': '3'
+      'updateInterval': '30'
     }
   };
 
