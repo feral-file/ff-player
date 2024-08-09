@@ -64,6 +64,7 @@ export interface CheckDeviceStatusReply extends Reply {
   artworks: PlayArtworkV2[];
   connectedDevice?: DeviceInfoV2;
   exhibitionId?: string;
+  displayKey?: string;
 }
 export interface CastExhibitionRequest {
   exhibitionId: string;
@@ -209,6 +210,7 @@ export interface CastInfo {
   exhibitionId?: string;
   catalogId?: string;
   catalog?: ExhibitionCatalog;
+  displayKey?: string;
 }
 
 // Enum for ExhibitionCatalog

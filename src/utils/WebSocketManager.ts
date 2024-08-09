@@ -62,7 +62,7 @@ const useWebSocket = (url: string, apiKey: string) => {
     };
   }, [url, apiKey]);
 
-  return { locationID, topicID, castInfo };
+  return { locationID, topicID, castInfo, canvasService };
 };
 
 export default useWebSocket;

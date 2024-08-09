@@ -14,20 +14,16 @@ import {
   PlaylistToken,
   ViewMode,
 } from '@/utils/types';
-import ArtworkPlayer from './artworkPlayer';
-import HomePage from './homePage';
-import OnboardingPage from './onboardingPage';
+import ArtworkPlayer from '../components/artworkPlayer';
+import HomePage from '../components/homePage';
+import OnboardingPage from '../components/onboardingPage';
 import ArtworkService from '@/utils/ArtworkService';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
-import ComingSoonPage from './comingSoonPage';
-import {
-  KeyEvent,
-  DeviceName,
-  TizenConfigService,
-  Config,
-} from '@/utils/platform';
 import ExhibitionHall from './exhibitions/exhibitionPlayer';
+import MessageModal from '../components/messageModal';
+import { KeyEvent, DeviceName, Config } from '@/utils/platform';
 import DailyService from '@/utils/DailyService';
+import { EventEmitter, Event } from '@/utils/EventEmitter';
 
 const enum CastState {
   None, // Not casting
@@ -40,7 +36,7 @@ const STANDARD_HEIGHT = 1080;
 const Home = () => {
   const [branchLink, setBranchLink] = useState<string | null>(null);
   const [deviceName, setDeviceName] = useState<string>('');
-  const { locationID, topicID, castInfo } = useWebSocket(
+  const { locationID, topicID, castInfo, canvasService } = useWebSocket(
     `${process.env.NEXT_PUBLIC_WEBSOCKET_URL!}/api/connection`,
     process.env.NEXT_PUBLIC_API_KEY!
   );
@@ -54,9 +50,11 @@ const Home = () => {
   const startPlayArtworkTime = useRef<number>(0);
   const endPlayArtworkTime = useRef<number>(0);
   const [screenRatio, setScreenRatio] = useState<number>(1);
-  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.landscape);
+  const [viewMode, setViewMode] = useState<ViewMode>();
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [currentArtwork, setCurrentArtwork] = useState<Artwork | null>(null);
+  const [castStatus, setCastStatus] = useState<boolean | null>(false);
+  const castStatusRef = useRef(castStatus);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [playlist, setPlaylist] = useState<PlaylistToken[]>([]);
@@ -77,13 +75,46 @@ const Home = () => {
   const indexRef = useRef<number>(-1);
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
+  const [isOnline, setIsOnline] = useState<boolean>(true);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-    }
+    castStatusRef.current = castStatus;
+    try {
+      (window as any).AppState.postMessage(
+        JSON.stringify({
+          handler: 'castStatusChanged',
+          data: castStatusRef.current,
+        })
+      );
+    } catch (error) {}
+  }, [castStatus]);
+
+  useEffect(() => {
+    const handleEscapeKey = () => {
+      console.log('Escape key pressed');
+      if (castStatusRef.current) {
+        setCastStatus(false);
+        if (canvasService?.current != null) {
+          canvasService?.current?.disconnect({});
+        }
+        clearTimer();
+      }
+    };
+
+    EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+    EventEmitter.subscribe(Event.escape, handleEscapeKey);
+
+    // Cleanup the event listener on component unmount
+    return () => {
+      EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+    };
   }, []);
 
   useEffect(() => {
+    function updateNetworkStatus() {
+      setIsOnline(navigator.onLine);
+    }
+
     if (typeof window !== 'undefined') {
       const browser = detect() as BrowserInfo;
       if (browser) {
@@ -106,6 +137,14 @@ const Home = () => {
       };
 
       resizeHandler();
+
+      window.addEventListener('online', updateNetworkStatus);
+      window.addEventListener('offline', updateNetworkStatus);
+
+      return () => {
+        window.removeEventListener('online', updateNetworkStatus);
+        window.removeEventListener('offline', updateNetworkStatus);
+      };
     }
   }, []);
 
@@ -160,6 +199,7 @@ const Home = () => {
           case CastCommand.castListArtwork: {
             setDisplayComingSoon(false); // Temporary display coming soon
             setDisplayOnboarding(false);
+            indexRef.current = -1;
             const getNftTokens = async (ids: string[]) => {
               if (!ids.length) {
                 return;
@@ -248,6 +288,11 @@ const Home = () => {
             break;
           }
 
+          case CastCommand.moveToArtwork: {
+            handleMoveToArtwork(castInfo.value);
+            break;
+          }
+
           case CastCommand.updateDuration: {
             if (castInfo.artworks) {
               handleUpdateDuration(castInfo.artworks);
@@ -296,7 +341,11 @@ const Home = () => {
   }, []);
 
   try {
-    (window as any).AppState?.postMessage('loaded');
+    (window as any).AppState.postMessage(
+      JSON.stringify({
+        handler: 'loaded',
+      })
+    );
   } catch (error) {}
 
   useEffect(() => {
@@ -382,6 +431,19 @@ const Home = () => {
     );
     setStartTime(st);
     startInterval(remainTimeRef.current);
+  };
+
+  const handleMoveToArtwork = (tokenID: string) => {
+    const index = playlist.findIndex(
+      (p: PlaylistToken) => p.token?.id === tokenID
+    );
+    if (index < 0) {
+      return;
+    }
+    const st = calculateStartTime(playlist, index);
+    setStartTime(st);
+    clearTimer();
+    setCurrentIndex(index);
   };
 
   const startInterval = (duration: number) => {
@@ -498,12 +560,20 @@ const Home = () => {
             ? '50vw center'
             : 'center 50vh'
         }`,
-        transition: 'all 0.2s',
+        transition: 'transform 0.2s',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
       }}>
-      {displayComingSoon && <ComingSoonPage screenRatio={screenRatio} />}
+      {displayComingSoon && (
+        <MessageModal screenRatio={screenRatio} message="Coming soon..." />
+      )}
+      {!isOnline && (
+        <MessageModal
+          screenRatio={screenRatio}
+          message="Internet connection lost. Reconnecting..."
+        />
+      )}
       {displayOnboarding && (
         <OnboardingPage
           screenRatio={screenRatio}
@@ -515,7 +585,7 @@ const Home = () => {
       {castState === CastState.None && (
         <HomePage
           screenRatio={screenRatio}
-          viewMode={viewMode}
+          viewMode={viewMode!}
           deviceName={deviceName!}
           branchLink={branchLink!}
           currentArtwork={currentArtwork!}
@@ -531,7 +601,7 @@ const Home = () => {
       )}
       {castState === CastState.Exhibition && (
         <ExhibitionHall
-          viewMode={viewMode}
+          viewMode={viewMode!}
           screenRatio={screenRatio}
           exhibitionID={castInfo?.exhibitionId}
           catalogID={castInfo?.catalogId}

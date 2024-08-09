@@ -3,13 +3,11 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:device_info_plus_tizen/device_info_plus_tizen.dart';
 import 'package:feralfile_display_tizen/app_router.dart';
 import 'package:feralfile_display_tizen/service/configuration_service.dart';
 import 'package:feralfile_display_tizen/service/navigation_service.dart';
 import 'package:feralfile_display_tizen/service/remote_config_service.dart';
-import 'package:feralfile_display_tizen/service/update_manager.dart';
 import 'package:feralfile_display_tizen/utils/config_manager.dart';
 import 'package:feralfile_display_tizen/utils/injector.dart';
 import 'package:feralfile_display_tizen/utils/log.dart';
@@ -17,9 +15,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-
-late StreamSubscription<ConnectivityResult> connectivitySubscription;
-final Connectivity connectivity = Connectivity();
 
 double minSize = 0.0;
 double defaultFontSize = 0.0;
@@ -35,36 +30,14 @@ Future<void> main() async {
 
     await setup();
 
-    // Init logger
-    // Logger.root.level = Level.INFO;
-    // Logger.root.onRecord.listen((record) {
-    //   print('${record.level.name}: ${record.time}: ${record.message}');
-    // });
-
     await injector<RemoteConfigService>().loadConfigs();
     DeviceInfoPluginTizen deviceInfo = DeviceInfoPluginTizen();
     TizenDeviceInfo tizenInfo = await deviceInfo.tizenInfo;
     final name = tizenInfo.modelName ?? 'Samsung TV';
     await injector<ConfigurationService>().setString('device_name', name);
 
-    UpdateManager(injector(), injector()).start();
+    //UpdateManager(injector(), injector()).start();
 
-    connectivitySubscription =
-        connectivity.onConnectivityChanged.listen((result) async {
-      final context = injector<NavigationService>().context;
-      if (context?.mounted == true) {
-        if (result == ConnectivityResult.none) {
-          ScaffoldMessenger.of(context!).showSnackBar(
-            const SnackBar(
-              content: Text('No internet connection'),
-              duration: Duration(days: 1),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context!).hideCurrentSnackBar();
-        }
-      }
-    });
     runApp(const MyApp());
   }, (Object error, StackTrace stackTrace) {
     if (kDebugMode) {

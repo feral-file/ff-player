@@ -19,8 +19,9 @@ class RemoteConfigServiceImpl implements RemoteConfigService {
 
   static const Map<String, dynamic> _defaults = <String, dynamic>{
     'tizen': {
-      'url': 'https://feralfile-display-prod.pages.dev/',
-      'gitHash': '1434d96c8ce703c4ed6d1485e18a5296a406bcdb'
+      'url': 'https://feralfile-display-prod.pages.dev?platform=tizen',
+      'gitHash': '1434d96c8ce703c4ed6d1485e18a5296a406bcdb',
+      'updateInterval': '30'
     }
   };
 
@@ -83,7 +84,7 @@ extension ConfigGroupExtension on ConfigGroup {
   }
 }
 
-enum ConfigKey { url, gitHash }
+enum ConfigKey { url, gitHash, updateInterval }
 
 // ConfigKey getString extension
 extension ConfigKeyExtension on ConfigKey {
@@ -93,6 +94,8 @@ extension ConfigKeyExtension on ConfigKey {
         return 'url';
       case ConfigKey.gitHash:
         return 'gitHash';
+      case ConfigKey.updateInterval:
+        return 'updateInterval';
     }
   }
 }

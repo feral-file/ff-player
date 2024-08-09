@@ -1,4 +1,10 @@
-const ComingSoonPage = ({ screenRatio }: { screenRatio: number }) => {
+const MessageModal = ({
+  screenRatio,
+  message,
+}: {
+  screenRatio: number;
+  message: string;
+}) => {
   return (
     <div
       style={{
@@ -11,7 +17,7 @@ const ComingSoonPage = ({ screenRatio }: { screenRatio: number }) => {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: '0 30%',
+        padding: '0 20%',
       }}>
       <div
         style={{
@@ -22,10 +28,10 @@ const ComingSoonPage = ({ screenRatio }: { screenRatio: number }) => {
           borderRadius: 20,
           textAlign: 'center',
         }}>
-        <p style={{ fontSize: screenRatio * 36 }}>Coming soon...</p>
+        <p style={{ fontSize: screenRatio * 36 }}>{message}</p>
       </div>
     </div>
   );
 };
 
-export default ComingSoonPage;
+export default MessageModal;

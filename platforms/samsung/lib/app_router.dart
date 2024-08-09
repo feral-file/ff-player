@@ -12,8 +12,10 @@ class AppRouter {
     switch (settings.name) {
       case inAppWebViewScreen:
       case homePage:
-        final url = injector<RemoteConfigService>().getConfig(ConfigGroup.tizen,
-            ConfigKey.url, 'https://feralfile-display-prod.pages.dev/');
+        final url = injector<RemoteConfigService>().getConfig(
+            ConfigGroup.tizen,
+            ConfigKey.url,
+            'https://feralfile-display-prod.pages.dev?platform=tizen');
         final gitHash = injector<RemoteConfigService>()
             .getConfig(ConfigGroup.tizen, ConfigKey.gitHash, '');
         final payload = InAppWebViewPayload(url, '${url}_$gitHash');

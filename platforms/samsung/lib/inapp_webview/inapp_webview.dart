@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:feralfile_display_tizen/model/app_state_message.dart';
 import 'package:feralfile_display_tizen/model/js_message.dart';
 import 'package:feralfile_display_tizen/service/configuration_service.dart';
 import 'package:feralfile_display_tizen/utils/config_manager.dart';
@@ -28,6 +29,7 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
   final FocusNode _focusNode = FocusNode();
 
   bool _isLoading = true;
+  bool _isCasting = false;
 
   @override
   void initState() {
@@ -39,17 +41,21 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
         body: Focus(
+          autofocus: true,
           focusNode: _focusNode,
           onKeyEvent: (node, event) {
-            if (event is KeyDownEvent) {
-              log.info('key down: ${event.logicalKey.keyId} '
-                  '${event.logicalKey.keyLabel}');
-              event.logicalKey.toString();
-              unawaited(_webViewController.runJavaScript(
-                  'KeyEvent.handlePlatformEvent("${event.logicalKey.keyId}_'
-                  '${event.logicalKey.keyLabel}");'));
+            log.info(event.toString());
+            if (_isCasting &&
+                event.logicalKey.keyId == LogicalKeyboardKey.escape.keyId) {
+              if (event is KeyDownEvent) {
+                unawaited(_webViewController.runJavaScriptReturningResult(
+                    'KeyEvent.handlePlatformEvent("${event.logicalKey.keyId}_'
+                    '${event.logicalKey.keyLabel}");'));
+              }
+
               return KeyEventResult.handled;
             }
+
             return KeyEventResult.ignored;
           },
           child: Stack(
@@ -90,18 +96,40 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
   void _addJavaScriptChannel() {
     _webViewController.addJavaScriptChannel('AppState',
         onMessageReceived: (message) {
-      log.info('app state: ${message.message}');
-      if (message.message == 'loading') {
-        setState(() {
-          _isLoading = true;
-        });
-      } else if (message.message == 'loaded') {
-        log.info('loaded');
-        setState(() {
-          _isLoading = false;
-        });
+      final appStateMessage =
+          AppStateMessageReceived.fromJson(jsonDecode(message.message));
+      log.info('app state handler: ${appStateMessage.handler}');
+      log.info('app state data: ${appStateMessage.data}');
+
+      switch (appStateMessage.handler) {
+        case 'loading':
+          {
+            setState(() {
+              _isLoading = true;
+            });
+            break;
+          }
+
+        case 'loaded':
+          {
+            log.info('loaded');
+            setState(() {
+              _isLoading = false;
+            });
+            break;
+          }
+
+        case 'castStatusChanged':
+          {
+            final isCasting = appStateMessage.data as bool;
+            _isCasting = isCasting;
+            break;
+          }
+
+        default:
       }
     });
+
     _webViewController.addJavaScriptChannel('Rotate',
         onMessageReceived: (message) {
       log.info('rotate: ${message.message}');
