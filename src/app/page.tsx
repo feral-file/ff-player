@@ -17,7 +17,7 @@ import HomePage from './homePage';
 import OnboardingPage from './onboardingPage';
 import ArtworkService from '@/utils/ArtworkService';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
-import ComingSoonPage from './commingSoonPage';
+import ComingSoonPage from './comingSoonPage';
 import {
   KeyEvent,
   DeviceName,
