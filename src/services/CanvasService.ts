@@ -54,6 +54,11 @@ class CanvasService {
     console.log('processMessage', JSON.stringify(event));
 
     const webSocketMessage: WebSocketMessage = JSON.parse(event.data);
+    if (!webSocketMessage || !webSocketMessage.message) {
+      console.error('Invalid message:', JSON.stringify(event.data));
+      return;
+    }
+
     const messageData = JSON.parse(webSocketMessage.message);
 
     if (
