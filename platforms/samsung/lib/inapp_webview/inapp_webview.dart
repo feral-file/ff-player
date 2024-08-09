@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_tizen/webview_flutter_tizen.dart';
 
 class InAppWebViewPage extends StatefulWidget {
   final InAppWebViewPayload payload;
@@ -54,10 +55,12 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
     super.initState();
     unawaited(WakelockPlus.enable());
     _initWebview();
+    _webViewController.tizenEnginePolicy = true;
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Colors.transparent,
         body: Focus(
           autofocus: true,
           focusNode: _focusNode,
