@@ -94,17 +94,34 @@ const Carousel: React.FC<CarouselProps> = ({
                 justifyContent: 'center',
                 alignItems: 'center',
               }}>
-              {item.type === PostType.Note && (
+              {(item.type === PostType.ArtistNote ||
+                item.type === PostType.CuratorNote) && (
                 <div
                   className={styles.card}
                   style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
                   <p
                     className={styles.type}
                     style={{ fontSize: 22 * screenRatio }}>
-                    Curators note
+                    {item.type}
                   </p>
                   <p
                     className={styles.postTitle}
+                    style={{ fontSize: 32 * screenRatio }}>
+                    {item.title}
+                  </p>
+                  <p
+                    className={styles.content}
+                    style={{ fontSize: 32 * screenRatio }}
+                    dangerouslySetInnerHTML={{ __html: item.content! }}></p>
+                </div>
+              )}
+
+              {item.type === PostType.J043Custom && (
+                <div
+                  className={styles.card}
+                  style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
+                  <p
+                    className={styles.type}
                     style={{ fontSize: 32 * screenRatio }}>
                     {item.title}
                   </p>

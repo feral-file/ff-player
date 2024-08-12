@@ -1,3 +1,4 @@
+import { AppSettings } from '@/constants';
 import {
   Exhibition,
   Post,
@@ -5,6 +6,8 @@ import {
   PostType,
   YoutubeThumbnailVariants,
 } from '@/models';
+import { Jg043CustomPosts } from '@/models/jg043.model';
+import axios from 'axios';
 
 const YOUTUBE_VIDEO_QUERY_PARAM_KEY = 'v';
 const YOUTUBE_URL = 'https://www.youtube.com';
@@ -13,22 +16,57 @@ const YOUTUBE_THUMBNAIL_URL =
 const YOUTUBE_VIDEO_URL = 'https://www.youtube.com/embed/{video-id}';
 
 export class PostService {
-  public getPostExhibition(exhibition: Exhibition): Post[] {
+  public async getPostExhibition(exhibition: Exhibition): Promise<Post[]> {
     try {
+      const isJG043Show = exhibition.id === AppSettings.JG_043_EXHIBITION_ID;
       let posts = exhibition.posts || [];
       const curatorNote = {
         id: 'curatorNote',
-        type: PostType.Note,
+        type: isJG043Show ? PostType.ArtistNote : PostType.CuratorNote,
         title: exhibition?.noteTitle,
         content: exhibition?.noteBrief,
       } as Post;
-      posts = [curatorNote, ...posts];
+      if (isJG043Show) {
+        const J043Customs = await this.getCustomPostOfJG043Show();
+        posts = [curatorNote, ...J043Customs, ...posts];
+      } else {
+        posts = [curatorNote, ...posts];
+      }
+
       for (const post of posts) {
         this.formatPost(post);
       }
       return posts;
     } catch (error) {
       console.log('Failed to load exhibition:', error);
+      return [];
+    }
+  }
+
+  private async getCustomPostOfJG043Show(): Promise<Post[]> {
+    try {
+      const response = await axios.get(
+        `${process.env
+          .NEXT_PUBLIC_PUB_DOC_URL!}/configs/postcard/postcard_configs.json`
+      );
+
+      const jg043Section = response.data as Jg043CustomPosts;
+      if (jg043Section.john_gerrard?.custom_notes?.length) {
+        const posts: Post[] = jg043Section.john_gerrard.custom_notes.map(
+          note => {
+            return {
+              id: note.id,
+              type: PostType.J043Custom,
+              title: note.title,
+              content: note.content,
+            } as Post;
+          }
+        );
+        return posts;
+      }
+      return [];
+    } catch (error) {
+      console.log('Failed to load SOURCE exhibition', error);
       return [];
     }
   }

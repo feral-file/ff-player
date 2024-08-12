@@ -1,4 +1,4 @@
-import { Exhibition } from "./exhibition.model";
+import { Exhibition } from './exhibition.model';
 
 export interface Post {
   id?: string;
@@ -25,20 +25,22 @@ export interface Post {
 }
 
 export enum PostType {
-  Note = "note",
-  CloseUp = "close-up",
-  Event = "event",
-  News = "news",
-  Schedule = "schedule",
-  WhitePaper = "white-paper",
+  CuratorNote = 'Curators note',
+  ArtistNote = `Artist's note`,
+  CloseUp = 'close-up',
+  Event = 'event',
+  News = 'news',
+  Schedule = 'schedule',
+  WhitePaper = 'white-paper',
+  J043Custom = 'jg043-custom',
 }
 
 export enum PostMediaType {
-  Image = "image",
-  Video = "video",
+  Image = 'image',
+  Video = 'video',
 }
 
 export enum YoutubeThumbnailVariants {
-  highQuality = "maxresdefault", // Higher quality - May or may not exist
-  mediumQuality = "mqdefault", // Lower quality - Guaranteed to exist
+  highQuality = 'maxresdefault', // Higher quality - May or may not exist
+  mediumQuality = 'mqdefault', // Lower quality - Guaranteed to exist
 }

@@ -7,6 +7,7 @@
   gap: 45px;
   border-radius: 20px;
   background: var(--Dark-Grey, #2e2e2e);
+  max-height: 90%;
 
   .type {
     color: #fff;
@@ -28,6 +29,12 @@
     font-style: normal;
     font-weight: 400;
     line-height: 140%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    white-space: normal;
+    max-height: 100%;
   }
 }
 
