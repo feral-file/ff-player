@@ -80,8 +80,14 @@ class DeviceManager {
     this.setToLocalStorage(LocalStorageItem.name, name);
   }
 
-  public async getName(): Promise<string | null> {
-    return await this.getFromLocalStorage(LocalStorageItem.name);
+  public async getName(): Promise<string> {
+    try {
+      const name = await this.getFromLocalStorage(LocalStorageItem.name);
+      return name || 'Unknown';
+    } catch (error) {
+      console.error('Error getting device name', error);
+      return 'Unknown';
+    }
   }
 
   public setPreviouslyConnectedDeviceIds(deviceIds: string[]): void {
@@ -131,7 +137,7 @@ class DeviceManager {
         deviceId,
         locationId,
         topicId,
-        name: name || '',
+        name: name,
         platform: 'web',
       };
     } catch (error) {
