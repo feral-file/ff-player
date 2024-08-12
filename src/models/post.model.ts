@@ -25,12 +25,12 @@ export interface Post {
 }
 
 export enum PostType {
-  CuratorNote = 'Curators note',
+  CuratorNote = `Curator's note`,
   ArtistNote = `Artist's note`,
   CloseUp = 'close-up',
-  Event = 'Event',
-  News = 'News',
-  Schedule = 'Schedule',
+  Event = 'event',
+  News = 'news',
+  Schedule = 'schedule',
   WhitePaper = 'white-paper',
   J043Custom = 'jg043-custom',
 }
