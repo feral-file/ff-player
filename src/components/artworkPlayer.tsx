@@ -79,7 +79,13 @@ const ArtworkPlayer = ({
   useEffect(() => {
     const detectPreviewType = async (previewURL: string) => {
       try {
-        const response = await fetch(previewURL, { method: 'HEAD' });
+        const url = new URL(previewURL);
+        const extendPreviewURL = url.search
+          ? `${previewURL}&v=${Date.now()}`
+          : `${previewURL}?v=${Date.now()}`;
+        const response = await fetch(extendPreviewURL, {
+          method: 'HEAD',
+        });
         const contentType = response.headers.get('Content-Type');
         compareToGetFileType(contentType!);
         console.log('Content-Type:', contentType);
