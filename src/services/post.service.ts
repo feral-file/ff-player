@@ -19,7 +19,8 @@ export class PostService {
   public async getPostExhibition(exhibition: Exhibition): Promise<Post[]> {
     try {
       const isJG043Show = exhibition.id === AppSettings.JG_043_EXHIBITION_ID;
-      let posts = exhibition.posts || [];
+      let posts =
+        exhibition.posts?.filter(post => post.type != PostType.Schedule) || [];
       const curatorNote = {
         id: 'curatorNote',
         type: isJG043Show ? PostType.ArtistNote : PostType.CuratorNote,
