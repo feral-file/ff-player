@@ -28,9 +28,9 @@ export enum PostType {
   CuratorNote = 'Curators note',
   ArtistNote = `Artist's note`,
   CloseUp = 'close-up',
-  Event = 'event',
-  News = 'news',
-  Schedule = 'schedule',
+  Event = 'Event',
+  News = 'News',
+  Schedule = 'Schedule',
   WhitePaper = 'white-paper',
   J043Custom = 'jg043-custom',
 }
