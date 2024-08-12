@@ -276,6 +276,7 @@ const Home: React.FC = () => {
           }
 
           case CastCommand.castExhibition: {
+            resetCastingStatus();
             castExhibition();
             break;
           }
@@ -483,6 +484,12 @@ const Home: React.FC = () => {
     setStartTime(st);
     clearTimer();
     setCurrentIndex(index);
+  };
+
+  const resetCastingStatus = () => {
+    clearTimer();
+    setPlaylist([]);
+    setCurrentIndex(-1);
   };
 
   const startInterval = (duration: number) => {
