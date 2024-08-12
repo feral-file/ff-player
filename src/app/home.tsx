@@ -21,7 +21,7 @@ import { KeyEvent, DeviceName, Config } from '@/utils/platform';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { AppSettings } from '@/constants';
 import AppService from '@/services/app.service';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AppContext } from '@/context/AppContext';
 import ArtworkService from '@/services/ArtworkService';
 import DailyService from '@/services/DailyService';
@@ -38,19 +38,8 @@ const Home: React.FC = () => {
   const { locationID, topicID, castInfo, canvasService } = data;
 
   const router = useRouter();
-  const ranRef = useRef(false);
+  const pathName = usePathname();
 
-  useEffect(() => {
-    if (ranRef.current) {
-      return;
-    }
-
-    if (context.isFirstOpen) {
-      ranRef.current = true;
-      context.setIsFirstOpen(false);
-      router.push('/daily');
-    }
-  }, []);
   const [branchLink, setBranchLink] = useState<string | null>(null);
   const [deviceName, setDeviceName] = useState<string>('');
   const artworkService = useRef(new ArtworkService());
@@ -588,6 +577,29 @@ const Home: React.FC = () => {
 
     return () => clearInterval(intervalID);
   }, []);
+
+  useEffect(() => {
+    if (castInfo?.dataChecked && !castInfo?.castCommand) {
+      handleNavigateDaily();
+    }
+  }, [castInfo]);
+
+  const handleNavigateDaily = () => {
+    const isFirstOpenQuery = query.get('isFirstOpen');
+    if (isFirstOpenQuery === 'false') {
+      AppService.setIsFirstOpen(false);
+      return;
+    }
+
+    const isFirstOpen = AppService.getIsFirstOpen(pathName);
+    if (isFirstOpen) {
+      AppService.setIsFirstOpen(false);
+      router.replace('/?isFirstOpen=false');
+      setTimeout(() => {
+        router.push('/daily');
+      }, 100);
+    }
+  };
 
   return (
     <div

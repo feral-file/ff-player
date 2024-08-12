@@ -207,6 +207,7 @@ export interface CastInfo {
   exhibitionId?: string;
   value?: any;
   displayKey?: string;
+  dataChecked?: boolean;
 }
 
 export enum ViewMode {

@@ -9,7 +9,9 @@ let webSocketInstance: any = null;
 const useWebSocket = (url: string, apiKey: string) => {
   const [locationID, setLocationID] = useState<string | null>(null);
   const [topicID, setTopicID] = useState<string | null>(null);
-  const [castInfo, setCastInfo] = useState<CastInfo | null>(null);
+  const [castInfo, setCastInfo] = useState<CastInfo | null>({
+    dataChecked: false,
+  });
   const ws = useRef<ReconnectingWebSocket | null>(null);
   const canvasService = useRef(new CanvasService());
 
@@ -28,7 +30,12 @@ const useWebSocket = (url: string, apiKey: string) => {
       const castInfo = localStorage.getItem(LocalStorageItem.castInfo);
       if (castInfo) {
         canvasService.current.setCastInfo(JSON.parse(castInfo));
-        setCastInfo(JSON.parse(castInfo) as CastInfo);
+        setCastInfo({
+          ...JSON.parse(castInfo),
+          dataChecked: true,
+        } as CastInfo);
+      } else {
+        setCastInfo({ dataChecked: true });
       }
 
       ws.current = new ReconnectingWebSocket(wsUrl);
