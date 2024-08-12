@@ -50,8 +50,7 @@ const Carousel: React.FC<CarouselProps> = ({
     swiperParams.spaceBetween = 20 * screenRatio;
     swiperParams.coverflowEffect!.depth = 20 * screenRatio;
   }
-
-  let swiper: Swiper;
+  const [swiper, setSwiper] = useState<Swiper | null>(null);
 
   useEffect(() => {
     for (const item of items) {
@@ -65,14 +64,15 @@ const Carousel: React.FC<CarouselProps> = ({
 
   useEffect(() => {
     if (!swiper) {
-      swiper = new Swiper('.swiper', swiperParams);
+      const s = new Swiper('.swiper', swiperParams);
+      setSwiper(s);
     }
 
     setTimeout(() => {
       if (swiper && index !== undefined) {
         swiper.slideTo(index);
       }
-    }, 300);
+    }, 200);
   }, [index]);
 
   useEffect(() => {
