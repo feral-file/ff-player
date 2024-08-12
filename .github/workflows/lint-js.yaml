@@ -28,7 +28,10 @@ jobs:
     - name: Install dependencies
       run: npm install
 
-    - uses: reviewdog/action-eslint@v1
+    - uses: reviewdog/action-setup@v1
       with:
-        reporter: github-pr-review
-        eslint_flags: "**/*.{ts,tsx}"
+        reviewdog_version: latest
+
+    - name: Lint
+      run: |
+        ./node_modules/.bin/eslint --format=rdjson src | reviewdog -f=rdjson -reporter=github-pr-review
