@@ -8,18 +8,19 @@ on:
 
 jobs:
   build:
-    name: Build
     runs-on: self-hosted
     strategy:
       matrix:
         environment: [Development, Production]
+    name: Build ${{ matrix.environment }}
+    environment: ${{ matrix.environment }}
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
     - name: Setup Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: '20'
         cache: 'npm'
@@ -38,6 +39,52 @@ jobs:
         echo "NEXT_PUBLIC_WEBSOCKET_URL=${{ vars.WEBSOCKET_URL }}" >> .env.local
         echo "NEXT_PUBLIC_API_KEY=${{ secrets.WEBSOCKET_API_KEY }}" >> .env.local
         echo "NEXT_PUBLIC_BRANCH_KEY=${{ secrets.BRANCH_KEY }}" >> .env.local
+
+    - name: Check for missing environment variables
+      id: check_env_vars
+      run: |
+        missing=false
+        warnings=()
+    
+        # Check each key in .env.local.sample to see if it has a value in .env.local
+        while IFS= read -r line; do
+          key=$(echo $line | cut -d '=' -f 1)
+    
+          # Extract the value of the corresponding key from .env.local
+          value=$(grep -m 1 "^$key=" .env.local | cut -d '=' -f 2-)
+          
+          # If the key is missing or has an empty value, log a warning
+          if [ -z "$value" ]; then
+            warnings+=("\"$key is missing or has an empty value in .env.local\"")
+            missing=true
+          fi
+        done < .env.local.sample
+    
+        # Handle setting the output and state only if there are warnings
+        if [ "$missing" = true ]; then
+          warnings_json=$(printf "%s\n" "${warnings[@]}" | jq -R . | jq -s .)
+          echo "warnings=$warnings_json" >> $GITHUB_OUTPUT
+        else
+          echo "warnings=[]" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Add GitHub comment with warnings if any
+      if: steps.check_env_vars.outputs.warnings != '[]'
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const warningsOutput = '${{ steps.check_env_vars.outputs.warnings }}';
+          if (warningsOutput && warningsOutput !== '[]') {
+            const warnings = JSON.parse(warningsOutput);
+            const body = warnings.map(warning => `- ${warning}`).join('\n');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## :warning: Environment Variables and Secrets Warnings:\n${body}`
+            });
+          }
 
     - uses: actions/cache@v4
       with:

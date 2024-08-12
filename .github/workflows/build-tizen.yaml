@@ -1,4 +1,4 @@
-name: Tizen Build
+name: Build Tizen
 
 on:
   workflow_dispatch:
