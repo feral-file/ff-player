@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
+const youtubeFailedThumbnailHeight = 90;
+
 interface QueuingImagesProps {
   urls: string[];
   alt: string;
@@ -15,20 +17,24 @@ const QueuingImages: React.FC<QueuingImagesProps> = ({ urls, alt }) => {
     }
   }, [urls]);
 
-  const handleImageError = () => {
-    if (currentUrlIndex < urls.length - 1) {
-      const nextIndex = currentUrlIndex + 1;
-      setCurrentUrlIndex(nextIndex);
-      setCurrentUrl(urls[nextIndex]);
-    } else {
-      setCurrentUrl(undefined); // No valid image found
+  const handleImageLoading = (
+    event: React.SyntheticEvent<HTMLImageElement, Event>
+  ) => {
+    if (event.currentTarget.naturalHeight <= youtubeFailedThumbnailHeight) {
+      if (currentUrlIndex < urls.length - 1) {
+        const nextIndex = currentUrlIndex + 1;
+        setCurrentUrlIndex(nextIndex);
+        setCurrentUrl(urls[nextIndex]);
+      } else {
+        setCurrentUrl(undefined); // No valid image found
+      }
     }
   };
 
   return (
     <>
       {currentUrl && (
-        <img src={currentUrl} alt={alt} onError={handleImageError} />
+        <img src={currentUrl} alt={alt} onLoad={handleImageLoading} />
       )}
     </>
   );
