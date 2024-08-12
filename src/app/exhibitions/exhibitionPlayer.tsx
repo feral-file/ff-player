@@ -45,8 +45,14 @@ const ExhibitionHall = ({
   const FERAL_FILE_ASSET_URL =
     process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL! + '/';
 
-  const getPreviewSource = async (artworkID: string) => {
-    const artwork = await seriesService.current.getArtwork(artworkID);
+  const getPreviewSource = async (
+    artworkID: string,
+    exhibition?: Exhibition
+  ) => {
+    const artwork = await seriesService.current.getArtwork(
+      artworkID,
+      exhibition
+    );
     if (!artwork) {
       return;
     }
@@ -62,9 +68,8 @@ const ExhibitionHall = ({
         return;
       }
 
-      const exhibition = await exhibitionService.current.getExhibition(
-        exhibitionID
-      );
+      const exhibition =
+        await exhibitionService.current.getExhibition(exhibitionID);
 
       setExhibitionDetail(exhibition);
       fetchPosts(exhibition!);
@@ -99,7 +104,7 @@ const ExhibitionHall = ({
           getPostIndexByID(catalogID!);
           break;
         case ExhibitionCatalog.artwork:
-          getPreviewSource(catalogID!);
+          getPreviewSource(catalogID!, exhibitionDetail);
           break;
       }
 
