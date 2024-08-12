@@ -91,6 +91,7 @@ const ArtworkPlayer = ({
         console.log('Content-Type:', contentType);
       } catch (error) {
         console.log('Error get content-type', error);
+        setPreviewType(SeriesPreviewHTMLTag.iframe);
       }
     };
 
