@@ -60,9 +60,13 @@ jobs:
           fi
         done < .env.local.sample
     
-        # Output the warnings as a JSON array
-        warnings_json=$(printf "%s\n" "${warnings[@]}" | jq -R . | jq -s .)
-        echo "::set-output name=warnings::$warnings_json"
+        # If there are warnings, output them as a JSON array
+        if [ "$missing" = true ]; then
+          warnings_json=$(printf "%s\n" "${warnings[@]}" | jq -R . | jq -s .)
+          echo "::set-output name=warnings::$warnings_json"
+        else
+          echo "::set-output name=warnings::[]"
+        fi
     
     - name: Add GitHub comment with warnings if any
       if: steps.check_env_vars.outputs.warnings != '[]'
@@ -70,8 +74,9 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
-          const warnings = JSON.parse('${{ steps.check_env_vars.outputs.warnings }}');
-          if (warnings.length > 0) {
+          const warningsOutput = '${{ steps.check_env_vars.outputs.warnings }}';
+          if (warningsOutput && warningsOutput !== '[]') {
+            const warnings = JSON.parse(warningsOutput);
             const body = warnings.map(warning => `- ${warning}`).join('\n');
             github.rest.issues.createComment({
               issue_number: context.issue.number,
