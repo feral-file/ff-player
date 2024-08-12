@@ -1,26 +1,34 @@
-import axios from "axios";
-import { Post, PostMediaType, YoutubeThumbnailVariants } from "@/models";
+import {
+  Exhibition,
+  Post,
+  PostMediaType,
+  PostType,
+  YoutubeThumbnailVariants,
+} from '@/models';
 
-const YOUTUBE_VIDEO_QUERY_PARAM_KEY = "v";
-const YOUTUBE_URL = "https://www.youtube.com";
+const YOUTUBE_VIDEO_QUERY_PARAM_KEY = 'v';
+const YOUTUBE_URL = 'https://www.youtube.com';
 const YOUTUBE_THUMBNAIL_URL =
-  "https://img.youtube.com/vi/{video-id}/{variant}.jpg";
-const YOUTUBE_VIDEO_URL = "https://www.youtube.com/embed/{video-id}";
+  'https://img.youtube.com/vi/{video-id}/{variant}.jpg';
+const YOUTUBE_VIDEO_URL = 'https://www.youtube.com/embed/{video-id}';
 
 export class PostService {
-  public async getPostExhibition(exhID: string) {
+  public getPostExhibition(exhibition: Exhibition): Post[] {
     try {
-      const response = await axios.get<{ result: Post[] }>(
-        `${process.env.NEXT_PUBLIC_API_URL!}/api/posts?exhibitionID=${exhID}`
-      );
-      const posts = response.data?.result || [];
+      let posts = exhibition.posts || [];
+      const curatorNote = {
+        id: 'curatorNote',
+        type: PostType.Note,
+        title: exhibition?.noteTitle,
+        content: exhibition?.noteBrief,
+      } as Post;
+      posts = [curatorNote, ...posts];
       for (const post of posts) {
         this.formatPost(post);
       }
-
       return posts;
     } catch (error) {
-      console.log("Failed to load exhibition:", error);
+      console.log('Failed to load exhibition:', error);
       return [];
     }
   }
@@ -46,11 +54,13 @@ export class PostService {
             );
           }
 
-          resource.videoUrl = YOUTUBE_VIDEO_URL.replace("{video-id}", videoId);
+          resource.videoUrl = YOUTUBE_VIDEO_URL.replace('{video-id}', videoId);
         }
+      } else {
+        resource.thumbUrls = [resource.coverURI];
       }
     } catch (error) {
-      console.log("Failed to format post:", error);
+      console.log('Failed to format post:', error);
     }
   }
 }

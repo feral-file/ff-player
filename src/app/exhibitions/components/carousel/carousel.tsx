@@ -9,6 +9,7 @@ import { formatDateTime } from '@/utils/ui/formatDate';
 import { useEffect, useState } from 'react';
 import { setTimeout } from 'timers';
 import { ViewMode } from '@/utils/types';
+import QueuingImages from '../queuingImages/queuingImages';
 
 interface CarouselProps {
   items: Post[];
@@ -123,8 +124,8 @@ const Carousel: React.FC<CarouselProps> = ({
                     style={{ fontSize: 22 * screenRatio }}>
                     Close up
                   </p>
-                  {item.coverURI && (
-                    <img src={item.coverURI} alt="close up thumbnail" />
+                  {item.thumbUrls?.length && (
+                    <QueuingImages urls={item.thumbUrls} alt="thumbnail" />
                   )}
                   <p
                     className={styles.postTitle}
@@ -157,8 +158,8 @@ const Carousel: React.FC<CarouselProps> = ({
                       ? 'White paper'
                       : item.type}
                   </p>
-                  {item.coverURI && (
-                    <img src={item.coverURI} alt="event thumbnail" />
+                  {item.thumbUrls?.length && (
+                    <QueuingImages urls={item.thumbUrls} alt="thumbnail" />
                   )}
                   <p
                     className={styles.postTitle}

@@ -15,7 +15,6 @@ import { ExhibitionCatalog, ViewMode } from '@/utils/types';
 import Carousel from './components/carousel/carousel';
 import ArtworkPlayer from '@/components/artworkPlayer';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
-import { getThumbnailCover } from '@/utils/youtube';
 
 const ExhibitionHall = ({
   exhibitionID,
@@ -41,6 +40,7 @@ const ExhibitionHall = ({
   const [artwork, setArtwork] = useState<Artwork>();
   const exhibitionService = useRef(new ExhibitionService());
   const seriesService = useRef(new SeriesService());
+  const postService = useRef(new PostService());
 
   const FERAL_FILE_ASSET_URL =
     process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL! + '/';
@@ -71,23 +71,7 @@ const ExhibitionHall = ({
     };
 
     const fetchPosts = async (exhibition: Exhibition) => {
-      if (!exhibitionID) {
-        return;
-      }
-
-      let posts = exhibition.posts || [];
-
-      // Add curator note as the first post
-      const curatorNote = {
-        id: 'curatorNote',
-        type: PostType.Note,
-        title: exhibition?.noteTitle,
-        content: exhibition?.noteBrief,
-      } as Post;
-      posts = [curatorNote, ...posts];
-      for (const post of posts) {
-        post.coverURI = getThumbnailCover(post.coverURI);
-      }
+      const posts = postService.current.getPostExhibition(exhibition);
       setPosts(posts);
     };
 
