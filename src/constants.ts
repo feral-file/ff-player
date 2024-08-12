@@ -20,5 +20,5 @@ export enum Platform {
 }
 
 export const AppSettings = {
-  VERSION_CHECK_INTERVAL_DURATION: 1000 * 60, // 1 minutes
+  VERSION_CHECK_INTERVAL_DURATION: 1000 * 60 * 60, // 1 minutes
 };

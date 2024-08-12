@@ -66,20 +66,10 @@ const HomePage = ({
               </div>
               <div className={clsx(styles.bottom)}>
                 <div className={clsx(styles.qrcode)}>
-                  <h2
-                    style={{
-                      fontSize: 22 * screenRatio,
-                      fontWeight: 'bold',
-                      paddingTop: 40 * screenRatio,
-                      paddingBottom:
-                        (viewMode === ViewMode.landscape ? 80 : 40) *
-                        screenRatio,
-                    }}>
-                    Display Name: {deviceName}
-                  </h2>
                   {branchLink ? (
                     <div
                       style={{
+                        marginTop: 40 * screenRatio,
                         padding: 10 * screenRatio,
                         backgroundColor: 'white',
                         width: 'fit-content',
