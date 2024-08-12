@@ -159,9 +159,12 @@ const Carousel: React.FC<CarouselProps> = ({
                 </div>
               )}
 
-              {[PostType.Event, PostType.News, PostType.WhitePaper].includes(
-                item.type
-              ) && (
+              {[
+                PostType.Event,
+                PostType.News,
+                PostType.Schedule,
+                PostType.WhitePaper,
+              ].includes(item.type) && (
                 <div
                   className={styles.card}
                   style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
