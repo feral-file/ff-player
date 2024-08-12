@@ -234,10 +234,10 @@ class CanvasService {
 
   private async castDaily(request: any): Promise<Reply> {
     console.log('castDaily', request);
-    this.castInfo = {
+    this.setCastInfo({
       ...this.castInfo,
       displayKey: 'daily_work',
-    };
+    });
 
     return { ok: true };
   }
