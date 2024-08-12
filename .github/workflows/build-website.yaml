@@ -63,18 +63,13 @@ jobs:
         # Output the warnings as a JSON array
         echo "::set-output name=warnings::$(echo ${warnings[@]} | jq -R -s -c 'split(" ")')"
     
-        # If any missing values were found, exit with a success code to continue the workflow
-        if [ "$missing" = true ]; then
-          exit 0
-        fi
-    
     - name: Add GitHub comment with warnings if any
       if: steps.check_env_vars.outputs.warnings != '[]'
       uses: actions/github-script@v6
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
-          const warnings = JSON.parse(process.env.warnings);
+          const warnings = JSON.parse(`"${{ steps.check_env_vars.outputs.warnings }}"`);
           if (warnings.length > 0) {
             const body = warnings.map(warning => `- ${warning}`).join('\n');
             github.rest.issues.createComment({
