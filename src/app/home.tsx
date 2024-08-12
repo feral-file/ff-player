@@ -6,6 +6,7 @@ import DeviceManager from '../utils/DeviceManager';
 import {
   Artwork,
   CastCommand,
+  ExhibitionCatalog,
   Orientation,
   Daily,
   PlayArtworkV2,
@@ -16,6 +17,7 @@ import ArtworkPlayer from '../components/artworkPlayer';
 import HomePage from '../components/homePage';
 import OnboardingPage from '../components/onboardingPage';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
+import ExhibitionHall from './exhibitions/exhibitionPlayer';
 import MessageModal from '../components/messageModal';
 import { KeyEvent, DeviceName, Config } from '@/utils/platform';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
@@ -25,6 +27,12 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AppContext } from '@/context/AppContext';
 import ArtworkService from '@/services/ArtworkService';
 import DailyService from '@/services/DailyService';
+
+const enum CastState {
+  None, // Not casting
+  Artwork, // Displaying artwork, playlist, dallies
+  Exhibition, // Displaying exhibition
+}
 
 const STANDARD_HEIGHT = 1080;
 
@@ -42,7 +50,12 @@ const Home: React.FC = () => {
 
   const [branchLink, setBranchLink] = useState<string | null>(null);
   const [deviceName, setDeviceName] = useState<string>('');
+
+  // Services
   const artworkService = useRef(new ArtworkService());
+
+  // States
+  const [castState, setCastState] = useState<CastState>(CastState.None);
   const dailyService = useRef(new DailyService());
   const startPlayArtworkTime = useRef<number>(0);
   const endPlayArtworkTime = useRef<number>(0);
@@ -50,8 +63,8 @@ const Home: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>();
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [currentArtwork, setCurrentArtwork] = useState<Artwork | null>(null);
-  const [castStatus, setCastStatus] = useState<boolean | null>(false);
-  const castStatusRef = useRef(castStatus);
+  // const [castStatus, setCastStatus] = useState<boolean | null>(false);
+  const castStatusRef = useRef(false);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [playlist, setPlaylist] = useState<PlaylistToken[]>([]);
@@ -81,7 +94,7 @@ const Home: React.FC = () => {
   });
 
   useEffect(() => {
-    castStatusRef.current = castStatus;
+    castStatusRef.current = castState !== CastState.None;
     try {
       (window as any).AppState.postMessage(
         JSON.stringify({
@@ -90,7 +103,7 @@ const Home: React.FC = () => {
         })
       );
     } catch (error) {}
-  }, [castStatus]);
+  }, [castState]);
 
   useEffect(() => {
     const handleEscapeKey = () => {
@@ -251,11 +264,8 @@ const Home: React.FC = () => {
           }
 
           case CastCommand.castExhibition: {
-            // Temporary display coming soon
-            setDisplayComingSoon(true);
-            setTimeout(() => {
-              setDisplayComingSoon(false);
-            }, 1000 * 15);
+            resetCastingStatus();
+            castExhibition();
             break;
           }
 
@@ -382,7 +392,7 @@ const Home: React.FC = () => {
     const index = currentIndex % playlist.length;
     const currentPlaylist = playlist[index];
     setCastPreviewURL(currentPlaylist.previewURL);
-    setCastStatus(true);
+    setCastState(CastState.Artwork);
     const currentTime = Date.now();
     startPlayArtworkTime.current = currentTime;
     endPlayArtworkTime.current = currentTime + currentPlaylist.duration;
@@ -462,6 +472,12 @@ const Home: React.FC = () => {
     setCurrentIndex(index);
   };
 
+  const resetCastingStatus = () => {
+    clearTimer();
+    setPlaylist([]);
+    setCurrentIndex(-1);
+  };
+
   const startInterval = (duration: number) => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -535,7 +551,7 @@ const Home: React.FC = () => {
       const delay = nextDisplayTime - now;
       if (dailies[0].previewURL) {
         setCastPreviewURL(dailies[0].previewURL);
-        setCastStatus(true);
+        setCastState(CastState.Artwork);
       }
 
       const interval = setInterval(() => {
@@ -547,7 +563,7 @@ const Home: React.FC = () => {
   };
 
   const refreshData = () => {
-    setCastStatus(false);
+    setCastState(CastState.None);
     setCurrentIndex(-1);
     indexRef.current = -1;
     setArtworks([]);
@@ -574,6 +590,10 @@ const Home: React.FC = () => {
 
     return () => clearInterval(intervalID);
   }, []);
+
+  const castExhibition = async () => {
+    setCastState(CastState.Exhibition);
+  };
 
   useEffect(() => {
     if (castInfo?.dataChecked && !castInfo?.castCommand) {
@@ -646,20 +666,30 @@ const Home: React.FC = () => {
           displayName={deviceName!}
         />
       )}
-      {castStatus ? (
-        <div style={{ width: '100vw', height: '100vh' }}>
-          <ArtworkPlayer
-            previewURL={castPreviewURL!}
-            keyboardCode={keyboardCode}
-          />
-        </div>
-      ) : (
+      {castState === CastState.None && (
         <HomePage
           screenRatio={screenRatio}
           viewMode={viewMode!}
           deviceName={deviceName!}
           branchLink={branchLink!}
           currentArtwork={currentArtwork!}
+        />
+      )}
+      {castState === CastState.Artwork && (
+        <div style={{ width: '100vw', height: '100vh' }}>
+          <ArtworkPlayer
+            previewURL={castPreviewURL!}
+            keyboardCode={keyboardCode}
+          />
+        </div>
+      )}
+      {castState === CastState.Exhibition && (
+        <ExhibitionHall
+          viewMode={viewMode!}
+          screenRatio={screenRatio}
+          exhibitionID={castInfo?.exhibitionId}
+          catalogID={castInfo?.catalogId}
+          screen={castInfo?.catalog}
         />
       )}
     </div>

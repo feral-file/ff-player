@@ -69,7 +69,7 @@ export interface CheckDeviceStatusReply extends Reply {
 export interface CastExhibitionRequest {
   exhibitionId: string;
   catalogId?: string;
-  catalog: string;
+  catalog?: ExhibitionCatalog;
 }
 export interface CastExhibitionReply extends Reply {}
 export interface CastListArtworkRequest {
@@ -204,10 +204,23 @@ export interface CastInfo {
   startTime?: number;
   castCommand?: CastCommand;
   deviceInfo?: any;
-  exhibitionId?: string;
   value?: any;
+
+  // Cast exhibition
+  exhibitionId?: string;
+  catalogId?: string;
+  catalog?: ExhibitionCatalog;
   displayKey?: string;
   dataChecked?: boolean;
+}
+
+// Enum for ExhibitionCatalog
+export enum ExhibitionCatalog {
+  home,
+  curatorNote,
+  resource,
+  resourceDetail,
+  artwork,
 }
 
 export enum ViewMode {

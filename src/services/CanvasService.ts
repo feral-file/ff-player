@@ -215,8 +215,17 @@ class CanvasService {
   private async castExhibition(
     request: CastExhibitionRequest
   ): Promise<CastExhibitionReply> {
-    console.log('castExhibition', request);
-    // Implementation similar to the Dart code
+    if (!request.exhibitionId) {
+      console.error('Exhibition ID is required');
+      return { ok: false };
+    }
+
+    this.castInfo = {
+      ...this.castInfo,
+      exhibitionId: request.exhibitionId,
+      catalogId: request.catalogId,
+      catalog: request.catalog,
+    };
     return { ok: true };
   }
 
