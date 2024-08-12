@@ -169,7 +169,7 @@ const Carousel: React.FC<CarouselProps> = ({
                   className={styles.card}
                   style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
                   <p
-                    className={styles.type}
+                    className={`${styles.type} ${styles.capitalizedFirstChar}`}
                     style={{ fontSize: 22 * screenRatio }}>
                     {item.type === PostType.WhitePaper
                       ? 'White paper'
