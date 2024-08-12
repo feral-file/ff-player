@@ -165,10 +165,9 @@ const Home: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (locationID && topicID) {
+    if (locationID && topicID && deviceName) {
       DeviceManager.setLocationId(locationID);
       DeviceManager.setTopicId(topicID);
-      DeviceManager.setName(deviceName);
       const generateBranchLink = async () => {
         const url = await DeviceManager.getOrGenerateBranchLink();
         setBranchLink(url);
@@ -362,9 +361,7 @@ const Home: React.FC = () => {
       console.log('Registering platform events');
       DeviceManager.getName().then(name => {
         console.log('Device Name:', name);
-        if (name) {
-          setDeviceName(name);
-        }
+        setDeviceName(name);
       });
     }
   }, [didRegisterPlatformEvents]);
