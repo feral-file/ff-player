@@ -12,6 +12,7 @@ import {
   MIMETypeVideo,
   SeriesPreviewHTMLTag,
 } from '@/utils/types';
+import Hls from 'hls.js';
 import { useEffect, useRef, useState } from 'react';
 
 const ArtworkPlayer = ({
@@ -23,15 +24,19 @@ const ArtworkPlayer = ({
 }) => {
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const videRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isStreaming, setIsStreaming] = useState<boolean>(false);
 
   function compareToGetFileType(type: string) {
+    setIsStreaming(false);
     if (!type) {
       return;
     }
+    type = type.toLowerCase();
 
     if (MIMETypeUseStream.includes(type)) {
       setPreviewType(SeriesPreviewHTMLTag.video);
+      setIsStreaming(true);
     } else if (FileUseIframe.includes(type)) {
       setPreviewType(SeriesPreviewHTMLTag.iframe);
     } else if (FileUseObject.includes(type) || type.match(MIMETypeObject)) {
@@ -108,12 +113,36 @@ const ArtworkPlayer = ({
   };
 
   useEffect(() => {
-    if (previewType === SeriesPreviewHTMLTag.video && videRef.current) {
-      videRef.current.play().catch(error => {
-        console.log('Error play video', error);
-      });
+    if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+      if (isStreaming && Hls.isSupported()) {
+        const hls = new Hls();
+        hls.loadSource(previewURL);
+        hls.attachMedia(videoRef.current);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          videoRef?.current
+            ?.play()
+            .catch(error => {
+              console.log(error);
+            })
+            .finally(() => {
+              setLoading(false);
+            });
+        });
+      } else {
+        videoRef.current.src = previewURL;
+        videoRef.current.addEventListener('loadeddata', () => {
+          videoRef?.current
+            ?.play()
+            .catch(error => {
+              console.log('Error play video', error);
+            })
+            .finally(() => {
+              setLoading(false);
+            });
+        });
+      }
     }
-  });
+  }, [previewType]);
 
   return (
     <div
@@ -164,15 +193,12 @@ const ArtworkPlayer = ({
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.video && (
         <video
-          ref={videRef}
+          ref={videoRef}
           style={{ width: '100%', height: '100%' }}
-          onLoadedData={loadedSource}
           autoPlay
           loop
           playsInline
-          crossOrigin="anonymous">
-          <source src={previewURL}></source>
-        </video>
+          crossOrigin="anonymous"></video>
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.audio && (
         <audio autoPlay={true} loop={true}>
