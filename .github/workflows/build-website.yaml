@@ -60,13 +60,9 @@ jobs:
           fi
         done < .env.local.sample
     
-        # If there are warnings, output them as a JSON array
-        if [ "$missing" = true ]; then
-          warnings_json=$(printf "%s\n" "${warnings[@]}" | jq -R . | jq -s .)
-          echo "::set-output name=warnings::$warnings_json"
-        else
-          echo "::set-output name=warnings::[]"
-        fi
+        # Save the warnings to state and output
+        warnings_json=$(printf "%s\n" "${warnings[@]}" | jq -R . | jq -s .)
+        echo "warnings=$warnings_json" >> $GITHUB_OUTPUT
     
     - name: Add GitHub comment with warnings if any
       if: steps.check_env_vars.outputs.warnings != '[]'
