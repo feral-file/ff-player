@@ -3,6 +3,7 @@ type EventHandler = (...args: any[]) => void;
 
 export enum Event {
   escape,
+  keyDown,
 }
 
 export class EventEmitter {

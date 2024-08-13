@@ -14,8 +14,8 @@ export class KeyEvent extends PlatformEventReceiver {
     super.handlePlatformEvent(event);
     const [keyId, keyLabel] = event.split('_');
     console.log(`Handling key event: ${keyId} - ${keyLabel}`);
-    if (parseInt(keyId) === KeyCodes.escape) {
-      EventEmitter.emit(Event.escape);
+    if (keyId !== KeyCodes.escape.toString()) {
+      EventEmitter.emit(Event.keyDown);
     }
   }
 }
