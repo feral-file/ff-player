@@ -54,6 +54,7 @@ export interface PlayArtworkV2 {
 
 export interface ConnectRequestV2 {
   clientDevice: DeviceInfoV2;
+  primaryAddress?: string;
 }
 
 export interface ConnectReplyV2 extends Reply {}

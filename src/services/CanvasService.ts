@@ -39,13 +39,17 @@ import {
 } from '../utils/types';
 
 import { LocalStorageItem } from '@/constants';
+import extendedMixpanel, { setIdentifyToDevice } from '@/utils/mixpanel';
 
 class CanvasService {
+  private connectedAddress?: string;
   private castInfo: CastInfo | null = null;
   private clientDeviceInfo: any = null;
   private timer: any = null;
 
-  constructor() {}
+  constructor() {
+    this.connectedAddress = '';
+  }
 
   public getCastInfo() {
     return this.castInfo;
@@ -188,12 +192,20 @@ class CanvasService {
       },
       startTime: Date.now(),
     });
+
+    const connectingAddress = request.primaryAddress;
+    if (connectingAddress && connectingAddress !== this.connectedAddress) {
+      this.connectedAddress = connectingAddress;
+      extendedMixpanel.identify(this.connectedAddress);
+    }
+
     console.log('_connected device:', JSON.stringify(this.clientDeviceInfo));
     return { ok: true };
   }
 
   public async disconnect(request: any): Promise<DisconnectReplyV2> {
     console.log('disconnect', JSON.stringify(request));
+    setIdentifyToDevice();
     this.onDisconnect();
     return { ok: true };
   }
