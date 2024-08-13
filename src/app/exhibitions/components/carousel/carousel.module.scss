@@ -41,6 +41,17 @@
     white-space: normal;
     max-height: 100%;
   }
+
+  .thumbnail {
+    width: 100%;
+    height: auto;
+    img {
+      width: 100%;
+      height: 100%;
+      max-height: 56vh;
+      object-fit: cover;
+    }
+  }
 }
 
 .loadingCover {

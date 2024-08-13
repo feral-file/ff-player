@@ -71,6 +71,10 @@ const ExhibitionHall = ({
       const exhibition =
         await exhibitionService.current.getExhibition(exhibitionID);
 
+      if (!exhibition) {
+        return;
+      }
+
       setExhibitionDetail(exhibition);
       fetchPosts(exhibition!);
     };
@@ -81,7 +85,7 @@ const ExhibitionHall = ({
     };
 
     if (exhibitionID && exhibitionDetail?.id !== exhibitionID) {
-      fetchExhibitionDetail();
+      fetchExhibitionDetail().catch(err => console.error(err));
     }
   }, [exhibitionID]);
 
@@ -101,16 +105,18 @@ const ExhibitionHall = ({
           setPostIndex(0);
           break;
         case ExhibitionCatalog.resource:
-          getPostIndexByID(catalogID!);
+          if (catalogID) getPostIndexByID(catalogID!);
           break;
         case ExhibitionCatalog.artwork:
-          getPreviewSource(catalogID!, exhibitionDetail);
+          if (catalogID && exhibitionDetail) {
+            getPreviewSource(catalogID!, exhibitionDetail);
+          }
           break;
       }
 
       setSection(screen);
     }
-  }, [screen]);
+  }, [screen, catalogID]);
 
   return (
     <div
