@@ -30,7 +30,7 @@ const Carousel: React.FC<CarouselProps> = ({
   const swiperParams: SwiperOptions = {
     effect: 'coverflow',
     spaceBetween: 250,
-    slidesPerView: 1.8,
+    slidesPerView: 1.55,
     centeredSlides: true,
     coverflowEffect: {
       rotate: 0,
@@ -42,14 +42,14 @@ const Carousel: React.FC<CarouselProps> = ({
     },
     loop: false,
   };
-
   if (viewMode === ViewMode.landscape) {
     swiperParams.spaceBetween = 250 * screenRatio;
     swiperParams.coverflowEffect!.depth = 480 * screenRatio;
   } else {
-    swiperParams.spaceBetween = 20 * screenRatio;
-    swiperParams.coverflowEffect!.depth = 20 * screenRatio;
+    swiperParams.spaceBetween = 50 * screenRatio;
+    swiperParams.coverflowEffect!.depth = 100 * screenRatio;
   }
+
   const [swiper, setSwiper] = useState<Swiper | null>(null);
 
   useEffect(() => {
@@ -66,13 +66,11 @@ const Carousel: React.FC<CarouselProps> = ({
     if (!swiper) {
       const s = new Swiper('.swiper', swiperParams);
       setSwiper(s);
-    }
 
-    setTimeout(() => {
-      if (swiper && index !== undefined) {
-        swiper.slideTo(index);
-      }
-    }, 200);
+      s.slideTo(index);
+    } else {
+      swiper.slideTo(index);
+    }
   }, [index]);
 
   useEffect(() => {
@@ -80,6 +78,20 @@ const Carousel: React.FC<CarouselProps> = ({
       setLoading(false);
     }, 500);
   }, [onLoad]);
+
+  useEffect(() => {
+    if (swiper && swiperParams) {
+      if (viewMode === ViewMode.landscape) {
+        swiper.originalParams.spaceBetween = 250 * screenRatio;
+        swiper.originalParams.coverflowEffect!.depth = 480 * screenRatio;
+      } else {
+        swiper.originalParams.spaceBetween = 50 * screenRatio;
+        swiper.originalParams.coverflowEffect!.depth = 100 * screenRatio;
+      }
+
+      swiper.update();
+    }
+  }, [viewMode]);
 
   return (
     <div className="swiper" style={{ height: '100%' }}>
@@ -142,7 +154,9 @@ const Carousel: React.FC<CarouselProps> = ({
                     Close up
                   </p>
                   {item.thumbUrls?.length && (
-                    <QueuingImages urls={item.thumbUrls} alt="thumbnail" />
+                    <div className={styles.thumbnail}>
+                      <QueuingImages urls={item.thumbUrls} alt="thumbnail" />
+                    </div>
                   )}
                   <p
                     className={styles.postTitle}
@@ -176,7 +190,9 @@ const Carousel: React.FC<CarouselProps> = ({
                       : item.type}
                   </p>
                   {item.thumbUrls?.length && (
-                    <QueuingImages urls={item.thumbUrls} alt="thumbnail" />
+                    <div className={styles.thumbnail}>
+                      <QueuingImages urls={item.thumbUrls} alt="thumbnail" />
+                    </div>
                   )}
                   <p
                     className={styles.postTitle}
