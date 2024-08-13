@@ -10,10 +10,10 @@ const MessageModal = ({
       style={{
         position: 'absolute',
         top: 0,
-        zIndex: 2,
+        zIndex: 3,
         backgroundColor: 'rgba(0, 0, 0, 0.80)',
-        width: '100vw',
-        height: '100vh',
+        width: '100%',
+        height: '100%',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
@@ -28,7 +28,9 @@ const MessageModal = ({
           borderRadius: 20,
           textAlign: 'center',
         }}>
-        <p style={{ fontSize: screenRatio * 36 }}>{message}</p>
+        <p style={{ fontSize: screenRatio * 36, color: '#ffffff' }}>
+          {message}
+        </p>
       </div>
     </div>
   );
