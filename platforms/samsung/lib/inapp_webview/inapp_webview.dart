@@ -66,13 +66,11 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
           onKeyEvent: (node, event) {
             log.info(event.toString());
 
-            if (event is KeyDownEvent) {
+            if (event is KeyDownEvent &&
+                _listAlwaysHandledKeys.contains(event.logicalKey)) {
               unawaited(_webViewController.runJavaScriptReturningResult(
                   'KeyEvent.handlePlatformEvent("${event.logicalKey.keyId}_'
                   '${event.logicalKey.keyLabel}");'));
-            }
-
-            if (_listAlwaysHandledKeys.contains(event.logicalKey)) {
               log.info('KeyEventResult.handled');
               return KeyEventResult.handled;
             }
