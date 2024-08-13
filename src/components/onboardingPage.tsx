@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import QRCode from 'qrcode.react';
 
 const OnboardingPage = ({
@@ -70,7 +71,11 @@ const OnboardingPage = ({
             3. Tap the display button on your <b>{connectedDeviceName}</b> to
             display your art on <b>{displayName}</b>.
           </p>
-          <img src="/cast-btn.svg"></img>
+          <Image
+            src={'/cast-btn.svg'}
+            width={100}
+            height={100}
+            alt="cas-button"></Image>
           <div
             style={{
               display: 'flex',
