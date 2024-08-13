@@ -13,12 +13,9 @@ import {
   PlaylistToken,
   ViewMode,
 } from '@/utils/types';
-import ArtworkPlayer from '../components/artworkPlayer';
 import HomePage from '../components/homePage';
-import OnboardingPage from '../components/onboardingPage';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
 import ExhibitionHall from './exhibitions/exhibitionPlayer';
-import MessageModal from '../components/messageModal';
 import { KeyEvent, DeviceName, Config } from '@/utils/platform';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { AppSettings } from '@/constants';
@@ -27,6 +24,9 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AppContext } from '@/context/AppContext';
 import ArtworkService from '@/services/ArtworkService';
 import DailyService from '@/services/DailyService';
+import OnboardingPage from '@/components/OnboardingPage';
+import MessageModal from '@/components/MessageModal';
+import ArtworkPlayer from '@/components/artworkPlayer';
 
 const enum CastState {
   None, // Not casting
@@ -93,36 +93,37 @@ const Home: React.FC = () => {
     localStorage.setItem('platform', platform);
   });
 
-  useEffect(() => {
-    castStatusRef.current = castState !== CastState.None;
-    try {
-      (window as any).AppState.postMessage(
-        JSON.stringify({
-          handler: 'backAbleChanged',
-          data: castStatusRef.current,
-        })
-      );
-    } catch (error) {}
-  }, [castState]);
+  // useEffect(() => {
+  //   castStatusRef.current = castState !== CastState.None;
+  //   try {
+  //     (window as any).AppState.postMessage(
+  //       JSON.stringify({
+  //         handler: 'backAbleChanged',
+  //         data: castStatusRef.current,
+  //       })
+  //     );
+  //   } catch (error) {}
+  // }, [castState]);
 
   useEffect(() => {
-    const handleEscapeKey = () => {
-      console.log('Escape key pressed');
-      if (castStatusRef.current) {
-        refreshData();
-        if (canvasService?.current != null) {
-          canvasService?.current?.disconnect({});
-        }
-        clearTimer();
-      }
+    const handleKeyDown = () => {
+      console.log('Key pressed');
+      handleNavigateDaily();
+      // if (castStatusRef.current) {
+      //   refreshData();
+      //   if (canvasService?.current != null) {
+      //     canvasService?.current?.disconnect({});
+      //   }
+      //   clearTimer();
+      // }
     };
 
-    EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
-    EventEmitter.subscribe(Event.escape, handleEscapeKey);
+    EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
+    EventEmitter.subscribe(Event.keyDown, handleKeyDown);
 
     // Cleanup the event listener on component unmount
     return () => {
-      EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+      EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
     };
   }, []);
 
@@ -590,20 +591,24 @@ const Home: React.FC = () => {
   }, [castInfo]);
 
   const handleNavigateDaily = () => {
-    const isFirstOpenQuery = query.get('isFirstOpen');
-    if (isFirstOpenQuery === 'false') {
-      AppService.setIsFirstOpen(false);
-      return;
-    }
+    // const isFirstOpenQuery = query.get('isFirstOpen');
+    // if (isFirstOpenQuery === 'false') {
+    //   AppService.setIsFirstOpen(false);
+    //   return;
+    // }
 
-    const isFirstOpen = AppService.getIsFirstOpen(pathName);
-    if (isFirstOpen) {
-      AppService.setIsFirstOpen(false);
-      router.replace('/?isFirstOpen=false');
-      setTimeout(() => {
-        router.push('/daily');
-      }, 100);
-    }
+    // const isFirstOpen = AppService.getIsFirstOpen(pathName);
+    // if (isFirstOpen) {
+    //   AppService.setIsFirstOpen(false);
+    //   router.replace('/?isFirstOpen=false');
+    //   setTimeout(() => {
+    //     router.push('/daily');
+    //   }, 100);
+    // }
+
+    setTimeout(() => {
+      router.push('/daily');
+    }, 100);
   };
 
   return (
