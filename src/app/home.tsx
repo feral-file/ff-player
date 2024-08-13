@@ -24,9 +24,9 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AppContext } from '@/context/AppContext';
 import ArtworkService from '@/services/ArtworkService';
 import DailyService from '@/services/DailyService';
-import OnboardingPage from '@/components/OnboardingPage';
-import ArtworkPlayer from '@/components/artworkPlayer';
-import MessageModal from '@/components/messageModal';
+import OnboardingPage from '../components/onboardingPage';
+import ArtworkPlayer from '../components/artworkPlayer';
+import MessageModal from '../components/messageModal';
 
 const enum CastState {
   None, // Not casting
@@ -89,7 +89,7 @@ const Home: React.FC = () => {
 
   const query = useSearchParams();
   useEffect(() => {
-    const platform = query.get('platform') ?? '';
+    const platform = query?.get('platform') ?? '';
     localStorage.setItem('platform', platform);
   });
 
