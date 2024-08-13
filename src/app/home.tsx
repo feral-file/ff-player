@@ -610,6 +610,7 @@ const Home: React.FC = () => {
     }
 
     const isFirstOpen = AppService.getIsFirstOpen(pathName);
+
     if (isFirstOpen) {
       AppService.setIsFirstOpen(false);
       router.replace('/?isFirstOpen=false');
