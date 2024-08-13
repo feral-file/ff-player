@@ -4,6 +4,6 @@ export interface User {
   fullName?: string;
 }
 
-export interface Artist extends User {}
+export type Artist = User;
 
-export interface Curator extends User {}
+export type Curator = User;

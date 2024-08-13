@@ -6,7 +6,6 @@ import DeviceManager from '../utils/DeviceManager';
 import {
   Artwork,
   CastCommand,
-  ExhibitionCatalog,
   Orientation,
   Daily,
   PlayArtworkV2,
@@ -27,6 +26,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AppContext } from '@/context/AppContext';
 import ArtworkService from '@/services/ArtworkService';
 import DailyService from '@/services/DailyService';
+import { IndexerToken } from '@/models';
 
 const enum CastState {
   None, // Not casting
@@ -37,14 +37,6 @@ const enum CastState {
 const STANDARD_HEIGHT = 1080;
 
 const Home: React.FC = () => {
-  const context = useContext(AppContext);
-  if (!context) {
-    return <p>There is no context.</p>;
-  }
-
-  const data = context.data;
-  const { locationID, topicID, castInfo, canvasService } = data;
-
   const router = useRouter();
   const pathName = usePathname();
 
@@ -63,7 +55,6 @@ const Home: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>();
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [currentArtwork, setCurrentArtwork] = useState<Artwork | null>(null);
-  // const [castStatus, setCastStatus] = useState<boolean | null>(false);
   const castStatusRef = useRef(false);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
@@ -72,7 +63,6 @@ const Home: React.FC = () => {
   const [displayComingSoon, setDisplayComingSoon] = useState<boolean>(false);
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
 
-  const [keyboardCode, setKeyboardCode] = useState<number>(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
@@ -88,6 +78,7 @@ const Home: React.FC = () => {
   const [isOnline, setIsOnline] = useState<boolean>(true);
 
   const query = useSearchParams();
+
   useEffect(() => {
     const platform = query.get('platform') ?? '';
     localStorage.setItem('platform', platform);
@@ -96,13 +87,20 @@ const Home: React.FC = () => {
   useEffect(() => {
     castStatusRef.current = castState !== CastState.None;
     try {
-      (window as any).AppState.postMessage(
-        JSON.stringify({
-          handler: 'backAbleChanged',
-          data: castStatusRef.current,
-        })
-      );
-    } catch (error) {}
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      const appState = (window as any).AppState;
+      if (appState) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        appState.postMessage(
+          JSON.stringify({
+            handler: 'backAbleChanged',
+            data: castStatusRef.current,
+          })
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    }
   }, [castState]);
 
   useEffect(() => {
@@ -110,9 +108,9 @@ const Home: React.FC = () => {
       console.log('Escape key pressed');
       if (castStatusRef.current) {
         refreshData();
-        if (canvasService?.current != null) {
-          canvasService?.current?.disconnect({});
-        }
+        canvasService.current.disconnect({}).catch((error: unknown) => {
+          console.error(error);
+        });
         clearTimer();
       }
     };
@@ -133,9 +131,7 @@ const Home: React.FC = () => {
 
     if (typeof window !== 'undefined') {
       const browser = detect() as BrowserInfo;
-      if (browser) {
-        setDeviceName(`${browser.os} - ${browser.name} ${browser.version}`);
-      }
+      setDeviceName(`${browser.os ?? ''} - ${browser.name} ${browser.version}`);
 
       const resizeHandler = () => {
         let minSize;
@@ -164,6 +160,16 @@ const Home: React.FC = () => {
     }
   }, []);
 
+  // Context
+  const context = useContext(AppContext);
+  if (!context) {
+    return <p>There is no context.</p>;
+  }
+
+  const data = context.data;
+  const { locationID, topicID, castInfo, canvasService } = data;
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (locationID && topicID && deviceName) {
       DeviceManager.setLocationId(locationID);
@@ -172,25 +178,29 @@ const Home: React.FC = () => {
         const url = await DeviceManager.getOrGenerateBranchLink();
         setBranchLink(url);
       };
-      generateBranchLink();
+      generateBranchLink().catch((error: unknown) => {
+        console.error(error);
+      });
     }
   }, [locationID, topicID, deviceName]);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     const fetchArtworks = async () => {
       try {
         const artworks = await artworkService.current.getFeaturedArtworks();
-        if (artworks) {
-          setArtworks(artworks);
-          setCurrentArtwork(artworks[0]);
-        }
+        setArtworks(artworks);
+        setCurrentArtwork(artworks[0]);
       } catch (error) {
         console.log('Error fetching artworks:', JSON.stringify(error));
       }
     };
-    fetchArtworks();
+    fetchArtworks().catch((error: unknown) => {
+      console.error(error);
+    });
   }, []);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (artworks.length > 0) {
       let index = 0;
@@ -199,10 +209,13 @@ const Home: React.FC = () => {
         index = (index + 1) % artworks.length;
       }, 60 * 1000);
 
-      return () => clearInterval(interval);
+      return () => {
+        clearInterval(interval);
+      };
     }
   }, [artworks]);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (castInfo) {
       const handleCastCommand = async () => {
@@ -220,32 +233,36 @@ const Home: React.FC = () => {
                 return;
               }
               try {
-                const data = await artworkService.current.queryTokens(ids);
-                const artworks = castInfo?.artworks;
+                const tokens = await artworkService.current.queryTokens(ids);
+                const artworks = castInfo.artworks;
                 if (!artworks) {
                   return;
                 }
 
-                if (data) {
-                  const previewData: Map<string, string> = new Map();
-                  data.tokens.forEach((token: any) => {
-                    previewData.set(
-                      token.indexID,
-                      token.asset.metadata.project.latest.previewURL
-                    );
-                  });
-                  const updatedArtworks = artworks.map((artwork: any) => {
-                    return {
-                      ...artwork,
-                      previewURL: previewData.get(artwork.token.id),
+                const previewData = new Map<string, string>();
+                tokens.forEach((token: IndexerToken) => {
+                  previewData.set(
+                    token.indexID,
+                    token.asset.metadata.project.latest.previewURL
+                  );
+                });
+                const updatedArtworks = artworks.map(
+                  (artwork: PlayArtworkV2) => {
+                    const aw: PlaylistToken = {
+                      duration: artwork.duration,
+                      previewURL:
+                        previewData.get(artwork.token?.id ?? '') ?? '',
+                      token: artwork.token ?? { id: '' },
                     };
-                  });
-                  setPlaylist(updatedArtworks);
-                  if (castInfo.startTime) {
-                    setStartTime(castInfo.startTime);
-                    const i = getIndex(updatedArtworks, castInfo?.startTime);
-                    setCurrentIndex(i);
+
+                    return aw;
                   }
+                );
+                setPlaylist(updatedArtworks);
+                if (castInfo.startTime) {
+                  setStartTime(castInfo.startTime);
+                  const i = getIndex(updatedArtworks, castInfo.startTime);
+                  setCurrentIndex(i);
                 }
               } catch (error) {
                 console.log(
@@ -256,9 +273,11 @@ const Home: React.FC = () => {
             };
             if (castInfo.artworks) {
               const assetIds = castInfo.artworks.map(
-                (artwork: any) => artwork.token.id
+                (artwork: PlayArtworkV2) => artwork.token?.id ?? ''
               );
-              getNftTokens(assetIds);
+              getNftTokens(assetIds).catch((error: unknown) => {
+                console.error(error);
+              });
             }
             break;
           }
@@ -271,26 +290,25 @@ const Home: React.FC = () => {
 
           case CastCommand.sendKeyboardEvent: {
             console.log('Keyboard Event:', castInfo.value);
-            setKeyboardCode(castInfo.value);
             break;
           }
 
           case CastCommand.connect: {
             if (
               !(await DeviceManager.isPreviouslyConnectedDevice(
-                castInfo?.deviceInfo?.device_id
+                castInfo.deviceInfo?.deviceId ?? ''
               ))
             ) {
               setDisplayOnboarding(true);
-              DeviceManager.addPreviouslyConnectedDeviceId(
-                castInfo?.deviceInfo?.device_id
+              await DeviceManager.addPreviouslyConnectedDeviceId(
+                castInfo.deviceInfo?.deviceId ?? ''
               );
             }
             break;
           }
 
           case CastCommand.castDaily: {
-            handleCastDaily();
+            await handleCastDaily();
             break;
           }
 
@@ -305,7 +323,7 @@ const Home: React.FC = () => {
           }
 
           case CastCommand.moveToArtwork: {
-            handleMoveToArtwork(castInfo.value);
+            handleMoveToArtwork(castInfo.value as string);
             break;
           }
 
@@ -337,49 +355,59 @@ const Home: React.FC = () => {
           }
         }
       };
-      handleCastCommand();
+      handleCastCommand().catch((error: unknown) => {
+        console.error(error);
+      });
     } else {
       refreshData();
     }
   }, [castInfo]);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    (window as any).KeyEvent = {
-      handlePlatformEvent: KeyEvent.handlePlatformEvent,
-    };
-    (window as any).DeviceName = {
-      handlePlatformEvent: DeviceName.handlePlatformEvent,
-    };
-    (window as any).Config = {
-      handlePlatformEvent: Config.handlePlatformEvent,
-    };
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      (window as any).KeyEvent = {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        handlePlatformEvent: KeyEvent.handlePlatformEvent,
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      (window as any).DeviceName = {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        handlePlatformEvent: DeviceName.handlePlatformEvent,
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      (window as any).Config = {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        handlePlatformEvent: Config.handlePlatformEvent,
+      };
+    }
+
     setDidRegisterPlatformEvents(true);
   }, []);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (didRegisterPlatformEvents) {
       console.log('Registering platform events');
-      DeviceManager.getName().then(name => {
-        console.log('Device Name:', name);
-        setDeviceName(name);
-      });
+      DeviceManager.getName()
+        .then(name => {
+          console.log('Device Name:', name);
+          setDeviceName(name);
+        })
+        .catch((error: unknown) => {
+          console.error(error);
+        });
     }
   }, [didRegisterPlatformEvents]);
 
-  try {
-    (window as any).AppState.postMessage(
-      JSON.stringify({
-        handler: 'loaded',
-      })
-    );
-  } catch (error) {}
-
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (currentIndex < 0) {
       return;
     }
 
-    if (playlist?.length === 0) {
+    if (playlist.length === 0) {
       return;
     }
 
@@ -398,6 +426,21 @@ const Home: React.FC = () => {
     endPlayArtworkTime.current = currentTime + currentPlaylist.duration;
     startInterval(currentPlaylist.duration);
   }, [currentIndex, playlist]);
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+    const appState = (window as any).AppState;
+    if (appState) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      appState.postMessage(
+        JSON.stringify({
+          handler: 'loaded',
+        })
+      );
+    }
+  } catch (error) {
+    console.error(error);
+  }
 
   const handleNext = () => {
     const i = (currentIndex + 1) % playlist.length;
@@ -435,7 +478,7 @@ const Home: React.FC = () => {
     });
 
     const i = currentIndex % playlist.length;
-    let remainTime = Date.now() - startPlayArtworkTime.current;
+    const remainTime = Date.now() - startPlayArtworkTime.current;
     const st = calculateStartTime(updatedPlaylist, i, remainTime + 100);
     setStartTime(st);
 
@@ -461,7 +504,7 @@ const Home: React.FC = () => {
 
   const handleMoveToArtwork = (tokenID: string) => {
     const index = playlist.findIndex(
-      (p: PlaylistToken) => p.token?.id === tokenID
+      (p: PlaylistToken) => p.token.id === tokenID
     );
     if (index < 0) {
       return;
@@ -498,9 +541,7 @@ const Home: React.FC = () => {
   // Handle cast daily
   const handleCastDaily = async () => {
     const daily = await dailyService.current.getUpcomingDaily();
-    if (!daily) {
-      return;
-    }
+
     const ids = daily.map((d: Daily) => {
       switch (d.blockchain) {
         case 'ethereum': {
@@ -526,8 +567,8 @@ const Home: React.FC = () => {
     }
 
     const data = await artworkService.current.queryTokens(ids);
-    const previewData: Map<string, string> = new Map();
-    data.tokens.forEach((token: any) => {
+    const previewData = new Map<string, string>();
+    data.forEach((token: IndexerToken) => {
       previewData.set(token.id, token.asset.metadata.project.latest.previewURL);
     });
 
@@ -555,10 +596,14 @@ const Home: React.FC = () => {
       }
 
       const interval = setInterval(() => {
-        handleCastDaily();
+        handleCastDaily().catch((error: unknown) => {
+          console.error(error);
+        });
       }, delay);
 
-      return () => clearInterval(interval);
+      return () => {
+        clearInterval(interval);
+      };
     }
   };
 
@@ -582,24 +627,35 @@ const Home: React.FC = () => {
     }
   };
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    checkVersion();
-    const intervalID = setInterval(async () => {
-      checkVersion();
-    }, AppSettings.VERSION_CHECK_INTERVAL_DURATION);
+    const validateVersion = async () => {
+      await checkVersion();
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      const intervalID = setInterval(async () => {
+        await checkVersion();
+      }, AppSettings.VERSION_CHECK_INTERVAL_DURATION);
 
-    return () => clearInterval(intervalID);
+      return () => {
+        clearInterval(intervalID);
+      };
+    };
+
+    validateVersion().catch((error: unknown) => {
+      console.error(error);
+    });
   }, []);
 
-  const castExhibition = async () => {
-    setCastState(CastState.Exhibition);
-  };
-
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    if (castInfo?.dataChecked && !castInfo?.castCommand) {
+    if (castInfo?.dataChecked && !castInfo.castCommand) {
       handleNavigateDaily();
     }
   }, [castInfo]);
+
+  const castExhibition = () => {
+    setCastState(CastState.Exhibition);
+  };
 
   const handleNavigateDaily = () => {
     const isFirstOpenQuery = query.get('isFirstOpen');
@@ -635,15 +691,14 @@ const Home: React.FC = () => {
             rotateRadius % 180 === 0)
             ? '100vh'
             : '100vw',
-        transform: `rotate(${-rotateRadius}deg) `,
-        transformOrigin: `${
+        transform: `rotate(${(-rotateRadius).toString()}deg) `,
+        transformOrigin:
           (screenOrientation === Orientation.vertical &&
             rotateRadius % 360 !== 90) ||
           (screenOrientation === Orientation.horizontal &&
             rotateRadius % 360 !== 90)
             ? '50vw center'
-            : 'center 50vh'
-        }`,
+            : 'center 50vh',
         transition: 'transform 0.2s',
         display: 'flex',
         justifyContent: 'center',
@@ -661,31 +716,28 @@ const Home: React.FC = () => {
       {displayOnboarding && (
         <OnboardingPage
           screenRatio={screenRatio}
-          branchLink={branchLink!}
-          connectedDeviceName={castInfo?.deviceInfo?.device_name}
-          displayName={deviceName!}
+          branchLink={branchLink ?? ''}
+          connectedDeviceName={castInfo?.deviceInfo?.deviceName ?? ''}
+          displayName={deviceName}
         />
       )}
       {castState === CastState.None && (
         <HomePage
           screenRatio={screenRatio}
-          viewMode={viewMode!}
-          deviceName={deviceName!}
-          branchLink={branchLink!}
-          currentArtwork={currentArtwork!}
+          viewMode={viewMode ?? ViewMode.landscape}
+          deviceName={deviceName}
+          branchLink={branchLink ?? ''}
+          currentArtwork={currentArtwork ?? undefined}
         />
       )}
       {castState === CastState.Artwork && (
         <div style={{ width: '100vw', height: '100vh' }}>
-          <ArtworkPlayer
-            previewURL={castPreviewURL!}
-            keyboardCode={keyboardCode}
-          />
+          <ArtworkPlayer previewURL={castPreviewURL ?? ''} />
         </div>
       )}
       {castState === CastState.Exhibition && (
         <ExhibitionHall
-          viewMode={viewMode!}
+          viewMode={viewMode ?? ViewMode.landscape}
           screenRatio={screenRatio}
           exhibitionID={castInfo?.exhibitionId}
           catalogID={castInfo?.catalogId}

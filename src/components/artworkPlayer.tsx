@@ -17,7 +17,6 @@ import { useEffect, useRef, useState } from 'react';
 
 const ArtworkPlayer = ({
   previewURL,
-  keyboardCode,
 }: {
   previewURL: string;
   keyboardCode?: number;
@@ -55,44 +54,17 @@ const ArtworkPlayer = ({
   }
 
   useEffect(() => {
-    if (keyboardCode) {
-      triggerKeyInIframe(keyboardCode);
-    }
-  }, [keyboardCode]);
-
-  const triggerKeyInIframe = (keyCode: number) => {
-    // This function to trigger keydown event in iframe
-    // But it's not working in this case
-
-    return;
-    // const iframe = document.getElementById("ff-iframe") as HTMLIFrameElement;
-    // if (!iframe) {
-    //   return;
-    // }
-    // const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-    // if (iframeDoc) {
-    //   const event = new KeyboardEvent("keydown", {
-    //     keyCode: keyCode,
-    //     which: keyCode,
-    //     bubbles: true,
-    //     cancelable: true,
-    //   });
-    //   iframeDoc.dispatchEvent(event);
-    // }
-  };
-
-  useEffect(() => {
     const detectPreviewType = async (previewURL: string) => {
       try {
         const url = new URL(previewURL);
         const extendPreviewURL = url.search
-          ? `${previewURL}&v=${Date.now()}`
-          : `${previewURL}?v=${Date.now()}`;
+          ? `${previewURL}&v=${Date.now().toString()}`
+          : `${previewURL}?v=${Date.now().toString()}`;
         const response = await fetch(extendPreviewURL, {
           method: 'HEAD',
         });
         const contentType = response.headers.get('Content-Type');
-        compareToGetFileType(contentType!);
+        compareToGetFileType(contentType ?? '');
         console.log('Content-Type:', contentType);
       } catch (error) {
         console.log('Error get content-type', error);
@@ -103,7 +75,9 @@ const ArtworkPlayer = ({
     if (previewURL) {
       setLoading(true);
       setPreviewType(null);
-      detectPreviewType(previewURL);
+      detectPreviewType(previewURL).catch((err: unknown) => {
+        console.error(err);
+      });
     }
   }, [previewURL]);
 
@@ -119,9 +93,9 @@ const ArtworkPlayer = ({
         hls.loadSource(previewURL);
         hls.attachMedia(videoRef.current);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          videoRef?.current
+          videoRef.current
             ?.play()
-            .catch(error => {
+            .catch((error: unknown) => {
               console.log(error);
             })
             .finally(() => {
@@ -131,9 +105,9 @@ const ArtworkPlayer = ({
       } else {
         videoRef.current.src = previewURL;
         videoRef.current.addEventListener('loadeddata', () => {
-          videoRef?.current
+          videoRef.current
             ?.play()
-            .catch(error => {
+            .catch((error: unknown) => {
               console.log('Error play video', error);
             })
             .finally(() => {

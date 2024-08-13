@@ -36,16 +36,15 @@ import {
   KeyboardEventRequest,
   KeyboardEventReply,
   CastInfo,
+  DeviceInfoV2,
 } from '../utils/types';
 
 import { LocalStorageItem } from '@/constants';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
-  private clientDeviceInfo: any = null;
-  private timer: any = null;
-
-  constructor() {}
+  private clientDeviceInfo: DeviceInfoV2 | null = null;
+  private timer: unknown = null;
 
   public getCastInfo() {
     return this.castInfo;
@@ -62,13 +61,15 @@ class CanvasService {
   public async processMessage(event: MessageEvent) {
     console.log('processMessage', JSON.stringify(event));
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument
     const webSocketMessage: WebSocketMessage = JSON.parse(event.data);
-    if (!webSocketMessage || !webSocketMessage.message) {
+    if (!webSocketMessage.message) {
       console.error('Invalid message:', JSON.stringify(event.data));
       return;
     }
 
-    const messageData = JSON.parse(webSocketMessage.message);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const messageData = JSON.parse(webSocketMessage.message as string);
 
     if (
       webSocketMessage.messageID.startsWith('system') ||
@@ -78,6 +79,7 @@ class CanvasService {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const commandStr = messageData.command;
     if (!commandStr) {
       console.error(
@@ -88,11 +90,8 @@ class CanvasService {
     }
 
     const command = CastCommand[commandStr as keyof typeof CastCommand];
-    if (!command) {
-      console.error('Invalid command:', JSON.stringify(commandStr));
-      return;
-    }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const requestJson = messageData.request;
 
     console.log(`Received command: ${JSON.stringify(commandStr)}`);
@@ -109,7 +108,7 @@ class CanvasService {
 
   private async commandHandler(
     command: CastCommand,
-    requestJson: any
+    requestJson: unknown
   ): Promise<Reply> {
     if (this.castInfo) {
       this.castInfo = {
@@ -124,45 +123,45 @@ class CanvasService {
 
     switch (command) {
       case CastCommand.connect:
-        return this.connect(requestJson);
+        return this.connect(requestJson as ConnectRequestV2);
       case CastCommand.disconnect:
         return this.disconnect(requestJson);
       case CastCommand.checkStatus:
-        return this.status(requestJson);
+        return this.status(requestJson as CheckDeviceStatusRequest);
       case CastCommand.castListArtwork:
-        return this.castListArtwork(requestJson);
+        return this.castListArtwork(requestJson as CastListArtworkRequest);
       // case CastCommand.cancelCasting:
       //   return this.cancelCasting(requestJson);
       // case CastCommand.appendArtworkToCastingList:
       //   return this.appendListArtwork(requestJson);
       case CastCommand.pauseCasting:
-        return this.pauseCasting(requestJson);
+        return this.pauseCasting(requestJson as PauseCastingRequest);
       case CastCommand.resumeCasting:
-        return this.resumeCasting(requestJson);
+        return this.resumeCasting(requestJson as ResumeCastingRequest);
       case CastCommand.nextArtwork:
-        return this.nextArtwork(requestJson);
+        return this.nextArtwork(requestJson as NextArtworkRequest);
       case CastCommand.previousArtwork:
-        return this.previousArtwork(requestJson);
+        return this.previousArtwork(requestJson as PreviousArtworkRequest);
       case CastCommand.moveToArtwork:
-        return this.moveToArtwork(requestJson);
+        return this.moveToArtwork(requestJson as MoveToArtworkRequest);
       case CastCommand.updateDuration:
-        return this.updateDuration(requestJson);
+        return this.updateDuration(requestJson as UpdateDurationRequest);
       case CastCommand.castExhibition:
-        return this.castExhibition(requestJson);
+        return this.castExhibition(requestJson as CastExhibitionRequest);
       case CastCommand.rotate:
-        return this.rotate(requestJson);
+        return this.rotate(requestJson as RotateRequest);
       case CastCommand.tapGesture:
-        return this.tapGesture(requestJson);
+        return this.tapGesture(requestJson as TapGestureRequest);
       case CastCommand.dragGesture:
-        return this.dragGesture(requestJson);
+        return this.dragGesture(requestJson as DragGestureRequest);
       case CastCommand.setCursorOffset:
-        return this.setCursorOffset(requestJson);
+        return this.setCursorOffset(requestJson as SetCursorOffsetRequest);
       case CastCommand.getCursorOffset:
-        return this.getCursorOffset(requestJson);
+        return this.getCursorOffset(requestJson as GetCursorOffsetRequest);
       case CastCommand.sendKeyboardEvent:
-        return this.keyboardEvent(requestJson);
+        return this.keyboardEvent(requestJson as KeyboardEventRequest);
       case CastCommand.castDaily:
-        return this.castDaily(requestJson);
+        return this.castDaily(requestJson as object);
       default:
         console.error(`Unknown command: ${command}`);
         return { ok: false };
@@ -182,42 +181,39 @@ class CanvasService {
     this.clientDeviceInfo = request.clientDevice;
     this.setCastInfo({
       artworks: [],
-      deviceInfo: {
-        device_id: this.clientDeviceInfo.device_id,
-        device_name: this.clientDeviceInfo.device_name,
-      },
+      deviceInfo: this.clientDeviceInfo,
       startTime: Date.now(),
     });
     console.log('_connected device:', JSON.stringify(this.clientDeviceInfo));
     return { ok: true };
   }
 
-  public async disconnect(request: any): Promise<DisconnectReplyV2> {
+  public disconnect(request: unknown): Promise<DisconnectReplyV2> {
     console.log('disconnect', JSON.stringify(request));
     this.onDisconnect();
-    return { ok: true };
+    return Promise.resolve({ ok: true });
   }
 
-  private async status(
+  private status(
     request: CheckDeviceStatusRequest
   ): Promise<CheckDeviceStatusReply> {
     console.log('checkStatus', JSON.stringify(request));
-    return {
+    return Promise.resolve({
       ok: true,
       startTime: Date.now(),
       artworks: this.castInfo?.artworks ?? [],
       connectedDevice: this.castInfo?.deviceInfo,
       exhibitionId: this.castInfo?.exhibitionId,
       displayKey: this.castInfo?.displayKey,
-    };
+    });
   }
 
-  private async castExhibition(
+  private castExhibition(
     request: CastExhibitionRequest
   ): Promise<CastExhibitionReply> {
     if (!request.exhibitionId) {
       console.error('Exhibition ID is required');
-      return { ok: false };
+      return Promise.resolve({ ok: false });
     }
 
     this.castInfo = {
@@ -226,10 +222,10 @@ class CanvasService {
       catalogId: request.catalogId,
       catalog: request.catalog,
     };
-    return { ok: true };
+    return Promise.resolve({ ok: true });
   }
 
-  private async castListArtwork(
+  private castListArtwork(
     request: CastListArtworkRequest
   ): Promise<CastListArtworkReply> {
     console.log('castListArtwork', JSON.stringify(request));
@@ -238,60 +234,57 @@ class CanvasService {
       artworks: request.artworks,
       startTime: request.startTime ?? Date.now(),
     });
-    return { ok: true };
+    return Promise.resolve({ ok: true });
   }
 
-  private async castDaily(request: any): Promise<Reply> {
+  private castDaily(request: object): Promise<Reply> {
     console.log('castDaily', request);
     this.setCastInfo({
       ...this.castInfo,
       displayKey: 'daily_work',
     });
 
-    return { ok: true };
+    return Promise.resolve({ ok: true });
   }
 
-  private async nextArtwork(
-    request: NextArtworkRequest
-  ): Promise<NextArtworkReply> {
+  private nextArtwork(request: NextArtworkRequest): Promise<NextArtworkReply> {
     console.log('nextArtwork', request);
-    return { ok: true };
+    return Promise.resolve({ ok: true });
   }
 
-  private async pauseCasting(
+  private pauseCasting(
     request: PauseCastingRequest
   ): Promise<PauseCastingReply> {
     console.log('pauseCasting', request);
-    return { ok: true };
+    return Promise.resolve({ ok: true });
   }
 
-  private async resumeCasting(
+  private resumeCasting(
     request: ResumeCastingRequest
   ): Promise<ResumeCastingReply> {
     console.log('resumeCasting', request);
-    return { ok: true };
+    return Promise.resolve({ ok: true });
   }
 
-  private async previousArtwork(
+  private previousArtwork(
     request: PreviousArtworkRequest
   ): Promise<PreviousArtworkReply> {
     console.log('previousArtwork', request);
-    return { ok: true };
+    return Promise.resolve({ ok: true });
   }
 
-  private async moveToArtwork(
+  private moveToArtwork(
     request: MoveToArtworkRequest
   ): Promise<MoveToArtworkReply> {
     console.log('moveToArtwork', request);
     this.setCastInfo({
       ...this.castInfo,
-      value: request?.artwork?.token?.id,
+      value: request.artwork.token.id,
     });
-    console.log('---Kien---', this.castInfo);
-    return { ok: true };
+    return Promise.resolve({ ok: true });
   }
 
-  private async updateDuration(
+  private updateDuration(
     request: UpdateDurationRequest
   ): Promise<UpdateDurationReply> {
     console.log('updateDuration', request);
@@ -300,48 +293,46 @@ class CanvasService {
       artworks: request.artworks,
     });
 
-    return {
+    return Promise.resolve({
       ok: true,
       startTime: Date.now(),
       artworks: request.artworks,
-    };
+    });
   }
 
-  private async rotate(request: RotateRequest): Promise<RotateReply> {
+  private rotate(request: RotateRequest): Promise<RotateReply> {
     console.log('rotate', request);
-    return { ok: true, degree: 0 };
+    return Promise.resolve({ ok: true, degree: 0 });
   }
 
   private async tapGesture(request: TapGestureRequest): Promise<GestureReply> {
     console.log('tapGesture', request);
-    return { ok: true };
+    return Promise.resolve({ ok: true });
   }
 
-  private async dragGesture(
-    request: DragGestureRequest
-  ): Promise<GestureReply> {
+  private dragGesture(request: DragGestureRequest): Promise<GestureReply> {
     console.log('dragGesture', request);
-    return { ok: true };
+    return Promise.resolve({ ok: true });
   }
 
-  private async getCursorOffset(
+  private getCursorOffset(
     request: GetCursorOffsetRequest
   ): Promise<GetCursorOffsetReply> {
     console.log('getCursorOffset', request);
-    return {
+    return Promise.resolve({
       ok: true,
       cursorOffset: { dx: 0, dy: 0, coefficientX: 1, coefficientY: 1 },
-    };
+    });
   }
 
-  private async setCursorOffset(
+  private setCursorOffset(
     request: SetCursorOffsetRequest
   ): Promise<SetCursorOffsetReply> {
     console.log('setCursorOffset', request);
-    return { ok: true };
+    return Promise.resolve({ ok: true });
   }
 
-  private async keyboardEvent(
+  private keyboardEvent(
     request: KeyboardEventRequest
   ): Promise<KeyboardEventReply> {
     console.log('keyboardEvent', request);
@@ -349,7 +340,7 @@ class CanvasService {
       ...this.castInfo,
       value: request.code,
     });
-    return { ok: true };
+    return Promise.resolve({ ok: true });
   }
 
   private onDisconnect() {
@@ -357,30 +348,30 @@ class CanvasService {
     this.setCastInfo(null);
   }
 
-  private setTimer(state: any, onNext: Function | null) {
-    console.log('setTimer', state);
-    this.cancelTimer();
-    if (state.artworks.length <= 1) {
-      return;
-    }
-    const currentArtwork = state.currentArtwork;
-    const castingIndex = state.castingIndex;
-    const artworkStartTime = state.artworkLastStartTime(castingIndex);
-    const remainingDuration =
-      currentArtwork.duration - (Date.now() - artworkStartTime);
-    if (remainingDuration <= 0) return;
-    console.log('setTimer: remainingDuration', remainingDuration);
-    this.timer = setTimeout(() => {
-      if (onNext) onNext();
-    }, remainingDuration - 1000);
-  }
+  // private setTimer(state: unknown, onNext: Function | null) {
+  //   console.log('setTimer', state);
+  //   this.cancelTimer();
+  //   if (state.artworks.length <= 1) {
+  //     return;
+  //   }
+  //   const currentArtwork = state.currentArtwork;
+  //   const castingIndex = state.castingIndex;
+  //   const artworkStartTime = state.artworkLastStartTime(castingIndex);
+  //   const remainingDuration =
+  //     currentArtwork.duration - (Date.now() - artworkStartTime);
+  //   if (remainingDuration <= 0) return;
+  //   console.log('setTimer: remainingDuration', remainingDuration);
+  //   this.timer = setTimeout(() => {
+  //     if (onNext) onNext();
+  //   }, remainingDuration - 1000);
+  // }
 
-  private cancelTimer() {
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
-  }
+  // private cancelTimer() {
+  //   if (this.timer) {
+  //     clearTimeout(this.timer);
+  //     this.timer = null;
+  //   }
+  // }
 }
 
 export default CanvasService;

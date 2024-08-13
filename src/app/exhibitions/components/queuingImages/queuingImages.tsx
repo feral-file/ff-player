@@ -18,7 +18,7 @@ const QueuingImages: React.FC<QueuingImagesProps> = ({ urls, alt }) => {
   }, [urls]);
 
   const handleImageLoading = (
-    event: React.SyntheticEvent<HTMLImageElement, Event>
+    event: React.SyntheticEvent<HTMLImageElement>
   ) => {
     if (event.currentTarget.naturalHeight <= youtubeFailedThumbnailHeight) {
       if (currentUrlIndex < urls.length - 1) {

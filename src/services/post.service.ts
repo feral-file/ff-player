@@ -19,12 +19,12 @@ export class PostService {
   public async getPostExhibition(exhibition: Exhibition): Promise<Post[]> {
     try {
       const isJG043Show = exhibition.id === AppSettings.JG_043_EXHIBITION_ID;
-      let posts = exhibition.posts || [];
+      let posts = exhibition.posts ?? [];
       const curatorNote = {
         id: 'curatorNote',
         type: isJG043Show ? PostType.ArtistNote : PostType.CuratorNote,
-        title: exhibition?.noteTitle,
-        content: exhibition?.noteBrief,
+        title: exhibition.noteTitle,
+        content: exhibition.noteBrief,
       } as Post;
       if (isJG043Show) {
         const J043Customs = await this.getCustomPostOfJG043Show();
@@ -46,12 +46,13 @@ export class PostService {
   private async getCustomPostOfJG043Show(): Promise<Post[]> {
     try {
       const response = await axios.get(
-        `${process.env
-          .NEXT_PUBLIC_PUB_DOC_URL!}/configs/postcard/postcard_configs.json`
+        `${
+          process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
+        }/configs/postcard/postcard_configs.json`
       );
 
       const jg043Section = response.data as Jg043CustomPosts;
-      if (jg043Section.john_gerrard?.custom_notes?.length) {
+      if (jg043Section.john_gerrard.custom_notes.length) {
         const posts: Post[] = jg043Section.john_gerrard.custom_notes.map(
           note => {
             return {
@@ -77,7 +78,7 @@ export class PostService {
         return;
       }
 
-      const url = new URL(resource.coverURI!);
+      const url = new URL(resource.coverURI);
       if (url.hostname === new URL(YOUTUBE_URL).hostname) {
         const videoId = url.searchParams.get(YOUTUBE_VIDEO_QUERY_PARAM_KEY);
         resource.mediaType = PostMediaType.Video;

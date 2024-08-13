@@ -10,10 +10,11 @@ export class ExhibitionService {
       }
 
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL!}/api/exhibitions/${id}`
+        `${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/exhibitions/${id}`
       );
       console.log('response', response);
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const exhibition = response.data.result as Exhibition;
       return exhibition;
     } catch (error) {
@@ -24,13 +25,15 @@ export class ExhibitionService {
   private async getSourceExhibition(): Promise<Exhibition | undefined> {
     try {
       console.log(
-        `${process.env
-          .NEXT_PUBLIC_PUB_DOC_URL!}/source_exhibition/exhibition.json`
+        `${
+          process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
+        }/source_exhibition/exhibition.json`
       );
 
       const response = await axios.get(
-        `${process.env
-          .NEXT_PUBLIC_PUB_DOC_URL!}/source_exhibition/exhibition.json`
+        `${
+          process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
+        }/source_exhibition/exhibition.json`
       );
       console.log('response', response);
 
@@ -50,7 +53,7 @@ export class ExhibitionService {
   private async getSourceSeries(): Promise<Series[] | undefined> {
     try {
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_PUB_DOC_URL!}/source_exhibition/series.json`
+        `${process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''}/source_exhibition/series.json`
       );
       console.log('response', response);
 

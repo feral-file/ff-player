@@ -6,7 +6,6 @@ import 'swiper/scss/effect-fade';
 import styles from './carousel.module.scss';
 import { formatDateTime } from '@/utils/ui/formatDate';
 import { useEffect, useState } from 'react';
-import { setTimeout } from 'timers';
 import { ViewMode } from '@/utils/types';
 import QueuingImages from '../queuingImages/queuingImages';
 import { Swiper, SwiperSlide } from 'swiper/react';
@@ -22,11 +21,9 @@ interface CarouselProps {
 const Carousel: React.FC<CarouselProps> = ({
   items,
   index,
-  onLoad,
   viewMode,
   screenRatio,
 }) => {
-  const [loading, setLoading] = useState(true);
   const [swiper, setSwiper] = useState<SwiperType | null>(null);
   const [spaceBetween, setSpaceBetween] = useState(250);
   const handleSwiper = (swiperInstance: SwiperType) => {
@@ -45,6 +42,7 @@ const Carousel: React.FC<CarouselProps> = ({
 
   useEffect(() => {
     if (!swiper) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
       (swiperInstance: SwiperType) => {
         setSwiper(swiperInstance);
       };
@@ -52,12 +50,6 @@ const Carousel: React.FC<CarouselProps> = ({
       swiper.slideTo(index);
     }
   }, [index, swiper]);
-
-  useEffect(() => {
-    setTimeout(() => {
-      setLoading(false);
-    }, 500);
-  }, [onLoad]);
 
   useEffect(() => {
     if (viewMode === ViewMode.landscape) {
@@ -84,9 +76,10 @@ const Carousel: React.FC<CarouselProps> = ({
       }}
       loop={false}
       style={{ height: '100%' }}>
-      {items.map((item, index) => {
+      {items.map(item => {
         return (
           <SwiperSlide
+            key={item.id}
             style={{
               display: 'flex',
               justifyContent: 'center',
@@ -110,7 +103,7 @@ const Carousel: React.FC<CarouselProps> = ({
                 <p
                   className={styles.content}
                   style={{ fontSize: 32 * screenRatio }}
-                  dangerouslySetInnerHTML={{ __html: item.content! }}></p>
+                  dangerouslySetInnerHTML={{ __html: item.content ?? '' }}></p>
               </div>
             )}
 
@@ -126,7 +119,7 @@ const Carousel: React.FC<CarouselProps> = ({
                 <p
                   className={styles.content}
                   style={{ fontSize: 32 * screenRatio }}
-                  dangerouslySetInnerHTML={{ __html: item.content! }}></p>
+                  dangerouslySetInnerHTML={{ __html: item.content ?? '' }}></p>
               </div>
             )}
 

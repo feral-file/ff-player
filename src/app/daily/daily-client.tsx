@@ -1,6 +1,7 @@
 'use client';
 
 import ArtworkPlayer from '@/components/artworkPlayer';
+import { IndexerToken } from '@/models';
 import ArtworkService from '@/services/ArtworkService';
 import DailyService from '@/services/DailyService';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
@@ -10,23 +11,31 @@ import { useEffect, useRef, useState } from 'react';
 export default function DailyClient() {
   const artworkService = useRef(new ArtworkService());
   const dailyService = useRef(new DailyService());
-  const effectRan = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
+
+  const effectRan = useRef(false);
 
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [dailies, setDailies] = useState<Daily[]>([]);
 
   useEffect(() => {
     try {
-      (window as any).AppState.postMessage(
-        JSON.stringify({
-          handler: 'backAbleChanged',
-          data: true,
-        })
-      );
-    } catch (error) {}
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      const appState = (window as any).AppState;
+      if (appState) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        appState.postMessage(
+          JSON.stringify({
+            handler: 'backAbleChanged',
+            data: true,
+          })
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    }
 
     const handleEscapeKey = () => {
       history.back();
@@ -47,8 +56,10 @@ export default function DailyClient() {
     }
 
     effectRan.current = true;
-    handleCastDaily();
-  }, []);
+    handleCastDaily().catch((error: unknown) => {
+      console.error(error);
+    });
+  });
 
   const getTokenID = (d: Daily) => {
     switch (d.blockchain) {
@@ -76,60 +87,67 @@ export default function DailyClient() {
       setDailies(dailies);
       return dailies;
     } catch (error) {
+      console.error(error);
       return dailies;
     }
   };
 
   // Handle cast daily
   const handleCastDaily = async () => {
-    const daily = await getDailies();
-    if (!daily) {
-      return;
-    }
-    const ids = daily.map((d: Daily) => {
-      return getTokenID(d);
-    });
+    try {
+      const daily = await getDailies();
+      const ids = daily.map((d: Daily) => {
+        return getTokenID(d);
+      });
 
-    if (ids.length === 0) {
-      return;
-    }
-
-    const data = await artworkService.current.queryTokens(ids);
-    const previewData: Map<string, string> = new Map();
-    data.tokens.forEach((token: any) => {
-      previewData.set(token.id, token.asset.metadata.project.latest.previewURL);
-    });
-
-    const dailies = daily.map((d: Daily) => {
-      return {
-        ...d,
-        previewURL: previewData.get(d.tokenID),
-      };
-    });
-
-    if (dailies.length > 0) {
-      const now = Date.now();
-      const currentDisplayTime = new Date(dailies[0].displayTime);
-      let nextDisplayTime = currentDisplayTime.setDate(
-        currentDisplayTime.getDate() + 1
-      );
-      if (dailies.length > 1 && dailies[1].displayTime) {
-        nextDisplayTime = new Date(dailies[1].displayTime).getTime();
+      if (ids.length === 0) {
+        return;
       }
 
-      const delay = nextDisplayTime - now;
-      if (dailies[0].previewURL) {
-        setCastPreviewURL(dailies[0].previewURL);
-      }
+      const data = await artworkService.current.queryTokens(ids);
+      const previewData = new Map<string, string>();
+      data.forEach((token: IndexerToken) => {
+        previewData.set(
+          token.id,
+          token.asset.metadata.project.latest.previewURL
+        );
+      });
 
-      startInterval(delay);
+      const dailies = daily.map((d: Daily) => {
+        return {
+          ...d,
+          previewURL: previewData.get(d.tokenID),
+        };
+      });
+
+      if (dailies.length > 0) {
+        const now = Date.now();
+        const currentDisplayTime = new Date(dailies[0].displayTime);
+        let nextDisplayTime = currentDisplayTime.setDate(
+          currentDisplayTime.getDate() + 1
+        );
+        if (dailies.length > 1 && dailies[1].displayTime) {
+          nextDisplayTime = new Date(dailies[1].displayTime).getTime();
+        }
+
+        const delay = nextDisplayTime - now;
+        if (dailies[0].previewURL) {
+          setCastPreviewURL(dailies[0].previewURL);
+        }
+
+        startInterval(delay);
+      }
+    } catch (error) {
+      console.error(error);
     }
   };
 
   const startInterval = (duration: number) => {
     clearTimer();
     intervalRef.current = setInterval(() => {
-      handleCastDaily();
+      handleCastDaily().catch((error: unknown) => {
+        console.error(error);
+      });
     }, duration);
   };
 
@@ -142,7 +160,7 @@ export default function DailyClient() {
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
-      <ArtworkPlayer previewURL={castPreviewURL!} />
+      {castPreviewURL && <ArtworkPlayer previewURL={castPreviewURL} />}
     </div>
   );
 }

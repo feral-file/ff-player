@@ -2,32 +2,34 @@ import { Artwork } from '../utils/types';
 import { gql } from '@apollo/client';
 import createApolloClient from '@/utils/ApolloClient';
 import axios from 'axios';
+import { IndexerToken } from '@/models';
 
 class ArtworkService {
   public async getFeaturedArtworks(): Promise<Artwork[]> {
     const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_API_URL!}/api/artworks/featured`
+      `${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/artworks/featured`
     );
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const artworks = response.data.result as Artwork[];
-    if (artworks) {
-      for (let artwork of artworks) {
-        artwork.artistAlias = await this.fetchArtist(artwork?.series?.artistID);
-      }
+    for (const artwork of artworks) {
+      artwork.artistAlias = await this.fetchArtist(artwork.series?.artistID);
     }
     return artworks;
   }
 
-  private fetchArtist = async (artistID?: string) => {
+  private fetchArtist = async (artistID?: string): Promise<string> => {
     const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_API_URL!}/api/accounts/${artistID}`
+      `${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/accounts/${artistID ?? ''}`
     );
 
-    return response.data.result.alias;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
+    return response.data.result.alias ?? '';
   };
 
-  public queryTokens = async (ids: string[]) => {
+  public async queryTokens(ids: string[]): Promise<IndexerToken[]> {
     try {
       const client = createApolloClient();
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const { data } = await client.query({
         query: gql`{tokens(ids: ["${ids.join('","')}"], offset: 0, size: 10)
               {
@@ -135,14 +137,14 @@ class ArtworkService {
               }
             }`,
       });
-      console.log('NFT Tokens:', JSON.stringify(data));
-      return data;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
+      return data.tokens;
     } catch (error) {
       console.log('Error querying tokens:', JSON.stringify(error));
     }
 
-    return null;
-  };
+    return [];
+  }
 }
 
 export default ArtworkService;

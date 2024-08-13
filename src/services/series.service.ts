@@ -1,4 +1,4 @@
-import { Artwork, Exhibition, Series } from '@/models';
+import { Artwork, Exhibition } from '@/models';
 import axios from 'axios';
 
 const cloudFlareHostingDomain = 'imagedelivery.net';
@@ -8,9 +8,9 @@ export class SeriesService {
   public async getArtworkOfSeries(seriesID: string): Promise<Artwork[]> {
     try {
       const response = await axios.get<{ result: Artwork[] }>(
-        `${process.env.NEXT_PUBLIC_API_URL!}/api/artworks?seriesID=${seriesID}`
+        `${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/artworks?seriesID=${seriesID}`
       );
-      return response.data?.result;
+      return response.data.result;
     } catch (error) {
       console.log('Failed to load artworks of series:', error);
       return [];
@@ -27,20 +27,20 @@ export class SeriesService {
       }
 
       const response = await axios.get<{ result: Artwork }>(
-        `${process.env.NEXT_PUBLIC_API_URL!}/api/artworks/${id}`
+        `${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/artworks/${id}`
       );
-      return response.data?.result;
+      return response.data.result;
     } catch (error) {
       console.log('Failed to load artwork:', error);
       return {};
     }
   }
 
-  private async getSourceArtwork(artworkID: string, exhibition: Exhibition) {
+  private getSourceArtwork(artworkID: string, exhibition: Exhibition) {
     const listArtworks =
       exhibition.series?.flatMap(series => series.artworks ?? []) ?? [];
 
-    const artwork = listArtworks.find(artwork => artwork?.id === artworkID);
+    const artwork = listArtworks.find(artwork => artwork.id === artworkID);
 
     if (artwork) {
       artwork.series = exhibition.series?.find(
@@ -52,9 +52,9 @@ export class SeriesService {
   }
 
   public getArtworkPreview(artwork: Artwork) {
-    let previewUrl =
-      artwork.metadata?.alternativePreviewURI ||
-      artwork.metadata?.previewCloudFlareURL ||
+    const previewUrl =
+      artwork.metadata?.alternativePreviewURI ??
+      artwork.metadata?.previewCloudFlareURL ??
       artwork.previewURI;
 
     return previewUrl && this.transformPreviewSrc(previewUrl);
@@ -74,6 +74,6 @@ export class SeriesService {
       return src;
     }
 
-    return process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL! + '/' + src;
+    return process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? '' + '/' + src;
   }
 }
