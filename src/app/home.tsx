@@ -25,8 +25,8 @@ import { AppContext } from '@/context/AppContext';
 import ArtworkService from '@/services/ArtworkService';
 import DailyService from '@/services/DailyService';
 import OnboardingPage from '@/components/OnboardingPage';
-import MessageModal from '@/components/MessageModal';
 import ArtworkPlayer from '@/components/artworkPlayer';
+import MessageModal from '@/components/messageModal';
 
 const enum CastState {
   None, // Not casting
