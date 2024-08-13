@@ -44,6 +44,7 @@ const Home: React.FC = () => {
 
   const data = context.data;
   const { locationID, topicID, castInfo, canvasService } = data;
+  const isOnline = context.isOnline;
 
   const router = useRouter();
   const pathName = usePathname();
@@ -85,11 +86,10 @@ const Home: React.FC = () => {
   const indexRef = useRef<number>(-1);
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
-  const [isOnline, setIsOnline] = useState<boolean>(true);
 
   const query = useSearchParams();
   useEffect(() => {
-    const platform = query.get('platform') ?? '';
+    const platform = query?.get('platform') ?? '';
     localStorage.setItem('platform', platform);
   });
 
@@ -128,10 +128,6 @@ const Home: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    function updateNetworkStatus() {
-      setIsOnline(navigator.onLine);
-    }
-
     if (typeof window !== 'undefined') {
       const browser = detect() as BrowserInfo;
       if (browser) {
@@ -154,14 +150,6 @@ const Home: React.FC = () => {
       };
 
       resizeHandler();
-
-      window.addEventListener('online', updateNetworkStatus);
-      window.addEventListener('offline', updateNetworkStatus);
-
-      return () => {
-        window.removeEventListener('online', updateNetworkStatus);
-        window.removeEventListener('offline', updateNetworkStatus);
-      };
     }
   }, []);
 

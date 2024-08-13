@@ -220,12 +220,12 @@ class CanvasService {
       return { ok: false };
     }
 
-    this.castInfo = {
+    this.setCastInfo({
       ...this.castInfo,
       exhibitionId: request.exhibitionId,
       catalogId: request.catalogId,
       catalog: request.catalog,
-    };
+    });
     return { ok: true };
   }
 
