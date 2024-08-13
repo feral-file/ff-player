@@ -108,7 +108,9 @@ const Home: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = () => {
       console.log('Key pressed');
-      handleNavigateDaily();
+      setTimeout(() => {
+        router.push('/daily');
+      }, 100);
       // if (castStatusRef.current) {
       //   refreshData();
       //   if (canvasService?.current != null) {
