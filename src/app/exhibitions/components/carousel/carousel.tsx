@@ -140,7 +140,8 @@ const Carousel: React.FC<CarouselProps> = ({
                   Close up
                 </p>
                 {item.thumbUrls?.length && (
-                  <div className={styles.thumbnail}>
+                  <div
+                    className={`${styles.thumbnail} ${viewMode === ViewMode.landscape ? styles.landscapeThumbnail : styles.portraitThumbnail}`}>
                     <QueuingImages urls={item.thumbUrls} alt="thumbnail" />
                   </div>
                 )}
