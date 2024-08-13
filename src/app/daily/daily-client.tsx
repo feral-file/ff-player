@@ -19,25 +19,16 @@ export default function DailyClient() {
   const [dailies, setDailies] = useState<Daily[]>([]);
 
   useEffect(() => {
-    try {
-      (window as any).AppState.postMessage(
-        JSON.stringify({
-          handler: 'backAbleChanged',
-          data: true,
-        })
-      );
-    } catch (error) {}
-
-    const handleEscapeKey = () => {
+    const handleKeyDown = () => {
       history.back();
     };
 
-    EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
-    EventEmitter.subscribe(Event.escape, handleEscapeKey);
+    EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
+    EventEmitter.subscribe(Event.keyDown, handleKeyDown);
 
     // Cleanup the event listener on component unmount
     return () => {
-      EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+      EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
     };
   }, []);
 

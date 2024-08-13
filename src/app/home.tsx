@@ -92,35 +92,19 @@ const Home: React.FC = () => {
   });
 
   useEffect(() => {
-    castStatusRef.current = castStatus;
-    try {
-      (window as any).AppState.postMessage(
-        JSON.stringify({
-          handler: 'backAbleChanged',
-          data: castStatusRef.current,
-        })
-      );
-    } catch (error) {}
-  }, [castStatus]);
-
-  useEffect(() => {
-    const handleEscapeKey = () => {
-      console.log('Escape key pressed');
-      if (castStatusRef.current) {
-        refreshData();
-        if (canvasService?.current != null) {
-          canvasService?.current?.disconnect({});
-        }
-        clearTimer();
-      }
+    const handleKeyDown = () => {
+      console.log('Key pressed');
+      setTimeout(() => {
+        router.push('/daily');
+      }, 100);
     };
 
-    EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
-    EventEmitter.subscribe(Event.escape, handleEscapeKey);
+    EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
+    EventEmitter.subscribe(Event.keyDown, handleKeyDown);
 
     // Cleanup the event listener on component unmount
     return () => {
-      EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+      EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
     };
   }, []);
 
