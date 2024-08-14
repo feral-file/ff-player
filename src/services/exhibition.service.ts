@@ -1,6 +1,6 @@
-import axios from 'axios';
 import { SOURCE_EXHIBITION_ID } from '@/utils/constants';
 import { Exhibition, Series } from '@/models';
+import axiosInstance from './axiosService';
 
 export class ExhibitionService {
   public async getExhibition(id: string) {
@@ -9,11 +9,10 @@ export class ExhibitionService {
         return await this.getSourceExhibition();
       }
 
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL!}/api/exhibitions/${id}`
-      );
+      const response = await axiosInstance.get(`/api/exhibitions/${id}`);
       console.log('response', response);
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const exhibition = response.data.result as Exhibition;
       return exhibition;
     } catch (error) {
@@ -24,13 +23,13 @@ export class ExhibitionService {
   private async getSourceExhibition(): Promise<Exhibition | undefined> {
     try {
       console.log(
-        `${process.env
-          .NEXT_PUBLIC_PUB_DOC_URL!}/source_exhibition/exhibition.json`
+        `${
+          process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
+        }/source_exhibition/exhibition.json`
       );
 
-      const response = await axios.get(
-        `${process.env
-          .NEXT_PUBLIC_PUB_DOC_URL!}/source_exhibition/exhibition.json`
+      const response = await axiosInstance.get(
+        '/source_exhibition/exhibition.json'
       );
       console.log('response', response);
 
@@ -49,8 +48,8 @@ export class ExhibitionService {
 
   private async getSourceSeries(): Promise<Series[] | undefined> {
     try {
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_PUB_DOC_URL!}/source_exhibition/series.json`
+      const response = await axiosInstance.get(
+        '/source_exhibition/series.json'
       );
       console.log('response', response);
 

@@ -20,14 +20,12 @@ interface WebSocketMessage {
   canvasService: MutableRefObject<CanvasService>;
 }
 
-export let isFirstOpen: boolean | null = null;
-
 export const AppContext = createContext<AppContextValue | undefined>(undefined);
 
 export const AppProvider = ({ children }: AppContextProps) => {
   const data = useWebSocket(
-    `${process.env.NEXT_PUBLIC_WEBSOCKET_URL!}/api/connection`,
-    process.env.NEXT_PUBLIC_API_KEY!
+    `${process.env.NEXT_PUBLIC_WEBSOCKET_URL ?? ''}/api/connection`,
+    process.env.NEXT_PUBLIC_API_KEY ?? ''
   );
 
   return (

@@ -1,22 +1,22 @@
 // @ts-check
-import { fixupPluginRules } from '@eslint/compat'
-import { FlatCompat } from '@eslint/eslintrc'
-import eslint from '@eslint/js'
-import tseslint from 'typescript-eslint'
+import { fixupPluginRules } from '@eslint/compat';
+import { FlatCompat } from '@eslint/eslintrc';
+import eslint from '@eslint/js';
+import tseslint from 'typescript-eslint';
 
 // NOTE: This is a workaround for ESLint plugins that have not been updated to use the new ESLint 9 flat config format.
 // See https://github.com/vercel/next.js/issues/64409
 function fixCompatibility(...configNames) {
-  return new FlatCompat().extends(...configNames).map((entry) => {
-    const plugins = entry.plugins
+  return new FlatCompat().extends(...configNames).map(entry => {
+    const plugins = entry.plugins;
     for (const key in plugins) {
       // eslint-disable-next-line no-prototype-builtins
       if (plugins.hasOwnProperty(key)) {
-        plugins[key] = fixupPluginRules(plugins[key])
+        plugins[key] = fixupPluginRules(plugins[key]);
       }
     }
-    return entry
-  })
+    return entry;
+  });
 }
 
 export default tseslint.config(
@@ -48,6 +48,14 @@ export default tseslint.config(
     ...tseslint.configs.disableTypeChecked,
   },
   {
-    ignores: ['.next/**/*', 'node_modules/**/*', 'dist/**/*', 'build/**/*', 'coverage/**/*'],
+    ignores: [
+      '.next/**/*',
+      'node_modules/**/*',
+      'dist/**/*',
+      'build/**/*',
+      'coverage/**/*',
+      'out/*',
+      'postcss.config.mjs',
+    ],
   }
-)
+);
