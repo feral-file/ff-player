@@ -2,11 +2,15 @@ import axios from 'axios';
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class AppService {
-  private static instance: AppService;
+  private static instance: AppService | null = null;
   private static currentVersion: string;
   private static isFirstOpen?: boolean = undefined;
 
   public static getInstance(): AppService {
+    if (!AppService.instance) {
+      AppService.instance = new AppService();
+    }
+
     return AppService.instance;
   }
 

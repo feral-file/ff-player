@@ -61,8 +61,13 @@ class CanvasService {
   public async processMessage(event: MessageEvent) {
     console.log('processMessage', JSON.stringify(event));
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument
-    const webSocketMessage: WebSocketMessage = JSON.parse(event.data);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    const webSocketMessage = JSON.parse(event.data) as WebSocketMessage | null;
+    if (!webSocketMessage) {
+      console.error('Invalid message:', JSON.stringify(event.data));
+      return;
+    }
+
     if (!webSocketMessage.message) {
       console.error('Invalid message:', JSON.stringify(event.data));
       return;

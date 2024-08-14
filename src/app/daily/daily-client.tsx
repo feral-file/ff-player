@@ -25,14 +25,11 @@ export default function DailyClient() {
       history.back();
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     EventEmitter.subscribe(Event.keyDown, handleKeyDown);
 
     // Cleanup the event listener on component unmount
     return () => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
     };
   }, []);
@@ -46,7 +43,7 @@ export default function DailyClient() {
     handleCastDaily().catch((error: unknown) => {
       console.error(error);
     });
-  });
+  }, []);
 
   const getTokenID = (d: Daily) => {
     switch (d.blockchain) {

@@ -51,8 +51,8 @@ export class PostService {
         }/configs/postcard/postcard_configs.json`
       );
 
-      const jg043Section = response.data as Jg043CustomPosts;
-      if (jg043Section.john_gerrard.custom_notes.length) {
+      const jg043Section = response.data as Jg043CustomPosts | null;
+      if (jg043Section?.john_gerrard?.custom_notes?.length) {
         const posts: Post[] = jg043Section.john_gerrard.custom_notes.map(
           note => {
             return {

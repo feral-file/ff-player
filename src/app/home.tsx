@@ -55,7 +55,6 @@ const Home: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>();
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [currentArtwork, setCurrentArtwork] = useState<Artwork | null>(null);
-  const castStatusRef = useRef(false);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [playlist, setPlaylist] = useState<PlaylistToken[]>([]);
@@ -119,8 +118,12 @@ const Home: React.FC = () => {
     }
 
     if (typeof window !== 'undefined') {
-      const browser = detect() as BrowserInfo;
-      setDeviceName(`${browser.os ?? ''} - ${browser.name} ${browser.version}`);
+      const browser = detect() as BrowserInfo | null;
+      if (browser) {
+        setDeviceName(
+          `${browser.os ?? ''} - ${browser.name} ${browser.version}`
+        );
+      }
 
       const resizeHandler = () => {
         let minSize;
