@@ -1,17 +1,19 @@
-import Image from 'next/image';
+import { AppContext } from '@/context/AppContext';
 import QRCode from 'qrcode.react';
+import Image from 'next/image';
+import { useContext } from 'react';
 
 const OnboardingPage = ({
-  screenRatio,
   branchLink,
   connectedDeviceName,
   displayName,
 }: {
-  screenRatio: number;
   branchLink: string;
   connectedDeviceName: string;
   displayName: string;
 }) => {
+  const screenRatio = useContext(AppContext)?.deviceRotation?.screenRatio ?? 1;
+
   return (
     <div
       style={{

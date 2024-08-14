@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AppProvider } from '../context/AppContext';
+import LostConnectionModal from '@/components/LostConnectionModal';
+import AppWrapper from '@/components/AppWrapper';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -19,7 +21,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <AppProvider>{children}</AppProvider>
+        <AppProvider>
+          <AppWrapper>
+            <LostConnectionModal></LostConnectionModal>
+            {children}
+          </AppWrapper>
+        </AppProvider>
       </body>
     </html>
   );

@@ -1,25 +1,26 @@
 import { Artwork, ViewMode } from '@/utils/types';
 import Image from 'next/image';
 import QRCode from 'qrcode.react';
-import ArtworkPlayer from '../components/artworkPlayer';
-import { useEffect, useState } from 'react';
+import ArtworkPlayer from './ArtworkPlayer';
+import { useContext, useEffect, useState } from 'react';
 import clsx from 'clsx';
 import styles from '../styles/global.module.scss';
+import { AppContext } from '@/context/AppContext';
 
 const HomePage = ({
-  screenRatio,
-  viewMode,
   deviceName,
   branchLink,
   currentArtwork,
 }: {
-  screenRatio: number;
-  viewMode: ViewMode;
   deviceName: string;
   branchLink: string;
   currentArtwork?: Artwork;
 }) => {
   const [previewURL, setPreviewURL] = useState<string | null>(null);
+  const { screenRatio, viewMode } = useContext(AppContext)?.deviceRotation ?? {
+    screenRatio: 1,
+    viewMode: ViewMode.landscape,
+  };
 
   useEffect(() => {
     const formatPreviewURL = (previewURI: string) => {

@@ -1,27 +1,24 @@
 'use client';
 
 import { Exhibition, ExhibitionType, Post, Artwork } from '@/models';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import styles from './exhibition.module.scss';
 import './exhibition.module.scss';
 import { ExhibitionCatalog, ViewMode } from '@/utils/types';
 import Carousel from './components/carousel/carousel';
-import ArtworkPlayer from '@/components/artworkPlayer';
+import ArtworkPlayer from '@/components/ArtworkPlayer';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
 import Image from 'next/image';
+import { AppContext } from '@/context/AppContext';
 
 const ExhibitionHall = ({
   exhibitionID,
   catalogID,
   screen,
-  viewMode,
-  screenRatio,
 }: {
   exhibitionID: string | undefined;
   catalogID: string | undefined;
   screen: ExhibitionCatalog | undefined;
-  viewMode: ViewMode;
-  screenRatio: number;
 }) => {
   const [pageSection, setSection] = useState<ExhibitionCatalog>(
     ExhibitionCatalog.home
@@ -35,6 +32,10 @@ const ExhibitionHall = ({
   const exhibitionService = useRef(new ExhibitionService());
   const seriesService = useRef(new SeriesService());
   const postService = useRef(new PostService());
+  const { screenRatio, viewMode } = useContext(AppContext)?.deviceRotation ?? {
+    screenRatio: 1,
+    viewMode: ViewMode.landscape,
+  };
 
   const FERAL_FILE_ASSET_URL =
     process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? '' + '/';
@@ -202,7 +203,6 @@ const ExhibitionHall = ({
                   ExhibitionCatalog.curatorNote,
                   ExhibitionCatalog.resource,
                 ].includes(pageSection)}
-                viewMode={viewMode}
                 screenRatio={screenRatio}></Carousel>
             </div>
           </div>
