@@ -237,6 +237,7 @@ export interface Daily {
   contractAddress: string;
   displayTime: string;
   tokenID: string;
+  tokenName: string;
   previewURL?: string;
 }
 

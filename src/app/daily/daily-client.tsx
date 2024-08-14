@@ -5,6 +5,12 @@ import { IndexerToken } from '@/models';
 import ArtworkService from '@/services/ArtworkService';
 import DailyService from '@/services/DailyService';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
+import { getIndexerTokenName } from '@/utils/indexer';
+import {
+  MixpanelEventName,
+  trackDailyEvent,
+  trackTimeEvent,
+} from '@/utils/mixpanel';
 import { Daily } from '@/utils/types';
 import { useEffect, useRef, useState } from 'react';
 
@@ -19,6 +25,7 @@ export default function DailyClient() {
 
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [dailies, setDailies] = useState<Daily[]>([]);
+  const dailiesRef = useRef<Daily[]>(dailies);
 
   useEffect(() => {
     const handleKeyDown = () => {
@@ -30,6 +37,7 @@ export default function DailyClient() {
 
     // Cleanup the event listener on component unmount
     return () => {
+      _trackDailyEvent(true);
       EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
     };
   }, []);
@@ -98,13 +106,22 @@ export default function DailyClient() {
       });
 
       const dailies = daily.map((d: Daily) => {
+        let tokenName = '';
+        const token = data.find(
+          (token: IndexerToken) => d.tokenID === token.id
+        );
+        if (token) {
+          tokenName = getIndexerTokenName(token);
+        }
         return {
           ...d,
           previewURL: previewData.get(d.tokenID),
+          tokenName,
         };
       });
 
       if (dailies.length > 0) {
+        dailiesRef.current = dailies;
         const now = Date.now();
         const currentDisplayTime = new Date(dailies[0].displayTime);
         let nextDisplayTime = currentDisplayTime.setDate(
@@ -116,6 +133,7 @@ export default function DailyClient() {
 
         const delay = nextDisplayTime - now;
         if (dailies[0].previewURL) {
+          trackTimeEvent(MixpanelEventName.CastArtworkEventName);
           setCastPreviewURL(dailies[0].previewURL);
         }
 
@@ -132,6 +150,7 @@ export default function DailyClient() {
       handleCastDaily().catch((error: unknown) => {
         console.error(error);
       });
+      _trackDailyEvent();
     }, duration);
   };
 
@@ -139,6 +158,16 @@ export default function DailyClient() {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = undefined;
+    }
+  };
+
+  const _trackDailyEvent = (isSendBeacon?: boolean) => {
+    if (dailiesRef.current.length > 0) {
+      trackDailyEvent(
+        dailiesRef.current[0].tokenID,
+        dailiesRef.current[0].tokenName,
+        isSendBeacon
+      );
     }
   };
 

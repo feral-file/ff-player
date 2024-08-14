@@ -4,6 +4,7 @@ import { AppSettings } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
+import { initMixpanel } from '@/utils/mixpanel';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { Orientation } from '@/utils/types';
 import { usePathname, useRouter } from 'next/navigation';
@@ -27,6 +28,13 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
   const pathName = usePathname();
   const router = useRouter();
+
+  // Init Mixpanel
+  useEffect(() => {
+    initMixpanel().catch((error: unknown) => {
+      console.log(error);
+    });
+  }, []);
 
   // Initialize platform events
   // eslint-disable-next-line react-hooks/rules-of-hooks
