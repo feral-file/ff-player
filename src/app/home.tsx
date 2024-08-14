@@ -643,29 +643,29 @@ const Home: React.FC = () => {
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (castInfo?.dataChecked && !castInfo.castCommand) {
+      const handleNavigateDaily = () => {
+        const isFirstOpenQuery = query.get('isFirstOpen');
+        if (isFirstOpenQuery === 'false') {
+          AppService.setIsFirstOpen(false);
+          return;
+        }
+
+        const isFirstOpen = AppService.getIsFirstOpen(pathName);
+        if (isFirstOpen) {
+          AppService.setIsFirstOpen(false);
+          router.replace('/?isFirstOpen=false');
+          setTimeout(() => {
+            router.push('/daily');
+          }, 100);
+        }
+      };
+
       handleNavigateDaily();
     }
-  }, [castInfo]);
+  }, [castInfo, pathName, query, router]);
 
   const castExhibition = () => {
     setCastState(CastState.Exhibition);
-  };
-
-  const handleNavigateDaily = () => {
-    const isFirstOpenQuery = query.get('isFirstOpen');
-    if (isFirstOpenQuery === 'false') {
-      AppService.setIsFirstOpen(false);
-      return;
-    }
-
-    const isFirstOpen = AppService.getIsFirstOpen(pathName);
-    if (isFirstOpen) {
-      AppService.setIsFirstOpen(false);
-      router.replace('/?isFirstOpen=false');
-      setTimeout(() => {
-        router.push('/daily');
-      }, 100);
-    }
   };
 
   return (
