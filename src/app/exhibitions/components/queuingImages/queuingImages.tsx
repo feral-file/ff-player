@@ -39,9 +39,10 @@ const QueuingImages: React.FC<QueuingImagesProps> = ({ urls, alt }) => {
           <Image
             src={currentUrl}
             alt={alt}
-            layout="fill"
             objectFit="contain"
             onLoad={handleImageLoading}
+            width={500}
+            height={500}
           />
         </div>
       )}
