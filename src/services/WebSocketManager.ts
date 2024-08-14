@@ -4,8 +4,6 @@ import CanvasService from './CanvasService';
 import { LocalStorageItem } from '@/constants';
 import { CastInfo } from '@/utils/types';
 
-let webSocketInstance: any = null;
-
 const useWebSocket = (url: string, apiKey: string) => {
   const [locationID, setLocationID] = useState<string | null>(null);
   const [topicID, setTopicID] = useState<string | null>(null);
@@ -29,7 +27,7 @@ const useWebSocket = (url: string, apiKey: string) => {
 
       const castInfo = localStorage.getItem(LocalStorageItem.castInfo);
       if (castInfo) {
-        canvasService.current.setCastInfo(JSON.parse(castInfo));
+        canvasService.current.setCastInfo(JSON.parse(castInfo) as CastInfo);
         setCastInfo({
           ...JSON.parse(castInfo),
           dataChecked: true,
@@ -43,20 +41,29 @@ const useWebSocket = (url: string, apiKey: string) => {
         console.log('WebSocket connected');
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
       ws.current.onmessage = async event => {
-        const data = JSON.parse(event.data);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const data = JSON.parse(event.data as string);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         if (data.messageID === 'system') {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
           setLocationID(data.message.locationID);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
           setTopicID(data.message.topicID);
           localStorage.setItem(
             LocalStorageItem.locationID,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
             data.message.locationID
           );
-          localStorage.setItem(LocalStorageItem.topicID, data.message.topicID);
-        } else {
-          const responseMessage = await canvasService.current.processMessage(
-            event
+          localStorage.setItem(
+            LocalStorageItem.topicID,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            data.message.topicID as string
           );
+        } else {
+          const responseMessage =
+            await canvasService.current.processMessage(event);
           setCastInfo(canvasService.current.getCastInfo());
           if (responseMessage) {
             ws.current?.send(JSON.stringify(responseMessage));

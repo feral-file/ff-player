@@ -1,11 +1,10 @@
-import axios from 'axios';
 import { Daily } from '../utils/types';
+import axiosInstance from './axiosService';
 
 class DailyService {
   public async getUpcomingDaily(): Promise<Daily[]> {
-    const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_API_URL!}/api/dailies/upcoming`
-    );
+    const response = await axiosInstance.get('/api/dailies/upcoming');
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     return response.data.result as Daily[];
   }
 }

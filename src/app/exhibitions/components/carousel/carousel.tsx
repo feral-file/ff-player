@@ -1,15 +1,14 @@
 import { Post, PostType } from '@/models';
-import { SwiperOptions } from 'swiper/types';
-import Swiper from 'swiper';
+import { Swiper as SwiperType } from 'swiper/types';
 import 'swiper/scss';
 import 'swiper/scss/effect-coverflow';
 import 'swiper/scss/effect-fade';
 import styles from './carousel.module.scss';
 import { formatDateTime } from '@/utils/ui/formatDate';
 import { useEffect, useState } from 'react';
-import { setTimeout } from 'timers';
 import { ViewMode } from '@/utils/types';
 import QueuingImages from '../queuingImages/queuingImages';
+import { Swiper, SwiperSlide } from 'swiper/react';
 
 interface CarouselProps {
   items: Post[];
@@ -22,35 +21,14 @@ interface CarouselProps {
 const Carousel: React.FC<CarouselProps> = ({
   items,
   index,
-  onLoad,
   viewMode,
   screenRatio,
 }) => {
-  const [loading, setLoading] = useState(true);
-  const swiperParams: SwiperOptions = {
-    effect: 'coverflow',
-    spaceBetween: 250,
-    slidesPerView: 1.55,
-    centeredSlides: true,
-    coverflowEffect: {
-      rotate: 0,
-      stretch: 0,
-      depth: 480,
-      modifier: 1,
-      slideShadows: false,
-      scale: 0.5,
-    },
-    loop: false,
+  const [swiper, setSwiper] = useState<SwiperType | null>(null);
+  const [spaceBetween, setSpaceBetween] = useState(250);
+  const handleSwiper = (swiperInstance: SwiperType) => {
+    setSwiper(swiperInstance);
   };
-  if (viewMode === ViewMode.landscape) {
-    swiperParams.spaceBetween = 250 * screenRatio;
-    swiperParams.coverflowEffect!.depth = 480 * screenRatio;
-  } else {
-    swiperParams.spaceBetween = 50 * screenRatio;
-    swiperParams.coverflowEffect!.depth = 100 * screenRatio;
-  }
-
-  const [swiper, setSwiper] = useState<Swiper | null>(null);
 
   useEffect(() => {
     for (const item of items) {
@@ -64,163 +42,164 @@ const Carousel: React.FC<CarouselProps> = ({
 
   useEffect(() => {
     if (!swiper) {
-      const s = new Swiper('.swiper', swiperParams);
-      setSwiper(s);
-
-      s.slideTo(index);
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      (swiperInstance: SwiperType) => {
+        setSwiper(swiperInstance);
+      };
     } else {
       swiper.slideTo(index);
     }
-  }, [index]);
+  }, [index, swiper]);
 
   useEffect(() => {
-    setTimeout(() => {
-      setLoading(false);
-    }, 500);
-  }, [onLoad]);
-
-  useEffect(() => {
-    if (swiper && swiperParams) {
-      if (viewMode === ViewMode.landscape) {
-        swiper.originalParams.spaceBetween = 250 * screenRatio;
-        swiper.originalParams.coverflowEffect!.depth = 480 * screenRatio;
-      } else {
-        swiper.originalParams.spaceBetween = 50 * screenRatio;
-        swiper.originalParams.coverflowEffect!.depth = 100 * screenRatio;
-      }
-
-      swiper.update();
+    if (viewMode === ViewMode.landscape) {
+      setSpaceBetween(250 * screenRatio);
+    } else {
+      setSpaceBetween(50 * screenRatio);
     }
-  }, [viewMode]);
+  }, [viewMode, screenRatio]);
 
   return (
-    <div className="swiper" style={{ height: '100%' }}>
-      <div className="swiper-wrapper">
-        {items.map((item, index) => {
-          return (
-            <div
-              key={index}
-              className="swiper-slide"
-              style={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}>
-              {(item.type === PostType.ArtistNote ||
-                item.type === PostType.CuratorNote) && (
-                <div
-                  className={styles.card}
-                  style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
+    <Swiper
+      onSwiper={handleSwiper}
+      effect="coverflow"
+      spaceBetween={spaceBetween}
+      slidesPerView={1.55}
+      centeredSlides={true}
+      coverflowEffect={{
+        rotate: 0,
+        stretch: 0,
+        depth: 250,
+        modifier: 1,
+        slideShadows: false,
+        scale: 0.5,
+      }}
+      loop={false}
+      style={{ height: '100%' }}>
+      {items.map(item => {
+        return (
+          <SwiperSlide
+            key={item.id}
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}>
+            {(item.type === PostType.ArtistNote ||
+              item.type === PostType.CuratorNote) && (
+              <div
+                className={styles.card}
+                style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
+                <p
+                  className={styles.type}
+                  style={{ fontSize: 22 * screenRatio }}>
+                  {item.type}
+                </p>
+                <p
+                  className={styles.postTitle}
+                  style={{ fontSize: 32 * screenRatio }}>
+                  {item.title}
+                </p>
+                <p
+                  className={styles.content}
+                  style={{ fontSize: 32 * screenRatio }}
+                  dangerouslySetInnerHTML={{ __html: item.content ?? '' }}></p>
+              </div>
+            )}
+
+            {item.type === PostType.J043Custom && (
+              <div
+                className={styles.card}
+                style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
+                <p
+                  className={styles.type}
+                  style={{ fontSize: 32 * screenRatio }}>
+                  {item.title}
+                </p>
+                <p
+                  className={styles.content}
+                  style={{ fontSize: 32 * screenRatio }}
+                  dangerouslySetInnerHTML={{ __html: item.content ?? '' }}></p>
+              </div>
+            )}
+
+            {item.type === PostType.CloseUp && (
+              <div
+                className={styles.card}
+                style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
+                <p
+                  className={styles.type}
+                  style={{ fontSize: 22 * screenRatio }}>
+                  Close up
+                </p>
+                {item.thumbUrls?.length && (
+                  <div
+                    className={`${styles.thumbnail} ${viewMode === ViewMode.landscape ? styles.landscapeThumbnail : styles.portraitThumbnail}`}>
+                    <QueuingImages urls={item.thumbUrls} alt="thumbnail" />
+                  </div>
+                )}
+                <p
+                  className={styles.postTitle}
+                  style={{ fontSize: 32 * screenRatio }}>
+                  {item.title}
+                </p>
+                {item.author && (
                   <p
-                    className={styles.type}
-                    style={{ fontSize: 22 * screenRatio }}>
-                    {item.type}
+                    className={styles.subContent}
+                    style={{ fontSize: 26 * screenRatio }}>
+                    by {item.author}
                   </p>
-                  <p
-                    className={styles.postTitle}
-                    style={{ fontSize: 32 * screenRatio }}>
-                    {item.title}
-                  </p>
-                  <p
+                )}
+              </div>
+            )}
+
+            {[
+              PostType.Event,
+              PostType.News,
+              PostType.Schedule,
+              PostType.WhitePaper,
+            ].includes(item.type) && (
+              <div
+                className={styles.card}
+                style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
+                <p
+                  className={`${styles.type} ${styles.capitalizedFirstChar}`}
+                  style={{ fontSize: 22 * screenRatio }}>
+                  {item.type === PostType.WhitePaper
+                    ? 'White paper'
+                    : item.type}
+                </p>
+                {item.thumbUrls?.length && (
+                  <div className={styles.thumbnail}>
+                    <QueuingImages urls={item.thumbUrls} alt="thumbnail" />
+                  </div>
+                )}
+                <p
+                  className={styles.postTitle}
+                  style={{ fontSize: 32 * screenRatio }}>
+                  {item.title}
+                </p>
+                {item.date && item.time && (
+                  <div
                     className={styles.content}
-                    style={{ fontSize: 32 * screenRatio }}
-                    dangerouslySetInnerHTML={{ __html: item.content! }}></p>
-                </div>
-              )}
-
-              {item.type === PostType.J043Custom && (
-                <div
-                  className={styles.card}
-                  style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
-                  <p
-                    className={styles.type}
                     style={{ fontSize: 32 * screenRatio }}>
-                    {item.title}
-                  </p>
+                    <p>Date: {item.date}</p>
+                    <p>Time: {item.time}</p>
+                  </div>
+                )}
+                {item.author && (
                   <p
-                    className={styles.content}
-                    style={{ fontSize: 32 * screenRatio }}
-                    dangerouslySetInnerHTML={{ __html: item.content! }}></p>
-                </div>
-              )}
-
-              {item.type === PostType.CloseUp && (
-                <div
-                  className={styles.card}
-                  style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
-                  <p
-                    className={styles.type}
-                    style={{ fontSize: 22 * screenRatio }}>
-                    Close up
+                    className={styles.subContent}
+                    style={{ fontSize: 26 * screenRatio }}>
+                    by {item.author}
                   </p>
-                  {item.thumbUrls?.length && (
-                    <div className={styles.thumbnail}>
-                      <QueuingImages urls={item.thumbUrls} alt="thumbnail" />
-                    </div>
-                  )}
-                  <p
-                    className={styles.postTitle}
-                    style={{ fontSize: 32 * screenRatio }}>
-                    {item.title}
-                  </p>
-                  {item.author && (
-                    <p
-                      className={styles.subContent}
-                      style={{ fontSize: 26 * screenRatio }}>
-                      by {item.author}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {[
-                PostType.Event,
-                PostType.News,
-                PostType.Schedule,
-                PostType.WhitePaper,
-              ].includes(item.type) && (
-                <div
-                  className={styles.card}
-                  style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
-                  <p
-                    className={`${styles.type} ${styles.capitalizedFirstChar}`}
-                    style={{ fontSize: 22 * screenRatio }}>
-                    {item.type === PostType.WhitePaper
-                      ? 'White paper'
-                      : item.type}
-                  </p>
-                  {item.thumbUrls?.length && (
-                    <div className={styles.thumbnail}>
-                      <QueuingImages urls={item.thumbUrls} alt="thumbnail" />
-                    </div>
-                  )}
-                  <p
-                    className={styles.postTitle}
-                    style={{ fontSize: 32 * screenRatio }}>
-                    {item.title}
-                  </p>
-                  {item.date && item.time && (
-                    <div
-                      className={styles.content}
-                      style={{ fontSize: 32 * screenRatio }}>
-                      <p>Date: {item.date}</p>
-                      <p>Time: {item.time}</p>
-                    </div>
-                  )}
-                  {item.author && (
-                    <p
-                      className={styles.subContent}
-                      style={{ fontSize: 26 * screenRatio }}>
-                      by {item.author}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+                )}
+              </div>
+            )}
+          </SwiperSlide>
+        );
+      })}
+    </Swiper>
   );
 };
 

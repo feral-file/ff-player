@@ -6,9 +6,9 @@ interface CustomNotes {
 }
 
 interface jg043CustomPostCard {
-  custom_notes: CustomNotes[];
+  custom_notes?: CustomNotes[];
 }
 
 export interface Jg043CustomPosts {
-  john_gerrard: jg043CustomPostCard;
+  john_gerrard?: jg043CustomPostCard;
 }

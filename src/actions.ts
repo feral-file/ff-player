@@ -4,6 +4,6 @@ import { redirect } from 'next/navigation';
 
 // Usage:
 // navigate(`/exhibitions`);
-export async function navigate(url: string) {
+export function navigate(url: string) {
   redirect(url);
 }
