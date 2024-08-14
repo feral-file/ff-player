@@ -1,6 +1,8 @@
+'use client';
+
 import { useEffect, useState } from 'react';
 
-const networkManger = () => {
+const useNetworkManger = () => {
   const [isOnline, setIsOnline] = useState<boolean>(true);
 
   useEffect(() => {
@@ -23,4 +25,4 @@ const networkManger = () => {
   return isOnline;
 };
 
-export default networkManger;
+export default useNetworkManger;
