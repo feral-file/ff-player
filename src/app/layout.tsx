@@ -4,6 +4,7 @@ import './globals.css';
 import { AppProvider } from '../context/AppContext';
 import LostConnectionModal from '@/components/LostConnectionModal';
 import AppWrapper from '@/components/AppWrapper';
+import QrCodePopUp from '@/components/qrCodePopUp';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -24,6 +25,7 @@ export default function RootLayout({
         <AppProvider>
           <AppWrapper>
             <LostConnectionModal></LostConnectionModal>
+            <QrCodePopUp></QrCodePopUp>
             {children}
           </AppWrapper>
         </AppProvider>
