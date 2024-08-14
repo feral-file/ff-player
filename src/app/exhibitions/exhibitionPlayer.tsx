@@ -55,6 +55,17 @@ const ExhibitionHall = ({
     setArtwork(artwork);
   };
 
+  const getPostIndexByID = (id: string) => {
+    if (!posts) {
+      return;
+    }
+
+    const index = posts.findIndex(post => post.id === id);
+    if (index !== -1) {
+      setPostIndex(index);
+    }
+  };
+
   useEffect(() => {
     // fetch exhibition detail
     const fetchExhibitionDetail = async () => {
@@ -88,15 +99,6 @@ const ExhibitionHall = ({
   }, [exhibitionID, exhibitionDetail]);
 
   useEffect(() => {
-    const getPostIndexByID = (id: string) => {
-      if (!posts) {
-        return;
-      }
-
-      const index = posts.findIndex(post => post.id === id);
-      setPostIndex(index);
-    };
-
     if (screen !== undefined) {
       switch (screen) {
         case ExhibitionCatalog.curatorNote:
@@ -118,7 +120,7 @@ const ExhibitionHall = ({
 
       setSection(screen);
     }
-  }, [screen, catalogID, exhibitionDetail, posts]);
+  }, [screen, catalogID, posts]);
 
   return (
     <div

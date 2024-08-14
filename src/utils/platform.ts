@@ -15,9 +15,8 @@ export class KeyEvent extends PlatformEventReceiver {
     super.handlePlatformEvent(event);
     const [keyId, keyLabel] = event.split('_');
     console.log(`Handling key event: ${keyId} - ${keyLabel}`);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
-    if (parseInt(keyId) === KeyCodes.escape) {
-      EventEmitter.emit(Event.escape);
+    if (keyId !== KeyCodes.escape.toString()) {
+      EventEmitter.emit(Event.keyDown);
     }
   }
 }

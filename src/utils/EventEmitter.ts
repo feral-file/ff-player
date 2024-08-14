@@ -3,6 +3,7 @@ type EventHandler = (...args: unknown[]) => void;
 
 export enum Event {
   escape,
+  keyDown,
 }
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class

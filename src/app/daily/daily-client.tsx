@@ -21,32 +21,19 @@ export default function DailyClient() {
   const [dailies, setDailies] = useState<Daily[]>([]);
 
   useEffect(() => {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      const appState = (window as any).AppState;
-      if (appState) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        appState.postMessage(
-          JSON.stringify({
-            handler: 'backAbleChanged',
-            data: true,
-          })
-        );
-      }
-    } catch (error) {
-      console.error(error);
-    }
-
-    const handleEscapeKey = () => {
+    const handleKeyDown = () => {
       history.back();
     };
 
-    EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
-    EventEmitter.subscribe(Event.escape, handleEscapeKey);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    EventEmitter.subscribe(Event.keyDown, handleKeyDown);
 
     // Cleanup the event listener on component unmount
     return () => {
-      EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
     };
   }, []);
 

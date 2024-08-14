@@ -79,30 +79,6 @@ const Home: React.FC = () => {
 
   const query = useSearchParams();
 
-  useEffect(() => {
-    const platform = query.get('platform') ?? '';
-    localStorage.setItem('platform', platform);
-  });
-
-  useEffect(() => {
-    castStatusRef.current = castState !== CastState.None;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      const appState = (window as any).AppState;
-      if (appState) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        appState.postMessage(
-          JSON.stringify({
-            handler: 'backAbleChanged',
-            data: castStatusRef.current,
-          })
-        );
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  }, [castState]);
-
   // Context
   const context = useContext(AppContext);
   if (!context) {
@@ -110,29 +86,31 @@ const Home: React.FC = () => {
   }
 
   const data = context.data;
-  const { locationID, topicID, castInfo, canvasService } = data;
+  const { locationID, topicID, castInfo } = data;
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    const handleEscapeKey = () => {
-      console.log('Escape key pressed');
-      if (castStatusRef.current) {
-        refreshData();
-        canvasService.current.disconnect({}).catch((error: unknown) => {
-          console.error(error);
-        });
-        clearTimer();
-      }
+    const platform = query.get('platform') ?? '';
+    localStorage.setItem('platform', platform);
+  });
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    const handleKeyDown = () => {
+      console.log('Key pressed');
+      setTimeout(() => {
+        router.push('/daily');
+      }, 100);
     };
 
-    EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
-    EventEmitter.subscribe(Event.escape, handleEscapeKey);
+    EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
+    EventEmitter.subscribe(Event.keyDown, handleKeyDown);
 
     // Cleanup the event listener on component unmount
     return () => {
-      EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+      EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
     };
-  }, [canvasService]);
+  }, []);
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
