@@ -16,44 +16,38 @@ import ArtworkPlayer from '../components/artworkPlayer';
 import HomePage from '../components/homePage';
 import OnboardingPage from '../components/onboardingPage';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
+import ExhibitionHall from './exhibitions/exhibitionPlayer';
 import MessageModal from '../components/messageModal';
 import { KeyEvent, DeviceName, Config } from '@/utils/platform';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { AppSettings } from '@/constants';
 import AppService from '@/services/app.service';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AppContext } from '@/context/AppContext';
 import ArtworkService from '@/services/ArtworkService';
 import DailyService from '@/services/DailyService';
+import { IndexerToken } from '@/models';
+
+const enum CastState {
+  None, // Not casting
+  Artwork, // Displaying artwork, playlist, dallies
+  Exhibition, // Displaying exhibition
+}
 
 const STANDARD_HEIGHT = 1080;
 
 const Home: React.FC = () => {
-  const context = useContext(AppContext);
-  if (!context) {
-    return <p>There is no context.</p>;
-  }
-
-  const data = context.data;
-  const { locationID, topicID, castInfo, canvasService } = data;
-
   const router = useRouter();
-  const ranRef = useRef(false);
+  const pathName = usePathname();
 
-  useEffect(() => {
-    if (ranRef.current) {
-      return;
-    }
-
-    if (context.isFirstOpen) {
-      ranRef.current = true;
-      context.setIsFirstOpen(false);
-      router.push('/daily');
-    }
-  }, []);
   const [branchLink, setBranchLink] = useState<string | null>(null);
   const [deviceName, setDeviceName] = useState<string>('');
+
+  // Services
   const artworkService = useRef(new ArtworkService());
+
+  // States
+  const [castState, setCastState] = useState<CastState>(CastState.None);
   const dailyService = useRef(new DailyService());
   const startPlayArtworkTime = useRef<number>(0);
   const endPlayArtworkTime = useRef<number>(0);
@@ -61,8 +55,6 @@ const Home: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>();
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [currentArtwork, setCurrentArtwork] = useState<Artwork | null>(null);
-  const [castStatus, setCastStatus] = useState<boolean | null>(false);
-  const castStatusRef = useRef(castStatus);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [playlist, setPlaylist] = useState<PlaylistToken[]>([]);
@@ -70,7 +62,6 @@ const Home: React.FC = () => {
   const [displayComingSoon, setDisplayComingSoon] = useState<boolean>(false);
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
 
-  const [keyboardCode, setKeyboardCode] = useState<number>(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
@@ -86,11 +77,23 @@ const Home: React.FC = () => {
   const [isOnline, setIsOnline] = useState<boolean>(true);
 
   const query = useSearchParams();
+
+  // Context
+  const context = useContext(AppContext);
+  if (!context) {
+    return <p>There is no context.</p>;
+  }
+
+  const data = context.data;
+  const { locationID, topicID, castInfo } = data;
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     const platform = query.get('platform') ?? '';
     localStorage.setItem('platform', platform);
   });
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     const handleKeyDown = () => {
       console.log('Key pressed');
@@ -108,15 +111,18 @@ const Home: React.FC = () => {
     };
   }, []);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     function updateNetworkStatus() {
       setIsOnline(navigator.onLine);
     }
 
     if (typeof window !== 'undefined') {
-      const browser = detect() as BrowserInfo;
+      const browser = detect() as BrowserInfo | null;
       if (browser) {
-        setDeviceName(`${browser.os} - ${browser.name} ${browser.version}`);
+        setDeviceName(
+          `${browser.os ?? ''} - ${browser.name} ${browser.version}`
+        );
       }
 
       const resizeHandler = () => {
@@ -146,34 +152,42 @@ const Home: React.FC = () => {
     }
   }, []);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    if (locationID && topicID) {
+    if (locationID && topicID && deviceName) {
       DeviceManager.setLocationId(locationID);
       DeviceManager.setTopicId(topicID);
-      DeviceManager.setName(deviceName);
       const generateBranchLink = async () => {
         const url = await DeviceManager.getOrGenerateBranchLink();
         setBranchLink(url);
       };
-      generateBranchLink();
+      generateBranchLink().catch((error: unknown) => {
+        console.error(error);
+      });
     }
   }, [locationID, topicID, deviceName]);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     const fetchArtworks = async () => {
       try {
         const artworks = await artworkService.current.getFeaturedArtworks();
-        if (artworks) {
-          setArtworks(artworks);
-          setCurrentArtwork(artworks[0]);
+        if (artworks.length === 0) {
+          return;
         }
+
+        setArtworks(artworks);
+        setCurrentArtwork(artworks[0]);
       } catch (error) {
         console.log('Error fetching artworks:', JSON.stringify(error));
       }
     };
-    fetchArtworks();
+    fetchArtworks().catch((error: unknown) => {
+      console.error(error);
+    });
   }, []);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (artworks.length > 0) {
       let index = 0;
@@ -182,10 +196,13 @@ const Home: React.FC = () => {
         index = (index + 1) % artworks.length;
       }, 60 * 1000);
 
-      return () => clearInterval(interval);
+      return () => {
+        clearInterval(interval);
+      };
     }
   }, [artworks]);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (castInfo) {
       const handleCastCommand = async () => {
@@ -203,32 +220,36 @@ const Home: React.FC = () => {
                 return;
               }
               try {
-                const data = await artworkService.current.queryTokens(ids);
-                const artworks = castInfo?.artworks;
+                const tokens = await artworkService.current.queryTokens(ids);
+                const artworks = castInfo.artworks;
                 if (!artworks) {
                   return;
                 }
 
-                if (data) {
-                  const previewData: Map<string, string> = new Map();
-                  data.tokens.forEach((token: any) => {
-                    previewData.set(
-                      token.indexID,
-                      token.asset.metadata.project.latest.previewURL
-                    );
-                  });
-                  const updatedArtworks = artworks.map((artwork: any) => {
-                    return {
-                      ...artwork,
-                      previewURL: previewData.get(artwork.token.id),
+                const previewData = new Map<string, string>();
+                tokens.forEach((token: IndexerToken) => {
+                  previewData.set(
+                    token.indexID,
+                    token.asset.metadata.project.latest.previewURL
+                  );
+                });
+                const updatedArtworks = artworks.map(
+                  (artwork: PlayArtworkV2) => {
+                    const aw: PlaylistToken = {
+                      duration: artwork.duration,
+                      previewURL:
+                        previewData.get(artwork.token?.id ?? '') ?? '',
+                      token: artwork.token ?? { id: '' },
                     };
-                  });
-                  setPlaylist(updatedArtworks);
-                  if (castInfo.startTime) {
-                    setStartTime(castInfo.startTime);
-                    const i = getIndex(updatedArtworks, castInfo?.startTime);
-                    setCurrentIndex(i);
+
+                    return aw;
                   }
+                );
+                setPlaylist(updatedArtworks);
+                if (castInfo.startTime) {
+                  setStartTime(castInfo.startTime);
+                  const i = getIndex(updatedArtworks, castInfo.startTime);
+                  setCurrentIndex(i);
                 }
               } catch (error) {
                 console.log(
@@ -239,44 +260,42 @@ const Home: React.FC = () => {
             };
             if (castInfo.artworks) {
               const assetIds = castInfo.artworks.map(
-                (artwork: any) => artwork.token.id
+                (artwork: PlayArtworkV2) => artwork.token?.id ?? ''
               );
-              getNftTokens(assetIds);
+              getNftTokens(assetIds).catch((error: unknown) => {
+                console.error(error);
+              });
             }
             break;
           }
 
           case CastCommand.castExhibition: {
-            // Temporary display coming soon
-            setDisplayComingSoon(true);
-            setTimeout(() => {
-              setDisplayComingSoon(false);
-            }, 1000 * 15);
+            resetCastingStatus();
+            castExhibition();
             break;
           }
 
           case CastCommand.sendKeyboardEvent: {
             console.log('Keyboard Event:', castInfo.value);
-            setKeyboardCode(castInfo.value);
             break;
           }
 
           case CastCommand.connect: {
             if (
               !(await DeviceManager.isPreviouslyConnectedDevice(
-                castInfo?.deviceInfo?.device_id
+                castInfo.deviceInfo?.deviceId ?? ''
               ))
             ) {
               setDisplayOnboarding(true);
-              DeviceManager.addPreviouslyConnectedDeviceId(
-                castInfo?.deviceInfo?.device_id
+              await DeviceManager.addPreviouslyConnectedDeviceId(
+                castInfo.deviceInfo?.deviceId ?? ''
               );
             }
             break;
           }
 
           case CastCommand.castDaily: {
-            handleCastDaily();
+            await handleCastDaily();
             break;
           }
 
@@ -291,7 +310,7 @@ const Home: React.FC = () => {
           }
 
           case CastCommand.moveToArtwork: {
-            handleMoveToArtwork(castInfo.value);
+            handleMoveToArtwork(castInfo.value as string);
             break;
           }
 
@@ -323,51 +342,59 @@ const Home: React.FC = () => {
           }
         }
       };
-      handleCastCommand();
+      handleCastCommand().catch((error: unknown) => {
+        console.error(error);
+      });
     } else {
       refreshData();
     }
   }, [castInfo]);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    (window as any).KeyEvent = {
-      handlePlatformEvent: KeyEvent.handlePlatformEvent,
-    };
-    (window as any).DeviceName = {
-      handlePlatformEvent: DeviceName.handlePlatformEvent,
-    };
-    (window as any).Config = {
-      handlePlatformEvent: Config.handlePlatformEvent,
-    };
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      (window as any).KeyEvent = {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        handlePlatformEvent: KeyEvent.handlePlatformEvent,
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      (window as any).DeviceName = {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        handlePlatformEvent: DeviceName.handlePlatformEvent,
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      (window as any).Config = {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        handlePlatformEvent: Config.handlePlatformEvent,
+      };
+    }
+
     setDidRegisterPlatformEvents(true);
   }, []);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (didRegisterPlatformEvents) {
       console.log('Registering platform events');
-      DeviceManager.getName().then(name => {
-        console.log('Device Name:', name);
-        if (name) {
+      DeviceManager.getName()
+        .then(name => {
+          console.log('Device Name:', name);
           setDeviceName(name);
-        }
-      });
+        })
+        .catch((error: unknown) => {
+          console.error(error);
+        });
     }
   }, [didRegisterPlatformEvents]);
 
-  try {
-    (window as any).AppState.postMessage(
-      JSON.stringify({
-        handler: 'loaded',
-      })
-    );
-  } catch (error) {}
-
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (currentIndex < 0) {
       return;
     }
 
-    if (playlist?.length === 0) {
+    if (playlist.length === 0) {
       return;
     }
 
@@ -380,12 +407,27 @@ const Home: React.FC = () => {
     const index = currentIndex % playlist.length;
     const currentPlaylist = playlist[index];
     setCastPreviewURL(currentPlaylist.previewURL);
-    setCastStatus(true);
+    setCastState(CastState.Artwork);
     const currentTime = Date.now();
     startPlayArtworkTime.current = currentTime;
     endPlayArtworkTime.current = currentTime + currentPlaylist.duration;
     startInterval(currentPlaylist.duration);
   }, [currentIndex, playlist]);
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+    const appState = (window as any).AppState;
+    if (appState) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      appState.postMessage(
+        JSON.stringify({
+          handler: 'loaded',
+        })
+      );
+    }
+  } catch (error) {
+    console.error(error);
+  }
 
   const handleNext = () => {
     const i = (currentIndex + 1) % playlist.length;
@@ -423,7 +465,7 @@ const Home: React.FC = () => {
     });
 
     const i = currentIndex % playlist.length;
-    let remainTime = Date.now() - startPlayArtworkTime.current;
+    const remainTime = Date.now() - startPlayArtworkTime.current;
     const st = calculateStartTime(updatedPlaylist, i, remainTime + 100);
     setStartTime(st);
 
@@ -449,7 +491,7 @@ const Home: React.FC = () => {
 
   const handleMoveToArtwork = (tokenID: string) => {
     const index = playlist.findIndex(
-      (p: PlaylistToken) => p.token?.id === tokenID
+      (p: PlaylistToken) => p.token.id === tokenID
     );
     if (index < 0) {
       return;
@@ -458,6 +500,12 @@ const Home: React.FC = () => {
     setStartTime(st);
     clearTimer();
     setCurrentIndex(index);
+  };
+
+  const resetCastingStatus = () => {
+    clearTimer();
+    setPlaylist([]);
+    setCurrentIndex(-1);
   };
 
   const startInterval = (duration: number) => {
@@ -479,73 +527,82 @@ const Home: React.FC = () => {
 
   // Handle cast daily
   const handleCastDaily = async () => {
-    const daily = await dailyService.current.getUpcomingDaily();
-    if (!daily) {
-      return;
-    }
-    const ids = daily.map((d: Daily) => {
-      switch (d.blockchain) {
-        case 'ethereum': {
-          return `eth-${d.contractAddress}-${d.tokenID}`;
+    try {
+      const daily = await dailyService.current.getUpcomingDaily();
+
+      const ids = daily.map((d: Daily) => {
+        switch (d.blockchain) {
+          case 'ethereum': {
+            return `eth-${d.contractAddress}-${d.tokenID}`;
+          }
+
+          case 'bitmark': {
+            return `bmk--${d.tokenID}`;
+          }
+
+          case 'tezos': {
+            return `tez-${d.contractAddress}-${d.tokenID}`;
+          }
+
+          default: {
+            return '';
+          }
         }
+      });
 
-        case 'bitmark': {
-          return `bmk--${d.tokenID}`;
-        }
-
-        case 'tezos': {
-          return `tez-${d.contractAddress}-${d.tokenID}`;
-        }
-
-        default: {
-          return '';
-        }
-      }
-    });
-
-    if (ids.length === 0) {
-      return;
-    }
-
-    const data = await artworkService.current.queryTokens(ids);
-    const previewData: Map<string, string> = new Map();
-    data.tokens.forEach((token: any) => {
-      previewData.set(token.id, token.asset.metadata.project.latest.previewURL);
-    });
-
-    const dailies = daily.map((d: Daily) => {
-      return {
-        ...d,
-        previewURL: previewData.get(d.tokenID),
-      };
-    });
-
-    if (dailies.length > 0) {
-      const now = Date.now();
-      const currentDisplayTime = new Date(dailies[0].displayTime);
-      let nextDisplayTime = currentDisplayTime.setDate(
-        currentDisplayTime.getDate() + 1
-      );
-      if (dailies.length > 1 && dailies[1].displayTime) {
-        nextDisplayTime = new Date(dailies[1].displayTime).getTime();
+      if (ids.length === 0) {
+        return;
       }
 
-      const delay = nextDisplayTime - now;
-      if (dailies[0].previewURL) {
-        setCastPreviewURL(dailies[0].previewURL);
-        setCastStatus(true);
+      const data = await artworkService.current.queryTokens(ids);
+      const previewData = new Map<string, string>();
+      data.forEach((token: IndexerToken) => {
+        previewData.set(
+          token.id,
+          token.asset.metadata.project.latest.previewURL
+        );
+      });
+
+      const dailies = daily.map((d: Daily) => {
+        return {
+          ...d,
+          previewURL: previewData.get(d.tokenID),
+        };
+      });
+
+      if (dailies.length > 0) {
+        const now = Date.now();
+        const currentDisplayTime = new Date(dailies[0].displayTime);
+        let nextDisplayTime = currentDisplayTime.setDate(
+          currentDisplayTime.getDate() + 1
+        );
+        if (dailies.length > 1 && dailies[1].displayTime) {
+          nextDisplayTime = new Date(dailies[1].displayTime).getTime();
+        }
+
+        const delay = nextDisplayTime - now;
+        if (dailies[0].previewURL) {
+          setCastPreviewURL(dailies[0].previewURL);
+          setCastState(CastState.Artwork);
+        }
+
+        const interval = setInterval(() => {
+          handleCastDaily().catch((error: unknown) => {
+            console.error(error);
+          });
+        }, delay);
+
+        return () => {
+          clearInterval(interval);
+        };
       }
-
-      const interval = setInterval(() => {
-        handleCastDaily();
-      }, delay);
-
-      return () => clearInterval(interval);
+    } catch (error) {
+      console.error(error);
     }
   };
 
   const refreshData = () => {
-    setCastStatus(false);
+    setCastState(CastState.None);
     setCurrentIndex(-1);
     indexRef.current = -1;
     setArtworks([]);
@@ -564,14 +621,52 @@ const Home: React.FC = () => {
     }
   };
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    checkVersion();
-    const intervalID = setInterval(async () => {
-      checkVersion();
-    }, AppSettings.VERSION_CHECK_INTERVAL_DURATION);
+    const validateVersion = async () => {
+      await checkVersion();
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      const intervalID = setInterval(async () => {
+        await checkVersion();
+      }, AppSettings.VERSION_CHECK_INTERVAL_DURATION);
 
-    return () => clearInterval(intervalID);
+      return () => {
+        clearInterval(intervalID);
+      };
+    };
+
+    validateVersion().catch((error: unknown) => {
+      console.error(error);
+    });
   }, []);
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (castInfo?.dataChecked && !castInfo.castCommand) {
+      const handleNavigateDaily = () => {
+        const isFirstOpenQuery = query.get('isFirstOpen');
+        if (isFirstOpenQuery === 'false') {
+          AppService.setIsFirstOpen(false);
+          return;
+        }
+
+        const isFirstOpen = AppService.getIsFirstOpen(pathName);
+        if (isFirstOpen) {
+          AppService.setIsFirstOpen(false);
+          router.replace('/?isFirstOpen=false');
+          setTimeout(() => {
+            router.push('/daily');
+          }, 100);
+        }
+      };
+
+      handleNavigateDaily();
+    }
+  }, [castInfo, pathName, query, router]);
+
+  const castExhibition = () => {
+    setCastState(CastState.Exhibition);
+  };
 
   return (
     <div
@@ -590,15 +685,14 @@ const Home: React.FC = () => {
             rotateRadius % 180 === 0)
             ? '100vh'
             : '100vw',
-        transform: `rotate(${-rotateRadius}deg) `,
-        transformOrigin: `${
+        transform: `rotate(${(-rotateRadius).toString()}deg) `,
+        transformOrigin:
           (screenOrientation === Orientation.vertical &&
             rotateRadius % 360 !== 90) ||
           (screenOrientation === Orientation.horizontal &&
             rotateRadius % 360 !== 90)
             ? '50vw center'
-            : 'center 50vh'
-        }`,
+            : 'center 50vh',
         transition: 'transform 0.2s',
         display: 'flex',
         justifyContent: 'center',
@@ -616,25 +710,32 @@ const Home: React.FC = () => {
       {displayOnboarding && (
         <OnboardingPage
           screenRatio={screenRatio}
-          branchLink={branchLink!}
-          connectedDeviceName={castInfo?.deviceInfo?.device_name}
-          displayName={deviceName!}
+          branchLink={branchLink ?? ''}
+          connectedDeviceName={castInfo?.deviceInfo?.deviceName ?? ''}
+          displayName={deviceName}
         />
       )}
-      {castStatus ? (
-        <div style={{ width: '100vw', height: '100vh' }}>
-          <ArtworkPlayer
-            previewURL={castPreviewURL!}
-            keyboardCode={keyboardCode}
-          />
-        </div>
-      ) : (
+      {castState === CastState.None && (
         <HomePage
           screenRatio={screenRatio}
-          viewMode={viewMode!}
-          deviceName={deviceName!}
-          branchLink={branchLink!}
-          currentArtwork={currentArtwork!}
+          viewMode={viewMode ?? ViewMode.portrait}
+          deviceName={deviceName}
+          branchLink={branchLink ?? ''}
+          currentArtwork={currentArtwork ?? undefined}
+        />
+      )}
+      {castState === CastState.Artwork && (
+        <div style={{ width: '100vw', height: '100vh' }}>
+          <ArtworkPlayer previewURL={castPreviewURL ?? ''} />
+        </div>
+      )}
+      {castState === CastState.Exhibition && (
+        <ExhibitionHall
+          viewMode={viewMode ?? ViewMode.portrait}
+          screenRatio={screenRatio}
+          exhibitionID={castInfo?.exhibitionId}
+          catalogID={castInfo?.catalogId}
+          screen={castInfo?.catalog}
         />
       )}
     </div>

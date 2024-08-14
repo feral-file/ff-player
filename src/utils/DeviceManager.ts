@@ -23,7 +23,7 @@ class DeviceManager {
     const platform = localStorage.getItem(LocalStorageItem.platform);
 
     console.log(
-      `creating PlatformConfigService instance for platform: ${platform}`
+      `creating PlatformConfigService instance for platform: ${platform ?? ''}`
     );
     switch (platform) {
       case Platform.android:
@@ -48,14 +48,16 @@ class DeviceManager {
   }
 
   private setToLocalStorage(key: string, value: string): void {
-    this.configService.setString(key, value);
+    this.configService.setString(key, value).catch((error: unknown) => {
+      console.error('Error setting value to local storage', error);
+    });
   }
 
   public async getDeviceId(): Promise<string | null> {
     let deviceId = await this.getFromLocalStorage(LocalStorageItem.deviceId);
     if (!deviceId) {
       deviceId = uuidv4();
-      this.setToLocalStorage(LocalStorageItem.deviceId, deviceId!);
+      this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
     }
     return deviceId;
   }
@@ -80,8 +82,14 @@ class DeviceManager {
     this.setToLocalStorage(LocalStorageItem.name, name);
   }
 
-  public async getName(): Promise<string | null> {
-    return await this.getFromLocalStorage(LocalStorageItem.name);
+  public async getName(): Promise<string> {
+    try {
+      const name = await this.getFromLocalStorage(LocalStorageItem.name);
+      return name ?? 'Unknown';
+    } catch (error) {
+      console.error('Error getting device name', error);
+      return 'Unknown';
+    }
   }
 
   public setPreviouslyConnectedDeviceIds(deviceIds: string[]): void {
@@ -98,7 +106,7 @@ class DeviceManager {
     if (!deviceIdsJson) {
       return [];
     }
-    return JSON.parse(deviceIdsJson);
+    return JSON.parse(deviceIdsJson) as string[];
   }
 
   public async addPreviouslyConnectedDeviceId(deviceId: string): Promise<void> {
@@ -131,17 +139,18 @@ class DeviceManager {
         deviceId,
         locationId,
         topicId,
-        name: name || '',
+        name: name,
         platform: 'web',
       };
     } catch (error) {
+      console.error('Error getting device info', error);
       return null;
     }
   }
 
   private async keyWithDevice(key: string): Promise<string> {
     const device = await this.getDeviceInfo();
-    return `${key}_${device?.locationId}_${device?.topicId}`;
+    return `${key}_${device?.locationId ?? ''}_${device?.topicId ?? ''}`;
   }
 
   public async setBranchLink(branchLink: string): Promise<void> {
@@ -159,7 +168,7 @@ class DeviceManager {
     if (!branchLink) {
       branchLink = await this.generateBranchLink();
       if (branchLink) {
-        this.setBranchLink(branchLink);
+        await this.setBranchLink(branchLink);
       }
     }
     return branchLink;
@@ -175,7 +184,7 @@ class DeviceManager {
         source: 'feralfile_display',
         device: deviceInfo,
       };
-      return createBranchLink(data);
+      return await createBranchLink(data);
     } catch (e) {
       console.error(e);
       return null;

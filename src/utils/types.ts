@@ -1,11 +1,11 @@
 export interface WebSocketMessage {
   messageID: string;
-  message: any;
+  message: unknown;
 }
 
 export interface CommandRequest {
   command: string;
-  request: any;
+  request: unknown;
 }
 
 export enum CastCommand {
@@ -50,15 +50,18 @@ export interface DeviceInfoV2 {
 export interface PlayArtworkV2 {
   id: string;
   duration: number;
+  token?: {
+    id: string;
+  };
 }
 
 export interface ConnectRequestV2 {
   clientDevice: DeviceInfoV2;
 }
 
-export interface ConnectReplyV2 extends Reply {}
-export interface DisconnectReplyV2 extends Reply {}
-export interface CheckDeviceStatusRequest {}
+export type ConnectReplyV2 = Reply;
+export type DisconnectReplyV2 = Reply;
+export type CheckDeviceStatusRequest = object;
 export interface CheckDeviceStatusReply extends Reply {
   startTime: number;
   artworks: PlayArtworkV2[];
@@ -69,26 +72,26 @@ export interface CheckDeviceStatusReply extends Reply {
 export interface CastExhibitionRequest {
   exhibitionId: string;
   catalogId?: string;
-  catalog: string;
+  catalog?: ExhibitionCatalog;
 }
-export interface CastExhibitionReply extends Reply {}
+export type CastExhibitionReply = Reply;
 export interface CastListArtworkRequest {
   startTime?: number;
   artworks: PlayArtworkV2[];
 }
-export interface CastListArtworkReply extends Reply {}
-export interface NextArtworkRequest {}
-export interface NextArtworkReply extends Reply {}
-export interface PauseCastingRequest {}
-export interface PauseCastingReply extends Reply {}
-export interface ResumeCastingRequest {}
-export interface ResumeCastingReply extends Reply {}
-export interface PreviousArtworkRequest {}
-export interface PreviousArtworkReply extends Reply {}
+export type CastListArtworkReply = Reply;
+export type NextArtworkRequest = object;
+export type NextArtworkReply = Reply;
+export type PauseCastingRequest = object;
+export type PauseCastingReply = Reply;
+export type ResumeCastingRequest = object;
+export type ResumeCastingReply = Reply;
+export type PreviousArtworkRequest = object;
+export type PreviousArtworkReply = Reply;
 export interface MoveToArtworkRequest {
   artwork: { token: { id: string } };
 }
-export interface MoveToArtworkReply extends Reply {}
+export type MoveToArtworkReply = Reply;
 export interface UpdateDurationRequest {
   artworks: PlayArtworkV2[];
 }
@@ -102,29 +105,29 @@ export interface RotateRequest {
 export interface RotateReply extends Reply {
   degree: number;
 }
-export interface TapGestureRequest {}
+export type TapGestureRequest = object;
 export interface DragGestureRequest {
   cursorOffsets: CursorOffset[];
 }
-export interface GestureReply extends Reply {}
+export type GestureReply = Reply;
 export interface CursorOffset {
   dx: number;
   dy: number;
   coefficientX: number;
   coefficientY: number;
 }
-export interface GetCursorOffsetRequest {}
+export type GetCursorOffsetRequest = object;
 export interface GetCursorOffsetReply extends Reply {
   cursorOffset: CursorOffset;
 }
 export interface SetCursorOffsetRequest {
   cursorOffset: CursorOffset;
 }
-export interface SetCursorOffsetReply extends Reply {}
+export type SetCursorOffsetReply = Reply;
 export interface KeyboardEventRequest {
   code: number;
 }
-export interface KeyboardEventReply extends Reply {}
+export type KeyboardEventReply = Reply;
 
 export interface Artwork {
   id: string;
@@ -191,7 +194,7 @@ export const MIMETypeImage = 'image/*';
 export const MIMETypeObject = 'text/csv';
 
 export interface PlaylistToken {
-  artwork: Artwork;
+  artwork?: Artwork;
   duration: number;
   previewURL: string;
   token: {
@@ -203,10 +206,24 @@ export interface CastInfo {
   artworks?: PlayArtworkV2[];
   startTime?: number;
   castCommand?: CastCommand;
-  deviceInfo?: any;
+  deviceInfo?: DeviceInfoV2;
+  value?: string | number;
+
+  // Cast exhibition
   exhibitionId?: string;
-  value?: any;
+  catalogId?: string;
+  catalog?: ExhibitionCatalog;
   displayKey?: string;
+  dataChecked?: boolean;
+}
+
+// Enum for ExhibitionCatalog
+export enum ExhibitionCatalog {
+  home,
+  curatorNote,
+  resource,
+  resourceDetail,
+  artwork,
 }
 
 export enum ViewMode {
