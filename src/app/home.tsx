@@ -712,7 +712,7 @@ const Home: React.FC = () => {
       )}
       {castState === CastState.Artwork && (
         <div style={{ width: '100vw', height: '100vh' }}>
-          <ArtworkPlayer previewURL={castPreviewURL ?? ''} />
+          {castPreviewURL && <ArtworkPlayer previewURL={castPreviewURL} />}
         </div>
       )}
       {castState === CastState.Exhibition && (
