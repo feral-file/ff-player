@@ -4,6 +4,10 @@ import createApolloClient from '@/utils/ApolloClient';
 import { IndexerToken } from '@/models';
 import axiosInstance from './axiosService';
 
+const a2pSuffix = '<A2P>';
+const tezosSuffix = '_tez';
+const custodySuffix = '_custody';
+
 class ArtworkService {
   public async getFeaturedArtworks(): Promise<Artwork[]> {
     const response = await axiosInstance.get(`/api/artworks/featured`);
@@ -15,11 +19,19 @@ class ArtworkService {
     return artworks;
   }
 
+  private removeArtistAliasSuffixes(value: string): string {
+    return value
+      .replace(new RegExp(`${a2pSuffix}$`), '')
+      .replace(new RegExp(`${tezosSuffix}$`), '')
+      .replace(new RegExp(`${custodySuffix}$`), '');
+  }
+
   private fetchArtist = async (artistID?: string): Promise<string> => {
     const response = await axiosInstance.get(`/api/accounts/${artistID ?? ''}`);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const artistAlias = (response.data.result.alias ?? '') as string;
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
-    return response.data.result.alias ?? '';
+    return this.removeArtistAliasSuffixes(artistAlias);
   };
 
   public async queryTokens(ids: string[]): Promise<IndexerToken[]> {
