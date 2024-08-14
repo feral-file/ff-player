@@ -4,22 +4,25 @@ import { Exhibition, ExhibitionType, Post, Artwork } from '@/models';
 import { useContext, useEffect, useRef, useState } from 'react';
 import styles from './exhibition.module.scss';
 import './exhibition.module.scss';
-import { ExhibitionCatalog, ViewMode } from '@/utils/types';
+import { CastCommand, ExhibitionCatalog, ViewMode } from '@/utils/types';
 import Carousel from './components/carousel/carousel';
 import ArtworkPlayer from '@/components/ArtworkPlayer';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
 import Image from 'next/image';
 import { AppContext } from '@/context/AppContext';
+import { set } from 'date-fns';
 
-const ExhibitionHall = ({
-  exhibitionID,
-  catalogID,
-  screen,
-}: {
-  exhibitionID: string | undefined;
-  catalogID: string | undefined;
-  screen: ExhibitionCatalog | undefined;
-}) => {
+const ExhibitionHall = () => {
+  const context = useContext(AppContext);
+  if (!context) {
+    return <p>There is no App context.</p>;
+  }
+  const { castInfo } = context.websocketData;
+
+  const [exhibitionID, setExhibitionID] = useState<string | undefined>();
+  const [catalogID, setCatalogID] = useState<string | undefined>();
+  const [screen, setScreen] = useState<ExhibitionCatalog | undefined>();
+
   const [pageSection, setSection] = useState<ExhibitionCatalog>(
     ExhibitionCatalog.home
   );
@@ -38,7 +41,7 @@ const ExhibitionHall = ({
   };
 
   const FERAL_FILE_ASSET_URL =
-    process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? '' + '/';
+    (process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? '') + '/';
 
   const getPreviewSource = async (
     artworkID: string,
@@ -53,10 +56,32 @@ const ExhibitionHall = ({
     }
 
     artwork.previewURI = seriesService.current.getArtworkPreview(artwork);
+    console.log('artwork', artwork);
+    console.log('artwork.previewURI', artwork.previewURI);
+
     setArtwork(artwork);
   };
 
   useEffect(() => {
+    console.log('castInfo', castInfo);
+
+    if (castInfo) {
+      const handleCastCommand = async () => {
+        if (castInfo.castCommand === CastCommand.castExhibition) {
+          setExhibitionID(castInfo.exhibitionId);
+          setCatalogID(castInfo.catalogId);
+          setScreen(castInfo.catalog);
+        }
+      };
+      handleCastCommand().catch((error: unknown) => {
+        console.error(error);
+      });
+    }
+  }, [castInfo]);
+
+  useEffect(() => {
+    console.log('exhibitionID', exhibitionID);
+
     // fetch exhibition detail
     const fetchExhibitionDetail = async () => {
       if (!exhibitionID) {
@@ -86,7 +111,7 @@ const ExhibitionHall = ({
         console.error(err);
       });
     }
-  }, [exhibitionID, exhibitionDetail]);
+  }, [exhibitionID]);
 
   useEffect(() => {
     if (screen !== undefined) {

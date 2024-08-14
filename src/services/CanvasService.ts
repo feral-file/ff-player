@@ -115,15 +115,17 @@ class CanvasService {
     command: CastCommand,
     requestJson: unknown
   ): Promise<Reply> {
-    if (this.castInfo) {
-      this.castInfo = {
-        ...this.castInfo,
-        castCommand: command,
-      };
-    } else {
-      this.castInfo = {
-        castCommand: command,
-      };
+    if (command !== CastCommand.checkStatus) {
+      if (this.castInfo) {
+        this.castInfo = {
+          ...this.castInfo,
+          castCommand: command,
+        };
+      } else {
+        this.castInfo = {
+          castCommand: command,
+        };
+      }
     }
 
     switch (command) {
@@ -221,12 +223,12 @@ class CanvasService {
       return Promise.resolve({ ok: false });
     }
 
-    this.castInfo = {
+    this.setCastInfo({
       ...this.castInfo,
       exhibitionId: request.exhibitionId,
       catalogId: request.catalogId,
       catalog: request.catalog,
-    };
+    });
     return Promise.resolve({ ok: true });
   }
 

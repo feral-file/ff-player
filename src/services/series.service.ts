@@ -74,6 +74,6 @@ export class SeriesService {
       return src;
     }
 
-    return process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? '' + '/' + src;
+    return (process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? '') + '/' + src;
   }
 }

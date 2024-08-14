@@ -3,11 +3,14 @@
 import { AppSettings } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
+import DeviceManager from '@/utils/DeviceManager';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
-import { Orientation } from '@/utils/types';
+import { CastCommand, Orientation } from '@/utils/types';
 import { usePathname, useRouter } from 'next/navigation';
 import React, { useContext, useEffect, useRef, useState } from 'react';
+import LostConnectionModal from './LostConnectionModal';
+import OnboardingModal from './OnboardingModal';
 
 const enum CastState {
   None, // Not casting
@@ -21,12 +24,16 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return <p>There is no App context.</p>;
   }
 
+  const pathName = usePathname();
+  const router = useRouter();
+  const { castInfo } = context.websocketData;
   const { screenOrientation, rotateRadius } = context.deviceRotation ?? {
     screenOrientation: Orientation.horizontal,
     rotateRadius: 0,
   };
-  const pathName = usePathname();
-  const router = useRouter();
+  const [castState, setCastState] = useState<CastState>(CastState.None);
+  const castStatusRef = useRef(false);
+  const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
 
   // Initialize platform events
   // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -72,8 +79,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     };
   }, []);
 
-  const [castState, setCastState] = useState<CastState>(CastState.None);
-  const castStatusRef = useRef(false);
   useEffect(() => {
     castStatusRef.current = castState !== CastState.None;
     try {
@@ -116,6 +121,72 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   };
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    console.log('--------------');
+    console.log('Cast Info:', castInfo);
+    console.log('--------------');
+
+    if (castInfo) {
+      const handleCastCommand = async () => {
+        switch (castInfo.castCommand) {
+          case CastCommand.connect: {
+            if (
+              !(await DeviceManager.isPreviouslyConnectedDevice(
+                castInfo.deviceInfo?.deviceId ?? ''
+              ))
+            ) {
+              setDisplayOnboarding(true);
+              await DeviceManager.addPreviouslyConnectedDeviceId(
+                castInfo.deviceInfo?.deviceId ?? ''
+              );
+            }
+            break;
+          }
+
+          case CastCommand.castListArtwork: {
+            setDisplayOnboarding(false);
+            if (castState === CastState.Artwork) {
+              return;
+            }
+
+            setCastState(CastState.Artwork);
+            castState === CastState.None
+              ? router.push('/playlist')
+              : router.replace('/playlist');
+            break;
+          }
+
+          case CastCommand.castExhibition: {
+            setDisplayOnboarding(false);
+
+            console.log('castState:', castState);
+
+            if (castState === CastState.Exhibition) {
+              return;
+            }
+
+            setCastState(CastState.Exhibition);
+            castState === CastState.None
+              ? router.push('/exhibitions')
+              : router.replace('/exhibitions');
+            break;
+          }
+        }
+      };
+      handleCastCommand().catch((error: unknown) => {
+        console.error(error);
+      });
+    } else {
+      if (castState !== CastState.None) {
+        setCastState(CastState.None);
+        console.log('router.back()');
+
+        router.back();
+      }
+    }
+  }, [castInfo]);
+
   return (
     <div
       style={{
@@ -147,6 +218,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         justifyContent: 'center',
         alignItems: 'center',
       }}>
+      {displayOnboarding && <OnboardingModal />}
       {children}
     </div>
   );

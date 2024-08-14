@@ -2,6 +2,8 @@
 
 import ArtworkPlayer from '@/components/ArtworkPlayer';
 import { AppContext } from '@/context/AppContext';
+import { IndexerToken } from '@/models';
+import ArtworkService from '@/services/ArtworkService';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
 import { CastCommand, PlayArtworkV2, PlaylistToken } from '@/utils/types';
 import { useContext, useEffect, useRef, useState } from 'react';
@@ -31,6 +33,8 @@ export default function PlayList() {
 
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
+
+  const artworkService = useRef(new ArtworkService());
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
@@ -163,59 +167,60 @@ export default function PlayList() {
   useEffect(() => {
     if (castInfo) {
       const handleCastCommand = async () => {
-        console.log('--------------');
-        console.log('Cast Command:', JSON.stringify(castInfo));
-        console.log('--------------');
-
         switch (castInfo.castCommand) {
           case CastCommand.castListArtwork: {
-            // setDisplayOnboarding(false);
-            // indexRef.current = -1;
-            // const getNftTokens = async (ids: string[]) => {
-            //   if (!ids.length) {
-            //     return;
-            //   }
-            //   try {
-            //     const data = await artworkService.current.queryTokens(ids);
-            //     const artworks = castInfo?.artworks;
-            //     if (!artworks) {
-            //       return;
-            //     }
+            indexRef.current = -1;
+            const getNftTokens = async (ids: string[]) => {
+              if (!ids.length) {
+                return;
+              }
+              try {
+                const tokens = await artworkService.current.queryTokens(ids);
+                const artworks = castInfo.artworks;
+                if (!artworks) {
+                  return;
+                }
 
-            //     if (data) {
-            //       const previewData: Map<string, string> = new Map();
-            //       data.tokens.forEach((token: any) => {
-            //         previewData.set(
-            //           token.indexID,
-            //           token.asset.metadata.project.latest.previewURL
-            //         );
-            //       });
-            //       const updatedArtworks = artworks.map((artwork: any) => {
-            //         return {
-            //           ...artwork,
-            //           previewURL: previewData.get(artwork.token.id),
-            //         };
-            //       });
-            //       setPlaylist(updatedArtworks);
-            //       if (castInfo.startTime) {
-            //         setStartTime(castInfo.startTime);
-            //         const i = getIndex(updatedArtworks, castInfo?.startTime);
-            //         setCurrentIndex(i);
-            //       }
-            //     }
-            //   } catch (error) {
-            //     console.log(
-            //       'Error fetching NFT tokens:',
-            //       JSON.stringify(error)
-            //     );
-            //   }
-            // };
-            // if (castInfo.artworks) {
-            //   const assetIds = castInfo.artworks.map(
-            //     (artwork: any) => artwork.token.id
-            //   );
-            //   getNftTokens(assetIds);
-            // }
+                const previewData = new Map<string, string>();
+                tokens.forEach((token: IndexerToken) => {
+                  previewData.set(
+                    token.indexID,
+                    token.asset.metadata.project.latest.previewURL
+                  );
+                });
+                const updatedArtworks = artworks.map(
+                  (artwork: PlayArtworkV2) => {
+                    const aw: PlaylistToken = {
+                      duration: artwork.duration,
+                      previewURL:
+                        previewData.get(artwork.token?.id ?? '') ?? '',
+                      token: artwork.token ?? { id: '' },
+                    };
+
+                    return aw;
+                  }
+                );
+                setPlaylist(updatedArtworks);
+                if (castInfo.startTime) {
+                  setStartTime(castInfo.startTime);
+                  const i = getIndex(updatedArtworks, castInfo.startTime);
+                  setCurrentIndex(i);
+                }
+              } catch (error) {
+                console.log(
+                  'Error fetching NFT tokens:',
+                  JSON.stringify(error)
+                );
+              }
+            };
+            if (castInfo.artworks) {
+              const assetIds = castInfo.artworks.map(
+                (artwork: PlayArtworkV2) => artwork.token?.id ?? ''
+              );
+              getNftTokens(assetIds).catch((error: unknown) => {
+                console.error(error);
+              });
+            }
             break;
           }
 
@@ -248,15 +253,6 @@ export default function PlayList() {
 
           case CastCommand.resumeCasting: {
             handleResumeCasting();
-            break;
-          }
-          case CastCommand.rotate: {
-            // setViewMode(
-            //   viewMode === ViewMode.landscape
-            //     ? ViewMode.portrait
-            //     : ViewMode.landscape
-            // );
-            // setRotateRadius(rotateRadius + 90);
             break;
           }
         }

@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AppProvider } from '../context/AppContext';
-import LostConnectionModal from '@/components/LostConnectionModal';
 import AppWrapper from '@/components/AppWrapper';
 import QrCodePopUp from '@/components/qrCodePopUp';
+import LostConnectionModal from '@/components/LostConnectionModal';
 
 const inter = Inter({ subsets: ['latin'] });
 
