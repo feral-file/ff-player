@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  Exhibition,
-  Series,
-  ExhibitionType,
-  Post,
-  PostType,
-  Artwork,
-} from '@/models';
+import { Exhibition, ExhibitionType, Post, Artwork } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import styles from './exhibition.module.scss';
 import './exhibition.module.scss';
@@ -15,6 +8,7 @@ import { ExhibitionCatalog, ViewMode } from '@/utils/types';
 import Carousel from './components/carousel/carousel';
 import ArtworkPlayer from '@/components/artworkPlayer';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
+import Image from 'next/image';
 
 const ExhibitionHall = ({
   exhibitionID,
@@ -43,7 +37,7 @@ const ExhibitionHall = ({
   const postService = useRef(new PostService());
 
   const FERAL_FILE_ASSET_URL =
-    process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL! + '/';
+    process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? '' + '/';
 
   const getPreviewSource = async (
     artworkID: string,
@@ -87,7 +81,9 @@ const ExhibitionHall = ({
       }
 
       setExhibitionDetail(exhibition);
-      fetchPosts(exhibition!);
+      fetchPosts(exhibition).catch((err: unknown) => {
+        console.error(err);
+      });
     };
 
     const fetchPosts = async (exhibition: Exhibition) => {
@@ -96,9 +92,11 @@ const ExhibitionHall = ({
     };
 
     if (exhibitionID && exhibitionDetail?.id !== exhibitionID) {
-      fetchExhibitionDetail().catch(err => console.error(err));
+      fetchExhibitionDetail().catch((err: unknown) => {
+        console.error(err);
+      });
     }
-  }, [exhibitionID]);
+  }, [exhibitionID, exhibitionDetail]);
 
   useEffect(() => {
     if (screen !== undefined) {
@@ -107,11 +105,15 @@ const ExhibitionHall = ({
           setPostIndex(0);
           break;
         case ExhibitionCatalog.resource:
-          if (catalogID) getPostIndexByID(catalogID!);
+          if (catalogID) getPostIndexByID(catalogID);
           break;
         case ExhibitionCatalog.artwork:
           if (catalogID && exhibitionDetail) {
-            getPreviewSource(catalogID!, exhibitionDetail);
+            getPreviewSource(catalogID, exhibitionDetail).catch(
+              (err: unknown) => {
+                console.error(err);
+              }
+            );
           }
           break;
       }
@@ -174,10 +176,15 @@ const ExhibitionHall = ({
             </div>
           </div>
           <div className={styles.rightSection}>
-            <img
-              src={FERAL_FILE_ASSET_URL + exhibitionDetail.coverURI}
-              alt={exhibitionDetail.title}
-            />
+            <div
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}>
+              <Image
+                src={FERAL_FILE_ASSET_URL + (exhibitionDetail.coverURI ?? '')}
+                alt={exhibitionDetail.title ?? ''}
+                layout="fill"
+                objectFit="contain"
+              />
+            </div>
           </div>
         </div>
       )}
@@ -189,7 +196,7 @@ const ExhibitionHall = ({
           <div className={[styles.posts].join(' ')}>
             <div className={styles.postList}>
               <Carousel
-                items={posts!}
+                items={posts}
                 index={postIndex}
                 onLoad={[
                   ExhibitionCatalog.curatorNote,
@@ -203,7 +210,7 @@ const ExhibitionHall = ({
       {exhibitionDetail && pageSection === ExhibitionCatalog.artwork && (
         <div className={[styles.exhCard, styles.fadeInBottom].join(' ')}>
           {artwork?.previewURI && (
-            <ArtworkPlayer key={artwork.id} previewURL={artwork.previewURI!} />
+            <ArtworkPlayer key={artwork.id} previewURL={artwork.previewURI} />
           )}
         </div>
       )}
