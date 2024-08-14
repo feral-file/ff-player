@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Artwork, ViewMode } from '@/utils/types';
 
-import styles from '../../styles/global.module.scss';
+import styles from './home.module.scss';
 import clsx from 'clsx';
 import Image from 'next/image';
 import ArtworkPlayer from '@/components/ArtworkPlayer';

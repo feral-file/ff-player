@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'PP Mori';
+  src: 'url(../fonts/PP_Mori/WEB/PPMori-Regular.woff2)';
+  font-weight: 400;
+  font-style: normal;
+}
+
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
@@ -14,6 +21,11 @@
     --background-start-rgb: 0, 0, 0;
     --background-end-rgb: 0, 0, 0;
   }
+}
+
+html,
+body {
+  font-family: 'PP Mori', sans-serif;
 }
 
 body {

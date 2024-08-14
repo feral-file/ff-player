@@ -5,10 +5,7 @@ import { useContext, useEffect, useState } from 'react';
 
 const useDeviceRotation = () => {
   const context = useContext(AppContext);
-  if (!context) {
-    return null;
-  }
-  const { castInfo } = context.websocketData;
+  const { castInfo } = context?.websocketData ?? {};
 
   const [screenOrientation, setScreenOrientation] = useState<Orientation>(
     Orientation.horizontal
@@ -17,7 +14,6 @@ const useDeviceRotation = () => {
   const [viewMode, setViewMode] = useState<ViewMode | null>(null);
   const [rotateRadius, setRotateRadius] = useState<number>(0);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     console.log('window', window);
 
@@ -48,7 +44,7 @@ const useDeviceRotation = () => {
       );
       setRotateRadius(rotateRadius + 90);
     }
-  }, [castInfo]);
+  }, [castInfo, rotateRadius, viewMode]);
 
   return { screenOrientation, screenRatio, viewMode, rotateRadius };
 };
