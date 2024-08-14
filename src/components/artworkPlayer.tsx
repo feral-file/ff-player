@@ -148,18 +148,17 @@ const ArtworkPlayer = ({
               display: 'flex',
               flexDirection: 'column',
               position: 'relative',
-              width: '50%',
-              height: '50%',
             }}>
             <div
               style={{
-                width: '100%',
-                height: '100%',
                 objectFit: 'contain',
+                position: 'relative',
               }}>
               <Image
                 src="/ff-loading-still-v2.svg"
-                layout="fill"
+                // layout="fill"
+                width={600}
+                height={600}
                 objectFit="contain"
                 alt="Loading"></Image>
             </div>
