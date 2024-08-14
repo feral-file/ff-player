@@ -605,8 +605,6 @@ const Home: React.FC = () => {
     setCastState(CastState.None);
     setCurrentIndex(-1);
     indexRef.current = -1;
-    setArtworks([]);
-    setCurrentArtwork(null);
     setPlaylist([]);
     setStartTime(0);
   };
