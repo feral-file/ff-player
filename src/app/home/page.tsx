@@ -24,7 +24,7 @@ export default function HomePage() {
     viewMode: ViewMode.landscape,
   };
 
-  const data = context.data;
+  const data = context.websocketData;
   const { locationID, topicID } = data;
 
   const [currentArtwork, setCurrentArtwork] = useState<Artwork | null>(null);

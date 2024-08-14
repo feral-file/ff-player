@@ -17,7 +17,7 @@ export default function PlayList() {
     return <p>There is no context.</p>;
   }
 
-  const data = context.data;
+  const data = context.websocketData;
   const { castInfo } = data;
 
   const startPlayArtworkTime = useRef<number>(0);

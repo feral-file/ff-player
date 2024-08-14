@@ -8,7 +8,7 @@ const useDeviceRotation = () => {
   if (!context) {
     return null;
   }
-  const { castInfo } = context.data;
+  const { castInfo } = context.websocketData;
 
   const [screenOrientation, setScreenOrientation] = useState<Orientation>(
     Orientation.horizontal

@@ -12,7 +12,7 @@ interface AppContextProps {
 }
 
 interface AppContextValue {
-  data: WebSocketMessage;
+  websocketData: WebSocketMessage;
   isOnline: boolean;
   deviceRotation: DeviceRotation | null;
 }
@@ -34,7 +34,7 @@ interface DeviceRotation {
 export const AppContext = createContext<AppContextValue | undefined>(undefined);
 
 export const AppProvider = ({ children }: AppContextProps) => {
-  const data = useWebSocket(
+  const websocketData = useWebSocket(
     `${process.env.NEXT_PUBLIC_WEBSOCKET_URL ?? ''}/api/connection`,
     process.env.NEXT_PUBLIC_API_KEY ?? ''
   );
@@ -45,7 +45,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   return (
     <AppContext.Provider
       value={{
-        data,
+        websocketData,
         isOnline,
         deviceRotation,
       }}>
