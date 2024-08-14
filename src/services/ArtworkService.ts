@@ -1,14 +1,12 @@
 import { Artwork } from '../utils/types';
 import { gql } from '@apollo/client';
 import createApolloClient from '@/utils/ApolloClient';
-import axios from 'axios';
 import { IndexerToken } from '@/models';
+import axiosInstance from './axiosService';
 
 class ArtworkService {
   public async getFeaturedArtworks(): Promise<Artwork[]> {
-    const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/artworks/featured`
-    );
+    const response = await axiosInstance.get(`/api/artworks/featured`);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const artworks = response.data.result as Artwork[];
     for (const artwork of artworks) {
@@ -18,9 +16,7 @@ class ArtworkService {
   }
 
   private fetchArtist = async (artistID?: string): Promise<string> => {
-    const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/accounts/${artistID ?? ''}`
-    );
+    const response = await axiosInstance.get(`/api/accounts/${artistID ?? ''}`);
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
     return response.data.result.alias ?? '';

@@ -7,7 +7,7 @@ import {
   YoutubeThumbnailVariants,
 } from '@/models';
 import { Jg043CustomPosts } from '@/models/jg043.model';
-import axios from 'axios';
+import axiosInstance from './axiosService';
 
 const YOUTUBE_VIDEO_QUERY_PARAM_KEY = 'v';
 const YOUTUBE_URL = 'https://www.youtube.com';
@@ -45,10 +45,8 @@ export class PostService {
 
   private async getCustomPostOfJG043Show(): Promise<Post[]> {
     try {
-      const response = await axios.get(
-        `${
-          process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
-        }/configs/postcard/postcard_configs.json`
+      const response = await axiosInstance.get(
+        '/configs/postcard/postcard_configs.json'
       );
 
       const jg043Section = response.data as Jg043CustomPosts | null;

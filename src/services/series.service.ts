@@ -1,5 +1,5 @@
 import { Artwork, Exhibition } from '@/models';
-import axios from 'axios';
+import axiosInstance from './axiosService';
 
 const cloudFlareHostingDomain = 'imagedelivery.net';
 const ipfsGateway = 'https://ipfs.io/ipfs/';
@@ -7,8 +7,8 @@ const ipfsGateway = 'https://ipfs.io/ipfs/';
 export class SeriesService {
   public async getArtworkOfSeries(seriesID: string): Promise<Artwork[]> {
     try {
-      const response = await axios.get<{ result: Artwork[] }>(
-        `${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/artworks?seriesID=${seriesID}`
+      const response = await axiosInstance.get<{ result: Artwork[] }>(
+        `/api/artworks?seriesID=${seriesID}`
       );
       return response.data.result;
     } catch (error) {
@@ -26,8 +26,8 @@ export class SeriesService {
         return this.getSourceArtwork(id, exhibition);
       }
 
-      const response = await axios.get<{ result: Artwork }>(
-        `${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/artworks/${id}`
+      const response = await axiosInstance.get<{ result: Artwork }>(
+        `/api/artworks/${id}`
       );
       return response.data.result;
     } catch (error) {
