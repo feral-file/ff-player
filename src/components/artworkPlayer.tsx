@@ -143,10 +143,27 @@ const ArtworkPlayer = ({
             alignItems: 'center',
             fontSize: 32,
           }}>
-          Loading...
-          {/* <img
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-            src="/ff-loading.gif"></img> */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative',
+            }}>
+            <div
+              style={{
+                objectFit: 'contain',
+                position: 'relative',
+              }}>
+              <Image
+                src="/ff-loading-still-v2.svg"
+                // layout="fill"
+                width={600}
+                height={600}
+                objectFit="contain"
+                alt="Loading"></Image>
+            </div>
+            <p>Loading</p>
+          </div>
         </div>
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (

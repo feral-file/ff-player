@@ -4,6 +4,7 @@ import { MutableRefObject, ReactNode, createContext } from 'react';
 import CanvasService from '../services/CanvasService';
 import useWebSocket from '../services/WebSocketManager';
 import { CastInfo } from '@/utils/types';
+import useNetworkManger from '@/services/NetworkManager';
 
 interface AppContextProps {
   children: ReactNode;
@@ -11,6 +12,7 @@ interface AppContextProps {
 
 interface AppContextValue {
   data: WebSocketMessage;
+  isOnline: boolean;
 }
 
 interface WebSocketMessage {
@@ -28,10 +30,13 @@ export const AppProvider = ({ children }: AppContextProps) => {
     process.env.NEXT_PUBLIC_API_KEY ?? ''
   );
 
+  const isOnline = useNetworkManger();
+
   return (
     <AppContext.Provider
       value={{
         data,
+        isOnline,
       }}>
       {children}
     </AppContext.Provider>

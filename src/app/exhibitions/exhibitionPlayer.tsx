@@ -37,7 +37,7 @@ const ExhibitionHall = ({
   const postService = useRef(new PostService());
 
   const FERAL_FILE_ASSET_URL =
-    process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? '' + '/';
+    (process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? '') + '/';
 
   const getPreviewSource = async (
     artworkID: string,
@@ -181,8 +181,9 @@ const ExhibitionHall = ({
               <Image
                 src={FERAL_FILE_ASSET_URL + (exhibitionDetail.coverURI ?? '')}
                 alt={exhibitionDetail.title ?? ''}
-                layout="fill"
                 objectFit="contain"
+                width={1080}
+                height={1080}
               />
             </div>
           </div>
