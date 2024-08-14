@@ -56,6 +56,7 @@ export default tseslint.config(
       'coverage/**/*',
       'out/*',
       'postcss.config.mjs',
+      'platforms/*',
     ],
   }
 );

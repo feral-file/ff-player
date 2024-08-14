@@ -74,7 +74,6 @@ const Home: React.FC = () => {
   const indexRef = useRef<number>(-1);
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
-  const [isOnline, setIsOnline] = useState<boolean>(true);
 
   const query = useSearchParams();
 
@@ -86,6 +85,7 @@ const Home: React.FC = () => {
 
   const data = context.data;
   const { locationID, topicID, castInfo } = data;
+  const isOnline = context.isOnline;
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
@@ -113,10 +113,6 @@ const Home: React.FC = () => {
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    function updateNetworkStatus() {
-      setIsOnline(navigator.onLine);
-    }
-
     if (typeof window !== 'undefined') {
       const browser = detect() as BrowserInfo | null;
       if (browser) {
@@ -141,14 +137,6 @@ const Home: React.FC = () => {
       };
 
       resizeHandler();
-
-      window.addEventListener('online', updateNetworkStatus);
-      window.addEventListener('offline', updateNetworkStatus);
-
-      return () => {
-        window.removeEventListener('online', updateNetworkStatus);
-        window.removeEventListener('offline', updateNetworkStatus);
-      };
     }
   }, []);
 
