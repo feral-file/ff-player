@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import React, { useState, useEffect } from 'react';
 
 const youtubeFailedThumbnailHeight = 90;
@@ -34,7 +35,15 @@ const QueuingImages: React.FC<QueuingImagesProps> = ({ urls, alt }) => {
   return (
     <>
       {currentUrl && (
-        <img src={currentUrl} alt={alt} onLoad={handleImageLoading} />
+        <div style={{ width: '100%', height: '100%', objectFit: 'contain' }}>
+          <Image
+            src={currentUrl}
+            alt={alt}
+            layout="fill"
+            objectFit="contain"
+            onLoad={handleImageLoading}
+          />
+        </div>
       )}
     </>
   );

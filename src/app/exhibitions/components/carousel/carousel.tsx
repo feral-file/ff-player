@@ -57,7 +57,7 @@ const Carousel: React.FC<CarouselProps> = ({
     } else {
       setSpaceBetween(50 * screenRatio);
     }
-  }, [viewMode]);
+  }, [viewMode, screenRatio]);
 
   return (
     <Swiper

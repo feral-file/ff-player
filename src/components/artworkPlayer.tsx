@@ -117,7 +117,7 @@ const ArtworkPlayer = ({
         });
       }
     }
-  }, [previewType]);
+  }, [previewType, isStreaming, previewURL]);
 
   return (
     <div

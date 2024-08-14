@@ -103,6 +103,16 @@ const Home: React.FC = () => {
     }
   }, [castState]);
 
+  // Context
+  const context = useContext(AppContext);
+  if (!context) {
+    return <p>There is no context.</p>;
+  }
+
+  const data = context.data;
+  const { locationID, topicID, castInfo, canvasService } = data;
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     const handleEscapeKey = () => {
       console.log('Escape key pressed');
@@ -122,8 +132,9 @@ const Home: React.FC = () => {
     return () => {
       EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
     };
-  }, []);
+  }, [canvasService]);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     function updateNetworkStatus() {
       setIsOnline(navigator.onLine);
@@ -160,15 +171,6 @@ const Home: React.FC = () => {
     }
   }, []);
 
-  // Context
-  const context = useContext(AppContext);
-  if (!context) {
-    return <p>There is no context.</p>;
-  }
-
-  const data = context.data;
-  const { locationID, topicID, castInfo, canvasService } = data;
-
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (locationID && topicID && deviceName) {
@@ -189,6 +191,10 @@ const Home: React.FC = () => {
     const fetchArtworks = async () => {
       try {
         const artworks = await artworkService.current.getFeaturedArtworks();
+        if (artworks.length === 0) {
+          return;
+        }
+
         setArtworks(artworks);
         setCurrentArtwork(artworks[0]);
       } catch (error) {
@@ -540,70 +546,77 @@ const Home: React.FC = () => {
 
   // Handle cast daily
   const handleCastDaily = async () => {
-    const daily = await dailyService.current.getUpcomingDaily();
+    try {
+      const daily = await dailyService.current.getUpcomingDaily();
 
-    const ids = daily.map((d: Daily) => {
-      switch (d.blockchain) {
-        case 'ethereum': {
-          return `eth-${d.contractAddress}-${d.tokenID}`;
+      const ids = daily.map((d: Daily) => {
+        switch (d.blockchain) {
+          case 'ethereum': {
+            return `eth-${d.contractAddress}-${d.tokenID}`;
+          }
+
+          case 'bitmark': {
+            return `bmk--${d.tokenID}`;
+          }
+
+          case 'tezos': {
+            return `tez-${d.contractAddress}-${d.tokenID}`;
+          }
+
+          default: {
+            return '';
+          }
         }
+      });
 
-        case 'bitmark': {
-          return `bmk--${d.tokenID}`;
-        }
-
-        case 'tezos': {
-          return `tez-${d.contractAddress}-${d.tokenID}`;
-        }
-
-        default: {
-          return '';
-        }
-      }
-    });
-
-    if (ids.length === 0) {
-      return;
-    }
-
-    const data = await artworkService.current.queryTokens(ids);
-    const previewData = new Map<string, string>();
-    data.forEach((token: IndexerToken) => {
-      previewData.set(token.id, token.asset.metadata.project.latest.previewURL);
-    });
-
-    const dailies = daily.map((d: Daily) => {
-      return {
-        ...d,
-        previewURL: previewData.get(d.tokenID),
-      };
-    });
-
-    if (dailies.length > 0) {
-      const now = Date.now();
-      const currentDisplayTime = new Date(dailies[0].displayTime);
-      let nextDisplayTime = currentDisplayTime.setDate(
-        currentDisplayTime.getDate() + 1
-      );
-      if (dailies.length > 1 && dailies[1].displayTime) {
-        nextDisplayTime = new Date(dailies[1].displayTime).getTime();
+      if (ids.length === 0) {
+        return;
       }
 
-      const delay = nextDisplayTime - now;
-      if (dailies[0].previewURL) {
-        setCastPreviewURL(dailies[0].previewURL);
-        setCastState(CastState.Artwork);
+      const data = await artworkService.current.queryTokens(ids);
+      const previewData = new Map<string, string>();
+      data.forEach((token: IndexerToken) => {
+        previewData.set(
+          token.id,
+          token.asset.metadata.project.latest.previewURL
+        );
+      });
+
+      const dailies = daily.map((d: Daily) => {
+        return {
+          ...d,
+          previewURL: previewData.get(d.tokenID),
+        };
+      });
+
+      if (dailies.length > 0) {
+        const now = Date.now();
+        const currentDisplayTime = new Date(dailies[0].displayTime);
+        let nextDisplayTime = currentDisplayTime.setDate(
+          currentDisplayTime.getDate() + 1
+        );
+        if (dailies.length > 1 && dailies[1].displayTime) {
+          nextDisplayTime = new Date(dailies[1].displayTime).getTime();
+        }
+
+        const delay = nextDisplayTime - now;
+        if (dailies[0].previewURL) {
+          setCastPreviewURL(dailies[0].previewURL);
+          setCastState(CastState.Artwork);
+        }
+
+        const interval = setInterval(() => {
+          handleCastDaily().catch((error: unknown) => {
+            console.error(error);
+          });
+        }, delay);
+
+        return () => {
+          clearInterval(interval);
+        };
       }
-
-      const interval = setInterval(() => {
-        handleCastDaily().catch((error: unknown) => {
-          console.error(error);
-        });
-      }, delay);
-
-      return () => {
-        clearInterval(interval);
-      };
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -724,7 +737,7 @@ const Home: React.FC = () => {
       {castState === CastState.None && (
         <HomePage
           screenRatio={screenRatio}
-          viewMode={viewMode ?? ViewMode.landscape}
+          viewMode={viewMode ?? ViewMode.portrait}
           deviceName={deviceName}
           branchLink={branchLink ?? ''}
           currentArtwork={currentArtwork ?? undefined}
@@ -737,7 +750,7 @@ const Home: React.FC = () => {
       )}
       {castState === CastState.Exhibition && (
         <ExhibitionHall
-          viewMode={viewMode ?? ViewMode.landscape}
+          viewMode={viewMode ?? ViewMode.portrait}
           screenRatio={screenRatio}
           exhibitionID={castInfo?.exhibitionId}
           catalogID={castInfo?.catalogId}

@@ -8,6 +8,7 @@ import { ExhibitionCatalog, ViewMode } from '@/utils/types';
 import Carousel from './components/carousel/carousel';
 import ArtworkPlayer from '@/components/artworkPlayer';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
+import Image from 'next/image';
 
 const ExhibitionHall = ({
   exhibitionID,
@@ -84,7 +85,7 @@ const ExhibitionHall = ({
         console.error(err);
       });
     }
-  }, [exhibitionID]);
+  }, [exhibitionID, exhibitionDetail]);
 
   useEffect(() => {
     const getPostIndexByID = (id: string) => {
@@ -117,7 +118,7 @@ const ExhibitionHall = ({
 
       setSection(screen);
     }
-  }, [screen, catalogID]);
+  }, [screen, catalogID, exhibitionDetail, posts]);
 
   return (
     <div
@@ -173,10 +174,15 @@ const ExhibitionHall = ({
             </div>
           </div>
           <div className={styles.rightSection}>
-            <img
-              src={FERAL_FILE_ASSET_URL + (exhibitionDetail.coverURI ?? '')}
-              alt={exhibitionDetail.title}
-            />
+            <div
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}>
+              <Image
+                src={FERAL_FILE_ASSET_URL + (exhibitionDetail.coverURI ?? '')}
+                alt={exhibitionDetail.title ?? ''}
+                layout="fill"
+                objectFit="contain"
+              />
+            </div>
           </div>
         </div>
       )}
