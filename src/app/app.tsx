@@ -1,27 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useContext } from 'react';
-import { detect, BrowserInfo } from 'detect-browser';
-import DeviceManager from '../utils/DeviceManager';
-import {
-  Artwork,
-  CastCommand,
-  Daily,
-  PlayArtworkV2,
-  PlaylistToken,
-} from '@/utils/types';
-import ArtworkPlayer from '../components/ArtworkPlayer';
-import { calculateStartTime, getIndex } from '@/utils/Playlist';
-import ExhibitionHall from './exhibitions/exhibitionPlayer';
-import { KeyEvent, DeviceName, Config } from '@/utils/platform';
-import { EventEmitter, Event } from '@/utils/EventEmitter';
-import { AppSettings } from '@/constants';
-import AppService from '@/services/app.service';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import React, { useEffect, useContext } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AppContext } from '@/context/AppContext';
-import ArtworkService from '@/services/ArtworkService';
-import DailyService from '@/services/DailyService';
-import HomePage from '@/components/homePage';
 
 // const enum CastState {
 //   None, // Not casting
@@ -150,6 +131,7 @@ const App: React.FC = () => {
   //   }
   // }, [artworks]);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   // useEffect(() => {
   //   if (castInfo) {
   //     const handleCastCommand = async () => {
@@ -159,6 +141,7 @@ const App: React.FC = () => {
 
   //       switch (castInfo.castCommand) {
   //         case CastCommand.castListArtwork: {
+  //           setDisplayComingSoon(false); // Temporary display coming soon
   //           setDisplayOnboarding(false);
   //           indexRef.current = -1;
   //           const getNftTokens = async (ids: string[]) => {
@@ -166,32 +149,36 @@ const App: React.FC = () => {
   //               return;
   //             }
   //             try {
-  //               const data = await artworkService.current.queryTokens(ids);
-  //               const artworks = castInfo?.artworks;
+  //               const tokens = await artworkService.current.queryTokens(ids);
+  //               const artworks = castInfo.artworks;
   //               if (!artworks) {
   //                 return;
   //               }
 
-  //               if (data) {
-  //                 const previewData: Map<string, string> = new Map();
-  //                 data.tokens.forEach((token: any) => {
-  //                   previewData.set(
-  //                     token.indexID,
-  //                     token.asset.metadata.project.latest.previewURL
-  //                   );
-  //                 });
-  //                 const updatedArtworks = artworks.map((artwork: any) => {
-  //                   return {
-  //                     ...artwork,
-  //                     previewURL: previewData.get(artwork.token.id),
+  //               const previewData = new Map<string, string>();
+  //               tokens.forEach((token: IndexerToken) => {
+  //                 previewData.set(
+  //                   token.indexID,
+  //                   token.asset.metadata.project.latest.previewURL
+  //                 );
+  //               });
+  //               const updatedArtworks = artworks.map(
+  //                 (artwork: PlayArtworkV2) => {
+  //                   const aw: PlaylistToken = {
+  //                     duration: artwork.duration,
+  //                     previewURL:
+  //                       previewData.get(artwork.token?.id ?? '') ?? '',
+  //                     token: artwork.token ?? { id: '' },
   //                   };
-  //                 });
-  //                 setPlaylist(updatedArtworks);
-  //                 if (castInfo.startTime) {
-  //                   setStartTime(castInfo.startTime);
-  //                   const i = getIndex(updatedArtworks, castInfo?.startTime);
-  //                   setCurrentIndex(i);
+
+  //                   return aw;
   //                 }
+  //               );
+  //               setPlaylist(updatedArtworks);
+  //               if (castInfo.startTime) {
+  //                 setStartTime(castInfo.startTime);
+  //                 const i = getIndex(updatedArtworks, castInfo.startTime);
+  //                 setCurrentIndex(i);
   //               }
   //             } catch (error) {
   //               console.log(
@@ -202,9 +189,11 @@ const App: React.FC = () => {
   //           };
   //           if (castInfo.artworks) {
   //             const assetIds = castInfo.artworks.map(
-  //               (artwork: any) => artwork.token.id
+  //               (artwork: PlayArtworkV2) => artwork.token?.id ?? ''
   //             );
-  //             getNftTokens(assetIds);
+  //             getNftTokens(assetIds).catch((error: unknown) => {
+  //               console.error(error);
+  //             });
   //           }
   //           break;
   //         }
@@ -217,26 +206,25 @@ const App: React.FC = () => {
 
   //         case CastCommand.sendKeyboardEvent: {
   //           console.log('Keyboard Event:', castInfo.value);
-  //           setKeyboardCode(castInfo.value);
   //           break;
   //         }
 
   //         case CastCommand.connect: {
   //           if (
   //             !(await DeviceManager.isPreviouslyConnectedDevice(
-  //               castInfo?.deviceInfo?.device_id
+  //               castInfo.deviceInfo?.deviceId ?? ''
   //             ))
   //           ) {
   //             setDisplayOnboarding(true);
-  //             DeviceManager.addPreviouslyConnectedDeviceId(
-  //               castInfo?.deviceInfo?.device_id
+  //             await DeviceManager.addPreviouslyConnectedDeviceId(
+  //               castInfo.deviceInfo?.deviceId ?? ''
   //             );
   //           }
   //           break;
   //         }
 
   //         case CastCommand.castDaily: {
-  //           handleCastDaily();
+  //           await handleCastDaily();
   //           break;
   //         }
 
@@ -251,7 +239,7 @@ const App: React.FC = () => {
   //         }
 
   //         case CastCommand.moveToArtwork: {
-  //           handleMoveToArtwork(castInfo.value);
+  //           handleMoveToArtwork(castInfo.value as string);
   //           break;
   //         }
 
@@ -272,11 +260,20 @@ const App: React.FC = () => {
   //           break;
   //         }
   //         case CastCommand.rotate: {
+  //           setViewMode(
+  //             viewMode === ViewMode.landscape
+  //               ? ViewMode.portrait
+  //               : ViewMode.landscape
+  //           );
+  //           setRotateRadius(rotateRadius + 90);
+
   //           break;
   //         }
   //       }
   //     };
-  //     handleCastCommand();
+  //     handleCastCommand().catch((error: unknown) => {
+  //       console.error(error);
+  //     });
   //   } else {
   //     refreshData();
   //   }
@@ -436,68 +433,77 @@ const App: React.FC = () => {
 
   // Handle cast daily
   // const handleCastDaily = async () => {
-  //   const daily = await dailyService.current.getUpcomingDaily();
-  //   if (!daily) {
-  //     return;
-  //   }
-  //   const ids = daily.map((d: Daily) => {
-  //     switch (d.blockchain) {
-  //       case 'ethereum': {
-  //         return `eth-${d.contractAddress}-${d.tokenID}`;
+  //   try {
+  //     const daily = await dailyService.current.getUpcomingDaily();
+
+  //     const ids = daily.map((d: Daily) => {
+  //       switch (d.blockchain) {
+  //         case 'ethereum': {
+  //           return `eth-${d.contractAddress}-${d.tokenID}`;
+  //         }
+
+  //         case 'bitmark': {
+  //           return `bmk--${d.tokenID}`;
+  //         }
+
+  //         case 'tezos': {
+  //           return `tez-${d.contractAddress}-${d.tokenID}`;
+  //         }
+
+  //         default: {
+  //           return '';
+  //         }
   //       }
+  //     });
 
-  //       case 'bitmark': {
-  //         return `bmk--${d.tokenID}`;
-  //       }
-
-  //       case 'tezos': {
-  //         return `tez-${d.contractAddress}-${d.tokenID}`;
-  //       }
-
-  //       default: {
-  //         return '';
-  //       }
-  //     }
-  //   });
-
-  //   if (ids.length === 0) {
-  //     return;
-  //   }
-
-  //   const data = await artworkService.current.queryTokens(ids);
-  //   const previewData: Map<string, string> = new Map();
-  //   data.tokens.forEach((token: any) => {
-  //     previewData.set(token.id, token.asset.metadata.project.latest.previewURL);
-  //   });
-
-  //   const dailies = daily.map((d: Daily) => {
-  //     return {
-  //       ...d,
-  //       previewURL: previewData.get(d.tokenID),
-  //     };
-  //   });
-
-  //   if (dailies.length > 0) {
-  //     const now = Date.now();
-  //     const currentDisplayTime = new Date(dailies[0].displayTime);
-  //     let nextDisplayTime = currentDisplayTime.setDate(
-  //       currentDisplayTime.getDate() + 1
-  //     );
-  //     if (dailies.length > 1 && dailies[1].displayTime) {
-  //       nextDisplayTime = new Date(dailies[1].displayTime).getTime();
+  //     if (ids.length === 0) {
+  //       return;
   //     }
 
-  //     const delay = nextDisplayTime - now;
-  //     if (dailies[0].previewURL) {
-  //       setCastPreviewURL(dailies[0].previewURL);
-  //       setCastState(CastState.Artwork);
+  //     const data = await artworkService.current.queryTokens(ids);
+  //     const previewData = new Map<string, string>();
+  //     data.forEach((token: IndexerToken) => {
+  //       previewData.set(
+  //         token.id,
+  //         token.asset.metadata.project.latest.previewURL
+  //       );
+  //     });
+
+  //     const dailies = daily.map((d: Daily) => {
+  //       return {
+  //         ...d,
+  //         previewURL: previewData.get(d.tokenID),
+  //       };
+  //     });
+
+  //     if (dailies.length > 0) {
+  //       const now = Date.now();
+  //       const currentDisplayTime = new Date(dailies[0].displayTime);
+  //       let nextDisplayTime = currentDisplayTime.setDate(
+  //         currentDisplayTime.getDate() + 1
+  //       );
+  //       if (dailies.length > 1 && dailies[1].displayTime) {
+  //         nextDisplayTime = new Date(dailies[1].displayTime).getTime();
+  //       }
+
+  //       const delay = nextDisplayTime - now;
+  //       if (dailies[0].previewURL) {
+  //         setCastPreviewURL(dailies[0].previewURL);
+  //         setCastState(CastState.Artwork);
+  //       }
+
+  //       const interval = setInterval(() => {
+  //         handleCastDaily().catch((error: unknown) => {
+  //           console.error(error);
+  //         });
+  //       }, delay);
+
+  //       return () => {
+  //         clearInterval(interval);
+  //       };
   //     }
-
-  //     const interval = setInterval(() => {
-  //       handleCastDaily();
-  //     }, delay);
-
-  //     return () => clearInterval(interval);
+  //   } catch (error) {
+  //     console.error(error);
   //   }
   // };
 
@@ -505,8 +511,6 @@ const App: React.FC = () => {
   //   setCastState(CastState.None);
   //   setCurrentIndex(-1);
   //   indexRef.current = -1;
-  //   setArtworks([]);
-  //   setCurrentArtwork(null);
   //   setPlaylist([]);
   //   setStartTime(0);
   // };
@@ -561,36 +565,47 @@ const App: React.FC = () => {
   if (!context) {
     return <p>There is no App context.</p>;
   }
+
   const { castInfo } = context.data;
 
+  const searchParams = useSearchParams();
   const router = useRouter();
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    const platform = searchParams?.get('platform') ?? '';
+    localStorage.setItem('platform', platform);
+  });
 
   useEffect(() => {
     if (castInfo?.dataChecked) {
+      const handleNavigateDaily = () => {
+        setTimeout(() => {
+          router.replace('/daily');
+        }, 100);
+      };
+
       handleNavigateDaily();
     }
   }, [castInfo]);
 
-  const handleNavigateDaily = () => {
-    setTimeout(() => {
-      router.replace('/daily');
-    }, 100);
-  };
-
-  const query = useSearchParams();
-  useEffect(() => {
-    const platform = query?.get('platform') ?? '';
-    console.log('Platform:', platform);
-    localStorage.setItem('platform', platform);
-  }, []);
-
   try {
-    (window as any).AppState.postMessage(
-      JSON.stringify({
-        handler: 'loaded',
-      })
-    );
-  } catch (error) {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+    console.log('window', window);
+    if (typeof window !== 'undefined') {
+      const appState = (window as any).AppState;
+      if (appState) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        appState.postMessage(
+          JSON.stringify({
+            handler: 'loaded',
+          })
+        );
+      }
+    }
+  } catch (error) {
+    console.error(error);
+  }
 
   return <></>;
 };

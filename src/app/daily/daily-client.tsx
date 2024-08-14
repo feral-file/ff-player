@@ -1,6 +1,6 @@
 'use client';
 
-import ArtworkPlayer from '@/components/artworkPlayer';
+import ArtworkPlayer from '@/components/ArtworkPlayer';
 import { IndexerToken } from '@/models';
 import ArtworkService from '@/services/ArtworkService';
 import DailyService from '@/services/DailyService';

@@ -17,7 +17,10 @@ const useDeviceRotation = () => {
   const [viewMode, setViewMode] = useState<ViewMode | null>(null);
   const [rotateRadius, setRotateRadius] = useState<number>(0);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
+    console.log('window', window);
+
     if (typeof window !== 'undefined') {
       const resizeHandler = () => {
         let minSize;

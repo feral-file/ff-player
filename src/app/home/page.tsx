@@ -37,6 +37,7 @@ export default function HomePage() {
   const artworkService = useRef(new ArtworkService());
 
   // initial setup
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const browser = detect() as BrowserInfo;
@@ -45,19 +46,24 @@ export default function HomePage() {
       }
     }
 
-    DeviceManager.getName().then(name => {
-      console.log('Device Name:', name);
-      setDeviceName(name);
-    });
+    DeviceManager.getName()
+      .then(name => {
+        console.log('Device Name:', name);
+        setDeviceName(name);
+      })
+      .catch((error: unknown) => {
+        console.error(error);
+      });
   }, []);
 
   // Fetch featured artworks
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     let interval: NodeJS.Timeout;
     const fetchArtworks = async () => {
       try {
         const artworks = await artworkService.current.getFeaturedArtworks();
-        if (artworks) {
+        if (artworks.length) {
           setCurrentArtwork(artworks[0]);
           let index = 0;
           interval = setInterval(() => {
@@ -102,6 +108,7 @@ export default function HomePage() {
     }
   }, [currentArtwork]);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (locationID && topicID && deviceName) {
       DeviceManager.setLocationId(locationID);

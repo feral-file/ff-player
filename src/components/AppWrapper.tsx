@@ -6,6 +6,7 @@ import AppService from '@/services/app.service';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { Orientation } from '@/utils/types';
+import { usePathname, useRouter } from 'next/navigation';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 
 const enum CastState {
@@ -24,43 +25,50 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     screenOrientation: Orientation.horizontal,
     rotateRadius: 0,
   };
+  const pathName = usePathname();
+  const router = useRouter();
 
-  // Init
+  // Initialize platform events
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    (window as any).KeyEvent = {
-      handlePlatformEvent: KeyEvent.handlePlatformEvent,
-    };
-    (window as any).DeviceName = {
-      handlePlatformEvent: DeviceName.handlePlatformEvent,
-    };
-    (window as any).Config = {
-      handlePlatformEvent: Config.handlePlatformEvent,
-    };
+    console.log('window', window);
+
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      (window as any).KeyEvent = {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        handlePlatformEvent: KeyEvent.handlePlatformEvent,
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      (window as any).DeviceName = {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        handlePlatformEvent: DeviceName.handlePlatformEvent,
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      (window as any).Config = {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        handlePlatformEvent: Config.handlePlatformEvent,
+      };
+    }
   }, []);
 
-  // listen castInfo
-
-  // handle redirect to daily
-
-  // ----------------- Listen back event -----------------
+  // Handle keydown event
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    const handleEscapeKey = () => {
-      console.log('Escape key pressed');
-      // if (castStatusRef.current) {
-      //   refreshData();
-      //   if (canvasService?.current != null) {
-      //     canvasService?.current?.disconnect({});
-      //   }
-      //   clearTimer();
-      // }
+    const handleKeyDown = () => {
+      if (pathName === 'daily') {
+        router.replace('/home');
+      } else if (pathName === 'home') {
+        router.replace('/daily');
+      }
     };
 
-    EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
-    EventEmitter.subscribe(Event.escape, handleEscapeKey);
+    EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
+    EventEmitter.subscribe(Event.keyDown, handleKeyDown);
 
     // Cleanup the event listener on component unmount
     return () => {
-      EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+      EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
     };
   }, []);
 
@@ -78,14 +86,24 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     } catch (error) {}
   }, [castState]);
 
-  // ----------------- Listen back event -----------------
+  // Check version update
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    checkVersion();
-    const intervalID = setInterval(async () => {
-      checkVersion();
-    }, AppSettings.VERSION_CHECK_INTERVAL_DURATION);
+    const validateVersion = async () => {
+      await checkVersion();
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      const intervalID = setInterval(async () => {
+        await checkVersion();
+      }, AppSettings.VERSION_CHECK_INTERVAL_DURATION);
 
-    return () => clearInterval(intervalID);
+      return () => {
+        clearInterval(intervalID);
+      };
+    };
+
+    validateVersion().catch((error: unknown) => {
+      console.error(error);
+    });
   }, []);
 
   const checkVersion = async () => {

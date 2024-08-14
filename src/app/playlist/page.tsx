@@ -32,6 +32,7 @@ export default function PlayList() {
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (currentIndex < 0) {
       return;
@@ -94,6 +95,14 @@ export default function PlayList() {
     startInterval(remainTimeRef.current);
   };
 
+  const handleNext = () => {
+    const i = (currentIndex + 1) % playlist.length;
+    const st = calculateStartTime(playlist, i);
+    setStartTime(st);
+    clearTimer();
+    setCurrentIndex(i);
+  };
+
   const handlePrevious = () => {
     let i: number;
     if (currentIndex === 0) {
@@ -102,14 +111,6 @@ export default function PlayList() {
       i = (currentIndex - 1) % playlist.length;
     }
 
-    const st = calculateStartTime(playlist, i);
-    setStartTime(st);
-    clearTimer();
-    setCurrentIndex(i);
-  };
-
-  const handleNext = () => {
-    const i = (currentIndex + 1) % playlist.length;
     const st = calculateStartTime(playlist, i);
     setStartTime(st);
     clearTimer();
@@ -229,7 +230,7 @@ export default function PlayList() {
           }
 
           case CastCommand.moveToArtwork: {
-            handleMoveToArtwork(castInfo.value);
+            handleMoveToArtwork(castInfo.value as string);
             break;
           }
 
@@ -250,6 +251,12 @@ export default function PlayList() {
             break;
           }
           case CastCommand.rotate: {
+            // setViewMode(
+            //   viewMode === ViewMode.landscape
+            //     ? ViewMode.portrait
+            //     : ViewMode.landscape
+            // );
+            // setRotateRadius(rotateRadius + 90);
             break;
           }
         }
