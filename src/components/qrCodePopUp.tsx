@@ -13,7 +13,7 @@ const QrCodePopUp = () => {
   const { screenRatio } = context?.deviceRotation ?? {
     screenRatio: 1,
   };
-  const { locationID, topicID } = context?.data ?? {};
+  const { locationID, topicID } = context?.websocketData ?? {};
 
   useEffect(() => {
     if (locationID && topicID) {

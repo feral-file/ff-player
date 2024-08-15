@@ -3,7 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { AppProvider } from '../context/AppContext';
 import AppWrapper from '@/components/AppWrapper';
-import QrCodePopUp from '@/components/qrCodePopUp';
+import QrCodePopUp from '@/components/QrCodePopUp';
 import LostConnectionModal from '@/components/LostConnectionModal';
 
 const inter = Inter({ subsets: ['latin'] });

@@ -178,8 +178,7 @@ class CanvasService {
   private async connect(request: ConnectRequestV2): Promise<ConnectReplyV2> {
     console.log('connect', JSON.stringify(request));
 
-    const deviceInfo = await DeviceManager.getDeviceInfo(); // Get the website’s device info
-
+    const deviceInfo = await DeviceManager.getDeviceInfo();
     if (!deviceInfo) {
       console.error('Device info is not available');
       return { ok: false };
@@ -187,17 +186,17 @@ class CanvasService {
 
     this.clientDeviceInfo = request.clientDevice;
     this.setCastInfo({
-      artworks: [],
+      castCommand: CastCommand.connect,
       deviceInfo: this.clientDeviceInfo,
-      startTime: Date.now(),
     });
+
     console.log('_connected device:', JSON.stringify(this.clientDeviceInfo));
     return { ok: true };
   }
 
-  public disconnect(request: unknown): Promise<DisconnectReplyV2> {
+  private disconnect(request: unknown): Promise<DisconnectReplyV2> {
     console.log('disconnect', JSON.stringify(request));
-    this.onDisconnect();
+    this.setCastInfo(null);
     return Promise.resolve({ ok: true });
   }
 
@@ -348,11 +347,6 @@ class CanvasService {
       value: request.code,
     });
     return Promise.resolve({ ok: true });
-  }
-
-  private onDisconnect() {
-    console.log('onDisconnect');
-    this.setCastInfo(null);
   }
 
   // private setTimer(state: unknown, onNext: Function | null) {

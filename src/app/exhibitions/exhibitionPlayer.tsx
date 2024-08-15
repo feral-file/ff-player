@@ -17,7 +17,12 @@ const ExhibitionHall = () => {
   if (!context) {
     return <p>There is no App context.</p>;
   }
+
   const { castInfo } = context.websocketData;
+  const { screenRatio, viewMode } = context.deviceRotation ?? {
+    screenRatio: 1,
+    viewMode: ViewMode.landscape,
+  };
 
   const [exhibitionID, setExhibitionID] = useState<string | undefined>();
   const [catalogID, setCatalogID] = useState<string | undefined>();
@@ -32,13 +37,11 @@ const ExhibitionHall = () => {
   const [posts, setPosts] = useState<Post[] | undefined>();
   const [postIndex, setPostIndex] = useState<number>(0);
   const [artwork, setArtwork] = useState<Artwork>();
+
+  // Services
   const exhibitionService = useRef(new ExhibitionService());
   const seriesService = useRef(new SeriesService());
   const postService = useRef(new PostService());
-  const { screenRatio, viewMode } = useContext(AppContext)?.deviceRotation ?? {
-    screenRatio: 1,
-    viewMode: ViewMode.landscape,
-  };
 
   const FERAL_FILE_ASSET_URL =
     (process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? '') + '/';
@@ -56,15 +59,11 @@ const ExhibitionHall = () => {
     }
 
     artwork.previewURI = seriesService.current.getArtworkPreview(artwork);
-    console.log('artwork', artwork);
-    console.log('artwork.previewURI', artwork.previewURI);
-
     setArtwork(artwork);
   };
 
   useEffect(() => {
     console.log('castInfo', castInfo);
-
     if (castInfo) {
       const handleCastCommand = async () => {
         if (castInfo.castCommand === CastCommand.castExhibition) {
@@ -73,15 +72,11 @@ const ExhibitionHall = () => {
           setScreen(castInfo.catalog);
         }
       };
-      handleCastCommand().catch((error: unknown) => {
-        console.error(error);
-      });
+      handleCastCommand().catch(console.error);
     }
   }, [castInfo]);
 
   useEffect(() => {
-    console.log('exhibitionID', exhibitionID);
-
     // fetch exhibition detail
     const fetchExhibitionDetail = async () => {
       if (!exhibitionID) {

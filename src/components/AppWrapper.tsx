@@ -9,7 +9,6 @@ import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
 import { usePathname, useRouter } from 'next/navigation';
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import LostConnectionModal from './LostConnectionModal';
 import OnboardingModal from './OnboardingModal';
 
 const enum CastState {
@@ -21,25 +20,22 @@ const enum CastState {
 const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const context = useContext(AppContext);
   if (!context) {
-    return <p>There is no App context.</p>;
+    return <div></div>;
   }
 
   const pathName = usePathname();
   const router = useRouter();
+
   const { castInfo } = context.websocketData;
   const { screenOrientation, rotateRadius } = context.deviceRotation ?? {
     screenOrientation: Orientation.horizontal,
     rotateRadius: 0,
   };
   const [castState, setCastState] = useState<CastState>(CastState.None);
-  const castStatusRef = useRef(false);
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
 
   // Initialize platform events
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    console.log('window', window);
-
     if (typeof window !== 'undefined') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       (window as any).KeyEvent = {
@@ -73,23 +69,10 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
     EventEmitter.subscribe(Event.keyDown, handleKeyDown);
 
-    // Cleanup the event listener on component unmount
     return () => {
       EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
     };
   }, []);
-
-  useEffect(() => {
-    castStatusRef.current = castState !== CastState.None;
-    try {
-      (window as any).AppState.postMessage(
-        JSON.stringify({
-          handler: 'backAbleChanged',
-          data: castStatusRef.current,
-        })
-      );
-    } catch (error) {}
-  }, [castState]);
 
   // Check version update
   // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -98,7 +81,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       await checkVersion();
       // eslint-disable-next-line @typescript-eslint/no-misused-promises
       const intervalID = setInterval(async () => {
-        await checkVersion();
+        checkVersion().catch(console.error);
       }, AppSettings.VERSION_CHECK_INTERVAL_DURATION);
 
       return () => {
@@ -106,9 +89,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       };
     };
 
-    validateVersion().catch((error: unknown) => {
-      console.error(error);
-    });
+    validateVersion().catch(console.error);
   }, []);
 
   const checkVersion = async () => {
@@ -123,10 +104,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    console.log('--------------');
     console.log('Cast Info:', castInfo);
-    console.log('--------------');
-
     if (castInfo) {
       const handleCastCommand = async () => {
         switch (castInfo.castCommand) {
@@ -159,9 +137,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
           case CastCommand.castExhibition: {
             setDisplayOnboarding(false);
-
-            console.log('castState:', castState);
-
             if (castState === CastState.Exhibition) {
               return;
             }
@@ -172,6 +147,10 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               : router.replace('/exhibitions');
             break;
           }
+
+          default: {
+            break;
+          }
         }
       };
       handleCastCommand().catch((error: unknown) => {
@@ -179,48 +158,49 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       });
     } else {
       if (castState !== CastState.None) {
+        // Disconnect
         setCastState(CastState.None);
-        console.log('router.back()');
-
         router.back();
       }
     }
   }, [castInfo]);
 
   return (
-    <div
-      style={{
-        width:
-          (screenOrientation === Orientation.vertical &&
-            (rotateRadius || 0) % 180 !== 90) ||
-          (screenOrientation === Orientation.horizontal &&
-            (rotateRadius || 0) % 180 === 0)
-            ? '100vw'
-            : '100vh',
-        height:
-          (screenOrientation === Orientation.vertical &&
-            (rotateRadius || 0) % 180 !== 90) ||
-          (screenOrientation === Orientation.horizontal &&
-            (rotateRadius || 0) % 180 === 0)
-            ? '100vh'
-            : '100vw',
-        transform: `rotate(${-(rotateRadius || 0)}deg) `,
-        transformOrigin: `${
-          (screenOrientation === Orientation.vertical &&
-            (rotateRadius || 0) % 360 !== 90) ||
-          (screenOrientation === Orientation.horizontal &&
-            (rotateRadius || 0) % 360 !== 90)
-            ? '50vw center'
-            : 'center 50vh'
-        }`,
-        transition: 'transform 0.2s',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}>
+    <>
       {displayOnboarding && <OnboardingModal />}
-      {children}
-    </div>
+      <div
+        style={{
+          width:
+            (screenOrientation === Orientation.vertical &&
+              (rotateRadius || 0) % 180 !== 90) ||
+            (screenOrientation === Orientation.horizontal &&
+              (rotateRadius || 0) % 180 === 0)
+              ? '100vw'
+              : '100vh',
+          height:
+            (screenOrientation === Orientation.vertical &&
+              (rotateRadius || 0) % 180 !== 90) ||
+            (screenOrientation === Orientation.horizontal &&
+              (rotateRadius || 0) % 180 === 0)
+              ? '100vh'
+              : '100vw',
+          transform: `rotate(${-(rotateRadius || 0)}deg) `,
+          transformOrigin: `${
+            (screenOrientation === Orientation.vertical &&
+              (rotateRadius || 0) % 360 !== 90) ||
+            (screenOrientation === Orientation.horizontal &&
+              (rotateRadius || 0) % 360 !== 90)
+              ? '50vw center'
+              : 'center 50vh'
+          }`,
+          transition: 'transform 0.2s',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+        {children}
+      </div>
+    </>
   );
 };
 

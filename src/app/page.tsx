@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import App from './app';
 
-export default function Page() {
+export default function AppPage() {
   return (
     <>
       <Suspense>
