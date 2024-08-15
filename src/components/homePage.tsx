@@ -29,7 +29,9 @@ const HomePage = ({
         return `${process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? ''}/${previewURI}`;
       }
     };
-    setPreviewURL(formatPreviewURL(currentArtwork?.previewURI ?? ''));
+    if (currentArtwork?.previewURI) {
+      setPreviewURL(formatPreviewURL(currentArtwork.previewURI));
+    }
   }, [currentArtwork]);
   return (
     <>

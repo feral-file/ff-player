@@ -3,10 +3,7 @@ import { gql } from '@apollo/client';
 import createApolloClient from '@/utils/ApolloClient';
 import { IndexerToken } from '@/models';
 import axiosInstance from './axiosService';
-
-const a2pSuffix = '<A2P>';
-const tezosSuffix = '_tez';
-const custodySuffix = '_custody';
+import { removeArtistAliasSuffixes } from '@/utils/ui/formatAlias';
 
 class ArtworkService {
   public async getFeaturedArtworks(): Promise<Artwork[]> {
@@ -19,19 +16,12 @@ class ArtworkService {
     return artworks;
   }
 
-  private removeArtistAliasSuffixes(value: string): string {
-    return value
-      .replace(new RegExp(`${a2pSuffix}$`), '')
-      .replace(new RegExp(`${tezosSuffix}$`), '')
-      .replace(new RegExp(`${custodySuffix}$`), '');
-  }
-
   private fetchArtist = async (artistID?: string): Promise<string> => {
     const response = await axiosInstance.get(`/api/accounts/${artistID ?? ''}`);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const artistAlias = (response.data.result.alias ?? '') as string;
 
-    return this.removeArtistAliasSuffixes(artistAlias);
+    return removeArtistAliasSuffixes(artistAlias);
   };
 
   public async queryTokens(ids: string[]): Promise<IndexerToken[]> {

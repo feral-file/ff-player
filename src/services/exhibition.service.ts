@@ -2,6 +2,7 @@ import { SOURCE_EXHIBITION_ID } from '@/utils/constants';
 import { Exhibition, Series } from '@/models';
 import axiosInstance from './axiosService';
 import axios from 'axios';
+import { removeArtistAliasSuffixes } from '@/utils/ui/formatAlias';
 
 export class ExhibitionService {
   public async getExhibition(id: string) {
@@ -11,10 +12,21 @@ export class ExhibitionService {
       }
 
       const response = await axiosInstance.get(`/api/exhibitions/${id}`);
-      console.log('response', response);
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const exhibition = response.data.result as Exhibition;
+
+      // Format artist/ curator alias remove suffix
+      if (exhibition.curator)
+        exhibition.curator.alias = removeArtistAliasSuffixes(
+          exhibition.curator.alias ?? ''
+        );
+      if (exhibition.artists) {
+        exhibition.artists.map(artist => {
+          artist.alias = removeArtistAliasSuffixes(artist.alias ?? '');
+        });
+      }
+
       return exhibition;
     } catch (error) {
       console.log('Failed to load exhibition:', error);
@@ -23,26 +35,15 @@ export class ExhibitionService {
 
   private async getSourceExhibition(): Promise<Exhibition | undefined> {
     try {
-      console.log(
-        `${
-          process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
-        }/source_exhibition/exhibition.json`
-      );
-
       const response = await axios.get(
         `${
           process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
         }/source_exhibition/exhibition.json`
       );
-      console.log('response', response);
 
       const exhibition = response.data as Exhibition;
-      console.log('exhibition', exhibition);
       const series = await this.getSourceSeries();
-      console.log('series', series);
       exhibition.series = series;
-      console.log('exhibition', exhibition);
-
       return exhibition;
     } catch (error) {
       console.log('Failed to load Source exhibition:', error);
@@ -56,7 +57,6 @@ export class ExhibitionService {
           process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
         }/source_exhibition/series.json`
       );
-      console.log('response', response);
 
       const series = response.data as Series[];
       return series;
