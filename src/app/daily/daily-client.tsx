@@ -6,7 +6,6 @@ import ArtworkService from '@/services/ArtworkService';
 import DailyService from '@/services/DailyService';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Daily } from '@/utils/types';
-import { da } from 'date-fns/locale';
 import { useEffect, useRef, useState } from 'react';
 
 export default function DailyClient() {
