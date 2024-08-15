@@ -14,16 +14,10 @@ import { AppContext } from '@/context/AppContext';
 interface CarouselProps {
   items: Post[];
   index: number;
-  onLoad: boolean;
   screenRatio: number;
 }
 
-const Carousel: React.FC<CarouselProps> = ({
-  items,
-  index,
-  onLoad,
-  screenRatio,
-}) => {
+const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
   const [swiper, setSwiper] = useState<SwiperType | null>(null);
   const [spaceBetween, setSpaceBetween] = useState(250);
   const viewMode = useContext(AppContext)?.deviceRotation?.viewMode;

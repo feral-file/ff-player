@@ -38,7 +38,7 @@ export default function PlaylistClient() {
       return;
     }
 
-    if (playlist?.length === 0) {
+    if (playlist.length === 0) {
       return;
     }
 
@@ -71,7 +71,7 @@ export default function PlaylistClient() {
     });
 
     const i = currentIndex % playlist.length;
-    let remainTime = Date.now() - startPlayArtworkTime.current;
+    const remainTime = Date.now() - startPlayArtworkTime.current;
     const st = calculateStartTime(updatedPlaylist, i, remainTime + 100);
     setStartTime(st);
     setPlaylist(updatedPlaylist);
@@ -118,7 +118,7 @@ export default function PlaylistClient() {
 
   const handleMoveToArtwork = (tokenID: string) => {
     const index = playlist.findIndex(
-      (p: PlaylistToken) => p.token?.id === tokenID
+      (p: PlaylistToken) => p.token.id === tokenID
     );
     if (index < 0) {
       return;
@@ -150,7 +150,7 @@ export default function PlaylistClient() {
 
   useEffect(() => {
     if (castInfo) {
-      const handleCastCommand = async () => {
+      const handleCastCommand = () => {
         switch (castInfo.castCommand) {
           case CastCommand.castListArtwork: {
             indexRef.current = -1;
@@ -248,7 +248,7 @@ export default function PlaylistClient() {
   return (
     <>
       <div style={{ width: '100vw', height: '100vh' }}>
-        <ArtworkPlayer previewURL={castPreviewURL!} />
+        <ArtworkPlayer previewURL={castPreviewURL ?? ''} />
       </div>
     </>
   );

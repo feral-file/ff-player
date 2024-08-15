@@ -12,6 +12,7 @@ import { BrowserInfo, detect } from 'detect-browser';
 import ArtworkService from '@/services/ArtworkService';
 import DeviceManager from '@/utils/DeviceManager';
 import { AppContext } from '@/context/AppContext';
+import { ca } from 'date-fns/locale';
 
 export default function HomeClient() {
   const context = useContext(AppContext);
@@ -39,7 +40,7 @@ export default function HomeClient() {
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const browser = detect() as BrowserInfo;
+      const browser = detect() as BrowserInfo | null;
       if (browser) {
         setDeviceName(`${browser.os} - ${browser.name} ${browser.version}`);
       }
@@ -49,7 +50,9 @@ export default function HomeClient() {
       .then(name => {
         setDeviceName(name);
       })
-      .catch(console.error);
+      .catch((error: unknown) => {
+        console.error(error);
+      });
   }, []);
 
   // Fetch featured artworks
@@ -110,8 +113,12 @@ export default function HomeClient() {
       DeviceManager.setLocationId(locationID);
       DeviceManager.setTopicId(topicID);
       const generateBranchLink = async () => {
-        const url = await DeviceManager.getOrGenerateBranchLink();
-        setBranchLink(url);
+        try {
+          const url = await DeviceManager.getOrGenerateBranchLink();
+          setBranchLink(url);
+        } catch (error: unknown) {
+          console.error(error);
+        }
       };
       generateBranchLink();
     }

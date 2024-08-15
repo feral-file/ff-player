@@ -7,7 +7,7 @@ import DeviceManager from '@/utils/DeviceManager';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import React, { useContext, useEffect, useState } from 'react';
 import OnboardingModal from './OnboardingModal';
 
@@ -23,7 +23,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return <div></div>;
   }
 
-  const pathName = usePathname();
   const router = useRouter();
 
   const { castInfo } = context.websocketData;
@@ -76,8 +75,10 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const validateVersion = async () => {
       await checkVersion();
       // eslint-disable-next-line @typescript-eslint/no-misused-promises
-      const intervalID = setInterval(async () => {
-        checkVersion().catch(console.error);
+      const intervalID = setInterval(() => {
+        checkVersion().catch((error: unknown) => {
+          console.error(error);
+        });
       }, AppSettings.VERSION_CHECK_INTERVAL_DURATION);
 
       return () => {
@@ -85,7 +86,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       };
     };
 
-    validateVersion().catch(console.error);
+    validateVersion().catch((error: unknown) => {
+      console.error(error);
+    });
   }, []);
 
   const checkVersion = async () => {
@@ -125,9 +128,12 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             }
 
             setCastState(CastState.Artwork);
-            castState === CastState.None
-              ? router.push('/playlist')
-              : router.replace('/playlist');
+            if (castState === CastState.None) {
+              router.push('/playlist');
+            } else {
+              router.replace('/playlist');
+            }
+
             break;
           }
 
@@ -138,9 +144,12 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             }
 
             setCastState(CastState.Exhibition);
-            castState === CastState.None
-              ? router.push('/exhibitions')
-              : router.replace('/exhibitions');
+            if (castState === CastState.None) {
+              router.push('/exhibitions');
+            } else {
+              router.replace('/exhibitions');
+            }
+
             break;
           }
 

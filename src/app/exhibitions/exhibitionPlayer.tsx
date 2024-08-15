@@ -10,7 +10,6 @@ import ArtworkPlayer from '@/components/ArtworkPlayer';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
 import Image from 'next/image';
 import { AppContext } from '@/context/AppContext';
-import { set } from 'date-fns';
 
 const ExhibitionHall = () => {
   const context = useContext(AppContext);
@@ -65,14 +64,14 @@ const ExhibitionHall = () => {
   useEffect(() => {
     console.log('castInfo', castInfo);
     if (castInfo) {
-      const handleCastCommand = async () => {
+      const handleCastCommand = () => {
         if (castInfo.castCommand === CastCommand.castExhibition) {
           setExhibitionID(castInfo.exhibitionId);
           setCatalogID(castInfo.catalogId);
           setScreen(castInfo.catalog);
         }
       };
-      handleCastCommand().catch(console.error);
+      handleCastCommand();
     }
   }, [castInfo]);
 
@@ -219,10 +218,6 @@ const ExhibitionHall = () => {
               <Carousel
                 items={posts}
                 index={postIndex}
-                onLoad={[
-                  ExhibitionCatalog.curatorNote,
-                  ExhibitionCatalog.resource,
-                ].includes(pageSection)}
                 screenRatio={screenRatio}></Carousel>
             </div>
           </div>

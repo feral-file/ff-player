@@ -62,7 +62,7 @@ export default function DailyClient() {
   };
 
   // Handle cast daily
-  const handleCastDaily = async () => {
+  async function handleCastDaily() {
     try {
       const daily = await getDailies();
       const ids = daily.map((d: Daily) => {
@@ -109,7 +109,7 @@ export default function DailyClient() {
     } catch (error) {
       console.error(error);
     }
-  };
+  }
 
   const startInterval = (duration: number) => {
     clearTimer();

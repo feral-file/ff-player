@@ -7,15 +7,14 @@ const App: React.FC = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     const platform = searchParams?.get('platform') ?? '';
     localStorage.setItem('platform', platform);
 
     setTimeout(() => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
         if (typeof window !== 'undefined') {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
           const appState = (window as any).AppState;
           if (appState) {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access

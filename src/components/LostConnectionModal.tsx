@@ -1,7 +1,7 @@
 'use client';
 
 import { AppContext } from '@/context/AppContext';
-import { useContext, useEffect, useState } from 'react';
+import { useContext } from 'react';
 import MessageModal from './MessageModal';
 
 export default function LostConnectionModal() {
