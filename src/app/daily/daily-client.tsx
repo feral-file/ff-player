@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 export default function DailyClient() {
   const artworkService = useRef(new ArtworkService());
   const dailyService = useRef(new DailyService());
-  const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
+  const timeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
 
@@ -119,16 +119,18 @@ export default function DailyClient() {
           setCastPreviewURL(dailies[0].previewURL);
         }
 
-        startInterval(delay);
+        if (delay > 0) {
+          startTimeout(delay);
+        }
       }
     } catch (error) {
       console.error(error);
     }
   };
 
-  const startInterval = (duration: number) => {
+  const startTimeout = (duration: number) => {
     clearTimer();
-    intervalRef.current = setInterval(() => {
+    timeoutRef.current = setTimeout(() => {
       handleCastDaily().catch((error: unknown) => {
         console.error(error);
       });
@@ -136,9 +138,9 @@ export default function DailyClient() {
   };
 
   const clearTimer = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = undefined;
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = undefined;
     }
   };
 
