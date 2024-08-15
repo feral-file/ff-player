@@ -15,8 +15,6 @@ const useDeviceRotation = () => {
   const [rotateRadius, setRotateRadius] = useState<number>(0);
 
   useEffect(() => {
-    console.log('window', window);
-
     if (typeof window !== 'undefined') {
       const resizeHandler = () => {
         let minSize;

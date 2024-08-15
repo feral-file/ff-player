@@ -42,7 +42,9 @@ export default function HomeClient() {
     if (typeof window !== 'undefined') {
       const browser = detect() as BrowserInfo | null;
       if (browser) {
-        setDeviceName(`${browser.os} - ${browser.name} ${browser.version}`);
+        setDeviceName(
+          `${browser.os ?? ''} - ${browser.name} ${browser.version}`
+        );
       }
     }
 
