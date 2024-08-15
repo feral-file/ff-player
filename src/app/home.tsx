@@ -111,7 +111,6 @@ const Home: React.FC = () => {
     };
   }, []);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const browser = detect() as BrowserInfo | null;
