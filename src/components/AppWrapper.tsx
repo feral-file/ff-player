@@ -60,7 +60,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     const handleKeyDown = () => {
-      setDisplayOnboarding(!displayOnboarding);
+      setShowQrCode(!showQrCode);
     };
 
     EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
