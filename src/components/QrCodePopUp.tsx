@@ -62,7 +62,7 @@ const QrCodePopUp = () => {
         padding: screenRatio * 40,
         gap: screenRatio * 40,
         zIndex: 3,
-        fontSize: screenRatio * 14,
+        fontSize: screenRatio * 28,
         lineHeight: 1.4,
         color: '#ffffff',
       }}>
@@ -70,19 +70,19 @@ const QrCodePopUp = () => {
         style={{
           display: 'flex',
           justifyContent: 'space-between',
-          gap: screenRatio * 200,
+          gap: screenRatio * 100,
           width: '100%s',
         }}>
         <Image
           src={'/feralfile-logo.svg'}
           alt="FF logo"
-          width={screenRatio * 224}
-          height={screenRatio * 23}></Image>
+          width={screenRatio * 448}
+          height={screenRatio * 46}></Image>
         <Image
           src={'/close.svg'}
           alt="Close"
-          width={screenRatio * 22}
-          height={screenRatio * 22}></Image>
+          width={screenRatio * 44}
+          height={screenRatio * 44}></Image>
       </div>
       <div>
         <div
@@ -117,9 +117,11 @@ const QrCodePopUp = () => {
       </div>
       <div style={{ display: 'flex', gap: screenRatio * 20 }}>
         {branchLink ? (
-          <QRCode value={branchLink} size={screenRatio * 86}></QRCode>
+          <QRCode value={branchLink} size={screenRatio * 258}></QRCode>
         ) : (
-          <p>Connecting...</p>
+          <p style={{ width: screenRatio * 258, height: screenRatio * 258 }}>
+            Connecting...
+          </p>
         )}
         <p style={{ maxWidth: '32%' }}>
           Get the Feral File app on your phone to browse and display over 15,000
