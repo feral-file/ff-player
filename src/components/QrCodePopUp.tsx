@@ -70,8 +70,8 @@ const QrCodePopUp = () => {
         style={{
           display: 'flex',
           justifyContent: 'space-between',
-          gap: screenRatio * 100,
-          width: '100%s',
+          gap: screenRatio * 500,
+          width: '100%',
         }}>
         <Image
           src={'/feralfile-logo.svg'}
@@ -123,10 +123,12 @@ const QrCodePopUp = () => {
             Connecting...
           </p>
         )}
-        <p style={{ maxWidth: '32%' }}>
-          Get the Feral File app on your phone to browse and display over 15,000
-          artworks on your tv.
-        </p>
+        <div style={{ width: screenRatio * 500 }}>
+          <p>
+            Get the Feral File app on your phone to browse and display over
+            15,000 artworks on your tv.
+          </p>
+        </div>
       </div>
     </div>
   );
