@@ -64,6 +64,7 @@ const QrCodePopUp = () => {
         zIndex: 3,
         fontSize: screenRatio * 14,
         lineHeight: 1.4,
+        color: '#ffffff',
       }}>
       <div
         style={{
@@ -87,11 +88,10 @@ const QrCodePopUp = () => {
         <div
           style={{
             borderBottom: '1px solid #ffffff',
-
             display: 'flex',
             justifyContent: 'space-between',
             width: '100%',
-            padding: screenRatio * 10,
+            paddingBottom: screenRatio * 10,
           }}>
           <p>Today’s daily</p>
           <p
