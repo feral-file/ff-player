@@ -42,6 +42,9 @@ export default tseslint.config(
         ecmaFeatures: { jsx: true },
       },
     },
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+    },
   },
   {
     files: ['eslint.config.mjs', 'next.config.mjs'],

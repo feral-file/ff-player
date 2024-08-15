@@ -103,7 +103,7 @@ export default function HomeClient() {
       }
     };
 
-    if (currentArtwork) {
+    if (currentArtwork?.previewURI) {
       setPreviewURL(formatPreviewURL(currentArtwork.previewURI));
     }
   }, [currentArtwork]);
