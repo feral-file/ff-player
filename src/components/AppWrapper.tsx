@@ -228,7 +228,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           justifyContent: 'center',
           alignItems: 'center',
         }}>
-        <p>{showQrCode}</p>
         {children}
         {showQrCode && <QrCodePopUp></QrCodePopUp>}
       </div>
