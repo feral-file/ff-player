@@ -87,13 +87,13 @@ const Home: React.FC = () => {
   const { locationID, topicID, castInfo } = data;
   const isOnline = context.isOnline;
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   useEffect(() => {
     const platform = query.get('platform') ?? '';
     localStorage.setItem('platform', platform);
   });
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   useEffect(() => {
     const handleKeyDown = () => {
       console.log('Key pressed');
@@ -139,7 +139,7 @@ const Home: React.FC = () => {
     }
   }, []);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   useEffect(() => {
     if (locationID && topicID && deviceName) {
       DeviceManager.setLocationId(locationID);
@@ -154,7 +154,7 @@ const Home: React.FC = () => {
     }
   }, [locationID, topicID, deviceName]);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   useEffect(() => {
     const fetchArtworks = async () => {
       try {
@@ -174,7 +174,7 @@ const Home: React.FC = () => {
     });
   }, []);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   useEffect(() => {
     if (artworks.length > 0) {
       let index = 0;
@@ -189,7 +189,7 @@ const Home: React.FC = () => {
     }
   }, [artworks]);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   useEffect(() => {
     if (castInfo) {
       const handleCastCommand = async () => {
@@ -337,7 +337,7 @@ const Home: React.FC = () => {
     }
   }, [castInfo]);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   useEffect(() => {
     if (typeof window !== 'undefined') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
@@ -360,7 +360,7 @@ const Home: React.FC = () => {
     setDidRegisterPlatformEvents(true);
   }, []);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   useEffect(() => {
     if (didRegisterPlatformEvents) {
       console.log('Registering platform events');
@@ -375,7 +375,7 @@ const Home: React.FC = () => {
     }
   }, [didRegisterPlatformEvents]);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   useEffect(() => {
     if (currentIndex < 0) {
       return;
@@ -606,7 +606,7 @@ const Home: React.FC = () => {
     }
   };
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   useEffect(() => {
     const validateVersion = async () => {
       await checkVersion();
@@ -625,7 +625,7 @@ const Home: React.FC = () => {
     });
   }, []);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   useEffect(() => {
     if (castInfo?.dataChecked && !castInfo.castCommand) {
       const handleNavigateDaily = () => {
