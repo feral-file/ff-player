@@ -8,7 +8,7 @@ import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
 import { usePathname, useRouter } from 'next/navigation';
-import React, { useContext, useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import OnboardingModal from './OnboardingModal';
 
 const enum CastState {
@@ -59,11 +59,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     const handleKeyDown = () => {
-      if (pathName === 'daily') {
-        router.replace('/home');
-      } else if (pathName === 'home') {
-        router.replace('/daily');
-      }
+      setDisplayOnboarding(!displayOnboarding);
     };
 
     EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);

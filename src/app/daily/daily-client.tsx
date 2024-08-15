@@ -4,7 +4,6 @@ import ArtworkPlayer from '@/components/ArtworkPlayer';
 import { IndexerToken } from '@/models';
 import ArtworkService from '@/services/ArtworkService';
 import DailyService from '@/services/DailyService';
-import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Daily } from '@/utils/types';
 import { useEffect, useRef, useState } from 'react';
 
@@ -19,20 +18,6 @@ export default function DailyClient() {
 
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [dailies, setDailies] = useState<Daily[]>([]);
-
-  useEffect(() => {
-    const handleKeyDown = () => {
-      history.back();
-    };
-
-    EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
-    EventEmitter.subscribe(Event.keyDown, handleKeyDown);
-
-    // Cleanup the event listener on component unmount
-    return () => {
-      EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
-    };
-  }, []);
 
   useEffect(() => {
     if (effectRan.current) {
