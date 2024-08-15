@@ -149,6 +149,8 @@ export default function PlaylistClient() {
   };
 
   useEffect(() => {
+    console.log('castInfo', castInfo);
+
     if (castInfo) {
       const handleCastCommand = () => {
         switch (castInfo.castCommand) {
@@ -240,7 +242,7 @@ export default function PlaylistClient() {
 
   return (
     <>
-      <div style={{ width: '100vw', height: '100vh' }}>
+      <div style={{ width: '100%', height: '100%' }}>
         <ArtworkPlayer previewURL={castPreviewURL ?? ''} />
       </div>
     </>

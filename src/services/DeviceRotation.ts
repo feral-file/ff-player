@@ -1,12 +1,8 @@
 import { AppSettings } from '@/constants';
-import { AppContext } from '@/context/AppContext';
-import { CastCommand, Orientation, ViewMode } from '@/utils/types';
-import { useContext, useEffect, useState } from 'react';
+import { CastCommand, CastInfo, Orientation, ViewMode } from '@/utils/types';
+import { useEffect, useState } from 'react';
 
-const useDeviceRotation = () => {
-  const context = useContext(AppContext);
-  const { castInfo } = context?.websocketData ?? {};
-
+const useDeviceRotation = (castInfo: CastInfo | null) => {
   const [screenOrientation, setScreenOrientation] = useState<Orientation>(
     Orientation.horizontal
   );
@@ -42,7 +38,8 @@ const useDeviceRotation = () => {
       );
       setRotateRadius(rotateRadius + 90);
     }
-  }, [castInfo, rotateRadius, viewMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [castInfo]);
 
   return { screenOrientation, screenRatio, viewMode, rotateRadius };
 };

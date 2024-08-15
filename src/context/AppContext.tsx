@@ -40,7 +40,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   );
 
   const isOnline = useNetworkManger();
-  const deviceRotation = useDeviceRotation();
+  const deviceRotation = useDeviceRotation(websocketData.castInfo);
 
   return (
     <AppContext.Provider
