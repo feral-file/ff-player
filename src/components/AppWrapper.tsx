@@ -10,7 +10,7 @@ import { CastCommand, Orientation } from '@/utils/types';
 import { useRouter } from 'next/navigation';
 import React, { useContext, useEffect, useState } from 'react';
 import OnboardingModal from './OnboardingModal';
-import QrCodePopUp from './qrCodePopUp';
+import QrCodePopUp from './QrCodePopUp';
 
 const enum CastState {
   None, // Not casting

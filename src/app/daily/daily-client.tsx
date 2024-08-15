@@ -1,6 +1,6 @@
 'use client';
 
-import ArtworkPlayer from '@/components/ArtworkPlayer';
+import ArtworkPlayer from '../../components/ArtworkPlayer';
 import DailyService, { DailyInstanceService } from '@/services/DailyService';
 import { getDelayTime } from '@/services/qrCodePopUpService';
 import { useEffect, useRef, useState } from 'react';

@@ -105,7 +105,7 @@ const ExhibitionHall = () => {
         console.error(err);
       });
     }
-  }, [exhibitionID]);
+  }, [exhibitionID, exhibitionDetail?.id]);
 
   useEffect(() => {
     if (screen !== undefined) {

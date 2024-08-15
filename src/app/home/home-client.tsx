@@ -12,7 +12,6 @@ import { BrowserInfo, detect } from 'detect-browser';
 import ArtworkService from '@/services/ArtworkService';
 import DeviceManager from '@/utils/DeviceManager';
 import { AppContext } from '@/context/AppContext';
-import { ca } from 'date-fns/locale';
 
 export default function HomeClient() {
   const context = useContext(AppContext);
