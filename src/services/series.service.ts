@@ -51,13 +51,13 @@ export class SeriesService {
     return artwork;
   }
 
-  public getArtworkPreview(artwork: Artwork) {
+  public getArtworkPreview(artwork: Artwork): string {
     const previewUrl =
       artwork.metadata?.alternativePreviewURI ??
       artwork.metadata?.previewCloudFlareURL ??
       artwork.previewURI;
 
-    return previewUrl && this.transformPreviewSrc(previewUrl);
+    return previewUrl ? this.transformPreviewSrc(previewUrl) : '';
   }
 
   private transformPreviewSrc(src: string): string {
@@ -74,6 +74,6 @@ export class SeriesService {
       return src;
     }
 
-    return (process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? '') + '/' + src;
+    return `${process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? ''}/${src}`;
   }
 }

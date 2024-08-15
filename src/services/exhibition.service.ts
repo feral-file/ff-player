@@ -1,6 +1,7 @@
 import { SOURCE_EXHIBITION_ID } from '@/utils/constants';
 import { Exhibition, Series } from '@/models';
 import axiosInstance from './axiosService';
+import axios from 'axios';
 
 export class ExhibitionService {
   public async getExhibition(id: string) {
@@ -28,8 +29,10 @@ export class ExhibitionService {
         }/source_exhibition/exhibition.json`
       );
 
-      const response = await axiosInstance.get(
-        '/source_exhibition/exhibition.json'
+      const response = await axios.get(
+        `${
+          process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
+        }/source_exhibition/exhibition.json`
       );
       console.log('response', response);
 
@@ -48,8 +51,10 @@ export class ExhibitionService {
 
   private async getSourceSeries(): Promise<Series[] | undefined> {
     try {
-      const response = await axiosInstance.get(
-        '/source_exhibition/series.json'
+      const response = await axios.get(
+        `${
+          process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
+        }/source_exhibition/series.json`
       );
       console.log('response', response);
 
