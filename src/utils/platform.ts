@@ -1,4 +1,4 @@
-import { IgnoreKeyCodes } from '@/constants';
+import { IgnoreKeyCodes, KeyCodes } from '@/constants';
 import DeviceManager from './DeviceManager';
 import { v4 as uuidv4 } from 'uuid';
 import { Event, EventEmitter } from './EventEmitter';
@@ -15,6 +15,14 @@ export class KeyEvent extends PlatformEventReceiver {
     super.handlePlatformEvent(event);
     const [keyId, keyLabel] = event.split('_');
     console.log(`Handling key event: ${keyId} - ${keyLabel}`);
+
+    if (keyId === KeyCodes.audioVolumeUp.toString()) {
+      console.log('Volume up key pressed');
+
+      window.location.reload();
+      return;
+    }
+
     if (IgnoreKeyCodes.some(keyCode => keyCode.toString() === keyId)) {
       return;
     }

@@ -57,7 +57,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, []);
 
   // Handle keydown event
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     const handleKeyDown = () => {
       setShowQrCode(!showQrCode);
@@ -69,7 +68,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return () => {
       EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
     };
-  }, []);
+  }, [showQrCode]);
 
   // Check version update
   // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -217,6 +216,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           justifyContent: 'center',
           alignItems: 'center',
         }}>
+        <p>{showQrCode}</p>
         {children}
         {showQrCode && <QrCodePopUp></QrCodePopUp>}
       </div>
