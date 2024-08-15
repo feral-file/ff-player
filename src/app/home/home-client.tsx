@@ -36,7 +36,6 @@ export default function HomeClient() {
   const artworkService = useRef(new ArtworkService());
 
   // initial setup
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const browser = detect() as BrowserInfo | null;
@@ -57,7 +56,6 @@ export default function HomeClient() {
   }, []);
 
   // Fetch featured artworks
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     const fetchArtworks = async () => {
       try {
@@ -77,7 +75,6 @@ export default function HomeClient() {
     });
   }, []);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (featuredWorks.length > 0) {
       let index = 0;
@@ -108,7 +105,6 @@ export default function HomeClient() {
     }
   }, [currentArtwork]);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (locationID && topicID && deviceName) {
       DeviceManager.setLocationId(locationID);
@@ -121,7 +117,9 @@ export default function HomeClient() {
           console.error(error);
         }
       };
-      generateBranchLink();
+      generateBranchLink().catch((error: unknown) => {
+        console.log(error);
+      });
     }
   }, [locationID, topicID, deviceName]);
 

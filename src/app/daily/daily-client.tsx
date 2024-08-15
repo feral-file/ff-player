@@ -14,46 +14,46 @@ export default function DailyClient() {
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
 
   useEffect(() => {
+    // Handle cast daily
+    async function handleCastDaily() {
+      try {
+        const dailies = await dailyService.current.callingDailies();
+        DailyInstanceService.setDailies(dailies);
+        if (dailies.length > 0) {
+          const delay = getDelayTime(dailies);
+          if (dailies[0].previewURL) {
+            setCastPreviewURL(dailies[0].previewURL);
+          }
+
+          if (delay > 0) {
+            startTimeout(delay);
+          }
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    const startTimeout = (duration: number) => {
+      clearTimer();
+      timeoutRef.current = setTimeout(() => {
+        handleCastDaily().catch((error: unknown) => {
+          console.error(error);
+        });
+      }, duration);
+    };
+
+    const clearTimer = () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = undefined;
+      }
+    };
+
     handleCastDaily().catch((error: unknown) => {
       console.error(error);
     });
   }, []);
-
-  // Handle cast daily
-  async function handleCastDaily() {
-    try {
-      const dailies = await dailyService.current.callingDailies();
-      DailyInstanceService.setDailies(dailies);
-      if (dailies.length > 0) {
-        const delay = getDelayTime(dailies);
-        if (dailies[0].previewURL) {
-          setCastPreviewURL(dailies[0].previewURL);
-        }
-
-        if (delay > 0) {
-          startTimeout(delay);
-        }
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  const startTimeout = (duration: number) => {
-    clearTimer();
-    timeoutRef.current = setTimeout(() => {
-      handleCastDaily().catch((error: unknown) => {
-        console.error(error);
-      });
-    }, duration);
-  };
-
-  const clearTimer = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = undefined;
-    }
-  };
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>

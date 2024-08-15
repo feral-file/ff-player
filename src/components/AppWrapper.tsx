@@ -54,7 +54,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         handlePlatformEvent: Config.handlePlatformEvent,
       };
     }
-  }, []);
+  });
 
   // Handle keydown event
   useEffect(() => {
@@ -70,12 +70,26 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     };
   }, [showQrCode]);
 
+  // Handle keydown event
+
+  // useEffect(() => {
+  //   const handleKeyDown = () => {
+  //     setShowQrCode(!showQrCode);
+  //   };
+
+  //   EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
+  //   EventEmitter.subscribe(Event.toggleQrCode, handleKeyDown);
+
+  //   return () => {
+  //     EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
+  //   };
+  // }, []);
+
   // Check version update
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     const validateVersion = async () => {
       await checkVersion();
-      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+
       const intervalID = setInterval(() => {
         checkVersion().catch((error: unknown) => {
           console.error(error);
@@ -102,7 +116,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   };
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     console.log('Cast Info:', castInfo);
     if (castInfo) {
@@ -169,7 +182,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         router.back();
       }
     }
-  }, [castInfo]);
+  }, [castInfo, castState, router]);
 
   useEffect(() => {
     if (showQrCode) {
@@ -202,15 +215,14 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               (rotateRadius || 0) % 180 === 0)
               ? '100vh'
               : '100vw',
-          transform: `rotate(${-(rotateRadius || 0)}deg) `,
-          transformOrigin: `${
+          transform: `rotate(${(-rotateRadius || 0).toString()}deg) `,
+          transformOrigin:
             (screenOrientation === Orientation.vertical &&
               (rotateRadius || 0) % 360 !== 90) ||
             (screenOrientation === Orientation.horizontal &&
               (rotateRadius || 0) % 360 !== 90)
               ? '50vw center'
-              : 'center 50vh'
-          }`,
+              : 'center 50vh',
           transition: 'transform 0.2s',
           display: 'flex',
           justifyContent: 'center',

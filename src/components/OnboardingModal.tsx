@@ -3,7 +3,7 @@ import QRCode from 'qrcode.react';
 import Image from 'next/image';
 import { useContext } from 'react';
 
-const OnboardingModal = ({}: {}) => {
+const OnboardingModal = () => {
   const screenRatio = useContext(AppContext)?.deviceRotation?.screenRatio ?? 1;
 
   return (
