@@ -10,6 +10,7 @@ import { CastCommand, Orientation } from '@/utils/types';
 import { useRouter } from 'next/navigation';
 import React, { useContext, useEffect, useState } from 'react';
 import OnboardingModal from './OnboardingModal';
+import QrCodePopUp from './qrCodePopUp';
 
 const enum CastState {
   None, // Not casting
@@ -32,6 +33,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
   const [castState, setCastState] = useState<CastState>(CastState.None);
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
+  const [showQrCode, setShowQrCode] = useState<boolean>(true);
 
   // Initialize platform events
   useEffect(() => {
@@ -170,6 +172,16 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   }, [castInfo]);
 
+  useEffect(() => {
+    const timeoutID = setTimeout(() => {
+      setShowQrCode(false);
+    }, 30000);
+
+    return () => {
+      clearTimeout(timeoutID);
+    };
+  }, []);
+
   return (
     <>
       {displayOnboarding && <OnboardingModal />}
@@ -204,6 +216,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
+        {showQrCode && <QrCodePopUp></QrCodePopUp>}
       </div>
     </>
   );

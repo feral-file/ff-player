@@ -1,7 +1,9 @@
 'use client';
 
 import { AppContext } from '@/context/AppContext';
+import useDailies, { getDelayTime } from '@/services/qrCodePopUpService';
 import DeviceManager from '@/utils/DeviceManager';
+import { Daily } from '@/utils/types';
 import Image from 'next/image';
 import QRCode from 'qrcode.react';
 import { useContext, useEffect, useState } from 'react';
@@ -9,11 +11,15 @@ import { useContext, useEffect, useState } from 'react';
 const QrCodePopUp = () => {
   const context = useContext(AppContext);
   const [branchLink, setBranchLink] = useState('');
+  const [currentDaily, setCurrentDaily] = useState<Daily>();
+  const [nextArtwork, setNextArtwork] = useState<number>(0);
 
   const { screenRatio } = context?.deviceRotation ?? {
     screenRatio: 1,
   };
   const { locationID, topicID } = context?.websocketData ?? {};
+
+  const dailies = useDailies();
 
   useEffect(() => {
     if (locationID && topicID) {
@@ -34,6 +40,14 @@ const QrCodePopUp = () => {
       });
     }
   }, [locationID, topicID]);
+
+  useEffect(() => {
+    if (dailies.length > 0) {
+      setCurrentDaily(dailies[0]);
+      const nextArtwork = getDelayTime(dailies) / 3600000;
+      setNextArtwork(nextArtwork);
+    }
+  }, [dailies]);
 
   return (
     <div
@@ -84,13 +98,20 @@ const QrCodePopUp = () => {
             style={{
               color: '#A0A0A0',
             }}>
-            Next work: 12hr
+            Next work: {nextArtwork > 0 ? nextArtwork.toFixed(0) : '--'}hr
           </p>
         </div>
         <div style={{ paddingTop: screenRatio * 15 }}>
-          <p>john gerrard,</p>
+          <p>
+            {currentDaily?.token?.asset.metadata.project.latest.artistName
+              ? currentDaily.token.asset.metadata.project.latest.artistName
+              : '--'}
+            ,
+          </p>
           <p style={{ fontStyle: 'italic', fontWeight: 'bold' }}>
-            crystalline work (arctic)
+            {currentDaily?.token?.asset.metadata.project.latest.title
+              ? currentDaily.token.asset.metadata.project.latest.title
+              : '--'}
           </p>
         </div>
       </div>
