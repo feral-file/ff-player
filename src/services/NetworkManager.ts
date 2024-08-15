@@ -8,9 +8,6 @@ const useNetworkManger = () => {
   useEffect(() => {
     function updateNetworkStatus() {
       setIsOnline(navigator.onLine);
-      if (navigator.onLine) {
-        window.location.reload();
-      }
     }
 
     window.addEventListener('online', updateNetworkStatus);

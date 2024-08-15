@@ -1,7 +1,7 @@
 'use client';
 
 import { AppContext } from '@/context/AppContext';
-import { useContext } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import MessageModal from './MessageModal';
 
 export default function LostConnectionModal() {
@@ -9,7 +9,19 @@ export default function LostConnectionModal() {
   if (!context) {
     return <p>There is no context.</p>;
   }
-  const isOnline = context.isOnline && !context.websocketData.isDisconnected;
+
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (
+      !isOnline &&
+      context.isOnline &&
+      !context.websocketData.isDisconnected
+    ) {
+      window.location.reload();
+    }
+    setIsOnline(context.isOnline && !context.websocketData.isDisconnected);
+  }, [context, isOnline]);
 
   return (
     <div>
