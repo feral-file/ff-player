@@ -4,11 +4,13 @@ import { AppContext } from '@/context/AppContext';
 import useDailies, { getDelayTime } from '@/services/qrCodePopUpService';
 import DeviceManager from '@/utils/DeviceManager';
 import { Daily } from '@/utils/types';
+import clsx from 'clsx';
 import Image from 'next/image';
 import QRCode from 'qrcode.react';
 import { useContext, useEffect, useState } from 'react';
+import styles from './styles.module.scss';
 
-const QrCodePopUp = () => {
+const QrCodePopUp = ({ onClick }: { onClick: (e: unknown) => void }) => {
   const context = useContext(AppContext);
   const [branchLink, setBranchLink] = useState('');
   const [currentDaily, setCurrentDaily] = useState<Daily>();
@@ -79,10 +81,12 @@ const QrCodePopUp = () => {
           width={screenRatio * 448}
           height={screenRatio * 46}></Image>
         <Image
+          className={clsx(styles['close-button'])}
           src={'/close.svg'}
           alt="Close"
           width={screenRatio * 44}
-          height={screenRatio * 44}></Image>
+          height={screenRatio * 44}
+          onClick={onClick}></Image>
       </div>
       <div>
         <div

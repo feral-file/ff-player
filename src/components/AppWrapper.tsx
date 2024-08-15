@@ -10,7 +10,7 @@ import { CastCommand, Orientation } from '@/utils/types';
 import { useRouter } from 'next/navigation';
 import React, { useContext, useEffect, useState } from 'react';
 import OnboardingModal from './OnboardingModal';
-import QrCodePopUp from './QrCodePopUp';
+import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 
 const enum CastState {
   None, // Not casting
@@ -196,6 +196,10 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   }, [showQrCode]);
 
+  const handleCloseQRCode = () => {
+    setShowQrCode(false);
+  };
+
   return (
     <>
       {displayOnboarding && <OnboardingModal />}
@@ -229,7 +233,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        {showQrCode && <QrCodePopUp></QrCodePopUp>}
+        {showQrCode && <QrCodePopUp onClick={handleCloseQRCode}></QrCodePopUp>}
       </div>
     </>
   );
