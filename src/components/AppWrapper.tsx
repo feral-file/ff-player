@@ -173,14 +173,16 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, [castInfo]);
 
   useEffect(() => {
-    const timeoutID = setTimeout(() => {
-      setShowQrCode(false);
-    }, 30000);
+    if (showQrCode) {
+      const timeoutID = setTimeout(() => {
+        setShowQrCode(false);
+      }, 30000);
 
-    return () => {
-      clearTimeout(timeoutID);
-    };
-  }, []);
+      return () => {
+        clearTimeout(timeoutID);
+      };
+    }
+  }, [showQrCode]);
 
   return (
     <>
