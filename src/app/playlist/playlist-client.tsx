@@ -33,127 +33,122 @@ export default function PlaylistClient() {
   const artworkService = useRef(new ArtworkService());
 
   useEffect(() => {
-    // Timer
-    const startInterval = (duration: number) => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+    if (currentIndex < 0) {
+      return;
+    }
 
-      intervalRef.current = setInterval(() => {
-        const i = getIndex(playlist, startTime);
-        setCurrentIndex(i);
-      }, duration);
-    };
+    if (playlist.length === 0) {
+      return;
+    }
 
-    const clearTimer = () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = undefined;
-      }
-    };
-    // End Timer
+    if (indexRef.current === currentIndex) {
+      return;
+    }
 
-    // Handle cast artwork
-    const handleUpdateDuration = (artworks: PlayArtworkV2[]) => {
-      const durationMap = new Map<string, number>();
-      artworks.forEach((a: PlayArtworkV2) => {
-        durationMap.set(a.id, a.duration);
-      });
+    indexRef.current = currentIndex;
 
-      const updatedPlaylist = playlist.map((p: PlaylistToken, i: number) => {
-        return {
-          ...p,
-          duration: artworks[i].duration,
-        };
-      });
+    const index = currentIndex % playlist.length;
+    const currentPlaylist = playlist[index];
+    setCastPreviewURL(currentPlaylist.previewURL);
+    const currentTime = Date.now();
+    startPlayArtworkTime.current = currentTime;
+    endPlayArtworkTime.current = currentTime + currentPlaylist.duration;
+    startInterval(currentPlaylist.duration);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, playlist]);
 
-      const i = currentIndex % playlist.length;
-      const remainTime = Date.now() - startPlayArtworkTime.current;
-      const st = calculateStartTime(updatedPlaylist, i, remainTime + 100);
-      setStartTime(st);
-      setPlaylist(updatedPlaylist);
-    };
+  const handleUpdateDuration = (artworks: PlayArtworkV2[]) => {
+    const durationMap = new Map<string, number>();
+    artworks.forEach((a: PlayArtworkV2) => {
+      durationMap.set(a.id, a.duration);
+    });
 
-    const handlePauseCasting = () => {
-      clearTimer();
-      const now = Date.now();
-      elapsedTimeRef.current = now - startPlayArtworkTime.current;
-      remainTimeRef.current = endPlayArtworkTime.current - now;
-    };
+    const updatedPlaylist = playlist.map((p: PlaylistToken, i: number) => {
+      return {
+        ...p,
+        duration: artworks[i].duration,
+      };
+    });
 
-    const handleResumeCasting = () => {
-      const st = calculateStartTime(
-        playlist,
-        currentIndex,
-        elapsedTimeRef.current
-      );
-      setStartTime(st);
-      startInterval(remainTimeRef.current);
-    };
+    const i = currentIndex % playlist.length;
+    const remainTime = Date.now() - startPlayArtworkTime.current;
+    const st = calculateStartTime(updatedPlaylist, i, remainTime + 100);
+    setStartTime(st);
+    setPlaylist(updatedPlaylist);
+  };
 
-    const handleNext = () => {
-      const i = (currentIndex + 1) % playlist.length;
-      const st = calculateStartTime(playlist, i);
-      setStartTime(st);
-      clearTimer();
+  const handlePauseCasting = () => {
+    clearTimer();
+    const now = Date.now();
+    elapsedTimeRef.current = now - startPlayArtworkTime.current;
+    remainTimeRef.current = endPlayArtworkTime.current - now;
+  };
+
+  const handleResumeCasting = () => {
+    const st = calculateStartTime(
+      playlist,
+      currentIndex,
+      elapsedTimeRef.current
+    );
+    setStartTime(st);
+    startInterval(remainTimeRef.current);
+  };
+
+  const handleNext = () => {
+    const i = (currentIndex + 1) % playlist.length;
+    const st = calculateStartTime(playlist, i);
+    setStartTime(st);
+    clearTimer();
+    setCurrentIndex(i);
+  };
+
+  const handlePrevious = () => {
+    let i: number;
+    if (currentIndex === 0) {
+      i = playlist.length - 1;
+    } else {
+      i = (currentIndex - 1) % playlist.length;
+    }
+
+    const st = calculateStartTime(playlist, i);
+    setStartTime(st);
+    clearTimer();
+    setCurrentIndex(i);
+  };
+
+  const handleMoveToArtwork = (tokenID: string) => {
+    const index = playlist.findIndex(
+      (p: PlaylistToken) => p.token.id === tokenID
+    );
+    if (index < 0) {
+      return;
+    }
+
+    const st = calculateStartTime(playlist, index);
+    setStartTime(st);
+    clearTimer();
+    setCurrentIndex(index);
+  };
+
+  const startInterval = (duration: number) => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    intervalRef.current = setInterval(() => {
+      const i = getIndex(playlist, startTime);
       setCurrentIndex(i);
-    };
+    }, duration);
+  };
 
-    const handlePrevious = () => {
-      let i: number;
-      if (currentIndex === 0) {
-        i = playlist.length - 1;
-      } else {
-        i = (currentIndex - 1) % playlist.length;
-      }
+  const clearTimer = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = undefined;
+    }
+  };
 
-      const st = calculateStartTime(playlist, i);
-      setStartTime(st);
-      clearTimer();
-      setCurrentIndex(i);
-    };
-
-    const handleMoveToArtwork = (tokenID: string) => {
-      const index = playlist.findIndex(
-        (p: PlaylistToken) => p.token.id === tokenID
-      );
-      if (index < 0) {
-        return;
-      }
-
-      const st = calculateStartTime(playlist, index);
-      setStartTime(st);
-      clearTimer();
-      setCurrentIndex(index);
-    };
-
-    const handleCastArtwork = () => {
-      if (currentIndex < 0) {
-        return;
-      }
-
-      if (playlist.length === 0) {
-        return;
-      }
-
-      if (indexRef.current === currentIndex) {
-        return;
-      }
-
-      indexRef.current = currentIndex;
-
-      const index = currentIndex % playlist.length;
-      const currentPlaylist = playlist[index];
-      setCastPreviewURL(currentPlaylist.previewURL);
-      const currentTime = Date.now();
-      startPlayArtworkTime.current = currentTime;
-      endPlayArtworkTime.current = currentTime + currentPlaylist.duration;
-      clearTimer();
-      startInterval(currentPlaylist.duration);
-    };
-    // End Handle cast artwork
-
-    // Handle cast Info command
+  useEffect(() => {
     if (castInfo) {
       const handleCastCommand = () => {
         switch (castInfo.castCommand) {
@@ -169,7 +164,6 @@ export default function PlaylistClient() {
                 if (!artworks) {
                   return;
                 }
-
                 const previewData = new Map<string, string>();
                 tokens.forEach((token: IndexerToken) => {
                   previewData.set(
@@ -185,7 +179,6 @@ export default function PlaylistClient() {
                         previewData.get(artwork.token?.id ?? '') ?? '',
                       token: artwork.token ?? { id: '' },
                     };
-
                     return aw;
                   }
                 );
@@ -212,46 +205,38 @@ export default function PlaylistClient() {
             }
             break;
           }
-
           case CastCommand.nextArtwork: {
             handleNext();
             break;
           }
-
           case CastCommand.previousArtwork: {
             handlePrevious();
             break;
           }
-
           case CastCommand.moveToArtwork: {
             handleMoveToArtwork(castInfo.value as string);
             break;
           }
-
           case CastCommand.updateDuration: {
             if (castInfo.artworks) {
               handleUpdateDuration(castInfo.artworks);
             }
             break;
           }
-
           case CastCommand.pauseCasting: {
             handlePauseCasting();
             break;
           }
-
           case CastCommand.resumeCasting: {
             handleResumeCasting();
             break;
           }
         }
       };
-      // End Handle cast Info command
-
       handleCastCommand();
-      handleCastArtwork();
     }
-  }, [castInfo, currentIndex, playlist, startTime]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [castInfo]);
 
   return (
     <>
