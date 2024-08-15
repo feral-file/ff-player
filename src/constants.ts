@@ -1,7 +1,16 @@
 export enum KeyCodes {
   escape = 0x0010000001b,
   audioVolumeUp = 0x00100000a10,
+  audioVolumeDown = 0x00100000a0f,
+  audioVolumeMute = 0x00100000a11,
 }
+
+export const IgnoreKeyCodes = [
+  KeyCodes.escape,
+  KeyCodes.audioVolumeUp,
+  KeyCodes.audioVolumeDown,
+  KeyCodes.audioVolumeMute,
+];
 
 export enum LocalStorageItem {
   deviceId = 'deviceId',

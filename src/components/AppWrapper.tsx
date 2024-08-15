@@ -63,11 +63,11 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       setShowQrCode(!showQrCode);
     };
 
-    EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
-    EventEmitter.subscribe(Event.keyDown, handleKeyDown);
+    EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
+    EventEmitter.subscribe(Event.toggleQrCode, handleKeyDown);
 
     return () => {
-      EventEmitter.unSubscribe(Event.keyDown, handleKeyDown);
+      EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
     };
   }, []);
 
