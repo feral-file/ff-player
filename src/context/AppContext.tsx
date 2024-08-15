@@ -22,6 +22,7 @@ interface WebSocketMessage {
   topicID: string | null;
   castInfo: CastInfo | null;
   canvasService: MutableRefObject<CanvasService>;
+  isDisconnected: boolean;
 }
 
 interface DeviceRotation {

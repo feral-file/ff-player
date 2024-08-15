@@ -9,7 +9,7 @@ export default function LostConnectionModal() {
   if (!context) {
     return <p>There is no context.</p>;
   }
-  const isOnline = context.isOnline;
+  const isOnline = context.isOnline && !context.websocketData.isDisconnected;
 
   return (
     <div>
