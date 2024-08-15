@@ -87,13 +87,11 @@ const Home: React.FC = () => {
   const { locationID, topicID, castInfo } = data;
   const isOnline = context.isOnline;
 
-   
   useEffect(() => {
     const platform = query.get('platform') ?? '';
     localStorage.setItem('platform', platform);
   });
 
-   
   useEffect(() => {
     const handleKeyDown = () => {
       console.log('Key pressed');
@@ -139,7 +137,6 @@ const Home: React.FC = () => {
     }
   }, []);
 
-   
   useEffect(() => {
     if (locationID && topicID && deviceName) {
       DeviceManager.setLocationId(locationID);
@@ -154,7 +151,6 @@ const Home: React.FC = () => {
     }
   }, [locationID, topicID, deviceName]);
 
-   
   useEffect(() => {
     const fetchArtworks = async () => {
       try {
@@ -174,7 +170,6 @@ const Home: React.FC = () => {
     });
   }, []);
 
-   
   useEffect(() => {
     if (artworks.length > 0) {
       let index = 0;
@@ -189,7 +184,6 @@ const Home: React.FC = () => {
     }
   }, [artworks]);
 
-   
   useEffect(() => {
     if (castInfo) {
       const handleCastCommand = async () => {
@@ -337,7 +331,6 @@ const Home: React.FC = () => {
     }
   }, [castInfo]);
 
-   
   useEffect(() => {
     if (typeof window !== 'undefined') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
@@ -360,7 +353,6 @@ const Home: React.FC = () => {
     setDidRegisterPlatformEvents(true);
   }, []);
 
-   
   useEffect(() => {
     if (didRegisterPlatformEvents) {
       console.log('Registering platform events');
@@ -375,7 +367,6 @@ const Home: React.FC = () => {
     }
   }, [didRegisterPlatformEvents]);
 
-   
   useEffect(() => {
     if (currentIndex < 0) {
       return;
@@ -606,7 +597,6 @@ const Home: React.FC = () => {
     }
   };
 
-   
   useEffect(() => {
     const validateVersion = async () => {
       await checkVersion();
@@ -625,7 +615,6 @@ const Home: React.FC = () => {
     });
   }, []);
 
-   
   useEffect(() => {
     if (castInfo?.dataChecked && !castInfo.castCommand) {
       const handleNavigateDaily = () => {
