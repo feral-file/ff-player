@@ -39,6 +39,8 @@ jobs:
         echo "NEXT_PUBLIC_WEBSOCKET_URL=${{ vars.WEBSOCKET_URL }}" >> .env.local
         echo "NEXT_PUBLIC_API_KEY=${{ secrets.WEBSOCKET_API_KEY }}" >> .env.local
         echo "NEXT_PUBLIC_BRANCH_KEY=${{ secrets.BRANCH_KEY }}" >> .env.local
+        echo "NEXT_PUBLIC_TV_AI_API_KEY=${{ secrets.TV_AI_API_KEY }}" >> .env.local
+        echo "NEXT_PUBLIC_TV_AI_API_URL=${{ vars.TV_AI_API_URL }}" >> .env.local
 
     - name: Check for missing environment variables
       id: check_env_vars
