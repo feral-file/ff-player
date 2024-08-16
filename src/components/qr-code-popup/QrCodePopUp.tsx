@@ -1,0 +1,141 @@
+'use client';
+
+import { AppContext } from '@/context/AppContext';
+import useDailies, { getDelayTime } from '@/services/qrCodePopUpService';
+import DeviceManager from '@/utils/DeviceManager';
+import { Daily } from '@/utils/types';
+import clsx from 'clsx';
+import Image from 'next/image';
+import QRCode from 'qrcode.react';
+import { useContext, useEffect, useState } from 'react';
+import styles from './styles.module.scss';
+
+const QrCodePopUp = ({ onClick }: { onClick: (e: unknown) => void }) => {
+  const context = useContext(AppContext);
+  const [branchLink, setBranchLink] = useState('');
+  const [currentDaily, setCurrentDaily] = useState<Daily>();
+  const [nextArtwork, setNextArtwork] = useState<number>(0);
+
+  const { screenRatio } = context?.deviceRotation ?? {
+    screenRatio: 1,
+  };
+  const { locationID, topicID } = context?.websocketData ?? {};
+
+  const dailies = useDailies();
+
+  useEffect(() => {
+    if (locationID && topicID) {
+      DeviceManager.setLocationId(locationID);
+      DeviceManager.setTopicId(topicID);
+      const generateBranchLink = async () => {
+        try {
+          const url = await DeviceManager.getOrGenerateBranchLink();
+          if (url) {
+            setBranchLink(url);
+          }
+        } catch (error) {
+          console.log(error);
+        }
+      };
+      generateBranchLink().catch((error: unknown) => {
+        console.log(error);
+      });
+    }
+  }, [locationID, topicID]);
+
+  useEffect(() => {
+    if (dailies.length > 0) {
+      setCurrentDaily(dailies[0]);
+      const nextArtwork = getDelayTime(dailies) / 3600000;
+      setNextArtwork(nextArtwork);
+    }
+  }, [dailies]);
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        backgroundColor: '#000000',
+        borderRadius: `0 20px 0 0`,
+        display: 'flex',
+        flexDirection: 'column',
+        padding: screenRatio * 40,
+        gap: screenRatio * 40,
+        zIndex: 3,
+        fontSize: screenRatio * 28,
+        lineHeight: 1.4,
+        color: '#ffffff',
+      }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: screenRatio * 500,
+          width: '100%',
+        }}>
+        <Image
+          src={'/feralfile-logo.svg'}
+          alt="FF logo"
+          width={screenRatio * 448}
+          height={screenRatio * 46}></Image>
+        <Image
+          className={clsx(styles['close-button'])}
+          src={'/close.svg'}
+          alt="Close"
+          width={screenRatio * 44}
+          height={screenRatio * 44}
+          onClick={onClick}></Image>
+      </div>
+      <div>
+        <div
+          style={{
+            borderBottom: '1px solid #ffffff',
+            display: 'flex',
+            justifyContent: 'space-between',
+            width: '100%',
+            paddingBottom: screenRatio * 10,
+          }}>
+          <p>Today’s daily</p>
+          <p
+            style={{
+              color: '#A0A0A0',
+            }}>
+            Next work: {nextArtwork > 0 ? nextArtwork.toFixed(0) : '--'}hr
+          </p>
+        </div>
+        <div style={{ paddingTop: screenRatio * 15 }}>
+          <p>
+            {currentDaily?.token?.asset.metadata.project.latest.artistName
+              ? currentDaily.token.asset.metadata.project.latest.artistName
+              : '--'}
+            ,
+          </p>
+          <p style={{ fontStyle: 'italic', fontWeight: 'bold' }}>
+            {currentDaily?.token?.asset.metadata.project.latest.title
+              ? currentDaily.token.asset.metadata.project.latest.title
+              : '--'}
+          </p>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: screenRatio * 20 }}>
+        {branchLink ? (
+          <QRCode value={branchLink} size={screenRatio * 258}></QRCode>
+        ) : (
+          <p style={{ width: screenRatio * 258, height: screenRatio * 258 }}>
+            Connecting...
+          </p>
+        )}
+        <div style={{ width: screenRatio * 500 }}>
+          <p>
+            Get the Feral File app on your phone to browse and display over
+            15,000 artworks on your tv.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default QrCodePopUp;

@@ -5,27 +5,22 @@ import 'swiper/scss/effect-coverflow';
 import 'swiper/scss/effect-fade';
 import styles from './carousel.module.scss';
 import { formatDateTime } from '@/utils/ui/formatDate';
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { ViewMode } from '@/utils/types';
 import QueuingImages from '../queuingImages/queuingImages';
 import { Swiper, SwiperSlide } from 'swiper/react';
+import { AppContext } from '@/context/AppContext';
 
 interface CarouselProps {
   items: Post[];
   index: number;
-  onLoad: boolean;
-  viewMode: ViewMode;
   screenRatio: number;
 }
 
-const Carousel: React.FC<CarouselProps> = ({
-  items,
-  index,
-  viewMode,
-  screenRatio,
-}) => {
+const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
   const [swiper, setSwiper] = useState<SwiperType | null>(null);
   const [spaceBetween, setSpaceBetween] = useState(250);
+  const viewMode = useContext(AppContext)?.deviceRotation?.viewMode;
   const handleSwiper = (swiperInstance: SwiperType) => {
     setSwiper(swiperInstance);
   };
@@ -134,7 +129,11 @@ const Carousel: React.FC<CarouselProps> = ({
                 </p>
                 {item.thumbUrls?.length && (
                   <div
-                    className={`${styles.thumbnail} ${viewMode === ViewMode.landscape ? styles.landscapeThumbnail : styles.portraitThumbnail}`}>
+                    className={`${styles.thumbnail} ${
+                      viewMode === ViewMode.landscape
+                        ? styles.landscapeThumbnail
+                        : styles.portraitThumbnail
+                    }`}>
                     <QueuingImages urls={item.thumbUrls} alt="thumbnail" />
                   </div>
                 )}

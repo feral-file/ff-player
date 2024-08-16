@@ -1,3 +1,5 @@
+import { IndexerToken } from '@/models';
+
 export interface WebSocketMessage {
   messageID: string;
   message: unknown;
@@ -238,6 +240,7 @@ export interface Daily {
   displayTime: string;
   tokenID: string;
   previewURL?: string;
+  token?: IndexerToken;
 }
 
 export enum Orientation {

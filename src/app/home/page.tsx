@@ -1,11 +1,11 @@
 import { Suspense } from 'react';
-import App from './app';
+import HomeClient from './home-client';
 
-export default function AppPage() {
+export default function HomePage() {
   return (
     <>
       <Suspense>
-        <App />
+        <HomeClient />
       </Suspense>
     </>
   );
