@@ -23,7 +23,8 @@
     "reconnecting-websocket": "^4.4.0",
     "sass": "^1.77.8",
     "swiper": "^11.1.9",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "webostvjs": "^1.2.5"
   },
   "devDependencies": {
     "@eslint/compat": "^1.1.1",
@@ -34,6 +35,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/uuid": "^10.0.0",
+    "@types/webostvjs": "^1.2.5",
     "eslint": "^9.9.0",
     "eslint-config-next": "^14.2.5",
     "eslint-plugin-prettier": "^5.2.1",

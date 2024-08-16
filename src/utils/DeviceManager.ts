@@ -2,11 +2,13 @@ import { v4 as uuidv4 } from 'uuid';
 import createBranchLink from './createBranchLink';
 import {
   AndroidConfigService,
+  LgConfigService,
   PlatformConfigService,
   TizenConfigService,
   WebConfigService,
 } from './platform';
 import { LocalStorageItem, Platform } from '@/constants';
+import 'webostvjs';
 
 class DeviceManager {
   static instance = new DeviceManager();
@@ -30,6 +32,8 @@ class DeviceManager {
         return new AndroidConfigService();
       case Platform.tizen:
         return new TizenConfigService();
+      case Platform.lg:
+        return new LgConfigService();
       default:
         return new WebConfigService();
     }

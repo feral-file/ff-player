@@ -2,6 +2,7 @@ import { IgnoreKeyCodes, KeyCodes } from '@/constants';
 import DeviceManager from './DeviceManager';
 import { v4 as uuidv4 } from 'uuid';
 import { Event, EventEmitter } from './EventEmitter';
+import { DeviceInfo } from 'webostvjs';
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class PlatformEventReceiver {
@@ -190,6 +191,45 @@ export class TizenConfigService implements PlatformConfigService {
 }
 
 export class WebConfigService implements PlatformConfigService {
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async getString(key: string): Promise<string | null> {
+    return localStorage.getItem(key);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async setString(key: string, value: string): Promise<void> {
+    localStorage.setItem(key, value);
+  }
+}
+
+export class LgConfigService implements PlatformConfigService {
+  constructor() {
+    this.setDeviceName().catch((error: unknown) => {
+      console.log(error);
+    });
+  }
+
+  async setDeviceName() {
+    try {
+      const deviceInfo = await this.getDeviceInfo();
+      console.log(`LG Device name: ${deviceInfo.modelName}`);
+      DeviceManager.setName(deviceInfo.modelName);
+    } catch (error) {
+      console.error('Error getting device info:', error);
+    }
+  }
+
+  async getDeviceInfo(): Promise<DeviceInfo> {
+    return new Promise(resolve => {
+      try {
+        window.webOS.deviceInfo((deviceInfo: DeviceInfo) => {
+          resolve(deviceInfo);
+        });
+      } catch (error) {
+        console.log(error);
+      }
+    });
+  }
   // eslint-disable-next-line @typescript-eslint/require-await
   async getString(key: string): Promise<string | null> {
     return localStorage.getItem(key);
