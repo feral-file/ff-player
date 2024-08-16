@@ -1,28 +1,32 @@
 'use client';
 
 import { Exhibition, ExhibitionType, Post, Artwork } from '@/models';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import styles from './exhibition.module.scss';
 import './exhibition.module.scss';
-import { ExhibitionCatalog, ViewMode } from '@/utils/types';
+import { CastCommand, ExhibitionCatalog, ViewMode } from '@/utils/types';
 import Carousel from './components/carousel/carousel';
-import ArtworkPlayer from '@/components/artworkPlayer';
+import ArtworkPlayer from '@/components/ArtworkPlayer';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
 import Image from 'next/image';
+import { AppContext } from '@/context/AppContext';
 
-const ExhibitionHall = ({
-  exhibitionID,
-  catalogID,
-  screen,
-  viewMode,
-  screenRatio,
-}: {
-  exhibitionID: string | undefined;
-  catalogID: string | undefined;
-  screen: ExhibitionCatalog | undefined;
-  viewMode: ViewMode;
-  screenRatio: number;
-}) => {
+const ExhibitionHall = () => {
+  const context = useContext(AppContext);
+  if (!context) {
+    return <p>There is no App context.</p>;
+  }
+
+  const { castInfo } = context.websocketData;
+  const { screenRatio, viewMode } = context.deviceRotation ?? {
+    screenRatio: 1,
+    viewMode: ViewMode.landscape,
+  };
+
+  const [exhibitionID, setExhibitionID] = useState<string | undefined>();
+  const [catalogID, setCatalogID] = useState<string | undefined>();
+  const [screen, setScreen] = useState<ExhibitionCatalog | undefined>();
+
   const [pageSection, setSection] = useState<ExhibitionCatalog>(
     ExhibitionCatalog.home
   );
@@ -32,6 +36,8 @@ const ExhibitionHall = ({
   const [posts, setPosts] = useState<Post[] | undefined>();
   const [postIndex, setPostIndex] = useState<number>(0);
   const [artwork, setArtwork] = useState<Artwork>();
+
+  // Services
   const exhibitionService = useRef(new ExhibitionService());
   const seriesService = useRef(new SeriesService());
   const postService = useRef(new PostService());
@@ -54,6 +60,20 @@ const ExhibitionHall = ({
     artwork.previewURI = seriesService.current.getArtworkPreview(artwork);
     setArtwork(artwork);
   };
+
+  useEffect(() => {
+    console.log('castInfo', castInfo);
+    if (castInfo) {
+      const handleCastCommand = () => {
+        if (castInfo.castCommand === CastCommand.castExhibition) {
+          setExhibitionID(castInfo.exhibitionId);
+          setCatalogID(castInfo.catalogId);
+          setScreen(castInfo.catalog);
+        }
+      };
+      handleCastCommand();
+    }
+  }, [castInfo]);
 
   useEffect(() => {
     // fetch exhibition detail
@@ -85,7 +105,7 @@ const ExhibitionHall = ({
         console.error(err);
       });
     }
-  }, [exhibitionID, exhibitionDetail]);
+  }, [exhibitionID, exhibitionDetail?.id]);
 
   useEffect(() => {
     if (screen !== undefined) {
@@ -199,11 +219,6 @@ const ExhibitionHall = ({
               <Carousel
                 items={posts}
                 index={postIndex}
-                onLoad={[
-                  ExhibitionCatalog.curatorNote,
-                  ExhibitionCatalog.resource,
-                ].includes(pageSection)}
-                viewMode={viewMode}
                 screenRatio={screenRatio}></Carousel>
             </div>
           </div>

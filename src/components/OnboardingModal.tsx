@@ -1,17 +1,11 @@
-import Image from 'next/image';
+import { AppContext } from '@/context/AppContext';
 import QRCode from 'qrcode.react';
+import Image from 'next/image';
+import { useContext } from 'react';
 
-const OnboardingPage = ({
-  screenRatio,
-  branchLink,
-  connectedDeviceName,
-  displayName,
-}: {
-  screenRatio: number;
-  branchLink: string;
-  connectedDeviceName: string;
-  displayName: string;
-}) => {
+const OnboardingModal = () => {
+  const screenRatio = useContext(AppContext)?.deviceRotation?.screenRatio ?? 1;
+
   return (
     <div
       style={{
@@ -51,7 +45,7 @@ const OnboardingPage = ({
             fontSize: screenRatio * 32,
             paddingBottom: screenRatio * 45,
           }}>
-          1. Open the Feral File app on your <b>{connectedDeviceName}</b>.
+          1. Open the Feral File app on your <b>{'connectedDeviceName'}</b>.
         </p>
         <p
           style={{
@@ -68,8 +62,8 @@ const OnboardingPage = ({
             alignItems: 'flex-start',
           }}>
           <p style={{ fontSize: screenRatio * 32 }}>
-            3. Tap the display button on your <b>{connectedDeviceName}</b> to
-            display your art on <b>{displayName}</b>.
+            3. Tap the display button on your <b>{'connectedDeviceName'}</b> to
+            display your art on <b>{'displayName'}</b>.
           </p>
           <Image
             src={'/cast-btn.svg'}
@@ -88,7 +82,7 @@ const OnboardingPage = ({
                 backgroundColor: 'white',
                 width: 'fit-content',
               }}>
-              <QRCode value={branchLink} size={250 * screenRatio} />
+              <QRCode value={'qwieyqwiuey'} size={250 * screenRatio} />
             </div>
             <p
               style={{
@@ -105,4 +99,4 @@ const OnboardingPage = ({
   );
 };
 
-export default OnboardingPage;
+export default OnboardingModal;

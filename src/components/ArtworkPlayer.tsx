@@ -156,9 +156,8 @@ const ArtworkPlayer = ({
               }}>
               <Image
                 src="/ff-loading-still-v2.svg"
-                // layout="fill"
-                width={600}
-                height={600}
+                width={360}
+                height={360}
                 objectFit="contain"
                 alt="Loading"></Image>
             </div>

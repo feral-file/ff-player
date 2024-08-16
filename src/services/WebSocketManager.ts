@@ -10,6 +10,7 @@ const useWebSocket = (url: string, apiKey: string) => {
   const [castInfo, setCastInfo] = useState<CastInfo | null>({
     dataChecked: false,
   });
+  const [isDisconnected, setIsDisconnected] = useState<boolean>(false);
   const ws = useRef<ReconnectingWebSocket | null>(null);
   const canvasService = useRef(new CanvasService());
 
@@ -39,6 +40,7 @@ const useWebSocket = (url: string, apiKey: string) => {
       ws.current = new ReconnectingWebSocket(wsUrl);
       ws.current.onopen = () => {
         console.log('WebSocket connected');
+        setIsDisconnected(false);
       };
 
       // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -73,10 +75,12 @@ const useWebSocket = (url: string, apiKey: string) => {
 
       ws.current.onerror = error => {
         console.error('WebSocket error:', error);
+        setIsDisconnected(true);
       };
 
       ws.current.onclose = () => {
         console.log('WebSocket disconnected, attempting to reconnect...');
+        setIsDisconnected(true);
       };
     };
 
@@ -89,7 +93,7 @@ const useWebSocket = (url: string, apiKey: string) => {
     };
   }, [url, apiKey]);
 
-  return { locationID, topicID, castInfo, canvasService };
+  return { locationID, topicID, castInfo, canvasService, isDisconnected };
 };
 
 export default useWebSocket;
