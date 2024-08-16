@@ -53,6 +53,10 @@ export default function AIArtworkClient() {
   }, []);
 
   function handleOnRecord() {
+    if (isRecording) {
+      return;
+    }
+
     setIsRecording(true);
     setSpeechText('');
 
@@ -62,9 +66,10 @@ export default function AIArtworkClient() {
 
     recognition.start();
 
+    let debounceHandling = debounce(handleSpeechText, 1000);
     recognition.onresult = async function (event) {
       const transcript = event.results[0][0].transcript;
-      debounce(handleSpeechText(transcript), 500);
+      debounceHandling(transcript);
     };
   }
 
@@ -94,26 +99,30 @@ export default function AIArtworkClient() {
   }, [seriesID]);
 
   const handleSpeechText = async (text: string) => {
-    console.log('Text record: ', text);
-    setSpeechText(text);
-    const aiArtwork = await conversationService.current.getConversation(text);
-    if (!aiArtwork) {
-      setIsRecording(false);
-      setPreviewURL('');
-      return;
-    }
-
-    // Check if the browser supports speechSynthesis
-    if ('speechSynthesis' in window) {
-      if (aiArtwork.reason) {
-        const utterance = new SpeechSynthesisUtterance(aiArtwork.reason);
-        utterance.rate = 0.7;
-        window.speechSynthesis.speak(utterance);
+    try {
+      console.log('Text record: ', text);
+      setSpeechText(text);
+      const aiArtwork = await conversationService.current.getConversation(text);
+      if (!aiArtwork) {
+        setIsRecording(false);
+        setPreviewURL('');
+        return;
       }
-    } else {
-      console.log('Text-to-Speech is not supported in this browser.');
+
+      // Check if the browser supports speechSynthesis
+      if ('speechSynthesis' in window) {
+        if (aiArtwork.reason) {
+          const utterance = new SpeechSynthesisUtterance(aiArtwork.reason);
+          utterance.rate = 0.7;
+          window.speechSynthesis.speak(utterance);
+        }
+      } else {
+        console.log('Text-to-Speech is not supported in this browser.');
+      }
+      setSeriesID(aiArtwork.series_id);
+    } catch (error) {
+      console.error('Failed to get conversation:', error);
     }
-    setSeriesID(aiArtwork.series_id);
   };
 
   function debounce(fn: any, delay: number) {
