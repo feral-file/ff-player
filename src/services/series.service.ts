@@ -5,10 +5,13 @@ const cloudFlareHostingDomain = 'imagedelivery.net';
 const ipfsGateway = 'https://ipfs.io/ipfs/';
 
 export class SeriesService {
-  public async getArtworkOfSeries(seriesID: string): Promise<Artwork[]> {
+  public async getArtworkOfSeries(
+    seriesID: string,
+    pagingParams?: string
+  ): Promise<Artwork[]> {
     try {
       const response = await axiosInstance.get<{ result: Artwork[] }>(
-        `/api/artworks?seriesID=${seriesID}`
+        `/api/artworks?seriesID=${seriesID}&${pagingParams ?? ''}`
       );
       return response.data.result;
     } catch (error) {

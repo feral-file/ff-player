@@ -233,7 +233,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        {showQrCode && <QrCodePopUp onClick={handleCloseQRCode}></QrCodePopUp>}
+        {/* {showQrCode && <QrCodePopUp onClick={handleCloseQRCode}></QrCodePopUp>} */}
       </div>
     </>
   );

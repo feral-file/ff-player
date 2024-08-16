@@ -1,30 +1,28 @@
 import axios from 'axios';
-import axiosInstance from './axiosService';
 
 const tvAIInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_TV_AI_API_URL,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
     'x-api-key': process.env.NEXT_PUBLIC_TV_AI_API_KEY,
   },
 });
 
+export interface AIArtworkResponse {
+  series_id: string;
+  reason: string;
+}
+
 export class ConversationService {
-  public async getConversation(text: string): Promise<string> {
-    try {
-      const response = await tvAIInstance.post('/conversations', {
-        text,
-      });
+  public async getConversation(message: string): Promise<AIArtworkResponse> {
+    const response = await tvAIInstance.post('/conversation', {
+      message,
+    });
 
-      console.log('---Kien---', response);
-
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const conversation = response.data.result as string;
-
-      return conversation;
-    } catch (error) {
-      console.log('Failed to get conversation:', error);
-      return '';
-    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const conversation = response.data.response as string;
+    const aiArtworkResponse = JSON.parse(conversation) as AIArtworkResponse;
+    return aiArtworkResponse;
   }
 }
