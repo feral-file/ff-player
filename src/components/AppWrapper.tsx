@@ -8,7 +8,7 @@ import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
 import { useRouter } from 'next/navigation';
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import OnboardingModal from './OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 
@@ -34,6 +34,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [castState, setCastState] = useState<CastState>(CastState.None);
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
   const [showQrCode, setShowQrCode] = useState<boolean>(true);
+  const lastEventTime = useRef(0);
 
   // Initialize platform events
   useEffect(() => {
@@ -67,6 +68,30 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     return () => {
       EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
+    };
+  }, [showQrCode]);
+
+  // Add event listener for press button 0 to toggle QR code
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const now = Date.now();
+      const minInterval = 200; // Minimum interval between events in milliseconds
+
+      if (now - lastEventTime.current > minInterval) {
+        lastEventTime.current = now;
+
+        if (event.key === '0' || event.keyCode === 48) {
+          console.log('Toggle QR Code');
+
+          setShowQrCode(!showQrCode);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [showQrCode]);
 
