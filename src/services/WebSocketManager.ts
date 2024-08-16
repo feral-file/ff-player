@@ -3,7 +3,7 @@ import ReconnectingWebSocket from 'reconnecting-websocket';
 import CanvasService from './CanvasService';
 import { LocalStorageItem } from '@/constants';
 import { CastInfo } from '@/utils/types';
-import extendedMixpanel from '@/utils/mixpanel';
+import mixpanel from '@/utils/mixpanel';
 
 const useWebSocket = (url: string, apiKey: string) => {
   const [locationID, setLocationID] = useState<string | null>(null);
@@ -26,7 +26,7 @@ const useWebSocket = (url: string, apiKey: string) => {
         LocalStorageItem.currentUserId,
         castInfo.primaryAddress
       );
-      extendedMixpanel.identify(castInfo.primaryAddress);
+      mixpanel.identify(castInfo.primaryAddress);
     }
   }, [castInfo]);
 

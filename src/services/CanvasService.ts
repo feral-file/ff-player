@@ -40,7 +40,7 @@ import {
 } from '../utils/types';
 
 import { LocalStorageItem } from '@/constants';
-import extendedMixpanel from '@/utils/mixpanel';
+import mixpanel from '@/utils/mixpanel';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -198,7 +198,7 @@ class CanvasService {
   private disconnect(request: unknown): Promise<DisconnectReplyV2> {
     console.log('disconnect', JSON.stringify(request));
     this.setCastInfo(null);
-    extendedMixpanel.reset();
+    mixpanel.reset();
     return Promise.resolve({ ok: true });
   }
 
