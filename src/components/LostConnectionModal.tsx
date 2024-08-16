@@ -18,7 +18,9 @@ export default function LostConnectionModal() {
       context.isOnline &&
       !context.websocketData.isDisconnected
     ) {
-      window.location.reload();
+      setTimeout(() => {
+        window.location.reload();
+      }, 0);
     }
     setIsOnline(context.isOnline && !context.websocketData.isDisconnected);
   }, [context, isOnline]);
