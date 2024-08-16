@@ -4,6 +4,9 @@ import ArtworkPlayer from '@/components/ArtworkPlayer';
 import { SeriesService } from '@/services';
 import { ConversationService } from '@/services/conversationService';
 import { useEffect, useRef, useState } from 'react';
+import styles from './styles.module.scss';
+import clsx from 'clsx';
+import Microphone from '@/components/Microphone';
 
 declare global {
   interface Window {
@@ -43,6 +46,7 @@ export default function AIArtworkClient() {
   const [seriesID, setSeriesID] = useState<string>('');
   const [previewURL, setPreviewURL] = useState<string>('');
   const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [speechText, setSpeechText] = useState<string>('');
 
   useEffect(() => {
     handleOnRecord();
@@ -50,6 +54,7 @@ export default function AIArtworkClient() {
 
   function handleOnRecord() {
     setIsRecording(true);
+    setSpeechText('');
 
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -59,24 +64,7 @@ export default function AIArtworkClient() {
 
     recognition.onresult = async function (event) {
       const transcript = event.results[0][0].transcript;
-      const aiArtwork =
-        await conversationService.current.getConversation(transcript);
-      if (!aiArtwork) {
-        setIsRecording(false);
-        setPreviewURL('');
-        return;
-      }
-
-      // Check if the browser supports speechSynthesis
-      if ('speechSynthesis' in window) {
-        if (aiArtwork.reason) {
-          const utterance = new SpeechSynthesisUtterance(aiArtwork.reason);
-          window.speechSynthesis.speak(utterance);
-        }
-      } else {
-        console.log('Text-to-Speech is not supported in this browser.');
-      }
-      setSeriesID(aiArtwork.series_id);
+      debounce(handleSpeechText(transcript), 500);
     };
   }
 
@@ -105,16 +93,59 @@ export default function AIArtworkClient() {
     handleSeries();
   }, [seriesID]);
 
+  const handleSpeechText = async (text: string) => {
+    console.log('Text record: ', text);
+    setSpeechText(text);
+    const aiArtwork = await conversationService.current.getConversation(text);
+    if (!aiArtwork) {
+      setIsRecording(false);
+      setPreviewURL('');
+      return;
+    }
+
+    // Check if the browser supports speechSynthesis
+    if ('speechSynthesis' in window) {
+      if (aiArtwork.reason) {
+        const utterance = new SpeechSynthesisUtterance(aiArtwork.reason);
+        utterance.rate = 0.7;
+        window.speechSynthesis.speak(utterance);
+      }
+    } else {
+      console.log('Text-to-Speech is not supported in this browser.');
+    }
+    setSeriesID(aiArtwork.series_id);
+  };
+
+  function debounce(fn: any, delay: number) {
+    let timeoutId: NodeJS.Timeout;
+    return (...args) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => fn(...args), delay);
+    };
+  }
+
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
-      {isRecording && <div>Recording...</div>}
+      {isRecording && (
+        <div className={clsx(styles.record)}>
+          {speechText ? speechText : 'Say something...'}
+        </div>
+      )}
       {!isRecording && !previewURL && (
-        <div>
-          We can't find any artwork.{' '}
-          <button onClick={handleOnRecord}>Please try again</button>
+        <div className={clsx(styles.record)}>
+          We can't find any artwork, please try again
         </div>
       )}
       {!isRecording && previewURL && <ArtworkPlayer previewURL={previewURL} />}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 20,
+          right: 20,
+          cursor: 'pointer',
+        }}>
+        <Microphone onClick={handleOnRecord} />
+      </div>
     </div>
   );
 }

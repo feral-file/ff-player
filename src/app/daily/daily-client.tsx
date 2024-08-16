@@ -1,15 +1,19 @@
 'use client';
 
+import Microphone from '@/components/Microphone';
 import ArtworkPlayer from '../../components/ArtworkPlayer';
 import DailyService, { DailyInstanceService } from '@/services/DailyService';
 import { getDelayTime } from '@/services/qrCodePopUpService';
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
-export default function DailyClient() {
+const DailyClient: React.FC = () => {
   const dailyService = useRef(new DailyService());
   const timeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
+
+  const router = useRouter();
 
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
 
@@ -55,9 +59,24 @@ export default function DailyClient() {
     });
   }, []);
 
+  const handleNavigateAIArtwork = () => {
+    router.push('/ai-artwork');
+  };
+
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
       {castPreviewURL && <ArtworkPlayer previewURL={castPreviewURL} />}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 20,
+          right: 20,
+          cursor: 'pointer',
+        }}>
+        <Microphone onClick={handleNavigateAIArtwork} />
+      </div>
     </div>
   );
-}
+};
+
+export default DailyClient;

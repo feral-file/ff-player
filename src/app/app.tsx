@@ -29,7 +29,7 @@ const App: React.FC = () => {
         console.error(error);
       }
 
-      router.replace('/ai-artwork');
+      router.replace('/daily');
     }, 100);
   }, [router, searchParams]);
 
