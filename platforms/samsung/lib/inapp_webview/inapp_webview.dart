@@ -114,6 +114,7 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
     _webViewController.loadRequest(Uri.parse(url));
 
     _webViewController.setJavaScriptMode(JavaScriptMode.unrestricted);
+    _webViewController.enableZoom(false);
     _webViewController.setBackgroundColor(Colors.black);
     _webViewController.setOnConsoleMessage((message) {
       log.info('console: ${message.message}');
