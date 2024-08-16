@@ -47,6 +47,7 @@ export interface PlayArtworkV2 {
   duration: number;
   token?: {
     id: string;
+    name: string;
   };
 }
 
@@ -194,6 +195,7 @@ export interface PlaylistToken {
   previewURL: string;
   token: {
     id: string;
+    name: string;
   };
 }
 
@@ -203,6 +205,7 @@ export interface CastInfo {
   castCommand?: CastCommand;
   deviceInfo?: DeviceInfo;
   value?: string | number;
+  primaryAddress?: string;
 
   // Cast exhibition
   exhibitionId?: string;
@@ -232,6 +235,7 @@ export interface Daily {
   contractAddress: string;
   displayTime: string;
   tokenID: string;
+  tokenName: string;
   previewURL?: string;
   token?: IndexerToken;
 }

@@ -4,6 +4,12 @@ import ArtworkPlayer from '@/components/ArtworkPlayer';
 import { AppContext } from '@/context/AppContext';
 import { IndexerToken } from '@/models';
 import ArtworkService from '@/services/ArtworkService';
+import { getIndexerTokenName } from '@/utils/indexer';
+import {
+  MixpanelEventName,
+  trackPlaylistCastArtworkEvent,
+  trackTimeEvent,
+} from '@/utils/mixpanel';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
 import { CastCommand, PlayArtworkV2, PlaylistToken } from '@/utils/types';
 import { useContext, useEffect, useRef, useState } from 'react';
@@ -28,6 +34,8 @@ export default function PlaylistClient() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>();
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
+  const currentPlaylistRef = useRef<PlaylistToken>();
+  const isCastingFirstArtwork = useRef<boolean>(true);
 
   // Services
   const artworkService = useRef(new ArtworkService());
@@ -49,11 +57,36 @@ export default function PlaylistClient() {
 
     const index = currentIndex % playlist.length;
     const currentPlaylist = playlist[index];
+    currentPlaylistRef.current = currentPlaylist;
     setCastPreviewURL(currentPlaylist.previewURL);
+
+    // HandleM mixpanel event
+    if (isCastingFirstArtwork.current) {
+      isCastingFirstArtwork.current = false;
+    } else {
+      trackPlaylistCastArtworkEvent(
+        currentPlaylistRef.current.token.id,
+        currentPlaylistRef.current.token.name
+      );
+    }
+
+    trackTimeEvent(MixpanelEventName.CastArtworkEventName);
+
     const currentTime = Date.now();
     startPlayArtworkTime.current = currentTime;
     endPlayArtworkTime.current = currentTime + currentPlaylist.duration;
     startInterval(currentPlaylist.duration);
+
+    return () => {
+      // Track playlist event when unmount
+      if (currentPlaylistRef.current) {
+        trackPlaylistCastArtworkEvent(
+          currentPlaylistRef.current.token.id,
+          currentPlaylistRef.current.token.name,
+          true
+        );
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, playlist]);
 
@@ -167,19 +200,26 @@ export default function PlaylistClient() {
                   return;
                 }
                 const previewData = new Map<string, string>();
+                const tokensName = new Map<string, string>();
                 tokens.forEach((token: IndexerToken) => {
                   previewData.set(
                     token.indexID,
                     token.asset.metadata.project.latest.previewURL
                   );
+                  tokensName.set(token.indexID, getIndexerTokenName(token));
                 });
                 const updatedArtworks = artworks.map(
                   (artwork: PlayArtworkV2) => {
+                    if (artwork.token) {
+                      artwork.token.name =
+                        tokensName.get(artwork.token.id) ?? '';
+                    }
+
                     const aw: PlaylistToken = {
                       duration: artwork.duration,
                       previewURL:
                         previewData.get(artwork.token?.id ?? '') ?? '',
-                      token: artwork.token ?? { id: '' },
+                      token: artwork.token ?? { id: '', name: '' },
                     };
                     return aw;
                   }

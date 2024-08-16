@@ -21,6 +21,7 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   images: { unoptimized: true },
+  reactStrictMode: false,
 };
 
 export default nextConfig;

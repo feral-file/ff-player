@@ -3,6 +3,7 @@ import ReconnectingWebSocket from 'reconnecting-websocket';
 import CanvasService from './CanvasService';
 import { LocalStorageItem } from '@/constants';
 import { CastInfo } from '@/utils/types';
+import extendedMixpanel from '@/utils/mixpanel';
 
 const useWebSocket = (url: string, apiKey: string) => {
   const [locationID, setLocationID] = useState<string | null>(null);
@@ -13,6 +14,21 @@ const useWebSocket = (url: string, apiKey: string) => {
   const [isDisconnected, setIsDisconnected] = useState<boolean>(false);
   const ws = useRef<ReconnectingWebSocket | null>(null);
   const canvasService = useRef(new CanvasService());
+
+  useEffect(() => {
+    const currentUser = localStorage.getItem(LocalStorageItem.currentUserId);
+    if (
+      castInfo?.dataChecked &&
+      castInfo.primaryAddress &&
+      currentUser != castInfo.primaryAddress
+    ) {
+      localStorage.setItem(
+        LocalStorageItem.currentUserId,
+        castInfo.primaryAddress
+      );
+      extendedMixpanel.identify(castInfo.primaryAddress);
+    }
+  }, [castInfo]);
 
   useEffect(() => {
     if (!url || !apiKey) return;
@@ -26,11 +42,14 @@ const useWebSocket = (url: string, apiKey: string) => {
       if (storedLocationID) wsUrl += `&locationID=${storedLocationID}`;
       if (storedTopicID) wsUrl += `&topicID=${storedTopicID}`;
 
-      const castInfo = localStorage.getItem(LocalStorageItem.castInfo);
-      if (castInfo) {
-        canvasService.current.setCastInfo(JSON.parse(castInfo) as CastInfo);
+      const castInfoString = localStorage.getItem(LocalStorageItem.castInfo);
+      if (castInfoString) {
+        canvasService.current.setCastInfo(
+          JSON.parse(castInfoString) as CastInfo
+        );
+
         setCastInfo({
-          ...JSON.parse(castInfo),
+          ...JSON.parse(castInfoString),
           dataChecked: true,
         } as CastInfo);
       } else {

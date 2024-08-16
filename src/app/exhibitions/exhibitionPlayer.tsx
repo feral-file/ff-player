@@ -10,6 +10,11 @@ import ArtworkPlayer from '@/components/ArtworkPlayer';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
 import Image from 'next/image';
 import { AppContext } from '@/context/AppContext';
+import {
+  MixpanelEventName,
+  trackExhibitionCastArtworkEvent,
+  trackTimeEvent,
+} from '@/utils/mixpanel';
 
 const ExhibitionHall = () => {
   const context = useContext(AppContext);
@@ -36,6 +41,8 @@ const ExhibitionHall = () => {
   const [posts, setPosts] = useState<Post[] | undefined>();
   const [postIndex, setPostIndex] = useState<number>(0);
   const [artwork, setArtwork] = useState<Artwork>();
+  const artworkRef = useRef<Artwork>();
+  const isCastingFirstArtwork = useRef<boolean>(true);
 
   // Services
   const exhibitionService = useRef(new ExhibitionService());
@@ -59,6 +66,21 @@ const ExhibitionHall = () => {
 
     artwork.previewURI = seriesService.current.getArtworkPreview(artwork);
     setArtwork(artwork);
+
+    // Handle mixpanel event
+    artworkRef.current = artwork;
+    if (isCastingFirstArtwork.current) {
+      isCastingFirstArtwork.current = false;
+    } else {
+      trackExhibitionCastArtworkEvent(
+        artworkRef.current.id ?? '',
+        (artworkRef.current.series?.title ?? '') +
+          ' ' +
+          (artworkRef.current.name ?? '')
+      );
+    }
+
+    trackTimeEvent(MixpanelEventName.CastArtworkEventName);
   };
 
   useEffect(() => {
@@ -73,6 +95,19 @@ const ExhibitionHall = () => {
       };
       handleCastCommand();
     }
+
+    return () => {
+      // Send mixpanel event when unmount
+      if (artworkRef.current) {
+        trackExhibitionCastArtworkEvent(
+          artworkRef.current.id ?? '',
+          (artworkRef.current.series?.title ?? '') +
+            ' ' +
+            (artworkRef.current.name ?? ''),
+          true
+        );
+      }
+    };
   }, [castInfo]);
 
   useEffect(() => {
