@@ -11,7 +11,6 @@ import { useRouter } from 'next/navigation';
 import React, { useContext, useEffect, useState } from 'react';
 import OnboardingModal from './OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
-import Microphone from './Microphone';
 
 const enum CastState {
   None, // Not casting
@@ -234,7 +233,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        {/* {showQrCode && <QrCodePopUp onClick={handleCloseQRCode}></QrCodePopUp>} */}
+        {showQrCode && <QrCodePopUp onClick={handleCloseQRCode}></QrCodePopUp>}
       </div>
     </>
   );

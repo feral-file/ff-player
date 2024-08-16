@@ -118,7 +118,7 @@ export default function AIArtworkClient() {
 
   function debounce(fn: any, delay: number) {
     let timeoutId: NodeJS.Timeout;
-    return (...args) => {
+    return (...args: any) => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => fn(...args), delay);
     };
