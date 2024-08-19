@@ -2,9 +2,12 @@ import { IgnoreKeyCodes, KeyCodes } from '@/constants';
 import DeviceManager from './DeviceManager';
 import { v4 as uuidv4 } from 'uuid';
 import { Event, EventEmitter } from './EventEmitter';
-import { DeviceInfo, OnCompleteSuccessResponse } from 'webostvjs';
 
-interface LGSuccessResponse extends OnCompleteSuccessResponse {
+interface DeviceInfo {
+  modelName: string;
+}
+
+interface LGSuccessResponse {
   results: { key: string; value: string }[];
 }
 
@@ -226,7 +229,8 @@ export class LgConfigService implements PlatformConfigService {
   async getDeviceInfo(): Promise<DeviceInfo> {
     return new Promise((resolve, reject) => {
       try {
-        window.webOS.deviceInfo((deviceInfo: DeviceInfo) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+        (window as any).webOS.deviceInfo((deviceInfo: DeviceInfo) => {
           resolve(deviceInfo);
         });
       } catch (error) {
@@ -238,7 +242,8 @@ export class LgConfigService implements PlatformConfigService {
 
   async getString(key: string): Promise<string | null> {
     return new Promise((resolve, reject) => {
-      window.webOS.service.request('luna://com.palm.db', {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+      (window as any).webOS.service.request('luna://com.palm.db', {
         method: 'find',
         parameters: {
           query: {
@@ -253,7 +258,7 @@ export class LgConfigService implements PlatformConfigService {
             resolve(null); // Return null if no matching record is found
           }
         },
-        onFailure(error) {
+        onFailure(error: unknown) {
           console.error(`Failed to retrieve data: ${JSON.stringify(error)}`);
           reject(new Error('Failed to retrieve data.'));
         },
@@ -265,7 +270,8 @@ export class LgConfigService implements PlatformConfigService {
     try {
       // Register the kind first
       await new Promise<void>((resolve, reject) => {
-        window.webOS.service.request('luna://com.palm.db', {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+        (window as any).webOS.service.request('luna://com.palm.db', {
           method: 'putKind',
           parameters: {
             id: 'com.feralfile.display:1', // Unique identifier for your kind
@@ -275,11 +281,11 @@ export class LgConfigService implements PlatformConfigService {
               { name: 'value', props: [{ name: 'value' }] },
             ],
           },
-          onSuccess: function (response) {
+          onSuccess: function (response: unknown) {
             console.log('Kind registered successfully:', response);
             resolve();
           },
-          onFailure: function (error) {
+          onFailure: function (error: unknown) {
             console.error('Failed to register kind:', error);
             reject(new Error('Failed to register kind.'));
           },
@@ -288,20 +294,21 @@ export class LgConfigService implements PlatformConfigService {
 
       // Insert the key-value pair after the kind has been registered
       await new Promise<void>((resolve, reject) => {
-        window.webOS.service.request('luna://com.palm.db', {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+        (window as any).webOS.service.request('luna://com.palm.db', {
           method: 'put',
           parameters: {
             objects: [
               { _kind: 'com.feralfile.display:1', key: key, value: value },
             ],
           },
-          onSuccess(response) {
+          onSuccess(response: unknown) {
             console.log(
               `Success response from LG: ${JSON.stringify(response)}`
             );
             resolve();
           },
-          onFailure(response) {
+          onFailure(response: unknown) {
             console.error(
               `Failed response from LG: ${JSON.stringify(response)}`
             );
