@@ -17,6 +17,8 @@ declare global {
 
 interface SpeechRecognition {
   start(): void;
+  abort(): void; // Added for cleanup purposes
+  onaudioend: () => void;
   onresult: (event: SpeechRecognitionEvent) => void;
 }
 
@@ -46,34 +48,99 @@ export default function AIArtworkClient() {
   const [seriesID, setSeriesID] = useState<string>('');
   const [previewURL, setPreviewURL] = useState<string>('');
   const [isRecording, setIsRecording] = useState<boolean>(false);
-  const [speechText, setSpeechText] = useState<string>('');
+  const [isGettingArtwork, setIsGettingArtwork] = useState<boolean>(false);
+  const [message, setMessage] = useState<string>('');
+
+  const recognition = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => {
+    console.log('AIArtworkClient mounted');
     handleOnRecord();
+
+    // Cleanup on component unmount
+    return () => {
+      if (recognition.current) {
+        recognition.current.abort();
+      }
+    };
   }, []);
 
-  function handleOnRecord() {
-    if (isRecording) {
+  useEffect(() => {
+    const requestMicrophoneAccess = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        console.log('Microphone access granted:', stream);
+      } catch (err) {
+        setMessage('Microphone access denied, please allow access to continue');
+        console.error('Microphone access denied:', err);
+      }
+    };
+
+    requestMicrophoneAccess().catch((error: unknown) => {
+      console.error('Error requesting microphone access:', error);
+    });
+  }, []);
+
+  function handleOnRecord(isForceRecord = false) {
+    console.log('isRecording:', isRecording, isForceRecord);
+    if (isRecording && !isForceRecord) {
       return;
     }
 
     setIsRecording(true);
-    setSpeechText('');
+    setMessage('Say something...');
 
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
 
-    recognition.start();
+    if (!SpeechRecognition) {
+      console.error('Speech Recognition is not supported in this browser.');
+      setIsRecording(false);
+      return;
+    }
 
-    let debounceHandling = debounce(handleSpeechText, 1000);
-    recognition.onresult = async function (event) {
-      const transcript = event.results[0][0].transcript;
-      debounceHandling(transcript);
+    console.log('Starting Speech Recognition...');
+
+    if (recognition.current) {
+      recognition.current.abort();
+    }
+
+    recognition.current = new SpeechRecognition();
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    recognition.current.start();
+    console.log('Speech Recognition started');
+
+    const debounceHandling = debounce(handleSpeechText, 1000);
+
+    let script = '';
+
+    recognition.current.onresult = function (event) {
+      try {
+        const transcript = event.results[0][0].transcript;
+        script = transcript;
+        console.log('Transcript received:', transcript);
+        setIsGettingArtwork(true);
+        debounceHandling(transcript);
+      } catch (error) {
+        console.error('Error in onresult:', error);
+        setIsRecording(false);
+      }
+    };
+
+    recognition.current.onaudioend = () => {
+      console.log('Audio end', script);
+      if (!script) {
+        handleOnRecord(true);
+      }
     };
   }
 
   useEffect(() => {
+    console.log('Series ID:', seriesID);
     if (!seriesID) {
       return;
     }
@@ -81,17 +148,23 @@ export default function AIArtworkClient() {
     setIsRecording(false);
 
     const handleSeries = async () => {
-      const artworks = await seriesService.current.getArtworkOfSeries(
-        seriesID,
-        'limit=1&offset=0'
-      );
-      if (!artworks.length) {
-        return;
-      }
+      try {
+        const artworks = await seriesService.current.getArtworkOfSeries(
+          seriesID,
+          'limit=1&offset=0'
+        );
+        if (!artworks.length) {
+          setMessage("We can't find any artwork, please try again");
+          return;
+        }
 
-      const previewURL = seriesService.current.getArtworkPreview(artworks[0]);
-      if (previewURL) {
-        setPreviewURL(previewURL);
+        const previewURL = seriesService.current.getArtworkPreview(artworks[0]);
+        if (previewURL) {
+          setPreviewURL(previewURL);
+        }
+      } catch (error) {
+        setMessage('Failed to get artwork, please try again');
+        console.error('Error fetching artworks:', error);
       }
     };
 
@@ -101,8 +174,9 @@ export default function AIArtworkClient() {
   const handleSpeechText = async (text: string) => {
     try {
       console.log('Text record: ', text);
-      setSpeechText(text);
+      setMessage(text);
       const aiArtwork = await conversationService.current.getConversation(text);
+      console.log('AI Artwork:', aiArtwork);
       if (!aiArtwork) {
         setIsRecording(false);
         setPreviewURL('');
@@ -122,6 +196,9 @@ export default function AIArtworkClient() {
       setSeriesID(aiArtwork.series_id);
     } catch (error) {
       console.error('Failed to get conversation:', error);
+      setMessage('Failed to get conversation, please try again');
+    } finally {
+      setIsGettingArtwork(false);
     }
   };
 
@@ -135,26 +212,27 @@ export default function AIArtworkClient() {
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
-      {isRecording && (
+      {message && (
         <div className={clsx(styles.record)}>
-          {speechText ? speechText : 'Say something...'}
-        </div>
-      )}
-      {!isRecording && !previewURL && (
-        <div className={clsx(styles.record)}>
-          We can't find any artwork, please try again
+          <p>{message}</p>
         </div>
       )}
       {!isRecording && previewURL && <ArtworkPlayer previewURL={previewURL} />}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 20,
-          right: 20,
-          cursor: 'pointer',
-        }}>
-        <Microphone onClick={handleOnRecord} />
-      </div>
+      {!isGettingArtwork && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 20,
+            right: 20,
+            cursor: 'pointer',
+          }}>
+          <Microphone
+            onClick={() => {
+              handleOnRecord(true);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
