@@ -2,7 +2,11 @@ import { IgnoreKeyCodes, KeyCodes } from '@/constants';
 import DeviceManager from './DeviceManager';
 import { v4 as uuidv4 } from 'uuid';
 import { Event, EventEmitter } from './EventEmitter';
-import { DeviceInfo } from 'webostvjs';
+import { DeviceInfo, OnCompleteSuccessResponse } from 'webostvjs';
+
+interface LGSuccessResponse extends OnCompleteSuccessResponse {
+  results: { key: string; value: string }[];
+}
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class PlatformEventReceiver {
@@ -230,13 +234,57 @@ export class LgConfigService implements PlatformConfigService {
       }
     });
   }
-  // eslint-disable-next-line @typescript-eslint/require-await
+
   async getString(key: string): Promise<string | null> {
-    return localStorage.getItem(key);
+    return new Promise(resolve => {
+      window.webOS.service.request('luna://com.palm.db', {
+        method: 'find',
+        parameters: {
+          query: {
+            from: 'com.feralfile.display:1',
+            where: [{ prop: 'key', op: '=', val: key }],
+          },
+        },
+        onSuccess(response) {
+          resolve((response as LGSuccessResponse).results[0]?.value);
+        },
+        onFailure(response) {
+          console.error(`Failed to retrieve data: ${JSON.stringify(response)}`);
+        },
+      });
+    });
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
   async setString(key: string, value: string): Promise<void> {
-    localStorage.setItem(key, value);
+    window.webOS.service.request('luna://com.palm.db', {
+      method: 'putKind',
+      parameters: {
+        id: 'com.feralfile.display:1', // Unique identifier for your kind
+        owner: 'com.feralfile.display', // Your app's owner ID
+        indexes: [
+          { name: 'key', props: [{ name: 'key' }] }, // Define the properties that will be indexed
+          { name: 'value', props: [{ name: 'value' }] },
+        ],
+      },
+      onSuccess: function (response) {
+        console.log('Kind registered successfully:', response);
+      },
+      onFailure: function (error) {
+        console.error('Failed to register kind:', error);
+      },
+    });
+    window.webOS.service.request('luna://com.palm.db', {
+      method: 'put',
+      parameters: {
+        objects: [{ _kind: 'com.feralfile.display:1', key: key, value: value }],
+      },
+      onSuccess(response) {
+        console.log(`Success response from LG: ${JSON.stringify(response)}`);
+      },
+      onFailure(response) {
+        console.error(`Failed response from LG: ${JSON.stringify(response)}`);
+      },
+    });
   }
 }
