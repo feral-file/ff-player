@@ -65,6 +65,7 @@ export default function AIArtworkClient() {
   }, []);
 
   function handleOnRecord(isForceRecord = false) {
+    console.log('isRecording:', isRecording, isForceRecord);
     if (isRecording && !isForceRecord) {
       return;
     }
@@ -81,13 +82,18 @@ export default function AIArtworkClient() {
       return;
     }
 
+    console.log('Starting Speech Recognition...');
+
     if (recognition) {
       recognition.abort();
     }
 
     recognition = new SpeechRecognition();
-
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
     recognition.start();
+    console.log('Speech Recognition started');
 
     const debounceHandling = debounce(handleSpeechText, 1000);
 
@@ -139,6 +145,7 @@ export default function AIArtworkClient() {
       console.log('Text record: ', text);
       setSpeechText(text);
       const aiArtwork = await conversationService.current.getConversation(text);
+      console.log('AI Artwork:', aiArtwork);
       if (!aiArtwork) {
         setIsRecording(false);
         setPreviewURL('');
