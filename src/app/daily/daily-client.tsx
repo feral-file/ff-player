@@ -3,11 +3,7 @@
 import ArtworkPlayer from '../../components/ArtworkPlayer';
 import DailyService, { DailyInstanceService } from '@/services/DailyService';
 import { getDelayTime } from '@/services/qrCodePopUpService';
-import {
-  MixpanelEventName,
-  trackDailyEvent,
-  trackTimeEvent,
-} from '@/utils/mixpanel';
+import { CastingArtworkType } from '@/utils/mixpanel';
 import { Daily } from '@/utils/types';
 import { useEffect, useRef, useState } from 'react';
 
@@ -17,6 +13,8 @@ export default function DailyClient() {
   const timeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
+  const [artworkID, setArtworkID] = useState<string | undefined>();
+  const [artworkName, setArtworkName] = useState<string | undefined>();
 
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
 
@@ -27,10 +25,15 @@ export default function DailyClient() {
         const dailies = await dailyService.current.callingDailies();
         DailyInstanceService.setDailies(dailies);
         if (dailies.length > 0) {
-          dailyRef.current = dailies[0];
+          // Set mixpanel metadata
+          if (dailyRef.current !== dailies[0]) {
+            dailyRef.current = dailies[0];
+            setArtworkID(dailyRef.current.tokenID);
+            setArtworkName(dailyRef.current.tokenName);
+          }
+
           const delay = getDelayTime(dailies);
           if (dailies[0].previewURL) {
-            trackTimeEvent(MixpanelEventName.CastArtworkEventName);
             setCastPreviewURL(dailies[0].previewURL);
           }
 
@@ -50,11 +53,6 @@ export default function DailyClient() {
         handleCastDaily().catch((error: unknown) => {
           console.error(error);
         });
-
-        // Track daily event
-        if (dailyRef.current) {
-          trackDailyEvent(dailyRef.current.tokenID, dailyRef.current.tokenName);
-        }
       }, duration);
     };
 
@@ -68,22 +66,18 @@ export default function DailyClient() {
     handleCastDaily().catch((error: unknown) => {
       console.error(error);
     });
-
-    return () => {
-      // Track daily event when unmount
-      if (dailyRef.current) {
-        trackDailyEvent(
-          dailyRef.current.tokenID,
-          dailyRef.current.tokenName,
-          true
-        );
-      }
-    };
   }, []);
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
-      {castPreviewURL && <ArtworkPlayer previewURL={castPreviewURL} />}
+      {castPreviewURL && (
+        <ArtworkPlayer
+          previewURL={castPreviewURL}
+          artworkID={artworkID}
+          artworkName={artworkName}
+          castingType={CastingArtworkType.Daily}
+        />
+      )}
     </div>
   );
 }

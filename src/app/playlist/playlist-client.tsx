@@ -5,11 +5,7 @@ import { AppContext } from '@/context/AppContext';
 import { IndexerToken } from '@/models';
 import ArtworkService from '@/services/ArtworkService';
 import { getIndexerTokenName } from '@/utils/indexer';
-import {
-  MixpanelEventName,
-  trackPlaylistCastArtworkEvent,
-  trackTimeEvent,
-} from '@/utils/mixpanel';
+import { CastingArtworkType } from '@/utils/mixpanel';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
 import { CastCommand, PlayArtworkV2, PlaylistToken } from '@/utils/types';
 import { useContext, useEffect, useRef, useState } from 'react';
@@ -21,6 +17,9 @@ export default function PlaylistClient() {
   }
 
   const { castInfo } = context.websocketData;
+
+  const [artworkID, setArtworkID] = useState<string | undefined>();
+  const [artworkName, setArtworkName] = useState<string | undefined>();
 
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const indexRef = useRef<number>(-1);
@@ -35,7 +34,6 @@ export default function PlaylistClient() {
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
   const currentPlaylistRef = useRef<PlaylistToken>();
-  const isCastingFirstArtwork = useRef<boolean>(true);
 
   // Services
   const artworkService = useRef(new ArtworkService());
@@ -57,36 +55,17 @@ export default function PlaylistClient() {
 
     const index = currentIndex % playlist.length;
     const currentPlaylist = playlist[index];
-    currentPlaylistRef.current = currentPlaylist;
-    setCastPreviewURL(currentPlaylist.previewURL);
-
-    // HandleM mixpanel event
-    if (isCastingFirstArtwork.current) {
-      isCastingFirstArtwork.current = false;
-    } else {
-      trackPlaylistCastArtworkEvent(
-        currentPlaylistRef.current.token.id,
-        currentPlaylistRef.current.token.name
-      );
+    if (currentPlaylist !== currentPlaylistRef.current) {
+      currentPlaylistRef.current = currentPlaylist;
+      setArtworkID(currentPlaylist.token.id);
+      setArtworkName(currentPlaylist.token.name);
     }
-
-    trackTimeEvent(MixpanelEventName.CastArtworkEventName);
+    setCastPreviewURL(currentPlaylist.previewURL);
 
     const currentTime = Date.now();
     startPlayArtworkTime.current = currentTime;
     endPlayArtworkTime.current = currentTime + currentPlaylist.duration;
     startInterval(currentPlaylist.duration);
-
-    return () => {
-      // Track playlist event when unmount
-      if (currentPlaylistRef.current) {
-        trackPlaylistCastArtworkEvent(
-          currentPlaylistRef.current.token.id,
-          currentPlaylistRef.current.token.name,
-          true
-        );
-      }
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, playlist]);
 
@@ -283,7 +262,12 @@ export default function PlaylistClient() {
   return (
     <>
       <div style={{ width: '100%', height: '100%' }}>
-        <ArtworkPlayer previewURL={castPreviewURL ?? ''} />
+        <ArtworkPlayer
+          previewURL={castPreviewURL ?? ''}
+          artworkID={artworkID}
+          artworkName={artworkName}
+          castingType={CastingArtworkType.Playlist}
+        />
       </div>
     </>
   );

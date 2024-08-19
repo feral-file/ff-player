@@ -1,4 +1,11 @@
 import {
+  CastArtworkEventProperties,
+  CastingArtworkType,
+  MixpanelEventName,
+  trackEvent,
+  trackTimeEvent,
+} from '@/utils/mixpanel';
+import {
   FileUseAudio,
   FileUseIframe,
   FileUseIframePDF,
@@ -18,8 +25,14 @@ import { useEffect, useRef, useState } from 'react';
 
 const ArtworkPlayer = ({
   previewURL,
+  artworkID,
+  artworkName,
+  castingType,
 }: {
   previewURL: string;
+  artworkID?: string;
+  artworkName?: string;
+  castingType?: CastingArtworkType;
   keyboardCode?: number;
 }) => {
   const [previewType, setPreviewType] = useState<string | null>(null);
@@ -53,6 +66,20 @@ const ArtworkPlayer = ({
       setPreviewType(SeriesPreviewHTMLTag.iframe);
     }
   }
+
+  useEffect(() => {
+    trackTimeEvent(MixpanelEventName.CastArtworkEventName);
+    return () => {
+      if (artworkID && castingType) {
+        const event: CastArtworkEventProperties = {
+          casting_type: castingType,
+          token_id: artworkID,
+          token_name: artworkName ?? '',
+        };
+        trackEvent(MixpanelEventName.CastArtworkEventName, event);
+      }
+    };
+  }, [castingType, artworkID, artworkName]);
 
   useEffect(() => {
     const detectPreviewType = async (previewURL: string) => {

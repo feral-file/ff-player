@@ -1,12 +1,13 @@
 import mixpanel from 'mixpanel-browser';
 
-interface CastArtworkEventProperties {
-  castingType: CastingArtworkType;
-  tokenID: string;
-  tokenName: string;
+export interface CastArtworkEventProperties {
+  casting_type: CastingArtworkType;
+  token_id: string;
+  token_name: string;
 }
 
-enum CastingArtworkType {
+export enum CastingArtworkType {
+  Unknown = 'Unknown',
   Daily = 'Daily',
   Playlist = 'Playlist',
   Exhibition = 'Exhibition',
@@ -36,7 +37,7 @@ export const trackTimeEvent = (eventName: MixpanelEventName) => {
   mixpanel.time_event(eventName);
 };
 
-const trackEvent = (
+export const trackEvent = (
   eventName: MixpanelEventName,
   properties?: CastArtworkEventProperties,
   isSendBeacon = false
@@ -45,57 +46,6 @@ const trackEvent = (
     eventName,
     properties,
     isSendBeacon ? { transport: 'sendBeacon' } : undefined
-  );
-};
-
-export const trackDailyEvent = (
-  tokenID: string,
-  tokenName: string,
-  isSendBeacon?: boolean
-) => {
-  const CastArtworkEventProperties: CastArtworkEventProperties = {
-    castingType: CastingArtworkType.Daily,
-    tokenID,
-    tokenName,
-  };
-  trackEvent(
-    MixpanelEventName.CastArtworkEventName,
-    CastArtworkEventProperties,
-    isSendBeacon
-  );
-};
-
-export const trackExhibitionCastArtworkEvent = (
-  tokenID: string,
-  tokenName: string,
-  isSendBeacon?: boolean
-) => {
-  const CastArtworkEventProperties: CastArtworkEventProperties = {
-    castingType: CastingArtworkType.Exhibition,
-    tokenID,
-    tokenName,
-  };
-  trackEvent(
-    MixpanelEventName.CastArtworkEventName,
-    CastArtworkEventProperties,
-    isSendBeacon
-  );
-};
-
-export const trackPlaylistCastArtworkEvent = (
-  tokenID: string,
-  tokenName: string,
-  isSendBeacon?: boolean
-) => {
-  const CastArtworkEventProperties: CastArtworkEventProperties = {
-    castingType: CastingArtworkType.Playlist,
-    tokenID,
-    tokenName,
-  };
-  trackEvent(
-    MixpanelEventName.CastArtworkEventName,
-    CastArtworkEventProperties,
-    isSendBeacon
   );
 };
 

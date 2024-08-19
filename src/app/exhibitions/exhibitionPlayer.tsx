@@ -10,11 +10,7 @@ import ArtworkPlayer from '@/components/ArtworkPlayer';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
 import Image from 'next/image';
 import { AppContext } from '@/context/AppContext';
-import {
-  MixpanelEventName,
-  trackExhibitionCastArtworkEvent,
-  trackTimeEvent,
-} from '@/utils/mixpanel';
+import { CastingArtworkType } from '@/utils/mixpanel';
 
 const ExhibitionHall = () => {
   const context = useContext(AppContext);
@@ -31,6 +27,8 @@ const ExhibitionHall = () => {
   const [exhibitionID, setExhibitionID] = useState<string | undefined>();
   const [catalogID, setCatalogID] = useState<string | undefined>();
   const [screen, setScreen] = useState<ExhibitionCatalog | undefined>();
+  const [artworkID, setArtworkID] = useState<string | undefined>();
+  const [artworkName, setArtworkName] = useState<string | undefined>();
 
   const [pageSection, setSection] = useState<ExhibitionCatalog>(
     ExhibitionCatalog.home
@@ -42,7 +40,6 @@ const ExhibitionHall = () => {
   const [postIndex, setPostIndex] = useState<number>(0);
   const [artwork, setArtwork] = useState<Artwork>();
   const artworkRef = useRef<Artwork>();
-  const isCastingFirstArtwork = useRef<boolean>(true);
 
   // Services
   const exhibitionService = useRef(new ExhibitionService());
@@ -67,24 +64,19 @@ const ExhibitionHall = () => {
     artwork.previewURI = seriesService.current.getArtworkPreview(artwork);
     setArtwork(artwork);
 
-    // Handle mixpanel event
-    artworkRef.current = artwork;
-    if (isCastingFirstArtwork.current) {
-      isCastingFirstArtwork.current = false;
-    } else {
-      trackExhibitionCastArtworkEvent(
-        artworkRef.current.id ?? '',
+    // Set mixpanel metadata
+    if (artwork !== artworkRef.current) {
+      artworkRef.current = artwork;
+      setArtworkName(
         (artworkRef.current.series?.title ?? '') +
           ' ' +
           (artworkRef.current.name ?? '')
       );
+      setArtworkID(artworkRef.current.id);
     }
-
-    trackTimeEvent(MixpanelEventName.CastArtworkEventName);
   };
 
   useEffect(() => {
-    console.log('castInfo', castInfo);
     if (castInfo) {
       const handleCastCommand = () => {
         if (castInfo.castCommand === CastCommand.castExhibition) {
@@ -95,19 +87,6 @@ const ExhibitionHall = () => {
       };
       handleCastCommand();
     }
-
-    return () => {
-      // Send mixpanel event when unmount
-      if (artworkRef.current) {
-        trackExhibitionCastArtworkEvent(
-          artworkRef.current.id ?? '',
-          (artworkRef.current.series?.title ?? '') +
-            ' ' +
-            (artworkRef.current.name ?? ''),
-          true
-        );
-      }
-    };
   }, [castInfo]);
 
   useEffect(() => {
@@ -261,7 +240,13 @@ const ExhibitionHall = () => {
       {exhibitionDetail && pageSection === ExhibitionCatalog.artwork && (
         <div className={[styles.exhCard, styles.fadeInBottom].join(' ')}>
           {artwork?.previewURI && (
-            <ArtworkPlayer key={artwork.id} previewURL={artwork.previewURI} />
+            <ArtworkPlayer
+              key={artwork.id}
+              previewURL={artwork.previewURI}
+              artworkID={artworkID}
+              artworkName={artworkName}
+              castingType={CastingArtworkType.Exhibition}
+            />
           )}
         </div>
       )}

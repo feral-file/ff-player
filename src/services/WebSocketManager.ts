@@ -20,7 +20,8 @@ const useWebSocket = (url: string, apiKey: string) => {
     if (
       castInfo?.dataChecked &&
       castInfo.primaryAddress &&
-      currentUser != castInfo.primaryAddress
+      (currentUser != castInfo.primaryAddress ||
+        mixpanel.get_distinct_id() != castInfo.primaryAddress)
     ) {
       localStorage.setItem(
         LocalStorageItem.currentUserId,
