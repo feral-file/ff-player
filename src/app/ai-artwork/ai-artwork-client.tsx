@@ -18,6 +18,7 @@ declare global {
 interface SpeechRecognition {
   start(): void;
   abort(): void; // Added for cleanup purposes
+  onaudioend: () => void;
   onresult: (event: SpeechRecognitionEvent) => void;
 }
 
@@ -50,7 +51,7 @@ export default function AIArtworkClient() {
   const [isGettingArtwork, setIsGettingArtwork] = useState<boolean>(false);
   const [speechText, setSpeechText] = useState<string>('');
 
-  let recognition: SpeechRecognition | null = null;
+  const recognition = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => {
     console.log('AIArtworkClient mounted');
@@ -58,8 +59,8 @@ export default function AIArtworkClient() {
 
     // Cleanup on component unmount
     return () => {
-      if (recognition) {
-        recognition.abort();
+      if (recognition.current) {
+        recognition.current.abort();
       }
     };
   }, []);
@@ -84,28 +85,38 @@ export default function AIArtworkClient() {
 
     console.log('Starting Speech Recognition...');
 
-    if (recognition) {
-      recognition.abort();
+    if (recognition.current) {
+      recognition.current.abort();
     }
 
-    recognition = new SpeechRecognition();
+    recognition.current = new SpeechRecognition();
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
-    recognition.start();
+    recognition.current.start();
     console.log('Speech Recognition started');
 
     const debounceHandling = debounce(handleSpeechText, 1000);
 
-    recognition.onresult = function (event) {
+    let script = '';
+
+    recognition.current.onresult = function (event) {
       try {
         const transcript = event.results[0][0].transcript;
+        script = transcript;
         console.log('Transcript received:', transcript);
         setIsGettingArtwork(true);
         debounceHandling(transcript);
       } catch (error) {
         console.error('Error in onresult:', error);
         setIsRecording(false);
+      }
+    };
+
+    recognition.current.onaudioend = () => {
+      console.log('Audio end', script);
+      if (!script) {
+        handleOnRecord(true);
       }
     };
   }
