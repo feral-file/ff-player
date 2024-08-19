@@ -4,6 +4,7 @@ import CanvasService from './CanvasService';
 import { LocalStorageItem } from '@/constants';
 import { CastInfo } from '@/utils/types';
 import mixpanel from '@/utils/mixpanel';
+import { hashStringToSHA256 } from '@/utils/crypto';
 
 const useWebSocket = (url: string, apiKey: string) => {
   const [locationID, setLocationID] = useState<string | null>(null);
@@ -16,18 +17,16 @@ const useWebSocket = (url: string, apiKey: string) => {
   const canvasService = useRef(new CanvasService());
 
   useEffect(() => {
-    const currentUser = localStorage.getItem(LocalStorageItem.currentUserId);
-    if (
-      castInfo?.dataChecked &&
-      castInfo.primaryAddress &&
-      (currentUser != castInfo.primaryAddress ||
-        mixpanel.get_distinct_id() != castInfo.primaryAddress)
-    ) {
-      localStorage.setItem(
-        LocalStorageItem.currentUserId,
-        castInfo.primaryAddress
-      );
-      mixpanel.identify(castInfo.primaryAddress);
+    if (castInfo?.primaryAddress) {
+      const currentUser = localStorage.getItem(LocalStorageItem.currentUserId);
+      const receivedUser = hashStringToSHA256(castInfo.primaryAddress);
+      if (
+        currentUser != receivedUser ||
+        mixpanel.get_distinct_id() != receivedUser
+      ) {
+        localStorage.setItem(LocalStorageItem.currentUserId, receivedUser);
+        mixpanel.identify(receivedUser);
+      }
     }
   }, [castInfo]);
 
