@@ -49,7 +49,7 @@ export default function AIArtworkClient() {
   const [previewURL, setPreviewURL] = useState<string>('');
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isGettingArtwork, setIsGettingArtwork] = useState<boolean>(false);
-  const [speechText, setSpeechText] = useState<string>('');
+  const [message, setMessage] = useState<string>('');
 
   const recognition = useRef<SpeechRecognition | null>(null);
 
@@ -65,6 +65,24 @@ export default function AIArtworkClient() {
     };
   }, []);
 
+  useEffect(() => {
+    const requestMicrophoneAccess = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        console.log('Microphone access granted:', stream);
+      } catch (err) {
+        setMessage('Microphone access denied, please allow access to continue');
+        console.error('Microphone access denied:', err);
+      }
+    };
+
+    requestMicrophoneAccess().catch((error: unknown) => {
+      console.error('Error requesting microphone access:', error);
+    });
+  }, []);
+
   function handleOnRecord(isForceRecord = false) {
     console.log('isRecording:', isRecording, isForceRecord);
     if (isRecording && !isForceRecord) {
@@ -72,7 +90,7 @@ export default function AIArtworkClient() {
     }
 
     setIsRecording(true);
-    setSpeechText('');
+    setMessage('Say something...');
 
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -136,6 +154,7 @@ export default function AIArtworkClient() {
           'limit=1&offset=0'
         );
         if (!artworks.length) {
+          setMessage("We can't find any artwork, please try again");
           return;
         }
 
@@ -144,6 +163,7 @@ export default function AIArtworkClient() {
           setPreviewURL(previewURL);
         }
       } catch (error) {
+        setMessage('Failed to get artwork, please try again');
         console.error('Error fetching artworks:', error);
       }
     };
@@ -154,7 +174,7 @@ export default function AIArtworkClient() {
   const handleSpeechText = async (text: string) => {
     try {
       console.log('Text record: ', text);
-      setSpeechText(text);
+      setMessage(text);
       const aiArtwork = await conversationService.current.getConversation(text);
       console.log('AI Artwork:', aiArtwork);
       if (!aiArtwork) {
@@ -176,6 +196,7 @@ export default function AIArtworkClient() {
       setSeriesID(aiArtwork.series_id);
     } catch (error) {
       console.error('Failed to get conversation:', error);
+      setMessage('Failed to get conversation, please try again');
     } finally {
       setIsGettingArtwork(false);
     }
@@ -191,14 +212,9 @@ export default function AIArtworkClient() {
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
-      {isRecording && (
+      {message && (
         <div className={clsx(styles.record)}>
-          <p>{speechText ? speechText : 'Say something...'}</p>
-        </div>
-      )}
-      {!isRecording && !previewURL && (
-        <div className={clsx(styles.record)}>
-          We can&apos;t find any artwork, please try again
+          <p>{message}</p>
         </div>
       )}
       {!isRecording && previewURL && <ArtworkPlayer previewURL={previewURL} />}
