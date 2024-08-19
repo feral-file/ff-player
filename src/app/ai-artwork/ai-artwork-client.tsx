@@ -17,7 +17,7 @@ declare global {
 
 interface SpeechRecognition {
   start(): void;
-  abort(): void;  // Added for cleanup purposes
+  abort(): void; // Added for cleanup purposes
   onresult: (event: SpeechRecognitionEvent) => void;
 }
 
@@ -52,6 +52,7 @@ export default function AIArtworkClient() {
   let recognition: SpeechRecognition | null = null;
 
   useEffect(() => {
+    console.log('AIArtworkClient mounted');
     handleOnRecord();
 
     // Cleanup on component unmount
@@ -98,6 +99,7 @@ export default function AIArtworkClient() {
   }
 
   useEffect(() => {
+    console.log('Series ID:', seriesID);
     if (!seriesID) {
       return;
     }
