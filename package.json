@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@apollo/client": "^3.11.2",
+    "@types/webostvjs": "^1.2.5",
     "axios": "^1.7.3",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
