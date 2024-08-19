@@ -17,6 +17,7 @@ declare global {
 
 interface SpeechRecognition {
   start(): void;
+  abort(): void;  // Added for cleanup purposes
   onresult: (event: SpeechRecognitionEvent) => void;
 }
 
@@ -48,8 +49,17 @@ export default function AIArtworkClient() {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [speechText, setSpeechText] = useState<string>('');
 
+  let recognition: SpeechRecognition | null = null;
+
   useEffect(() => {
     handleOnRecord();
+
+    // Cleanup on component unmount
+    return () => {
+      if (recognition) {
+        recognition.abort();
+      }
+    };
   }, []);
 
   function handleOnRecord() {
@@ -62,14 +72,28 @@ export default function AIArtworkClient() {
 
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
+
+    if (!SpeechRecognition) {
+      console.error('Speech Recognition is not supported in this browser.');
+      setIsRecording(false);
+      return;
+    }
+
+    recognition = new SpeechRecognition();
 
     recognition.start();
 
     let debounceHandling = debounce(handleSpeechText, 1000);
+
     recognition.onresult = async function (event) {
-      const transcript = event.results[0][0].transcript;
-      debounceHandling(transcript);
+      try {
+        const transcript = event.results[0][0].transcript;
+        console.log('Transcript received:', transcript);
+        debounceHandling(transcript);
+      } catch (error) {
+        console.error('Error in onresult:', error);
+        setIsRecording(false);
+      }
     };
   }
 
@@ -81,17 +105,21 @@ export default function AIArtworkClient() {
     setIsRecording(false);
 
     const handleSeries = async () => {
-      const artworks = await seriesService.current.getArtworkOfSeries(
-        seriesID,
-        'limit=1&offset=0'
-      );
-      if (!artworks.length) {
-        return;
-      }
+      try {
+        const artworks = await seriesService.current.getArtworkOfSeries(
+          seriesID,
+          'limit=1&offset=0'
+        );
+        if (!artworks.length) {
+          return;
+        }
 
-      const previewURL = seriesService.current.getArtworkPreview(artworks[0]);
-      if (previewURL) {
-        setPreviewURL(previewURL);
+        const previewURL = seriesService.current.getArtworkPreview(artworks[0]);
+        if (previewURL) {
+          setPreviewURL(previewURL);
+        }
+      } catch (error) {
+        console.error('Error fetching artworks:', error);
       }
     };
 
