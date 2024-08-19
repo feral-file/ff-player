@@ -47,6 +47,7 @@ export default function AIArtworkClient() {
   const [seriesID, setSeriesID] = useState<string>('');
   const [previewURL, setPreviewURL] = useState<string>('');
   const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [isGettingArtwork, setIsGettingArtwork] = useState<boolean>(false);
   const [speechText, setSpeechText] = useState<string>('');
 
   let recognition: SpeechRecognition | null = null;
@@ -63,8 +64,8 @@ export default function AIArtworkClient() {
     };
   }, []);
 
-  function handleOnRecord() {
-    if (isRecording) {
+  function handleOnRecord(isForceRecord = false) {
+    if (isRecording && !isForceRecord) {
       return;
     }
 
@@ -80,16 +81,21 @@ export default function AIArtworkClient() {
       return;
     }
 
+    if (recognition) {
+      recognition.abort();
+    }
+
     recognition = new SpeechRecognition();
 
     recognition.start();
 
-    let debounceHandling = debounce(handleSpeechText, 1000);
+    const debounceHandling = debounce(handleSpeechText, 1000);
 
-    recognition.onresult = async function (event) {
+    recognition.onresult = function (event) {
       try {
         const transcript = event.results[0][0].transcript;
         console.log('Transcript received:', transcript);
+        setIsGettingArtwork(true);
         debounceHandling(transcript);
       } catch (error) {
         console.error('Error in onresult:', error);
@@ -152,6 +158,8 @@ export default function AIArtworkClient() {
       setSeriesID(aiArtwork.series_id);
     } catch (error) {
       console.error('Failed to get conversation:', error);
+    } finally {
+      setIsGettingArtwork(false);
     }
   };
 
@@ -167,24 +175,30 @@ export default function AIArtworkClient() {
     <div style={{ width: '100vw', height: '100vh' }}>
       {isRecording && (
         <div className={clsx(styles.record)}>
-          {speechText ? speechText : 'Say something...'}
+          <p>{speechText ? speechText : 'Say something...'}</p>
         </div>
       )}
       {!isRecording && !previewURL && (
         <div className={clsx(styles.record)}>
-          We can't find any artwork, please try again
+          We can&apos;t find any artwork, please try again
         </div>
       )}
       {!isRecording && previewURL && <ArtworkPlayer previewURL={previewURL} />}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 20,
-          right: 20,
-          cursor: 'pointer',
-        }}>
-        <Microphone onClick={handleOnRecord} />
-      </div>
+      {!isGettingArtwork && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 20,
+            right: 20,
+            cursor: 'pointer',
+          }}>
+          <Microphone
+            onClick={() => {
+              handleOnRecord(true);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
