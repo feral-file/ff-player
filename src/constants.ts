@@ -12,6 +12,20 @@ export const IgnoreKeyCodes = [
   KeyCodes.audioVolumeMute,
 ];
 
+export enum KeyDown {
+  audioVolumeDown = 'AudioVolumeDown',
+  audioVolumeUp = 'AudioVolumeUp',
+  audioVolumeMute = 'AudioVolumeMute',
+  back = 'Back',
+}
+
+export const IgnoreKeyDown = [
+  KeyDown.audioVolumeDown,
+  KeyDown.audioVolumeUp,
+  KeyDown.audioVolumeMute,
+  KeyDown.back,
+];
+
 export enum LocalStorageItem {
   deviceId = 'deviceId',
   locationID = 'locationID',

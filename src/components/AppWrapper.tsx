@@ -1,6 +1,6 @@
 'use client';
 
-import { AppSettings } from '@/constants';
+import { AppSettings, IgnoreKeyDown, KeyDown } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import DeviceManager from '@/utils/DeviceManager';
@@ -80,16 +80,16 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
       if (now - lastEventTime.current > minInterval) {
         lastEventTime.current = now;
-
-        if (event.key === '0' || event.keyCode === 48) {
+        if (!IgnoreKeyDown.includes(event.key as KeyDown)) {
           console.log('Toggle QR Code');
 
           setShowQrCode(!showQrCode);
         }
       }
     };
-
-    window.addEventListener('keydown', handleKeyDown);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleKeyDown);
+    }
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
