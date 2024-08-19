@@ -224,19 +224,20 @@ export class LgConfigService implements PlatformConfigService {
   }
 
   async getDeviceInfo(): Promise<DeviceInfo> {
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
       try {
         window.webOS.deviceInfo((deviceInfo: DeviceInfo) => {
           resolve(deviceInfo);
         });
       } catch (error) {
         console.log(error);
+        reject(error as Error);
       }
     });
   }
 
   async getString(key: string): Promise<string | null> {
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
       window.webOS.service.request('luna://com.palm.db', {
         method: 'find',
         parameters: {
@@ -245,46 +246,72 @@ export class LgConfigService implements PlatformConfigService {
             where: [{ prop: 'key', op: '=', val: key }],
           },
         },
-        onSuccess(response) {
-          resolve((response as LGSuccessResponse).results[0]?.value);
+        onSuccess(response: LGSuccessResponse) {
+          if (response.results.length > 0) {
+            resolve(response.results[0].value);
+          } else {
+            resolve(null); // Return null if no matching record is found
+          }
         },
-        onFailure(response) {
-          console.error(`Failed to retrieve data: ${JSON.stringify(response)}`);
+        onFailure(error) {
+          console.error(`Failed to retrieve data: ${JSON.stringify(error)}`);
+          reject(new Error('Failed to retrieve data.'));
         },
       });
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async setString(key: string, value: string): Promise<void> {
-    window.webOS.service.request('luna://com.palm.db', {
-      method: 'putKind',
-      parameters: {
-        id: 'com.feralfile.display:1', // Unique identifier for your kind
-        owner: 'com.feralfile.display', // Your app's owner ID
-        indexes: [
-          { name: 'key', props: [{ name: 'key' }] }, // Define the properties that will be indexed
-          { name: 'value', props: [{ name: 'value' }] },
-        ],
-      },
-      onSuccess: function (response) {
-        console.log('Kind registered successfully:', response);
-      },
-      onFailure: function (error) {
-        console.error('Failed to register kind:', error);
-      },
-    });
-    window.webOS.service.request('luna://com.palm.db', {
-      method: 'put',
-      parameters: {
-        objects: [{ _kind: 'com.feralfile.display:1', key: key, value: value }],
-      },
-      onSuccess(response) {
-        console.log(`Success response from LG: ${JSON.stringify(response)}`);
-      },
-      onFailure(response) {
-        console.error(`Failed response from LG: ${JSON.stringify(response)}`);
-      },
-    });
+    try {
+      // Register the kind first
+      await new Promise<void>((resolve, reject) => {
+        window.webOS.service.request('luna://com.palm.db', {
+          method: 'putKind',
+          parameters: {
+            id: 'com.feralfile.display:1', // Unique identifier for your kind
+            owner: 'com.feralfile.display', // Your app's owner ID
+            indexes: [
+              { name: 'key', props: [{ name: 'key' }] }, // Define the properties that will be indexed
+              { name: 'value', props: [{ name: 'value' }] },
+            ],
+          },
+          onSuccess: function (response) {
+            console.log('Kind registered successfully:', response);
+            resolve();
+          },
+          onFailure: function (error) {
+            console.error('Failed to register kind:', error);
+            reject(new Error('Failed to register kind.'));
+          },
+        });
+      });
+
+      // Insert the key-value pair after the kind has been registered
+      await new Promise<void>((resolve, reject) => {
+        window.webOS.service.request('luna://com.palm.db', {
+          method: 'put',
+          parameters: {
+            objects: [
+              { _kind: 'com.feralfile.display:1', key: key, value: value },
+            ],
+          },
+          onSuccess(response) {
+            console.log(
+              `Success response from LG: ${JSON.stringify(response)}`
+            );
+            resolve();
+          },
+          onFailure(response) {
+            console.error(
+              `Failed response from LG: ${JSON.stringify(response)}`
+            );
+            reject(new Error('Failed to insert data.'));
+          },
+        });
+      });
+    } catch (error) {
+      console.error('Error in setString:', error);
+      throw error; // Propagate the error to the caller
+    }
   }
 }
