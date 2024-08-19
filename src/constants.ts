@@ -26,6 +26,7 @@ export enum LocalStorageItem {
 export enum Platform {
   android = 'android',
   tizen = 'tizen',
+  lg = 'lg',
 }
 
 export const AppSettings = {
