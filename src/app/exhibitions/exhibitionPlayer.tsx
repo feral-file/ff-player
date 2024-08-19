@@ -135,6 +135,9 @@ const ExhibitionHall = () => {
       };
 
       switch (screen) {
+        case ExhibitionCatalog.home:
+          setArtwork(undefined);
+          break;
         case ExhibitionCatalog.curatorNote:
           setPostIndex(0);
           break;
