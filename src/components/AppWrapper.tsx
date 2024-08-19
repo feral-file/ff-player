@@ -34,7 +34,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
   const [castState, setCastState] = useState<CastState>(CastState.None);
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
-  const [showQrCode, setShowQrCode] = useState<boolean>(true);
+  const [showQrCode, setShowQrCode] = useState<boolean>(false);
   const lastEventTime = useRef(0);
 
   // Initialize platform events
@@ -194,6 +194,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           }
 
           default: {
+            if (castInfo.dataChecked) {
+              setShowQrCode(true);
+            }
             break;
           }
         }
@@ -208,7 +211,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         router.back();
       }
     }
-  }, [castInfo, castState, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [castInfo]);
 
   useEffect(() => {
     if (showQrCode) {
