@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import OnboardingModal from './OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
+import Script from 'next/script';
 
 const enum CastState {
   None, // Not casting
@@ -227,6 +228,11 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <>
+      <Script
+        src="/webOSTVjs-1.2.11/webOSTV.js"
+        onLoad={() => {
+          console.log('loaded');
+        }}></Script>
       {displayOnboarding && <OnboardingModal />}
       <div
         style={{

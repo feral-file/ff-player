@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import createBranchLink from './createBranchLink';
 import {
   AndroidConfigService,
+  LgConfigService,
   PlatformConfigService,
   TizenConfigService,
   WebConfigService,
@@ -30,6 +31,8 @@ class DeviceManager {
         return new AndroidConfigService();
       case Platform.tizen:
         return new TizenConfigService();
+      case Platform.lg:
+        return new LgConfigService();
       default:
         return new WebConfigService();
     }
