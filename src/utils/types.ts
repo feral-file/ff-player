@@ -37,18 +37,6 @@ export interface Reply {
   ok: boolean;
 }
 
-export interface CastlistInfo {
-  artworks: PlayArtworkV2[];
-  startTime: number;
-  deviceInfo?: DeviceInfoV2;
-  exhibitionId?: string;
-}
-
-export interface DeviceInfoV2 {
-  deviceId: string;
-  deviceName: string;
-}
-
 export interface DeviceInfo {
   device_name: string;
   device_id: string;
