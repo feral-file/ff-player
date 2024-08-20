@@ -65,24 +65,6 @@ export default function AIArtworkClient() {
     };
   }, []);
 
-  useEffect(() => {
-    const requestMicrophoneAccess = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-        });
-        console.log('Microphone access granted:', stream);
-      } catch (err) {
-        setMessage('Microphone access denied, please allow access to continue');
-        console.error('Microphone access denied:', err);
-      }
-    };
-
-    requestMicrophoneAccess().catch((error: unknown) => {
-      console.error('Error requesting microphone access:', error);
-    });
-  }, []);
-
   function handleOnRecord(isForceRecord = false) {
     console.log('isRecording:', isRecording, isForceRecord);
     if (isRecording && !isForceRecord) {
