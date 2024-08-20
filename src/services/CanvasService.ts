@@ -204,7 +204,6 @@ class CanvasService {
     const mixpanelCurrentUser = mixpanel.get_distinct_id() as string;
     if (mixpanelCurrentUser !== castingUser) {
       mixpanel.identify(castingUser);
-      mixpanel.alias(mixpanelCurrentUser, castingUser);
     }
   }
 
