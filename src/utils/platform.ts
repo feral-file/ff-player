@@ -218,6 +218,35 @@ export class LgConfigService implements PlatformConfigService {
     this.setDeviceName().catch((error: unknown) => {
       console.log(error);
     });
+    this.registerDB().catch((error: unknown) => {
+      console.log(error);
+    });
+  }
+
+  async registerDB() {
+    // Register the kind first
+    await new Promise<void>((resolve, reject) => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+      (window as any).webOS.service.request('luna://com.palm.db', {
+        method: 'putKind',
+        parameters: {
+          id: `com.feralfile.display:2`, // Unique identifier for your kind
+          owner: 'com.feralfile.display', // Your app's owner ID
+          indexes: [
+            { name: 'key', props: [{ name: 'key' }] }, // Define the properties that will be indexed
+            { name: 'value', props: [{ name: 'value' }] },
+          ],
+        },
+        onSuccess: function (response: unknown) {
+          console.log('Kind registered successfully:', response);
+          resolve();
+        },
+        onFailure: function (error: unknown) {
+          console.error('Failed to register kind:', error);
+          reject(new Error('Failed to register kind.'));
+        },
+      });
+    });
   }
 
   async setDeviceName() {
@@ -257,7 +286,7 @@ export class LgConfigService implements PlatformConfigService {
         },
         onSuccess(response: LGSuccessResponse) {
           if (response.results.length > 0) {
-            resolve(response.results[0].value);
+            resolve(response.results[response.results.length - 1].value);
           } else {
             resolve(null); // Return null if no matching record is found
           }
@@ -272,30 +301,6 @@ export class LgConfigService implements PlatformConfigService {
 
   async setString(key: string, value: string): Promise<void> {
     try {
-      // Register the kind first
-      await new Promise<void>((resolve, reject) => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
-        (window as any).webOS.service.request('luna://com.palm.db', {
-          method: 'putKind',
-          parameters: {
-            id: 'com.feralfile.display:1', // Unique identifier for your kind
-            owner: 'com.feralfile.display', // Your app's owner ID
-            indexes: [
-              { name: 'key', props: [{ name: 'key' }] }, // Define the properties that will be indexed
-              { name: 'value', props: [{ name: 'value' }] },
-            ],
-          },
-          onSuccess: function (response: unknown) {
-            console.log('Kind registered successfully:', response);
-            resolve();
-          },
-          onFailure: function (error: unknown) {
-            console.error('Failed to register kind:', error);
-            reject(new Error('Failed to register kind.'));
-          },
-        });
-      });
-
       // Insert the key-value pair after the kind has been registered
       await new Promise<void>((resolve, reject) => {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
