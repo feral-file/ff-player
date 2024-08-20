@@ -49,6 +49,11 @@ export interface DeviceInfoV2 {
   deviceName: string;
 }
 
+export interface DeviceInfo {
+  device_name: string;
+  device_id: string;
+}
+
 export interface PlayArtworkV2 {
   id: string;
   duration: number;
@@ -58,7 +63,7 @@ export interface PlayArtworkV2 {
 }
 
 export interface ConnectRequestV2 {
-  clientDevice: DeviceInfoV2;
+  clientDevice: DeviceInfo;
 }
 
 export type ConnectReplyV2 = Reply;
@@ -67,7 +72,7 @@ export type CheckDeviceStatusRequest = object;
 export interface CheckDeviceStatusReply extends Reply {
   startTime: number;
   artworks: PlayArtworkV2[];
-  connectedDevice?: DeviceInfoV2;
+  connectedDevice?: DeviceInfo;
   exhibitionId?: string;
   displayKey?: string;
 }
@@ -208,7 +213,7 @@ export interface CastInfo {
   artworks?: PlayArtworkV2[];
   startTime?: number;
   castCommand?: CastCommand;
-  deviceInfo?: DeviceInfoV2;
+  deviceInfo?: DeviceInfo;
   value?: string | number;
 
   // Cast exhibition

@@ -10,7 +10,7 @@ const OnboardingModal = () => {
   const { deviceRotation, websocketData } = useContext(AppContext) ?? {};
   const screenRatio = deviceRotation?.screenRatio ?? 1;
   const viewMode = deviceRotation?.viewMode ?? ViewMode.landscape;
-  const connectedDeviceName = websocketData?.castInfo?.deviceInfo?.deviceName;
+  const connectedDeviceName = websocketData?.castInfo?.deviceInfo?.device_name;
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [branchLink, setBranchLink] = useState<string>('');
 

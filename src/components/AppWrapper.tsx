@@ -151,12 +151,12 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             setShowQrCode(false);
             if (
               !(await DeviceManager.isPreviouslyConnectedDevice(
-                castInfo.deviceInfo?.deviceId ?? ''
+                castInfo.deviceInfo?.device_id ?? ''
               ))
             ) {
               setDisplayOnboarding(true);
               await DeviceManager.addPreviouslyConnectedDeviceId(
-                castInfo.deviceInfo?.deviceId ?? ''
+                castInfo.deviceInfo?.device_id ?? ''
               );
             } else {
               setDisplayOnboarding(false);
