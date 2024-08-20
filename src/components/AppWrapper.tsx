@@ -148,6 +148,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       const handleCastCommand = async () => {
         switch (castInfo.castCommand) {
           case CastCommand.connect: {
+            setShowQrCode(false);
             if (
               !(await DeviceManager.isPreviouslyConnectedDevice(
                 castInfo.deviceInfo?.deviceId ?? ''
@@ -162,6 +163,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           }
 
           case CastCommand.castListArtwork: {
+            setShowQrCode(false);
             setDisplayOnboarding(false);
             if (castState === CastState.Artwork) {
               return;
@@ -178,6 +180,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           }
 
           case CastCommand.castExhibition: {
+            setShowQrCode(false);
             setDisplayOnboarding(false);
             if (castState === CastState.Exhibition) {
               return;
