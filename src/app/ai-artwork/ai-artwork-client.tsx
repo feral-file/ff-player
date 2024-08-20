@@ -72,6 +72,7 @@ export default function AIArtworkClient() {
     }
 
     setIsRecording(true);
+    setPreviewURL('');
     setMessage('Say something...');
 
     const SpeechRecognition =
