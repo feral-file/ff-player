@@ -286,6 +286,13 @@ export class LgConfigService implements PlatformConfigService {
         },
         onSuccess(response: LGSuccessResponse) {
           if (response.results.length > 0) {
+            console.log(
+              'Success response from LG:',
+              key,
+              ':',
+              response.results[response.results.length - 1].value
+            );
+
             resolve(response.results[response.results.length - 1].value);
           } else {
             resolve(null); // Return null if no matching record is found
