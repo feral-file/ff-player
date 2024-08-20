@@ -5,3 +5,19 @@ node_modules
 out
 # Sentry Config File
 .env.sentry-build-plugin
+platforms/samsung/build/*
+platforms/samsung/.idea/*
+platforms/samsung/android/*
+platforms/samsung/ios/*
+platforms/samsung/linux/*
+platforms/samsung/windows/*
+platforms/samsung/macos/*
+platforms/samsung/web/*
+platforms/samsung/.env
+
+platforms/samsung/.flutter-plugins-dependencies
+platforms/samsung/.flutter-plugins
+platforms/samsung/.dart_tool/*
+platforms/samsung/.vscode/*
+
+platforms/samsung/.dart_tool/*
