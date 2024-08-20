@@ -134,6 +134,8 @@ class DeviceManager {
       const topicId = await this.getTopicId();
       const name = await this.getName();
 
+      console.log('device info', { deviceId, locationId, topicId, name });
+
       if (!locationId || !topicId) {
         return null;
       }
@@ -174,6 +176,8 @@ class DeviceManager {
         await this.setBranchLink(branchLink);
       }
     }
+    console.log('branchLink', branchLink);
+
     return branchLink;
   }
 

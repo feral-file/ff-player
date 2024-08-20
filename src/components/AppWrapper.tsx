@@ -9,7 +9,7 @@ import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
 import { useRouter } from 'next/navigation';
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import OnboardingModal from './OnboardingModal';
+import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
 
@@ -158,6 +158,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               await DeviceManager.addPreviouslyConnectedDeviceId(
                 castInfo.deviceInfo?.deviceId ?? ''
               );
+            } else {
+              setDisplayOnboarding(false);
             }
             break;
           }

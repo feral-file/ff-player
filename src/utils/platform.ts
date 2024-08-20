@@ -199,10 +199,8 @@ export class TizenConfigService implements PlatformConfigService {
 
 export class WebConfigService implements PlatformConfigService {
   constructor() {
-    localStorage.setItem(
-      LocalStorageItem.name,
-      localStorage.getItem(LocalStorageItem.deviceId) ?? 'Unknown'
-    );
+    const deviceId = uuidv4();
+    localStorage.setItem(LocalStorageItem.name, deviceId);
   }
   // eslint-disable-next-line @typescript-eslint/require-await
   async getString(key: string): Promise<string | null> {
