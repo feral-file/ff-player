@@ -1,4 +1,4 @@
-import { IgnoreKeyCodes, KeyCodes } from '@/constants';
+import { IgnoreKeyCodes, KeyCodes, LocalStorageItem } from '@/constants';
 import DeviceManager from './DeviceManager';
 import { v4 as uuidv4 } from 'uuid';
 import { Event, EventEmitter } from './EventEmitter';
@@ -198,6 +198,12 @@ export class TizenConfigService implements PlatformConfigService {
 }
 
 export class WebConfigService implements PlatformConfigService {
+  constructor() {
+    localStorage.setItem(
+      LocalStorageItem.name,
+      localStorage.getItem(LocalStorageItem.deviceId) ?? 'Unknown'
+    );
+  }
   // eslint-disable-next-line @typescript-eslint/require-await
   async getString(key: string): Promise<string | null> {
     return localStorage.getItem(key);
