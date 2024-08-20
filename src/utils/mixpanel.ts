@@ -1,4 +1,6 @@
 import mixpanel from 'mixpanel-browser';
+import DeviceManager from './DeviceManager';
+import { hashStringToSHA256 } from './crypto';
 
 export interface CastArtworkEventProperties {
   casting_type: CastingArtworkType;
@@ -17,7 +19,17 @@ export enum MixpanelEventName {
   CastArtworkEventName = 'Cast Artwork',
 }
 
-export const initMixpanel = () => {
+export const getHashedDeviceID = async (): Promise<string> => {
+  try {
+    const deviceID = await DeviceManager.getName();
+    return hashStringToSHA256(deviceID);
+  } catch (error) {
+    console.error('Error identifying device:', error);
+    return '';
+  }
+};
+
+export const initMixpanel = async () => {
   if (typeof window !== 'undefined') {
     const mixpanelToken = process.env.NEXT_PUBLIC_MIXPANEL_TOKEN;
     if (!mixpanelToken) {
@@ -25,10 +37,13 @@ export const initMixpanel = () => {
     }
 
     mixpanel.init(mixpanelToken, {
-      debug: process.env.NODE_ENV !== 'production',
+      debug: true,
+      // debug: process.env.NODE_ENV !== 'production',
     });
+    const device_id = await getHashedDeviceID();
     mixpanel.register({
       user_agent: navigator.userAgent,
+      device_id,
     });
   }
 };

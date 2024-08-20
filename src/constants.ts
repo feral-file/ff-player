@@ -48,7 +48,6 @@ export enum LocalStorageItem {
   name = 'device_name',
   branchLink = 'branchLink',
   previouslyConnectedDeviceIds = 'previouslyConnectedDeviceIds',
-  currentUserId = 'currentMixpanelUserId',
 }
 
 export enum Platform {

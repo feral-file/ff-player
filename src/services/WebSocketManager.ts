@@ -3,8 +3,6 @@ import ReconnectingWebSocket from 'reconnecting-websocket';
 import CanvasService from './CanvasService';
 import { LocalStorageItem } from '@/constants';
 import { CastInfo } from '@/utils/types';
-import mixpanel from '@/utils/mixpanel';
-import { hashStringToSHA256 } from '@/utils/crypto';
 
 const useWebSocket = (url: string, apiKey: string) => {
   const [locationID, setLocationID] = useState<string | null>(null);
@@ -15,20 +13,6 @@ const useWebSocket = (url: string, apiKey: string) => {
   const [isDisconnected, setIsDisconnected] = useState<boolean>(false);
   const ws = useRef<ReconnectingWebSocket | null>(null);
   const canvasService = useRef(new CanvasService());
-
-  useEffect(() => {
-    if (castInfo?.primaryAddress) {
-      const currentUser = localStorage.getItem(LocalStorageItem.currentUserId);
-      const receivedUser = hashStringToSHA256(castInfo.primaryAddress);
-      if (
-        currentUser != receivedUser ||
-        mixpanel.get_distinct_id() != receivedUser
-      ) {
-        localStorage.setItem(LocalStorageItem.currentUserId, receivedUser);
-        mixpanel.identify(receivedUser);
-      }
-    }
-  }, [castInfo]);
 
   useEffect(() => {
     if (!url || !apiKey) return;

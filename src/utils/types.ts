@@ -53,6 +53,7 @@ export interface PlayArtworkV2 {
 
 export interface ConnectRequestV2 {
   clientDevice: DeviceInfo;
+  primaryAddress?: string;
 }
 
 export type ConnectReplyV2 = Reply;
@@ -205,7 +206,6 @@ export interface CastInfo {
   castCommand?: CastCommand;
   deviceInfo?: DeviceInfo;
   value?: string | number;
-  primaryAddress?: string;
 
   // Cast exhibition
   exhibitionId?: string;

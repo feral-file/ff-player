@@ -41,6 +41,7 @@ import {
 
 import { LocalStorageItem } from '@/constants';
 import mixpanel from '@/utils/mixpanel';
+import { hashStringToSHA256 } from '@/utils/crypto';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -190,12 +191,24 @@ class CanvasService {
       castCommand: CastCommand.connect,
       deviceInfo: this.clientDeviceInfo,
     });
+    if (request.primaryAddress) {
+      this.identifyUser(request.primaryAddress);
+    }
 
     console.log('_connected device:', JSON.stringify(this.clientDeviceInfo));
     return { ok: true };
   }
 
-  private disconnect(request: unknown): Promise<DisconnectReplyV2> {
+  private identifyUser(connectingUser: string) {
+    const castingUser = hashStringToSHA256(connectingUser);
+    const mixpanelCurrentUser = mixpanel.get_distinct_id() as string;
+    if (mixpanelCurrentUser !== castingUser) {
+      mixpanel.identify(castingUser);
+      mixpanel.alias(mixpanelCurrentUser, castingUser);
+    }
+  }
+
+  private async disconnect(request: unknown): Promise<DisconnectReplyV2> {
     console.log('disconnect', JSON.stringify(request));
     this.setCastInfo(null);
     mixpanel.reset();
