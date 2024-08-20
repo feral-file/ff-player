@@ -37,8 +37,7 @@ export const initMixpanel = async () => {
     }
 
     mixpanel.init(mixpanelToken, {
-      debug: true,
-      // debug: process.env.NODE_ENV !== 'production',
+      debug: process.env.NODE_ENV !== 'production',
     });
     const device_id = await getHashedDeviceID();
     mixpanel.register({
