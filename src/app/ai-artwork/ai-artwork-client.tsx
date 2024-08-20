@@ -194,7 +194,7 @@ export default function AIArtworkClient() {
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
-      {message && (
+      {message && !previewURL && (
         <div className={clsx(styles.record)}>
           <p>{message}</p>
         </div>
