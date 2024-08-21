@@ -1,0 +1,59 @@
+name: Build Google TV App
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to build"
+        required: false
+        default: "Development"
+        type: choice
+        options:
+          - Development
+          - Production
+
+jobs:
+  build:
+    runs-on: self-hosted
+    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v3
+        with:
+          distribution: "zulu"
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.24.0
+
+      - run: flutter config --no-cli-animations
+
+      - name: Write secrets to .env file
+        run: |
+          cd platforms/google
+          echo "PUB_DOC_URL = ${{ vars.PUB_DOC_URL }}" >> .env
+
+      - name: Build APK for Android TV
+        run: |
+          cd platforms/google
+          flutter pub get
+          flutter build apk --release
+
+      - run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/Display-${{ github.ref == 'refs/heads/main' && 'Production' || 'Development' }}-${{ github.event.number }}.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Google-TV-${{ github.ref == 'refs/heads/main' && 'Production' || 'Development' }}-${{ github.event.number }}
+          path: build/app/outputs/flutter-apk/Display-${{ github.ref == 'refs/heads/main' && 'Production' || 'Development' }}-${{ github.event.number }}.apk
+          retention-days: 1
+          overwrite: true
