@@ -57,14 +57,14 @@ const QrCodePopUp = ({ onClick }: { onClick: (e: unknown) => void }) => {
         position: 'fixed',
         bottom: 0,
         left: 0,
-        backgroundColor: '#000000',
+        backgroundColor: '#2e2e2e',
         borderRadius: `0 20px 0 0`,
         display: 'flex',
         flexDirection: 'column',
         padding: screenRatio * 40,
         gap: screenRatio * 40,
         zIndex: 3,
-        fontSize: screenRatio * 28,
+        fontSize: screenRatio * 14,
         lineHeight: 1.4,
         color: '#ffffff',
       }}>
@@ -72,20 +72,20 @@ const QrCodePopUp = ({ onClick }: { onClick: (e: unknown) => void }) => {
         style={{
           display: 'flex',
           justifyContent: 'space-between',
-          gap: screenRatio * 500,
+          gap: screenRatio * 100,
           width: '100%',
         }}>
         <Image
           src={'/feralfile-logo.svg'}
           alt="FF logo"
-          width={screenRatio * 448}
-          height={screenRatio * 46}></Image>
+          width={screenRatio * 224}
+          height={screenRatio * 23}></Image>
         <Image
           className={clsx(styles['close-button'])}
           src={'/close.svg'}
           alt="Close"
-          width={screenRatio * 44}
-          height={screenRatio * 44}
+          width={screenRatio * 22}
+          height={screenRatio * 22}
           onClick={onClick}></Image>
       </div>
       <div>
@@ -121,14 +121,14 @@ const QrCodePopUp = ({ onClick }: { onClick: (e: unknown) => void }) => {
       </div>
       <div style={{ display: 'flex', gap: screenRatio * 20 }}>
         {branchLink ? (
-          <QRCode value={branchLink} size={screenRatio * 258}></QRCode>
+          <QRCode value={branchLink} size={screenRatio * 86}></QRCode>
         ) : (
-          <p style={{ width: screenRatio * 258, height: screenRatio * 258 }}>
+          <p style={{ width: screenRatio * 86, height: screenRatio * 86 }}>
             Connecting...
           </p>
         )}
         <div style={{ width: screenRatio * 500 }}>
-          <p>
+          <p style={{ width: '32%' }}>
             Get the Feral File app on your phone to browse and display over
             15,000 artworks on your tv.
           </p>

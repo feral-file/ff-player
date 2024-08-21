@@ -1,6 +1,6 @@
 'use client';
 
-import { AppSettings } from '@/constants';
+import { AppSettings, IgnoreKeyDown, KeyDown } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import DeviceManager from '@/utils/DeviceManager';
@@ -8,9 +8,10 @@ import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
 import { useRouter } from 'next/navigation';
-import React, { useContext, useEffect, useState } from 'react';
-import OnboardingModal from './OnboardingModal';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
+import Script from 'next/script';
 
 const enum CastState {
   None, // Not casting
@@ -33,7 +34,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
   const [castState, setCastState] = useState<CastState>(CastState.None);
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
-  const [showQrCode, setShowQrCode] = useState<boolean>(true);
+  const [showQrCode, setShowQrCode] = useState<boolean>(false);
+  const lastEventTime = useRef(0);
 
   // Initialize platform events
   useEffect(() => {
@@ -67,6 +69,30 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     return () => {
       EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
+    };
+  }, [showQrCode]);
+
+  // Add event listener for press button 0 to toggle QR code
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const now = Date.now();
+      const minInterval = 200; // Minimum interval between events in milliseconds
+
+      if (now - lastEventTime.current > minInterval) {
+        lastEventTime.current = now;
+        if (!IgnoreKeyDown.includes(event.key as KeyDown)) {
+          console.log('Toggle QR Code');
+
+          setShowQrCode(!showQrCode);
+        }
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [showQrCode]);
 
@@ -122,20 +148,24 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       const handleCastCommand = async () => {
         switch (castInfo.castCommand) {
           case CastCommand.connect: {
+            setShowQrCode(false);
             if (
               !(await DeviceManager.isPreviouslyConnectedDevice(
-                castInfo.deviceInfo?.deviceId ?? ''
+                castInfo.deviceInfo?.device_id ?? ''
               ))
             ) {
               setDisplayOnboarding(true);
               await DeviceManager.addPreviouslyConnectedDeviceId(
-                castInfo.deviceInfo?.deviceId ?? ''
+                castInfo.deviceInfo?.device_id ?? ''
               );
+            } else {
+              setDisplayOnboarding(false);
             }
             break;
           }
 
           case CastCommand.castListArtwork: {
+            setShowQrCode(false);
             setDisplayOnboarding(false);
             if (castState === CastState.Artwork) {
               return;
@@ -152,6 +182,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           }
 
           case CastCommand.castExhibition: {
+            setShowQrCode(false);
             setDisplayOnboarding(false);
             if (castState === CastState.Exhibition) {
               return;
@@ -168,6 +199,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           }
 
           default: {
+            if (castInfo.dataChecked) {
+              setShowQrCode(true);
+            }
             break;
           }
         }
@@ -182,7 +216,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         router.back();
       }
     }
-  }, [castInfo, castState, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [castInfo]);
 
   useEffect(() => {
     if (showQrCode) {
@@ -202,6 +237,11 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <>
+      <Script
+        src="/webOSTVjs-1.2.11/webOSTV.js"
+        onLoad={() => {
+          console.log('loaded');
+        }}></Script>
       {displayOnboarding && <OnboardingModal />}
       <div
         style={{

@@ -36,14 +36,14 @@ import {
   KeyboardEventRequest,
   KeyboardEventReply,
   CastInfo,
-  DeviceInfoV2,
+  DeviceInfo,
 } from '../utils/types';
 
 import { LocalStorageItem } from '@/constants';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
-  private clientDeviceInfo: DeviceInfoV2 | null = null;
+  private clientDeviceInfo: DeviceInfo | null = null;
   private timer: unknown = null;
 
   public getCastInfo() {
