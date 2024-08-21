@@ -17,6 +17,12 @@ export enum KeyDown {
   audioVolumeUp = 'AudioVolumeUp',
   audioVolumeMute = 'AudioVolumeMute',
   back = 'Back',
+  arrowUp = 'ArrowUp',
+  arrowLeft = 'ArrowLeft',
+  arrowRight = 'ArrowRight',
+  arrowDown = 'ArrowDown',
+  enter = 'Enter',
+  unidentified = 'Unidentified',
 }
 
 export const IgnoreKeyDown = [
@@ -24,6 +30,12 @@ export const IgnoreKeyDown = [
   KeyDown.audioVolumeUp,
   KeyDown.audioVolumeMute,
   KeyDown.back,
+  KeyDown.arrowUp,
+  KeyDown.arrowLeft,
+  KeyDown.arrowRight,
+  KeyDown.arrowDown,
+  KeyDown.enter,
+  KeyDown.unidentified,
 ];
 
 export enum LocalStorageItem {
