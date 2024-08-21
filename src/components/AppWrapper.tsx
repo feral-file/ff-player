@@ -40,9 +40,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // Initialize mixpanel
   useEffect(() => {
-    initMixpanel().catch((error: unknown) => {
-      console.error(error);
-    });
+    initMixpanel();
   }, []);
 
   // Initialize platform events

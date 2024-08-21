@@ -29,21 +29,26 @@ export const getHashedDeviceID = async (): Promise<string> => {
   }
 };
 
-export const initMixpanel = async () => {
+export const initMixpanel = () => {
   if (typeof window !== 'undefined') {
     const mixpanelToken = process.env.NEXT_PUBLIC_MIXPANEL_TOKEN;
     if (!mixpanelToken) {
       throw new Error('Mixpanel token is not defined');
     }
 
+    const registerSupperProperties = async () => {
+      const device_id = await getHashedDeviceID();
+      mixpanel.register({ device_id, user_agent: navigator.userAgent });
+    };
+
     mixpanel.init(mixpanelToken, {
       debug: true,
       // debug: process.env.NODE_ENV !== 'production',
-    });
-    const device_id = await getHashedDeviceID();
-    mixpanel.register({
-      user_agent: navigator.userAgent,
-      device_id,
+      loaded: () => {
+        registerSupperProperties().catch((error: unknown) => {
+          console.error(error);
+        });
+      },
     });
   }
 };
@@ -54,7 +59,7 @@ export const trackTimeEvent = (eventName: MixpanelEventName) => {
 
 export const trackEvent = (
   eventName: MixpanelEventName,
-  properties?: CastArtworkEventProperties,
+  properties: CastArtworkEventProperties,
   isSendBeacon = false
 ) => {
   mixpanel.track(
