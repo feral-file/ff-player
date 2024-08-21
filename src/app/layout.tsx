@@ -4,7 +4,6 @@ import './globals.css';
 import { AppProvider } from '../context/AppContext';
 import AppWrapper from '@/components/AppWrapper';
 import LostConnectionModal from '@/components/LostConnectionModal';
-import FullScreen from '@/components/fullscreen';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
@@ -26,9 +25,6 @@ export default function RootLayout({
             <LostConnectionModal></LostConnectionModal>
             {children}
           </AppWrapper>
-          <div className="fullscreen">
-            <FullScreen />
-          </div>
         </AppProvider>
       </body>
     </html>

@@ -40,10 +40,3 @@ body {
     text-wrap: balance;
   }
 }
-
-.fullscreen {
-  position: fixed;
-  top: 15px;
-  right: 15px;
-  cursor: pointer;
-}

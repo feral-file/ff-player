@@ -1,6 +1,11 @@
 'use client';
 
-import { AppSettings, IgnoreKeyDown, KeyDown } from '@/constants';
+import {
+  AppSettings,
+  IgnoreKeyDown,
+  KeyDown,
+  LocalStorageItem,
+} from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import DeviceManager from '@/utils/DeviceManager';
@@ -12,6 +17,7 @@ import React, { useContext, useEffect, useRef, useState } from 'react';
 import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
+import FullScreen from './fullscreen';
 
 const enum CastState {
   None, // Not casting
@@ -36,6 +42,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
   const [showQrCode, setShowQrCode] = useState<boolean>(false);
   const lastEventTime = useRef(0);
+  const [isDisplayFullScreen, setIsDisplayFullScreen] =
+    useState<boolean>(false);
 
   // Initialize platform events
   useEffect(() => {
@@ -95,6 +103,11 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [showQrCode]);
+
+  useEffect(() => {
+    const platform = localStorage.getItem(LocalStorageItem.platform);
+    setIsDisplayFullScreen(!platform);
+  }, [isDisplayFullScreen]);
 
   // Handle keydown event
 
@@ -244,6 +257,18 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           console.log('loaded');
         }}></Script>
       {displayOnboarding && <OnboardingModal />}
+      {isDisplayFullScreen && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 15,
+            right: 15,
+            cursor: 'pointer',
+            zIndex: 2,
+          }}>
+          <FullScreen />
+        </div>
+      )}
       <div
         style={{
           width:
