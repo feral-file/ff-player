@@ -56,3 +56,4 @@ jobs:
           path: platforms/google/build/app/outputs/flutter-apk/Display-${{ github.ref == 'refs/heads/main' && 'Production' || 'Development' }}-${{ github.event.number }}.apk
           retention-days: 1
           overwrite: true
+          compression-level: 0
