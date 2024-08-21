@@ -9,9 +9,10 @@ import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
 import { useRouter } from 'next/navigation';
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import OnboardingModal from './onboarding-modal/OnboardingModal';
-import QrCodePopUp from './qr-code-popup/QrCodePopUp';
+import OnboardingModal from '../onboarding-modal/OnboardingModal';
+import QrCodePopUp from '../qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
+import styles from './styles.module.scss';
 
 const enum CastState {
   None, // Not casting
@@ -244,29 +245,30 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         }}></Script>
       {displayOnboarding && <OnboardingModal />}
       <div
+        className={styles.appWrapper}
         style={{
-          width:
-            (screenOrientation === Orientation.vertical &&
-              (rotateRadius || 0) % 180 !== 90) ||
-            (screenOrientation === Orientation.horizontal &&
-              (rotateRadius || 0) % 180 === 0)
-              ? '100vw'
-              : '100vh',
-          height:
-            (screenOrientation === Orientation.vertical &&
-              (rotateRadius || 0) % 180 !== 90) ||
-            (screenOrientation === Orientation.horizontal &&
-              (rotateRadius || 0) % 180 === 0)
-              ? '100vh'
-              : '100vw',
-          transform: `rotateZ(${(-rotateRadius || 0).toString()}deg) `,
-          transformOrigin:
-            (screenOrientation === Orientation.vertical &&
-              (rotateRadius || 0) % 360 !== 90) ||
-            (screenOrientation === Orientation.horizontal &&
-              (rotateRadius || 0) % 360 !== 90)
-              ? '50vw center'
-              : 'center 50vh',
+          // width:
+          //   (screenOrientation === Orientation.vertical &&
+          //     (rotateRadius || 0) % 180 !== 90) ||
+          //   (screenOrientation === Orientation.horizontal &&
+          //     (rotateRadius || 0) % 180 === 0)
+          //     ? '100vw'
+          //     : '100vh',
+          // height:
+          //   (screenOrientation === Orientation.vertical &&
+          //     (rotateRadius || 0) % 180 !== 90) ||
+          //   (screenOrientation === Orientation.horizontal &&
+          //     (rotateRadius || 0) % 180 === 0)
+          //     ? '100vh'
+          //     : '100vw',
+          // transform: `rotateZ(${(-rotateRadius || 0).toString()}deg) `,
+          // transformOrigin:
+          //   (screenOrientation === Orientation.vertical &&
+          //     (rotateRadius || 0) % 360 !== 90) ||
+          //   (screenOrientation === Orientation.horizontal &&
+          //     (rotateRadius || 0) % 360 !== 90)
+          //     ? '50vw center'
+          //     : 'center 50vh',
           transition: 'transform 0.2s',
           display: 'flex',
           justifyContent: 'center',
