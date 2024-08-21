@@ -86,6 +86,8 @@ const ExhibitionHall = () => {
         }
       };
       handleCastCommand();
+    } else {
+      setArtwork({} as Artwork);
     }
   }, [castInfo]);
 

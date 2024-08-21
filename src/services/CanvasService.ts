@@ -210,7 +210,6 @@ class CanvasService {
   private async disconnect(request: unknown): Promise<DisconnectReplyV2> {
     console.log('disconnect', JSON.stringify(request));
     this.setCastInfo(null);
-    mixpanel.reset();
     return Promise.resolve({ ok: true });
   }
 
