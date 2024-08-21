@@ -149,6 +149,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         switch (castInfo.castCommand) {
           case CastCommand.connect: {
             setShowQrCode(false);
+            setCastState(CastState.None);
             if (
               !(await DeviceManager.isPreviouslyConnectedDevice(
                 castInfo.deviceInfo?.device_id ?? ''
