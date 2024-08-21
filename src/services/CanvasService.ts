@@ -40,7 +40,7 @@ import {
 } from '../utils/types';
 
 import { LocalStorageItem } from '@/constants';
-import mixpanel from '@/utils/mixpanel';
+import mixpanel, { registerSupperProperties } from '@/utils/mixpanel';
 import { hashStringToSHA256 } from '@/utils/crypto';
 
 class CanvasService {
@@ -192,17 +192,21 @@ class CanvasService {
       deviceInfo: this.clientDeviceInfo,
     });
     if (request.primaryAddress) {
-      this.identifyUser(request.primaryAddress);
+      this.identifyUser(request.primaryAddress).catch((error: unknown) => {
+        console.error('Error identifying user:', error);
+      });
     }
 
     console.log('_connected device:', JSON.stringify(this.clientDeviceInfo));
     return { ok: true };
   }
 
-  private identifyUser(connectingUser: string) {
+  private async identifyUser(connectingUser: string) {
     const castingUser = hashStringToSHA256(connectingUser);
     const mixpanelCurrentUser = mixpanel.get_distinct_id() as string;
     if (mixpanelCurrentUser !== castingUser) {
+      // Fix for Tizen: Tizen frame automatically clears the super props after a while
+      await registerSupperProperties();
       mixpanel.identify(castingUser);
     }
   }

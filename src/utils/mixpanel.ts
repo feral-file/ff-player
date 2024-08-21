@@ -29,6 +29,11 @@ export const getHashedDeviceID = async (): Promise<string> => {
   }
 };
 
+export const registerSupperProperties = async () => {
+  const device_id = await getHashedDeviceID();
+  mixpanel.register({ device_id, user_agent: navigator.userAgent });
+};
+
 export const initMixpanel = () => {
   if (typeof window !== 'undefined') {
     const mixpanelToken = process.env.NEXT_PUBLIC_MIXPANEL_TOKEN;
@@ -36,26 +41,14 @@ export const initMixpanel = () => {
       throw new Error('Mixpanel token is not defined');
     }
 
-    const registerSupperProperties = async () => {
-      const device_id = await getHashedDeviceID();
-      mixpanel.register({ device_id, user_agent: navigator.userAgent });
-    };
-
     mixpanel.init(mixpanelToken, {
-      debug: true,
-      // debug: process.env.NODE_ENV !== 'production',
+      debug: process.env.NODE_ENV !== 'production',
       loaded: () => {
         registerSupperProperties().catch((error: unknown) => {
           console.error(error);
         });
       },
     });
-
-    setTimeout(() => {
-      registerSupperProperties().catch((error: unknown) => {
-        console.error(error);
-      });
-    }, 1500);
   }
 };
 
@@ -63,11 +56,13 @@ export const trackTimeEvent = (eventName: MixpanelEventName) => {
   mixpanel.time_event(eventName);
 };
 
-export const trackEvent = (
+export const trackEvent = async (
   eventName: MixpanelEventName,
   properties: CastArtworkEventProperties,
   isSendBeacon = false
 ) => {
+  // Fix for Tizen: Tizen frame automatically clears the super props after a while
+  await registerSupperProperties();
   mixpanel.track(
     eventName,
     properties,

@@ -76,7 +76,11 @@ const ArtworkPlayer = ({
           token_id: artworkID,
           token_name: artworkName ?? '',
         };
-        trackEvent(MixpanelEventName.CastArtworkEventName, event);
+        trackEvent(MixpanelEventName.CastArtworkEventName, event).catch(
+          (error: unknown) => {
+            console.error(error);
+          }
+        );
       }
     };
   }, [castingType, artworkID, artworkName]);
