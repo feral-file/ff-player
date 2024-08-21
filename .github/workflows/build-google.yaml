@@ -47,13 +47,12 @@ jobs:
           cd platforms/google
           flutter pub get
           flutter build apk --release
-
-      - run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/Display-${{ github.ref == 'refs/heads/main' && 'Production' || 'Development' }}-${{ github.event.number }}.apk
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/Display-${{ github.ref == 'refs/heads/main' && 'Production' || 'Development' }}-${{ github.event.number }}.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Google-TV-${{ github.ref == 'refs/heads/main' && 'Production' || 'Development' }}-${{ github.event.number }}
-          path: build/app/outputs/flutter-apk/Display-${{ github.ref == 'refs/heads/main' && 'Production' || 'Development' }}-${{ github.event.number }}.apk
+          path: platforms/google/build/app/outputs/flutter-apk/Display-${{ github.ref == 'refs/heads/main' && 'Production' || 'Development' }}-${{ github.event.number }}.apk
           retention-days: 1
           overwrite: true
