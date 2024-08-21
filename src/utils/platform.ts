@@ -24,13 +24,6 @@ export class KeyEvent extends PlatformEventReceiver {
     const [keyId, keyLabel] = event.split('_');
     console.log(`Handling key event: ${keyId} - ${keyLabel}`);
 
-    if (keyId === KeyCodes.audioVolumeUp.toString()) {
-      console.log('Volume up key pressed');
-
-      window.location.reload();
-      return;
-    }
-
     if (IgnoreKeyCodes.some(keyCode => keyCode.toString() === keyId)) {
       return;
     }
