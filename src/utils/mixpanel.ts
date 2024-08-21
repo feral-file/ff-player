@@ -50,6 +50,12 @@ export const initMixpanel = () => {
         });
       },
     });
+
+    setTimeout(() => {
+      registerSupperProperties().catch((error: unknown) => {
+        console.error(error);
+      });
+    }, 1500);
   }
 };
 
