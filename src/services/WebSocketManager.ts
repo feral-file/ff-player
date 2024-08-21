@@ -3,6 +3,7 @@ import ReconnectingWebSocket from 'reconnecting-websocket';
 import CanvasService from './CanvasService';
 import { LocalStorageItem } from '@/constants';
 import { CastInfo } from '@/utils/types';
+import * as Sentry from '@sentry/nextjs';
 
 const useWebSocket = (url: string, apiKey: string) => {
   const [locationID, setLocationID] = useState<string | null>(null);
@@ -19,6 +20,11 @@ const useWebSocket = (url: string, apiKey: string) => {
 
     const connect = () => {
       let wsUrl = `${url}?apiKey=${apiKey}`;
+      Sentry.addBreadcrumb({
+        data: { url: wsUrl },
+        category: 'Websocket',
+        message: 'Websocket connection',
+      });
       const storedLocationID = localStorage.getItem(
         LocalStorageItem.locationID
       );
@@ -63,6 +69,12 @@ const useWebSocket = (url: string, apiKey: string) => {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             data.message.topicID as string
           );
+          Sentry.addBreadcrumb({
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+            data: data.message,
+            category: 'Websocket',
+            message: 'Websocket system message',
+          });
         } else {
           const responseMessage =
             await canvasService.current.processMessage(event);
@@ -74,11 +86,13 @@ const useWebSocket = (url: string, apiKey: string) => {
       };
 
       ws.current.onerror = error => {
+        Sentry.captureException(error);
         console.error('WebSocket error:', error);
         setIsDisconnected(true);
       };
 
       ws.current.onclose = () => {
+        Sentry.captureMessage('WebSocket disconnected');
         console.log('WebSocket disconnected, attempting to reconnect...');
         setIsDisconnected(true);
       };

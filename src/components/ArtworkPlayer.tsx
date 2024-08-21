@@ -15,6 +15,7 @@ import {
 import Hls from 'hls.js';
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
+import * as Sentry from '@sentry/nextjs';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -69,11 +70,17 @@ const ArtworkPlayer = ({
         console.log('Content-Type:', contentType);
       } catch (error) {
         console.log('Error get content-type', error);
+        Sentry.captureException(error);
         setPreviewType(SeriesPreviewHTMLTag.iframe);
       }
     };
 
     if (previewURL) {
+      Sentry.addBreadcrumb({
+        category: 'ArtworkPlayer',
+        message: 'play artwork',
+        data: { previewURL },
+      });
       setLoading(true);
       setPreviewType(null);
       detectPreviewType(previewURL).catch((err: unknown) => {

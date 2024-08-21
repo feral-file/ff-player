@@ -7,6 +7,7 @@ import {
   WebConfigService,
 } from './platform';
 import { LocalStorageItem, Platform } from '@/constants';
+import * as Sentry from '@sentry/nextjs';
 
 class DeviceManager {
   static instance = new DeviceManager();
@@ -21,7 +22,11 @@ class DeviceManager {
 
   private createConfigService(): PlatformConfigService {
     const platform = localStorage.getItem(LocalStorageItem.platform);
-
+    Sentry.addBreadcrumb({
+      data: { platform },
+      category: 'DeviceManager',
+      message: 'Creating PlatformConfigService instance',
+    });
     console.log(
       `creating PlatformConfigService instance for platform: ${platform ?? ''}`
     );
@@ -44,12 +49,18 @@ class DeviceManager {
     'previouslyConnectedDeviceIds';
 
   private async getFromLocalStorage(key: string): Promise<string | null> {
-    return await this.configService.getString(key);
+    try {
+      return await this.configService.getString(key);
+    } catch (error) {
+      Sentry.captureException(error);
+      return null;
+    }
   }
 
   private setToLocalStorage(key: string, value: string): void {
     this.configService.setString(key, value).catch((error: unknown) => {
       console.error('Error setting value to local storage', error);
+      Sentry.captureException(error);
     });
   }
 
@@ -171,6 +182,11 @@ class DeviceManager {
         await this.setBranchLink(branchLink);
       }
     }
+    Sentry.addBreadcrumb({
+      data: { branchLink },
+      category: 'DeviceManager',
+      message: 'Generated branch link',
+    });
     return branchLink;
   }
 
@@ -187,6 +203,7 @@ class DeviceManager {
       return await createBranchLink(data);
     } catch (e) {
       console.error(e);
+      Sentry.captureException(e);
       return null;
     }
   }
