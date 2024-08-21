@@ -61,3 +61,5 @@ export const AppSettings = {
   JG_043_EXHIBITION_ID: '46a0f68b-a657-4364-92a0-32a88b65fbd9',
   STANDARD_HEIGHT: 1080,
 };
+
+export const MixpanelAnonymousIDPrefix = '$device:';

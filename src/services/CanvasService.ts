@@ -39,7 +39,7 @@ import {
   DeviceInfo,
 } from '../utils/types';
 
-import { LocalStorageItem } from '@/constants';
+import { LocalStorageItem, MixpanelAnonymousIDPrefix } from '@/constants';
 import mixpanel, { registerSupperProperties } from '@/utils/mixpanel';
 import { hashStringToSHA256 } from '@/utils/crypto';
 
@@ -207,7 +207,14 @@ class CanvasService {
     if (mixpanelCurrentUser !== castingUser) {
       // Fix for Tizen: Tizen frame automatically clears the super props after a while
       await registerSupperProperties();
-      mixpanel.identify(castingUser);
+      if (mixpanelCurrentUser.includes(MixpanelAnonymousIDPrefix)) {
+        mixpanel.identify(castingUser);
+      } else {
+        // Wait for mixpanel to track the latest casting with the previous user
+        setTimeout(() => {
+          mixpanel.identify(castingUser);
+        }, 2000);
+      }
     }
   }
 
