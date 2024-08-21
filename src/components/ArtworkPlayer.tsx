@@ -90,7 +90,9 @@ const ArtworkPlayer = ({
   useEffect(() => {
     if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
       if (isStreaming && Hls.isSupported()) {
-        const hls = new Hls();
+        const hls = new Hls({
+          ignoreDevicePixelRatio: true,
+        });
         hls.loadSource(previewURL);
         hls.attachMedia(videoRef.current);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
