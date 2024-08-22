@@ -26,11 +26,14 @@ const useWebSocket = (url: string, apiKey: string) => {
       if (storedLocationID) wsUrl += `&locationID=${storedLocationID}`;
       if (storedTopicID) wsUrl += `&topicID=${storedTopicID}`;
 
-      const castInfo = localStorage.getItem(LocalStorageItem.castInfo);
-      if (castInfo) {
-        canvasService.current.setCastInfo(JSON.parse(castInfo) as CastInfo);
+      const castInfoString = localStorage.getItem(LocalStorageItem.castInfo);
+      if (castInfoString) {
+        canvasService.current.setCastInfo(
+          JSON.parse(castInfoString) as CastInfo
+        );
+
         setCastInfo({
-          ...JSON.parse(castInfo),
+          ...JSON.parse(castInfoString),
           dataChecked: true,
         } as CastInfo);
       } else {

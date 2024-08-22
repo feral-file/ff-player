@@ -4,6 +4,8 @@ import ArtworkPlayer from '@/components/ArtworkPlayer';
 import { AppContext } from '@/context/AppContext';
 import { IndexerToken } from '@/models';
 import ArtworkService from '@/services/ArtworkService';
+import { getIndexerTokenName } from '@/utils/indexer';
+import { CastingArtworkType } from '@/utils/mixpanel';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
 import { CastCommand, PlayArtworkV2, PlaylistToken } from '@/utils/types';
 import { useContext, useEffect, useRef, useState } from 'react';
@@ -15,6 +17,9 @@ export default function PlaylistClient() {
   }
 
   const { castInfo } = context.websocketData;
+
+  const [artworkID, setArtworkID] = useState<string | undefined>();
+  const [artworkName, setArtworkName] = useState<string | undefined>();
 
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const indexRef = useRef<number>(-1);
@@ -28,6 +33,7 @@ export default function PlaylistClient() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>();
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
+  const currentPlaylistRef = useRef<PlaylistToken>();
 
   // Services
   const artworkService = useRef(new ArtworkService());
@@ -49,7 +55,13 @@ export default function PlaylistClient() {
 
     const index = currentIndex % playlist.length;
     const currentPlaylist = playlist[index];
+    if (currentPlaylist !== currentPlaylistRef.current) {
+      currentPlaylistRef.current = currentPlaylist;
+      setArtworkID(currentPlaylist.token.id);
+      setArtworkName(currentPlaylist.token.name);
+    }
     setCastPreviewURL(currentPlaylist.previewURL);
+
     const currentTime = Date.now();
     startPlayArtworkTime.current = currentTime;
     endPlayArtworkTime.current = currentTime + currentPlaylist.duration;
@@ -167,19 +179,26 @@ export default function PlaylistClient() {
                   return;
                 }
                 const previewData = new Map<string, string>();
+                const tokensName = new Map<string, string>();
                 tokens.forEach((token: IndexerToken) => {
                   previewData.set(
                     token.indexID,
                     token.asset.metadata.project.latest.previewURL
                   );
+                  tokensName.set(token.indexID, getIndexerTokenName(token));
                 });
                 const updatedArtworks = artworks.map(
                   (artwork: PlayArtworkV2) => {
+                    if (artwork.token) {
+                      artwork.token.name =
+                        tokensName.get(artwork.token.id) ?? '';
+                    }
+
                     const aw: PlaylistToken = {
                       duration: artwork.duration,
                       previewURL:
                         previewData.get(artwork.token?.id ?? '') ?? '',
-                      token: artwork.token ?? { id: '' },
+                      token: artwork.token ?? { id: '', name: '' },
                     };
                     return aw;
                   }
@@ -243,7 +262,12 @@ export default function PlaylistClient() {
   return (
     <>
       <div style={{ width: '100%', height: '100%' }}>
-        <ArtworkPlayer previewURL={castPreviewURL ?? ''} />
+        <ArtworkPlayer
+          previewURL={castPreviewURL ?? ''}
+          artworkID={artworkID}
+          artworkName={artworkName}
+          castingType={CastingArtworkType.Playlist}
+        />
       </div>
     </>
   );

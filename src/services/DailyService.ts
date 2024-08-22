@@ -2,6 +2,7 @@ import { IndexerToken } from '@/models';
 import { Daily } from '../utils/types';
 import ArtworkService from './ArtworkService';
 import axiosInstance from './axiosService';
+import { getIndexerTokenName } from '@/utils/indexer';
 
 class DailyService {
   private artworkService = new ArtworkService();
@@ -38,10 +39,16 @@ class DailyService {
       });
 
       const convertDailies = dailies.map((d: Daily) => {
+        let tokenName = '';
+        const token = indexerData.get(d.tokenID);
+        if (token) {
+          tokenName = getIndexerTokenName(token);
+        }
         return {
           ...d,
           previewURL: previewData.get(d.tokenID),
-          token: indexerData.get(d.tokenID),
+          token,
+          tokenName,
         };
       });
 
