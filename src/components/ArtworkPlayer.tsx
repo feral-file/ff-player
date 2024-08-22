@@ -191,6 +191,7 @@ const ArtworkPlayer = ({
           style={{ width: '100%', height: '100%' }}
           autoPlay
           loop
+          controls
           playsInline
           crossOrigin="anonymous"></video>
       )}

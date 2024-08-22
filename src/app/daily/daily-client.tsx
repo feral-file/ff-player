@@ -4,10 +4,16 @@ import Microphone from '@/components/Microphone';
 import ArtworkPlayer from '../../components/ArtworkPlayer';
 import DailyService, { DailyInstanceService } from '@/services/DailyService';
 import { getDelayTime } from '@/services/qrCodePopUpService';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AppContext } from '@/context/AppContext';
 
 const DailyClient: React.FC = () => {
+  const context = useContext(AppContext);
+  if (!context) {
+    return <p>There is no app context.</p>;
+  }
+  const { canvasService } = context.websocketData;
   const dailyService = useRef(new DailyService());
   const timeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
@@ -57,6 +63,10 @@ const DailyClient: React.FC = () => {
     handleCastDaily().catch((error: unknown) => {
       console.error(error);
     });
+    canvasService.current.disconnect({}).catch((error: unknown) => {
+      console.log('Error disconnecting canvas service:', error);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleNavigateAIArtwork = () => {
