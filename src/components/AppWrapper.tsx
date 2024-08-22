@@ -149,6 +149,20 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
 
   useEffect(() => {
+    const handleEscapeKey = () => {
+      history.back();
+    };
+
+    EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+    EventEmitter.subscribe(Event.escape, handleEscapeKey);
+
+    // Cleanup the event listener on component unmount
+    return () => {
+      EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+    };
+  });
+
+  useEffect(() => {
     console.log('Cast Info:', castInfo);
     if (castInfo) {
       const handleCastCommand = async () => {

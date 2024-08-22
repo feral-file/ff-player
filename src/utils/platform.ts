@@ -26,6 +26,9 @@ export class KeyEvent extends PlatformEventReceiver {
     if (keyId === KeyCodes.enter.toString()) {
       EventEmitter.emit(Event.toggleQrCode);
     }
+    if (keyId === KeyCodes.escape.toString()) {
+      EventEmitter.emit(Event.escape);
+    }
   }
 }
 

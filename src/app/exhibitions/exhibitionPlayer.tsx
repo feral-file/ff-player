@@ -161,6 +161,20 @@ const ExhibitionHall = () => {
     }
   }, [screen, catalogID, exhibitionDetail, posts]);
 
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      (window as any).AppState.postMessage(
+        JSON.stringify({
+          handler: 'backAbleChanged',
+          data: false,
+        })
+      );
+    } catch (error) {
+      console.error(error);
+    }
+  });
+
   return (
     <div
       className={
