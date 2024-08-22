@@ -121,7 +121,7 @@ const QrCodePopUp = ({ onClick }: { onClick: (e: unknown) => void }) => {
       </div>
       <div style={{ display: 'flex', gap: screenRatio * 20 }}>
         {branchLink ? (
-          <QRCode value={branchLink} size={screenRatio * 86}></QRCode>
+          <QRCode value={branchLink} size={screenRatio * 86 * 2}></QRCode>
         ) : (
           <p style={{ width: screenRatio * 86, height: screenRatio * 86 }}>
             Connecting...
