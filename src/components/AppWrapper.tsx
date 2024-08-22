@@ -28,7 +28,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const router = useRouter();
 
-  const { castInfo } = context.websocketData;
+  const { castInfo, canvasService } = context.websocketData;
   const { screenOrientation, rotateRadius } = context.deviceRotation ?? {
     screenOrientation: Orientation.horizontal,
     rotateRadius: 0,
@@ -151,6 +151,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   useEffect(() => {
     const handleEscapeKey = () => {
       history.back();
+      canvasService.current.disconnect({}).catch((error: unknown) => {
+        console.log(error);
+      });
     };
 
     EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
@@ -165,6 +168,19 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   useEffect(() => {
     console.log('Cast Info:', castInfo);
     if (castInfo) {
+      const disableBackChanged = () => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+          (window as any).AppState.postMessage(
+            JSON.stringify({
+              handler: 'backAbleChanged',
+              data: false,
+            })
+          );
+        } catch (error) {
+          console.error(error);
+        }
+      };
       const handleCastCommand = async () => {
         switch (castInfo.castCommand) {
           case CastCommand.connect: {
@@ -197,7 +213,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             } else {
               router.replace('/playlist');
             }
-
+            disableBackChanged();
             break;
           }
 
@@ -214,6 +230,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             } else {
               router.replace('/exhibitions');
             }
+            disableBackChanged();
 
             break;
           }

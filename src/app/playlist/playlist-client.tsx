@@ -259,20 +259,6 @@ export default function PlaylistClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [castInfo]);
 
-  useEffect(() => {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).AppState.postMessage(
-        JSON.stringify({
-          handler: 'backAbleChanged',
-          data: false,
-        })
-      );
-    } catch (error) {
-      console.error(error);
-    }
-  });
-
   return (
     <>
       <div style={{ width: '100%', height: '100%' }}>
