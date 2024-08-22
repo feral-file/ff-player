@@ -29,7 +29,7 @@ class ArtworkService {
       const client = createApolloClient();
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const { data } = await client.query({
-        query: gql`{tokens(ids: ["${ids.join('","')}"], offset: 0, size: 10)
+        query: gql`{tokens(ids: ["${ids.join('","')}"])
               {
                 id
                 blockchain
