@@ -7,6 +7,7 @@ import { getDelayTime } from '@/services/qrCodePopUpService';
 import { useContext, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppContext } from '@/context/AppContext';
+import { LocalStorageItem } from '@/constants';
 
 const DailyClient: React.FC = () => {
   const context = useContext(AppContext);
@@ -22,6 +23,7 @@ const DailyClient: React.FC = () => {
   const router = useRouter();
 
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
+  const [isDisplayWebAction, setIsDisplayWebAction] = useState<boolean>(false);
 
   useEffect(() => {
     // Handle cast daily
@@ -69,6 +71,11 @@ const DailyClient: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const platform = localStorage.getItem(LocalStorageItem.platform);
+    setIsDisplayWebAction(!platform);
+  }, [isDisplayWebAction]);
+
   const handleNavigateAIArtwork = () => {
     router.push('/ai-artwork');
   };
@@ -76,15 +83,17 @@ const DailyClient: React.FC = () => {
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
       {castPreviewURL && <ArtworkPlayer previewURL={castPreviewURL} />}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 20,
-          right: 20,
-          cursor: 'pointer',
-        }}>
-        <Microphone onClick={handleNavigateAIArtwork} />
-      </div>
+      {isDisplayWebAction && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 20,
+            right: 20,
+            cursor: 'pointer',
+          }}>
+          <Microphone onClick={handleNavigateAIArtwork} />
+        </div>
+      )}
     </div>
   );
 };

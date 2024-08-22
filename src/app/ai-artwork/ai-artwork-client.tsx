@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import styles from './styles.module.scss';
 import clsx from 'clsx';
 import Microphone from '@/components/Microphone';
-import { AIRecordedKeyCodes, KeyCodes } from '@/constants';
+import { AIRecordedKeyCodes, KeyCodes, LocalStorageItem } from '@/constants';
 
 declare global {
   interface Window {
@@ -51,6 +51,7 @@ export default function AIArtworkClient() {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isGettingArtwork, setIsGettingArtwork] = useState<boolean>(false);
   const [message, setMessage] = useState<string>('');
+  const [isDisplayWebAction, setIsDisplayWebAction] = useState<boolean>(false);
 
   const recognition = useRef<SpeechRecognition | null>(null);
   const lastEventTime = useRef(0);
@@ -83,6 +84,11 @@ export default function AIArtworkClient() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
+
+  useEffect(() => {
+    const platform = localStorage.getItem(LocalStorageItem.platform);
+    setIsDisplayWebAction(!platform);
+  }, [isDisplayWebAction]);
 
   function handleOnRecord(isForceRecord = false) {
     console.log('isRecording:', isRecording, isForceRecord);
@@ -220,7 +226,7 @@ export default function AIArtworkClient() {
         </div>
       )}
       {!isRecording && previewURL && <ArtworkPlayer previewURL={previewURL} />}
-      {!isGettingArtwork && (
+      {!isGettingArtwork && isDisplayWebAction && (
         <div
           style={{
             position: 'fixed',

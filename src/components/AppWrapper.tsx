@@ -44,8 +44,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
   const [showQrCode, setShowQrCode] = useState<boolean>(false);
   const lastEventTime = useRef(0);
-  const [isDisplayFullScreen, setIsDisplayFullScreen] =
-    useState<boolean>(false);
+  const [isDisplayWebAction, setIsDisplayWebAction] = useState<boolean>(false);
 
   // Initialize platform events
   useEffect(() => {
@@ -115,8 +114,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     const platform = localStorage.getItem(LocalStorageItem.platform);
-    setIsDisplayFullScreen(!platform);
-  }, [isDisplayFullScreen]);
+    setIsDisplayWebAction(!platform);
+  }, [isDisplayWebAction]);
 
   // Handle keydown event
 
@@ -266,7 +265,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           console.log('loaded');
         }}></Script>
       {displayOnboarding && <OnboardingModal />}
-      {isDisplayFullScreen && (
+      {isDisplayWebAction && (
         <div
           style={{
             position: 'fixed',
