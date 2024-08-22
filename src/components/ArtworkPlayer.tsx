@@ -107,20 +107,21 @@ const ArtworkPlayer = ({
             });
         });
       } else {
-        videoRef.current.src = previewURL;
-        videoRef.current.addEventListener('loadeddata', () => {
-          videoRef.current
-            ?.play()
-            .then(() => {
-              console.log('Play video');
-            })
-            .catch((error: unknown) => {
-              console.log('Error play video', error);
-            })
-            .finally(() => {
-              setLoading(false);
-            });
-        });
+        setLoading(false);
+        // videoRef.current.src = previewURL;
+        // videoRef.current.addEventListener('loadeddata', () => {
+        //   videoRef.current
+        //     ?.play()
+        //     .then(() => {
+        //       console.log('Play video');
+        //     })
+        //     .catch((error: unknown) => {
+        //       console.log('Error play video', error);
+        //     })
+        //     .finally(() => {
+        //       setLoading(false);
+        //     });
+        // });
       }
     }
   }, [previewType, isStreaming, previewURL]);
