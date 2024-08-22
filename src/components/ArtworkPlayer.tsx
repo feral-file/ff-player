@@ -192,17 +192,30 @@ const ArtworkPlayer = ({
         </object>
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.video && (
-        <video
-          ref={videoRef}
+        <svg
           style={{
-            width: '320px',
-            height: '240px',
-            transform: `rotateZ(90deg)`,
-          }}
-          autoPlay
-          loop
-          playsInline
-          crossOrigin="anonymous"></video>
+            width: '400px',
+            height: '300px',
+          }}>
+          <foreignObject
+            style={{
+              display: 'block',
+              transform: `rotateZ(90deg)`,
+              width: '100%',
+              height: '100%',
+            }}>
+            <video
+              ref={videoRef}
+              style={{
+                width: '320px',
+                height: '240px',
+              }}
+              autoPlay
+              loop
+              playsInline
+              crossOrigin="anonymous"></video>
+          </foreignObject>
+        </svg>
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.audio && (
         <audio autoPlay={true} loop={true}>
