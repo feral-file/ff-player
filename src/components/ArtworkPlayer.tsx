@@ -107,21 +107,20 @@ const ArtworkPlayer = ({
             });
         });
       } else {
-        setLoading(false);
-        // videoRef.current.src = previewURL;
-        // videoRef.current.addEventListener('loadeddata', () => {
-        //   videoRef.current
-        //     ?.play()
-        //     .then(() => {
-        //       console.log('Play video');
-        //     })
-        //     .catch((error: unknown) => {
-        //       console.log('Error play video', error);
-        //     })
-        //     .finally(() => {
-        //       setLoading(false);
-        //     });
-        // });
+        videoRef.current.src = previewURL;
+        videoRef.current.addEventListener('loadeddata', () => {
+          videoRef.current
+            ?.play()
+            .then(() => {
+              console.log('Play video');
+            })
+            .catch((error: unknown) => {
+              console.log('Error play video', error);
+            })
+            .finally(() => {
+              setLoading(false);
+            });
+        });
       }
     }
   }, [previewType, isStreaming, previewURL]);
@@ -201,28 +200,6 @@ const ArtworkPlayer = ({
           playsInline
           crossOrigin="anonymous"></video>
       )}
-      <video
-        ref={videoRef}
-        width="320"
-        height="240"
-        controls
-        autoPlay
-        loop
-        playsInline
-        preload="none"
-        crossOrigin="anonymous">
-        <source
-          src="https://cdn.feralfileassets.com/previews/67ab07f9-3dc5-4758-a560-c3d2347523b8/1709105834/preview.mp4"
-          type="video/mp4"
-        />
-        <track
-          src="/path/to/captions.vtt"
-          kind="subtitles"
-          srcLang="en"
-          label="English"
-        />
-        Your browser does not support the video tag.
-      </video>
       {previewURL && previewType === SeriesPreviewHTMLTag.audio && (
         <audio autoPlay={true} loop={true}>
           <source src={previewURL} onLoadedData={loadedSource}></source>
