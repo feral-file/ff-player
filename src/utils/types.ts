@@ -37,16 +37,9 @@ export interface Reply {
   ok: boolean;
 }
 
-export interface CastlistInfo {
-  artworks: PlayArtworkV2[];
-  startTime: number;
-  deviceInfo?: DeviceInfoV2;
-  exhibitionId?: string;
-}
-
-export interface DeviceInfoV2 {
-  deviceId: string;
-  deviceName: string;
+export interface DeviceInfo {
+  device_name: string;
+  device_id: string;
 }
 
 export interface PlayArtworkV2 {
@@ -54,11 +47,13 @@ export interface PlayArtworkV2 {
   duration: number;
   token?: {
     id: string;
+    name: string;
   };
 }
 
 export interface ConnectRequestV2 {
-  clientDevice: DeviceInfoV2;
+  clientDevice: DeviceInfo;
+  primaryAddress?: string;
 }
 
 export type ConnectReplyV2 = Reply;
@@ -67,7 +62,7 @@ export type CheckDeviceStatusRequest = object;
 export interface CheckDeviceStatusReply extends Reply {
   startTime: number;
   artworks: PlayArtworkV2[];
-  connectedDevice?: DeviceInfoV2;
+  connectedDevice?: DeviceInfo;
   exhibitionId?: string;
   displayKey?: string;
 }
@@ -201,6 +196,7 @@ export interface PlaylistToken {
   previewURL: string;
   token: {
     id: string;
+    name: string;
   };
 }
 
@@ -208,7 +204,7 @@ export interface CastInfo {
   artworks?: PlayArtworkV2[];
   startTime?: number;
   castCommand?: CastCommand;
-  deviceInfo?: DeviceInfoV2;
+  deviceInfo?: DeviceInfo;
   value?: string | number;
 
   // Cast exhibition
@@ -239,6 +235,7 @@ export interface Daily {
   contractAddress: string;
   displayTime: string;
   tokenID: string;
+  tokenName: string;
   previewURL?: string;
   token?: IndexerToken;
 }

@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: "Environment to build"
+        description: 'Environment to build'
         required: false
-        default: "Development"
+        default: 'Development'
         type: choice
         options:
           - Development
@@ -25,7 +25,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Install dependencies
         run: npm install
@@ -41,6 +41,7 @@ jobs:
           echo "NEXT_PUBLIC_API_KEY=${{ secrets.WEBSOCKET_API_KEY }}" >> .env.local
           echo "NEXT_PUBLIC_BRANCH_KEY=${{ secrets.BRANCH_KEY }}" >> .env.local
           echo "NEXT_PUBLIC_ENVIRONMENT=${{ vars.NEXT_PUBLIC_ENVIRONMENT }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_MIXPANEL_TOKEN=${{ secrets.MIXPANEL_TOKEN }}" >> .env.local
 
       - name: Build Next.js app
         env:
@@ -58,4 +59,4 @@ jobs:
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           projectName: ${{ vars.CLOUDFLARE_PROJECT_ID }}
           directory: out
-          wranglerVersion: "3"
+          wranglerVersion: '3'

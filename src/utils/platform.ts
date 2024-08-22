@@ -1,7 +1,15 @@
-import { IgnoreKeyCodes, KeyCodes } from '@/constants';
+import { KeyCodes, LocalStorageItem } from '@/constants';
 import DeviceManager from './DeviceManager';
 import { v4 as uuidv4 } from 'uuid';
 import { Event, EventEmitter } from './EventEmitter';
+
+interface DeviceInfo {
+  modelName: string;
+}
+
+interface LGSuccessResponse {
+  results: { key: string; value: string }[];
+}
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class PlatformEventReceiver {
@@ -15,19 +23,9 @@ export class KeyEvent extends PlatformEventReceiver {
     super.handlePlatformEvent(event);
     const [keyId, keyLabel] = event.split('_');
     console.log(`Handling key event: ${keyId} - ${keyLabel}`);
-
-    if (keyId === KeyCodes.audioVolumeUp.toString()) {
-      console.log('Volume up key pressed');
-
-      window.location.reload();
-      return;
+    if (keyId === KeyCodes.enter.toString()) {
+      EventEmitter.emit(Event.toggleQrCode);
     }
-
-    if (IgnoreKeyCodes.some(keyCode => keyCode.toString() === keyId)) {
-      return;
-    }
-
-    EventEmitter.emit(Event.toggleQrCode);
   }
 }
 
@@ -190,6 +188,10 @@ export class TizenConfigService implements PlatformConfigService {
 }
 
 export class WebConfigService implements PlatformConfigService {
+  constructor() {
+    const deviceId = uuidv4();
+    localStorage.setItem(LocalStorageItem.name, deviceId);
+  }
   // eslint-disable-next-line @typescript-eslint/require-await
   async getString(key: string): Promise<string | null> {
     return localStorage.getItem(key);
@@ -198,5 +200,131 @@ export class WebConfigService implements PlatformConfigService {
   // eslint-disable-next-line @typescript-eslint/require-await
   async setString(key: string, value: string): Promise<void> {
     localStorage.setItem(key, value);
+  }
+}
+
+export class LgConfigService implements PlatformConfigService {
+  constructor() {
+    this.setDeviceName().catch((error: unknown) => {
+      console.log(error);
+    });
+    this.registerDB().catch((error: unknown) => {
+      console.log(error);
+    });
+  }
+
+  async registerDB() {
+    // Register the kind first
+    await new Promise<void>((resolve, reject) => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+      (window as any).webOS.service.request('luna://com.palm.db', {
+        method: 'putKind',
+        parameters: {
+          id: `com.feralfile.display:2`, // Unique identifier for your kind
+          owner: 'com.feralfile.display', // Your app's owner ID
+          indexes: [
+            { name: 'key', props: [{ name: 'key' }] }, // Define the properties that will be indexed
+            { name: 'value', props: [{ name: 'value' }] },
+          ],
+        },
+        onSuccess: function (response: unknown) {
+          console.log('Kind registered successfully:', response);
+          resolve();
+        },
+        onFailure: function (error: unknown) {
+          console.error('Failed to register kind:', error);
+          reject(new Error('Failed to register kind.'));
+        },
+      });
+    });
+  }
+
+  async setDeviceName() {
+    try {
+      const deviceInfo = await this.getDeviceInfo();
+      console.log(`LG Device name: ${deviceInfo.modelName}`);
+      DeviceManager.setName(deviceInfo.modelName);
+    } catch (error) {
+      console.error('Error getting device info:', error);
+    }
+  }
+
+  async getDeviceInfo(): Promise<DeviceInfo> {
+    return new Promise((resolve, reject) => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+        (window as any).webOS.deviceInfo((deviceInfo: DeviceInfo) => {
+          resolve(deviceInfo);
+        });
+      } catch (error) {
+        console.log(error);
+        reject(error as Error);
+      }
+    });
+  }
+
+  async getString(key: string): Promise<string | null> {
+    return new Promise((resolve, reject) => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+      (window as any).webOS.service.request('luna://com.palm.db', {
+        method: 'find',
+        parameters: {
+          query: {
+            from: 'com.feralfile.display:1',
+            where: [{ prop: 'key', op: '=', val: key }],
+          },
+        },
+        onSuccess(response: LGSuccessResponse) {
+          if (response.results.length > 0) {
+            console.log(
+              'Success response from LG:',
+              key,
+              ':',
+              response.results[response.results.length - 1].value
+            );
+
+            resolve(response.results[response.results.length - 1].value);
+          } else {
+            resolve(null); // Return null if no matching record is found
+          }
+        },
+        onFailure(error: unknown) {
+          console.error(`Failed to retrieve data: ${JSON.stringify(error)}`);
+          reject(new Error('Failed to retrieve data.'));
+        },
+      });
+    });
+  }
+
+  async setString(key: string, value: string): Promise<void> {
+    try {
+      // Insert the key-value pair after the kind has been registered
+      await new Promise<void>((resolve, reject) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+        (window as any).webOS.service.request('luna://com.palm.db', {
+          method: 'put',
+          parameters: {
+            objects: [
+              { _kind: 'com.feralfile.display:1', key: key, value: value },
+            ],
+          },
+          onSuccess(response: unknown) {
+            console.log(
+              `Success response from LG: ${JSON.stringify(response)}`
+            );
+            resolve();
+          },
+          onFailure(response: unknown) {
+            console.error(
+              `Failed response from LG: ${JSON.stringify(response)}`
+            );
+            reject(new Error('Failed to insert data.'));
+          },
+        });
+      });
+    } catch (error) {
+      console.error('Error in setString:', error);
+      throw error; // Propagate the error to the caller
+    }
   }
 }

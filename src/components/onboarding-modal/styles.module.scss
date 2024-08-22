@@ -1,0 +1,51 @@
+.modalContainer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 20%;
+  z-index: 4;
+  .modalContent {
+    width: 100%;
+    height: fit-content;
+    background-color: #2e2e2e;
+    border-radius: 20px;
+    .bottomText {
+      display: flex;
+      align-items: flex-start;
+      .displayText {
+        display: flex;
+        align-items: flex-start;
+      }
+      .qrCodeContainer {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        .qrCode {
+          background-color: #ffffff;
+        }
+      }
+    }
+  }
+}
+
+.landscapeModal {
+  @extend .modalContainer;
+}
+
+.portraitModal {
+  @extend .modalContainer;
+  .modalContent {
+    .bottomText {
+      flex-direction: column;
+      .qrCodeContainer {
+        align-items: flex-start;
+      }
+    }
+  }
+}

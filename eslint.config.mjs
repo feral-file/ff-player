@@ -60,6 +60,7 @@ export default tseslint.config(
       'out/*',
       'postcss.config.mjs',
       'platforms/*',
+      'public/**/*',
     ],
   }
 );

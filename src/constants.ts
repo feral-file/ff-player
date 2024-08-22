@@ -3,6 +3,7 @@ export enum KeyCodes {
   audioVolumeUp = 0x00100000a10,
   audioVolumeDown = 0x00100000a0f,
   audioVolumeMute = 0x00100000a11,
+  enter = 0x0010000000d,
 }
 
 export const IgnoreKeyCodes = [
@@ -10,6 +11,32 @@ export const IgnoreKeyCodes = [
   KeyCodes.audioVolumeUp,
   KeyCodes.audioVolumeDown,
   KeyCodes.audioVolumeMute,
+];
+
+export enum KeyDown {
+  audioVolumeDown = 'AudioVolumeDown',
+  audioVolumeUp = 'AudioVolumeUp',
+  audioVolumeMute = 'AudioVolumeMute',
+  back = 'Back',
+  arrowUp = 'ArrowUp',
+  arrowLeft = 'ArrowLeft',
+  arrowRight = 'ArrowRight',
+  arrowDown = 'ArrowDown',
+  enter = 'Enter',
+  unidentified = 'Unidentified',
+}
+
+export const IgnoreKeyDown = [
+  KeyDown.audioVolumeDown,
+  KeyDown.audioVolumeUp,
+  KeyDown.audioVolumeMute,
+  KeyDown.back,
+  KeyDown.arrowUp,
+  KeyDown.arrowLeft,
+  KeyDown.arrowRight,
+  KeyDown.arrowDown,
+  KeyDown.enter,
+  KeyDown.unidentified,
 ];
 
 export enum LocalStorageItem {
@@ -21,11 +48,14 @@ export enum LocalStorageItem {
   name = 'device_name',
   branchLink = 'branchLink',
   previouslyConnectedDeviceIds = 'previouslyConnectedDeviceIds',
+  doResetMixpanelAfterTracking = 'doResetMixpanelAfterTracking',
+  newMixpanelUserID = 'newMixpanelUserID',
 }
 
 export enum Platform {
   android = 'android',
   tizen = 'tizen',
+  lg = 'lg',
 }
 
 export const AppSettings = {
@@ -33,3 +63,5 @@ export const AppSettings = {
   JG_043_EXHIBITION_ID: '46a0f68b-a657-4364-92a0-32a88b65fbd9',
   STANDARD_HEIGHT: 1080,
 };
+
+export const MixpanelAnonymousIDPrefix = '$device:';
