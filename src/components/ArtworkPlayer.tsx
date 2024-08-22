@@ -197,7 +197,6 @@ const ArtworkPlayer = ({
           style={{ width: '320', height: '240' }}
           autoPlay
           loop
-          playsInline
           crossOrigin="anonymous"></video>
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.audio && (
