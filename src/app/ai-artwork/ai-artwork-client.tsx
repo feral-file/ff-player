@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import styles from './styles.module.scss';
 import clsx from 'clsx';
 import Microphone from '@/components/Microphone';
+import { AIRecordedKeyCodes, KeyCodes } from '@/constants';
 
 declare global {
   interface Window {
@@ -52,16 +53,34 @@ export default function AIArtworkClient() {
   const [message, setMessage] = useState<string>('');
 
   const recognition = useRef<SpeechRecognition | null>(null);
+  const lastEventTime = useRef(0);
 
   useEffect(() => {
     console.log('AIArtworkClient mounted');
     handleOnRecord();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const now = Date.now();
+      const minInterval = 200; // Minimum interval between events in milliseconds
+
+      if (now - lastEventTime.current > minInterval) {
+        lastEventTime.current = now;
+        if (AIRecordedKeyCodes.includes(event.keyCode as KeyCodes)) {
+          handleOnRecord(true);
+        }
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleKeyDown);
+    }
 
     // Cleanup on component unmount
     return () => {
       if (recognition.current) {
         recognition.current.abort();
       }
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
 

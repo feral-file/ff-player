@@ -5,6 +5,8 @@ import {
   IgnoreKeyDown,
   KeyDown,
   LocalStorageItem,
+  AIRecordedKeyCodes,
+  KeyCodes,
 } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
@@ -88,6 +90,11 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
       if (now - lastEventTime.current > minInterval) {
         lastEventTime.current = now;
+        if (AIRecordedKeyCodes.includes(event.keyCode as KeyCodes)) {
+          router.push('/ai-artwork');
+          return;
+        }
+
         if (!IgnoreKeyDown.includes(event.key as KeyDown)) {
           console.log('Toggle QR Code');
 
