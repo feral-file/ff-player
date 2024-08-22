@@ -174,7 +174,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           (window as any).AppState.postMessage(
             JSON.stringify({
               handler: 'backAbleChanged',
-              data: false,
+              data: true,
             })
           );
         } catch (error) {
@@ -254,7 +254,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         );
         // Disconnect
         setCastState(CastState.None);
-        router.back();
+        router.push('/daily');
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

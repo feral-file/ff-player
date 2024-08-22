@@ -25,7 +25,7 @@ export default function DailyClient() {
         (window as any).AppState.postMessage(
           JSON.stringify({
             handler: 'backAbleChanged',
-            data: true,
+            data: false,
           })
         );
       } catch (error) {
