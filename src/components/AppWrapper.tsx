@@ -1,6 +1,6 @@
 'use client';
 
-import { AppSettings, IgnoreKeyDown, KeyDown } from '@/constants';
+import { AppSettings, KeyDown } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import DeviceManager from '@/utils/DeviceManager';
@@ -80,9 +80,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
       if (now - lastEventTime.current > minInterval) {
         lastEventTime.current = now;
-        if (!IgnoreKeyDown.includes(event.key as KeyDown)) {
+        // Toggle QR code when user press Enter
+        if ((event.key as KeyDown) === KeyDown.enter) {
           console.log('Toggle QR Code');
-
           setShowQrCode(!showQrCode);
         }
       }
