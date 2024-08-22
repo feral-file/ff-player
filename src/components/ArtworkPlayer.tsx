@@ -1,7 +1,9 @@
-import {
+import { LocalStorageItem } from '@/constants';
+import mixpanel, {
   CastArtworkEventProperties,
   CastingArtworkType,
   MixpanelEventName,
+  registerSupperProperties,
   trackEvent,
   trackTimeEvent,
 } from '@/utils/mixpanel';
@@ -67,21 +69,49 @@ const ArtworkPlayer = ({
     }
   }
 
+  // Mixpanel
   useEffect(() => {
     trackTimeEvent(MixpanelEventName.CastArtworkEventName);
-    return () => {
+
+    const cleanup = async () => {
       if (artworkID && castingType) {
         const event: CastArtworkEventProperties = {
           casting_type: castingType,
           token_id: artworkID,
           token_name: artworkName ?? '',
         };
-        trackEvent(MixpanelEventName.CastArtworkEventName, event).catch(
-          (error: unknown) => {
-            console.error(error);
+        try {
+          await trackEvent(MixpanelEventName.CastArtworkEventName, event);
+          if (
+            localStorage.getItem(
+              LocalStorageItem.doResetMixpanelAfterTracking
+            ) === 'true'
+          ) {
+            localStorage.setItem(
+              LocalStorageItem.doResetMixpanelAfterTracking,
+              'false'
+            );
+            mixpanel.reset();
           }
-        );
+
+          const newUserID = localStorage.getItem(
+            LocalStorageItem.newMixpanelUserID
+          );
+          if (newUserID) {
+            localStorage.setItem(LocalStorageItem.newMixpanelUserID, '');
+            await registerSupperProperties();
+            mixpanel.identify(newUserID);
+          }
+        } catch (error: unknown) {
+          console.error(error);
+        }
       }
+    };
+
+    return () => {
+      cleanup().catch((error: unknown) => {
+        console.error(error);
+      });
     };
   }, [castingType, artworkID, artworkName]);
 

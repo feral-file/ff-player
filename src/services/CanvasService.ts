@@ -39,8 +39,8 @@ import {
   DeviceInfo,
 } from '../utils/types';
 
-import { LocalStorageItem, MixpanelAnonymousIDPrefix } from '@/constants';
-import mixpanel, { registerSupperProperties } from '@/utils/mixpanel';
+import { LocalStorageItem } from '@/constants';
+import mixpanel from '@/utils/mixpanel';
 import { hashStringToSHA256 } from '@/utils/crypto';
 
 class CanvasService {
@@ -179,6 +179,9 @@ class CanvasService {
 
   private async connect(request: ConnectRequestV2): Promise<ConnectReplyV2> {
     console.log('connect', JSON.stringify(request));
+    if (request.primaryAddress) {
+      this.setIdentifyingUser(request.primaryAddress);
+    }
 
     const deviceInfo = await DeviceManager.getDeviceInfo();
     if (!deviceInfo) {
@@ -191,30 +194,17 @@ class CanvasService {
       castCommand: CastCommand.connect,
       deviceInfo: this.clientDeviceInfo,
     });
-    if (request.primaryAddress) {
-      this.identifyUser(request.primaryAddress).catch((error: unknown) => {
-        console.error('Error identifying user:', error);
-      });
-    }
 
     console.log('_connected device:', JSON.stringify(this.clientDeviceInfo));
     return { ok: true };
   }
 
-  private async identifyUser(connectingUser: string) {
+  private setIdentifyingUser(connectingUser: string) {
     const castingUser = hashStringToSHA256(connectingUser);
     const mixpanelCurrentUser = mixpanel.get_distinct_id() as string;
     if (mixpanelCurrentUser !== castingUser) {
       // Fix for Tizen: Tizen frame automatically clears the super props after a while
-      await registerSupperProperties();
-      if (mixpanelCurrentUser.includes(MixpanelAnonymousIDPrefix)) {
-        mixpanel.identify(castingUser);
-      } else {
-        // Wait for mixpanel to track the latest casting with the previous user
-        setTimeout(() => {
-          mixpanel.identify(castingUser);
-        }, 2000);
-      }
+      localStorage.setItem(LocalStorageItem.newMixpanelUserID, castingUser);
     }
   }
 

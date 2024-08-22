@@ -1,6 +1,6 @@
 'use client';
 
-import { AppSettings, KeyDown } from '@/constants';
+import { AppSettings, KeyDown, LocalStorageItem } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import DeviceManager from '@/utils/DeviceManager';
@@ -12,7 +12,7 @@ import React, { useContext, useEffect, useRef, useState } from 'react';
 import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
-import mixpanel, { initMixpanel } from '@/utils/mixpanel';
+import { initMixpanel } from '@/utils/mixpanel';
 
 const enum CastState {
   None, // Not casting
@@ -217,11 +217,12 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       });
     } else {
       if (castState !== CastState.None) {
+        localStorage.setItem(
+          LocalStorageItem.doResetMixpanelAfterTracking,
+          'true'
+        );
         // Disconnect
         setCastState(CastState.None);
-        setTimeout(() => {
-          mixpanel.reset();
-        }, 150);
         router.back();
       }
     }

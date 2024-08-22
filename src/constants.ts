@@ -48,6 +48,8 @@ export enum LocalStorageItem {
   name = 'device_name',
   branchLink = 'branchLink',
   previouslyConnectedDeviceIds = 'previouslyConnectedDeviceIds',
+  doResetMixpanelAfterTracking = 'doResetMixpanelAfterTracking',
+  newMixpanelUserID = 'newMixpanelUserID',
 }
 
 export enum Platform {
