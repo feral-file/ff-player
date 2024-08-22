@@ -221,12 +221,12 @@ export default function AIArtworkClient() {
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
       {message && !previewURL && (
-        <div className={clsx(styles.record)}>
-          <p>{message}</p>
+        <div className={clsx(styles.message)}>
+          <p style={{ fontSize: 36 }}>{message}</p>
         </div>
       )}
       {!message && !previewURL && (
-        <div className={clsx(styles.waiting)}>
+        <div className={clsx(styles.message)}>
           <ul style={{ fontSize: 36 }}>
             Ask me to find you the perfect artwork for any situation...
           </ul>
