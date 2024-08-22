@@ -96,6 +96,9 @@ const ArtworkPlayer = ({
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           videoRef.current
             ?.play()
+            .then(() => {
+              console.log('Play video');
+            })
             .catch((error: unknown) => {
               console.log(error);
             })
@@ -108,6 +111,9 @@ const ArtworkPlayer = ({
         videoRef.current.addEventListener('loadeddata', () => {
           videoRef.current
             ?.play()
+            .then(() => {
+              console.log('Play video');
+            })
             .catch((error: unknown) => {
               console.log('Error play video', error);
             })
