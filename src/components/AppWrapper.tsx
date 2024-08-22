@@ -1,6 +1,6 @@
 'use client';
 
-import { AppSettings, IgnoreKeyDown, KeyDown } from '@/constants';
+import { AppSettings, KeyDown, LocalStorageItem } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import DeviceManager from '@/utils/DeviceManager';
@@ -12,6 +12,7 @@ import React, { useContext, useEffect, useRef, useState } from 'react';
 import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
+import { initMixpanel } from '@/utils/mixpanel';
 
 const enum CastState {
   None, // Not casting
@@ -36,6 +37,11 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
   const [showQrCode, setShowQrCode] = useState<boolean>(false);
   const lastEventTime = useRef(0);
+
+  // Initialize mixpanel
+  useEffect(() => {
+    initMixpanel();
+  }, []);
 
   // Initialize platform events
   useEffect(() => {
@@ -80,9 +86,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
       if (now - lastEventTime.current > minInterval) {
         lastEventTime.current = now;
-        if (!IgnoreKeyDown.includes(event.key as KeyDown)) {
+        // Toggle QR code when user press Enter
+        if ((event.key as KeyDown) === KeyDown.enter) {
           console.log('Toggle QR Code');
-
           setShowQrCode(!showQrCode);
         }
       }
@@ -211,6 +217,10 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       });
     } else {
       if (castState !== CastState.None) {
+        localStorage.setItem(
+          LocalStorageItem.doResetMixpanelAfterTracking,
+          'true'
+        );
         // Disconnect
         setCastState(CastState.None);
         router.back();
