@@ -98,7 +98,7 @@ export default function AIArtworkClient() {
 
     setIsRecording(true);
     setPreviewURL('');
-    setMessage('Say something...');
+    setMessage('');
 
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -223,6 +223,19 @@ export default function AIArtworkClient() {
       {message && !previewURL && (
         <div className={clsx(styles.record)}>
           <p>{message}</p>
+        </div>
+      )}
+      {!message && !previewURL && (
+        <div className={clsx(styles.waiting)}>
+          <ul style={{ fontSize: 36 }}>
+            Ask me to find you the perfect artwork for any situation...
+          </ul>
+          <br></br>
+          <li style={{ fontSize: 24 }}>
+            “Suggest artwork for my living room.”
+          </li>
+          <li style={{ fontSize: 24 }}>“Find something happy and vibrant.”</li>
+          <li style={{ fontSize: 24 }}>“Recommend art for a dinner party.”</li>
         </div>
       )}
       {!isRecording && previewURL && <ArtworkPlayer previewURL={previewURL} />}
