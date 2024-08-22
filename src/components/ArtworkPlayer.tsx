@@ -129,8 +129,8 @@ const ArtworkPlayer = ({
     <div
       style={{
         display: 'flex',
-        width: '100%',
-        height: '100%',
+        width: '1020',
+        height: '440',
         backgroundColor: '#000000',
         justifyContent: 'center',
         position: 'relative',
@@ -197,6 +197,7 @@ const ArtworkPlayer = ({
           style={{ width: '320', height: '240' }}
           autoPlay
           loop
+          playsInline
           crossOrigin="anonymous"></video>
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.audio && (
