@@ -192,13 +192,26 @@ const ArtworkPlayer = ({
         </object>
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.video && (
-        <video
-          ref={videoRef}
-          style={{ width: '320px', height: '240px' }}
-          autoPlay
-          loop
-          playsInline
-          crossOrigin="anonymous"></video>
+        <video width="320" height="240" controls preload="none">
+          <source
+            src="https://cdn.feralfileassets.com/previews/67ab07f9-3dc5-4758-a560-c3d2347523b8/1709105834/preview.mp4"
+            type="video/mp4"
+          />
+          <track
+            src="/path/to/captions.vtt"
+            kind="subtitles"
+            srcLang="en"
+            label="English"
+          />
+          Your browser does not support the video tag.
+        </video>
+        // <video
+        //   ref={videoRef}
+        //   style={{ width: '320px', height: '240px' }}
+        //   autoPlay
+        //   loop
+        //   playsInline
+        //   crossOrigin="anonymous"></video>
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.audio && (
         <audio autoPlay={true} loop={true}>
