@@ -22,7 +22,9 @@ export default function DailyClient() {
         if (dailies.length > 0) {
           const delay = getDelayTime(dailies);
           if (dailies[0].previewURL) {
-            setCastPreviewURL(dailies[0].previewURL);
+            setCastPreviewURL(
+              'https://cdn.feralfileassets.com/previews/67ab07f9-3dc5-4758-a560-c3d2347523b8/1709105834/preview.mp4'
+            );
           }
 
           if (delay > 0) {
