@@ -150,7 +150,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     const handleEscapeKey = () => {
-      history.back();
+      router.back();
       canvasService.current.disconnect({}).catch((error: unknown) => {
         console.log(error);
       });
@@ -254,7 +254,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         );
         // Disconnect
         setCastState(CastState.None);
-        router.push('/daily');
+        router.back();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
