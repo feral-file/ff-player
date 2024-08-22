@@ -3,6 +3,7 @@ export enum KeyCodes {
   audioVolumeUp = 0x00100000a10,
   audioVolumeDown = 0x00100000a0f,
   audioVolumeMute = 0x00100000a11,
+  enter = 0x0010000000d,
   red = 403,
   green = 404,
   yellow = 405,

@@ -2,7 +2,6 @@
 
 import {
   AppSettings,
-  IgnoreKeyDown,
   KeyDown,
   LocalStorageItem,
   AIRecordedKeyCodes,
@@ -95,9 +94,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           return;
         }
 
-        if (!IgnoreKeyDown.includes(event.key as KeyDown)) {
+        // Toggle QR code when user press Enter
+        if ((event.key as KeyDown) === KeyDown.enter) {
           console.log('Toggle QR Code');
-
           setShowQrCode(!showQrCode);
         }
       }
