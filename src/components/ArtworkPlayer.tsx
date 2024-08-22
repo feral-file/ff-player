@@ -194,7 +194,7 @@ const ArtworkPlayer = ({
       {previewURL && previewType === SeriesPreviewHTMLTag.video && (
         <video
           ref={videoRef}
-          style={{ width: '100%', height: '100%' }}
+          style={{ width: '320', height: '240' }}
           autoPlay
           loop
           playsInline
