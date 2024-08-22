@@ -129,8 +129,8 @@ const ArtworkPlayer = ({
     <div
       style={{
         display: 'flex',
-        width: '1020',
-        height: '440',
+        width: '1020px',
+        height: '440px',
         backgroundColor: '#000000',
         justifyContent: 'center',
         position: 'relative',
@@ -194,7 +194,7 @@ const ArtworkPlayer = ({
       {previewURL && previewType === SeriesPreviewHTMLTag.video && (
         <video
           ref={videoRef}
-          style={{ width: '320', height: '240' }}
+          style={{ width: '320px', height: '240px' }}
           autoPlay
           loop
           playsInline
