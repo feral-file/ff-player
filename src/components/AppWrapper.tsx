@@ -91,6 +91,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       if (now - lastEventTime.current > minInterval) {
         lastEventTime.current = now;
         if (AIRecordedKeyCodes.includes(event.keyCode as KeyCodes)) {
+          setShowQrCode(false);
           router.push('/ai-artwork');
           return;
         }
@@ -109,6 +110,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showQrCode]);
 
   useEffect(() => {
