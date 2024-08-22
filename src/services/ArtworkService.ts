@@ -1,9 +1,11 @@
 import { Artwork } from '../utils/types';
-import { gql } from '@apollo/client';
+import { ApolloClient, gql, NormalizedCacheObject } from '@apollo/client';
 import createApolloClient from '@/utils/ApolloClient';
 import { IndexerToken } from '@/models';
 import axiosInstance from './axiosService';
 import { removeArtistAliasSuffixes } from '@/utils/ui/formatAlias';
+
+const LIMIT_PER_PAGE = 50;
 
 class ArtworkService {
   public async getFeaturedArtworks(): Promise<Artwork[]> {
@@ -27,9 +29,30 @@ class ArtworkService {
   public async queryTokens(ids: string[]): Promise<IndexerToken[]> {
     try {
       const client = createApolloClient();
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const { data } = await client.query({
-        query: gql`{tokens(ids: ["${ids.join('","')}"])
+      let tokens: IndexerToken[] = [];
+
+      for (let i = 0; i < ids.length; i += LIMIT_PER_PAGE) {
+        const idsChunk = ids.slice(i, i + LIMIT_PER_PAGE);
+        const data = await this.queryTokensChunk(client, idsChunk);
+        tokens = tokens.concat(data);
+      }
+
+      return tokens;
+    } catch (error) {
+      console.log('Error querying tokens:', JSON.stringify(error));
+    }
+
+    return [];
+  }
+
+  private async queryTokensChunk(
+    client: ApolloClient<NormalizedCacheObject>,
+    ids: string[]
+  ): Promise<IndexerToken[]> {
+    return new Promise((resolve, reject) => {
+      client
+        .query({
+          query: gql`{tokens(ids: ["${ids.join('","')}"])
               {
                 id
                 blockchain
@@ -134,14 +157,18 @@ class ArtworkService {
 
               }
             }`,
-      });
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
-      return data.tokens;
-    } catch (error) {
-      console.log('Error querying tokens:', JSON.stringify(error));
-    }
-
-    return [];
+        })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .then((result: any) => {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+          resolve(result.data.tokens);
+        })
+        .catch((error: unknown) => {
+          console.log('Error querying tokens:', JSON.stringify(error));
+          // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+          reject(error);
+        });
+    });
   }
 }
 
