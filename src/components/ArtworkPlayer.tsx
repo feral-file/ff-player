@@ -203,6 +203,7 @@ const ArtworkPlayer = ({
               transform: `rotateZ(90deg)`,
               width: '100%',
               height: '100%',
+              transformOrigin: 'center',
             }}>
             <video
               ref={videoRef}
