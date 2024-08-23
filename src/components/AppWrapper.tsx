@@ -171,7 +171,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       const disableBackChanged = () => {
         try {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-          (window as any).AppState.postMessage(
+          (window as any).AppState?.postMessage(
             JSON.stringify({
               handler: 'backAbleChanged',
               data: true,

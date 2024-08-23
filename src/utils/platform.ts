@@ -176,7 +176,7 @@ export class TizenConfigService implements PlatformConfigService {
     // fire event to tizen
     try {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-      (window as any).ConfigService.postMessage(JSON.stringify(request));
+      (window as any).ConfigService?.postMessage(JSON.stringify(request));
       console.log(`Sent request to Tizen ${JSON.stringify(request)}`);
     } catch (e) {
       console.error('Failed to send request to Tizen: ', e);
