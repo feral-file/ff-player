@@ -62,13 +62,18 @@ class DailyService {
 
       const convertDailies = dailies.map((d: Daily) => {
         let tokenName = '';
-        const token = indexerData.get(d.tokenID);
+        let tokenID = d.tokenID;
+        if (d.artwork?.swap) {
+          tokenID = d.artwork.swap.token;
+        }
+        const token = indexerData.get(tokenID);
         if (token) {
           tokenName = getIndexerTokenName(token);
         }
+
         return {
           ...d,
-          previewURL: previewData.get(d.tokenID),
+          previewURL: previewData.get(tokenID),
           token,
           tokenName,
         };
