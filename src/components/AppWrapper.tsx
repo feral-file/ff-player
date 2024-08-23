@@ -241,10 +241,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   }, [showQrCode]);
 
-  const handleCloseQRCode = () => {
-    setShowQrCode(false);
-  };
-
   return (
     <>
       <Script
@@ -283,7 +279,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        {showQrCode && <QrCodePopUp onClick={handleCloseQRCode}></QrCodePopUp>}
+        {showQrCode && <QrCodePopUp></QrCodePopUp>}
       </div>
     </>
   );
