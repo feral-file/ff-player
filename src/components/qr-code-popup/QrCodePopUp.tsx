@@ -1,9 +1,9 @@
 'use client';
 
 import { AppContext } from '@/context/AppContext';
+import { Daily } from '@/models';
 import useDailies, { getDelayTime } from '@/services/qrCodePopUpService';
 import DeviceManager from '@/utils/DeviceManager';
-import { Daily } from '@/utils/types';
 import Image from 'next/image';
 import QRCode from 'qrcode.react';
 import { useContext, useEffect, useState } from 'react';
