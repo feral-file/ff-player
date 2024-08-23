@@ -217,8 +217,8 @@ const ArtworkPlayer = ({
               }}>
               <Image
                 src="/ff-loading-still-v2.svg"
-                width={360}
-                height={360}
+                width={430}
+                height={288}
                 objectFit="contain"
                 alt="Loading"></Image>
             </div>

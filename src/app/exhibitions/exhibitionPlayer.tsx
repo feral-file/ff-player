@@ -94,6 +94,7 @@ const ExhibitionHall = () => {
   useEffect(() => {
     // fetch exhibition detail
     const fetchExhibitionDetail = async () => {
+      setExhibitionDetail(undefined);
       if (!exhibitionID) {
         return;
       }
