@@ -30,7 +30,7 @@ export class SeriesService {
       }
 
       const response = await axiosInstance.get<{ result: Artwork }>(
-        `/api/artworks/${id}`
+        `/api/artworks/${id}?includeSeries=true`
       );
       return response.data.result;
     } catch (error) {

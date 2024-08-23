@@ -19,6 +19,7 @@ import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
 import FullScreen from './fullscreen';
+import { initMixpanel } from '@/utils/mixpanel';
 
 const enum CastState {
   None, // Not casting
@@ -34,7 +35,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const router = useRouter();
 
-  const { castInfo } = context.websocketData;
+  const { castInfo, canvasService } = context.websocketData;
   const { screenOrientation, rotateRadius } = context.deviceRotation ?? {
     screenOrientation: Orientation.horizontal,
     rotateRadius: 0,
@@ -44,6 +45,11 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [showQrCode, setShowQrCode] = useState<boolean>(false);
   const lastEventTime = useRef(0);
   const [isDisplayWebAction, setIsDisplayWebAction] = useState<boolean>(false);
+
+  // Initialize mixpanel
+  useEffect(() => {
+    initMixpanel();
+  }, []);
 
   // Initialize platform events
   useEffect(() => {
@@ -163,8 +169,38 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
 
   useEffect(() => {
+    const handleEscapeKey = () => {
+      router.back();
+      canvasService.current.disconnect({}).catch((error: unknown) => {
+        console.log(error);
+      });
+    };
+
+    EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+    EventEmitter.subscribe(Event.escape, handleEscapeKey);
+
+    // Cleanup the event listener on component unmount
+    return () => {
+      EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+    };
+  });
+
+  useEffect(() => {
     console.log('Cast Info:', castInfo);
     if (castInfo) {
+      const disableBackChanged = () => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+          (window as any).AppState.postMessage(
+            JSON.stringify({
+              handler: 'backAbleChanged',
+              data: true,
+            })
+          );
+        } catch (error) {
+          console.error(error);
+        }
+      };
       const handleCastCommand = async () => {
         switch (castInfo.castCommand) {
           case CastCommand.connect: {
@@ -198,7 +234,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             } else {
               router.replace('/playlist');
             }
-
+            disableBackChanged();
             break;
           }
 
@@ -215,6 +251,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             } else {
               router.replace('/exhibitions');
             }
+            disableBackChanged();
 
             break;
           }
@@ -232,6 +269,10 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       });
     } else {
       if (castState !== CastState.None) {
+        localStorage.setItem(
+          LocalStorageItem.doResetMixpanelAfterTracking,
+          'true'
+        );
         // Disconnect
         setCastState(CastState.None);
         router.back();
@@ -251,10 +292,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       };
     }
   }, [showQrCode]);
-
-  const handleCloseQRCode = () => {
-    setShowQrCode(false);
-  };
 
   return (
     <>
@@ -306,7 +343,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        {showQrCode && <QrCodePopUp onClick={handleCloseQRCode}></QrCodePopUp>}
+        {showQrCode && <QrCodePopUp></QrCodePopUp>}
       </div>
     </>
   );

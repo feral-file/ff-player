@@ -15,6 +15,7 @@ const nextConfig = {
     NEXT_PUBLIC_BRANCH_KEY: process.env.NEXT_PUBLIC_BRANCH_KEY,
     NEXT_PUBLIC_TV_AI_API_URL: process.env.NEXT_PUBLIC_TV_AI_API_URL,
     NEXT_PUBLIC_TV_AI_API_KEY: process.env.NEXT_PUBLIC_TV_AI_API_KEY,
+    NEXT_PUBLIC_MIXPANEL_TOKEN: process.env.NEXT_PUBLIC_MIXPANEL_TOKEN,
   },
   experimental: {
     missingSuspenseWithCSRBailout: false,
@@ -23,6 +24,7 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   images: { unoptimized: true },
+  reactStrictMode: false,
 };
 
 export default nextConfig;

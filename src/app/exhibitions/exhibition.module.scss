@@ -71,12 +71,16 @@
     .leftSection,
     .rightSection {
       width: 100%;
-      height: 50%;
+    }
+    .rightSection {
+      height: 70%;
     }
     .leftSection {
-      align-items: center;
+      height: 30%;
+      align-items: flex-start;
       .info {
         width: 100%;
+        padding-top: 5%;
       }
     }
   }

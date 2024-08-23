@@ -1,10 +1,10 @@
-import { Series } from "./series.model";
+import { Series } from './series.model';
 
 export enum ArtworkModel {
-  multi = "multi",
-  single = "single",
-  multi_unique = "multi_unique",
-  unknown = "unknown",
+  multi = 'multi',
+  single = 'single',
+  multi_unique = 'multi_unique',
+  unknown = 'unknown',
 }
 
 export interface Artwork {

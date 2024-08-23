@@ -64,6 +64,7 @@ export interface IndexerToken {
   edition: number;
   editionName: string;
   mintedAt: string;
+  mintAt: string;
   balance: number;
   owner: string;
   owners: Owner[];

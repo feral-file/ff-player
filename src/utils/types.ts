@@ -47,11 +47,13 @@ export interface PlayArtworkV2 {
   duration: number;
   token?: {
     id: string;
+    name: string;
   };
 }
 
 export interface ConnectRequestV2 {
   clientDevice: DeviceInfo;
+  primaryAddress?: string;
 }
 
 export type ConnectReplyV2 = Reply;
@@ -194,6 +196,7 @@ export interface PlaylistToken {
   previewURL: string;
   token: {
     id: string;
+    name: string;
   };
 }
 
@@ -232,6 +235,7 @@ export interface Daily {
   contractAddress: string;
   displayTime: string;
   tokenID: string;
+  tokenName: string;
   previewURL?: string;
   token?: IndexerToken;
 }
