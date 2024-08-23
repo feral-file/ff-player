@@ -10,28 +10,26 @@ const App: React.FC = () => {
   useEffect(() => {
     const platform = searchParams.get('platform') ?? '';
     localStorage.setItem('platform', platform);
-
-    setTimeout(() => {
-      try {
-        if (typeof window !== 'undefined') {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-          const appState = (window as any).AppState;
-          if (appState) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            appState.postMessage(
-              JSON.stringify({
-                handler: 'loaded',
-              })
-            );
-          }
+    try {
+      if (typeof window !== 'undefined') {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+        const appState = (window as any).AppState;
+        if (appState) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+          appState.postMessage(
+            JSON.stringify({
+              handler: 'loaded',
+            })
+          );
         }
-      } catch (error) {
-        console.error(error);
       }
+    } catch (error) {
+      console.error(error);
+    }
 
-      router.replace('/daily');
-    }, 100);
-  }, [router, searchParams]);
+    router.replace('/daily');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return <></>;
 };

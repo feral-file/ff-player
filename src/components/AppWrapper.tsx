@@ -249,7 +249,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     } else {
       if (castState !== CastState.None) {
         localStorage.setItem(
-          LocalStorageItem.doResetMixpanelAfterTracking,
+          LocalStorageItem.doResetMixpanelAfterTracking as string,
           'true'
         );
         // Disconnect
