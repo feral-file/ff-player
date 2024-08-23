@@ -254,7 +254,6 @@ const ArtworkPlayer = ({
           loop
           controls
           playsInline
-          controls
           crossOrigin="anonymous"></video>
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.audio && (
