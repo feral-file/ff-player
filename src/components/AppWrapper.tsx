@@ -25,6 +25,7 @@ const enum CastState {
   None, // Not casting
   Artwork, // Displaying artwork, playlist, dallies
   Exhibition, // Displaying exhibition
+  Daily, // Displaying exhibition
 }
 
 const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -262,6 +263,23 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             break;
           }
 
+          case CastCommand.castDaily: {
+            setShowQrCode(false);
+            setDisplayOnboarding(false);
+            if (castState === CastState.Daily) {
+              return;
+            }
+
+            setCastState(CastState.Daily);
+            if (castState === CastState.None) {
+              router.push('/daily');
+            } else {
+              router.replace('/daily');
+            }
+            disableBackChanged();
+            break;
+          }
+
           default: {
             if (castInfo.dataChecked) {
               setShowQrCode(true);
@@ -274,7 +292,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         console.error(error);
       });
     } else {
-      if (castState !== CastState.None) {
+      if (castState !== CastState.None && castState !== CastState.Daily) {
         localStorage.setItem(
           LocalStorageItem.doResetMixpanelAfterTracking as string,
           'true'
