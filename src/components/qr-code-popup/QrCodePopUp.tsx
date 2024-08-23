@@ -4,13 +4,11 @@ import { AppContext } from '@/context/AppContext';
 import useDailies, { getDelayTime } from '@/services/qrCodePopUpService';
 import DeviceManager from '@/utils/DeviceManager';
 import { Daily } from '@/utils/types';
-import clsx from 'clsx';
 import Image from 'next/image';
 import QRCode from 'qrcode.react';
 import { useContext, useEffect, useState } from 'react';
-import styles from './styles.module.scss';
 
-const QrCodePopUp = ({ onClick }: { onClick: (e: unknown) => void }) => {
+const QrCodePopUp = () => {
   const context = useContext(AppContext);
   const [branchLink, setBranchLink] = useState('');
   const [currentDaily, setCurrentDaily] = useState<Daily>();
@@ -80,13 +78,6 @@ const QrCodePopUp = ({ onClick }: { onClick: (e: unknown) => void }) => {
           alt="FF logo"
           width={screenRatio * 224}
           height={screenRatio * 23}></Image>
-        <Image
-          className={clsx(styles['close-button'])}
-          src={'/close.svg'}
-          alt="Close"
-          width={screenRatio * 22}
-          height={screenRatio * 22}
-          onClick={onClick}></Image>
       </div>
       <div>
         <div

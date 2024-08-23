@@ -26,6 +26,9 @@ export class KeyEvent extends PlatformEventReceiver {
     if (keyId === KeyCodes.enter.toString()) {
       EventEmitter.emit(Event.toggleQrCode);
     }
+    if (keyId === KeyCodes.escape.toString()) {
+      EventEmitter.emit(Event.escape);
+    }
   }
 }
 
@@ -33,7 +36,7 @@ export class DeviceName extends PlatformEventReceiver {
   static override handlePlatformEvent(event: string) {
     super.handlePlatformEvent(event);
     console.log(`Handling set device name event: ${event}`);
-    DeviceManager.setName(event);
+    DeviceManager.setName(`Samsung-${event}`);
   }
 }
 
@@ -154,7 +157,7 @@ export class TizenConfigService implements PlatformConfigService {
     // fire event to tizen
     try {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-      (window as any).ConfigService.postMessage(JSON.stringify(request));
+      (window as any).ConfigService?.postMessage(JSON.stringify(request));
       console.log(`Sent request to Tizen ${JSON.stringify(request)}`);
     } catch (e) {
       console.error('Failed to send request to Tizen: ', e);
@@ -226,7 +229,7 @@ export class LgConfigService implements PlatformConfigService {
     try {
       const deviceInfo = await this.getDeviceInfo();
       console.log(`LG Device name: ${deviceInfo.modelName}`);
-      DeviceManager.setName(deviceInfo.modelName);
+      DeviceManager.setName(`LG-${deviceInfo.modelName}`);
     } catch (error) {
       console.error('Error getting device info:', error);
     }
