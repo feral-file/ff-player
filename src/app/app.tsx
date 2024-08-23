@@ -1,18 +1,12 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { initMixpanel } from '@/utils/mixpanel';
+import { useRouter } from 'next/navigation';
 
 const App: React.FC = () => {
-  const searchParams = useSearchParams();
   const router = useRouter();
 
   useEffect(() => {
-    const platform = searchParams.get('platform') ?? '';
-    localStorage.setItem('platform', platform);
-    // Initialize mixpanel
-    initMixpanel();
     try {
       if (typeof window !== 'undefined') {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
