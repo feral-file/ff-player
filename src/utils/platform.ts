@@ -33,7 +33,7 @@ export class DeviceName extends PlatformEventReceiver {
   static override handlePlatformEvent(event: string) {
     super.handlePlatformEvent(event);
     console.log(`Handling set device name event: ${event}`);
-    DeviceManager.setName(event);
+    DeviceManager.setName(`Samsung-${event}`);
   }
 }
 
@@ -243,7 +243,7 @@ export class LgConfigService implements PlatformConfigService {
     try {
       const deviceInfo = await this.getDeviceInfo();
       console.log(`LG Device name: ${deviceInfo.modelName}`);
-      DeviceManager.setName(deviceInfo.modelName);
+      DeviceManager.setName(`LG-${deviceInfo.modelName}`);
     } catch (error) {
       console.error('Error getting device info:', error);
     }
