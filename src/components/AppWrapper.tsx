@@ -12,7 +12,6 @@ import React, { useContext, useEffect, useRef, useState } from 'react';
 import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
-import { initMixpanel } from '@/utils/mixpanel';
 
 const enum CastState {
   None, // Not casting
@@ -37,11 +36,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
   const [showQrCode, setShowQrCode] = useState<boolean>(false);
   const lastEventTime = useRef(0);
-
-  // Initialize mixpanel
-  useEffect(() => {
-    initMixpanel();
-  }, []);
 
   // Initialize platform events
   useEffect(() => {
