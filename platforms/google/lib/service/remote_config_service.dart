@@ -18,10 +18,8 @@ class RemoteConfigServiceImpl implements RemoteConfigService {
   final PubdocAPI _pubdocAPI;
 
   static const Map<String, dynamic> _defaults = <String, dynamic>{
-    'tizen': {
-      'url': 'https://feralfile-display-prod.pages.dev?platform=tizen',
-      'gitHash': '1434d96c8ce703c4ed6d1485e18a5296a406bcdb',
-      'updateInterval': '30'
+    'google': {
+      'url': 'https://feralfile-display-prod.pages.dev?platform=gg'
     }
   };
 
