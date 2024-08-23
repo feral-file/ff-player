@@ -1,3 +1,4 @@
 export function convertToQueryParams(params: string[]): string {
-  return params.join('=true&');
+  params = params.map(param => `${param}=true`);
+  return params.join('&');
 }
