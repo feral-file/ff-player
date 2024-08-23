@@ -23,10 +23,14 @@ export class KeyEvent extends PlatformEventReceiver {
     super.handlePlatformEvent(event);
     const [keyId, keyLabel] = event.split('_');
     console.log(`Handling key event: ${keyId} - ${keyLabel}`);
-    if (keyId === KeyCodes.enter.toString()) {
+    if (
+      [KeyCodes.enter.toString(), KeyCodes.select.toString()].includes(keyId)
+    ) {
       EventEmitter.emit(Event.toggleQrCode);
     }
-    if (keyId === KeyCodes.escape.toString()) {
+    if (
+      [KeyCodes.escape.toString(), KeyCodes.goBack.toString()].includes(keyId)
+    ) {
       EventEmitter.emit(Event.escape);
     }
   }
