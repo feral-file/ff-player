@@ -1,23 +1,45 @@
-import { IndexerToken } from '@/models';
-import { Daily } from '../utils/types';
+import { Daily, IndexerToken } from '@/models';
 import ArtworkService from './ArtworkService';
 import axiosInstance from './axiosService';
 import { getIndexerTokenName } from '@/utils/indexer';
+import { convertToQueryParams } from '@/utils/queryParams';
 
 class DailyService {
   private artworkService = new ArtworkService();
 
-  public async getUpcomingDaily(): Promise<Daily[]> {
-    const response = await axiosInstance.get('/api/dailies/upcoming');
+  public async getUpcomingDaily(
+    expand: string[],
+    pagingParams?: string
+  ): Promise<Daily[]> {
+    const expandParams = convertToQueryParams(expand);
+    const response = await axiosInstance.get(
+      `/api/dailies/upcoming?${expandParams}&${pagingParams ?? ''}`
+    );
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     return response.data.result as Daily[];
   }
 
   public async callingDailies(): Promise<Daily[]> {
     try {
-      const dailies = await this.getUpcomingDaily();
+      const dailies = await this.getUpcomingDaily(
+        ['includeArtwork'],
+        'limit=10&offset=0'
+      );
       const ids = dailies.map((d: Daily) => {
-        return this.getTokenID(d);
+        if (d.artwork?.swap) {
+          const swap = d.artwork.swap;
+          return this.convertToTokenID(
+            swap.blockchainType,
+            swap.contractAddress,
+            swap.token
+          );
+        }
+
+        return this.convertToTokenID(
+          d.blockchain,
+          d.contractAddress,
+          d.tokenID
+        );
       });
 
       if (ids.length === 0) {
@@ -59,18 +81,22 @@ class DailyService {
     }
   }
 
-  private getTokenID(d: Daily): string {
-    switch (d.blockchain) {
+  private convertToTokenID(
+    blockchain: string,
+    contractAddress: string,
+    tokenID: string
+  ): string {
+    switch (blockchain) {
       case 'ethereum': {
-        return `eth-${d.contractAddress}-${d.tokenID}`;
+        return `eth-${contractAddress}-${tokenID}`;
       }
 
       case 'bitmark': {
-        return `bmk--${d.tokenID}`;
+        return `bmk--${tokenID}`;
       }
 
       case 'tezos': {
-        return `tez-${d.contractAddress}-${d.tokenID}`;
+        return `tez-${contractAddress}-${tokenID}`;
       }
 
       default: {

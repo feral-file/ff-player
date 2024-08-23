@@ -1,8 +1,8 @@
 // import { Daily } from '@/utils/types';
 
-import { Daily } from '@/utils/types';
 import { useEffect, useRef, useState } from 'react';
 import DailyService, { DailyInstanceService } from './DailyService';
+import { Daily } from '@/models';
 
 const useDailies = () => {
   const dailyService = useRef(new DailyService());

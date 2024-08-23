@@ -1,10 +1,10 @@
 'use client';
 
+import { Daily } from '@/models';
 import ArtworkPlayer from '../../components/ArtworkPlayer';
 import DailyService, { DailyInstanceService } from '@/services/DailyService';
 import { getDelayTime } from '@/services/qrCodePopUpService';
 import { CastingArtworkType } from '@/utils/mixpanel';
-import { Daily } from '@/utils/types';
 import { useEffect, useRef, useState } from 'react';
 
 export default function DailyClient() {
