@@ -19,7 +19,7 @@ class RemoteConfigServiceImpl implements RemoteConfigService {
 
   static const Map<String, dynamic> _defaults = <String, dynamic>{
     'google': {
-      'url': 'https://feralfile-display-prod.pages.dev?platform=gg'
+      'url': 'https://display.feralfile.com/?platform=google'
     }
   };
 
@@ -70,19 +70,19 @@ class RemoteConfigServiceImpl implements RemoteConfigService {
   }
 }
 
-enum ConfigGroup { tizen }
+enum ConfigGroup { google }
 
 // ConfigGroup getString extension
 extension ConfigGroupExtension on ConfigGroup {
   String get getString {
     switch (this) {
-      case ConfigGroup.tizen:
-        return 'tizen';
+      case ConfigGroup.google:
+        return 'google';
     }
   }
 }
 
-enum ConfigKey { url, gitHash, updateInterval }
+enum ConfigKey { url }
 
 // ConfigKey getString extension
 extension ConfigKeyExtension on ConfigKey {
@@ -90,10 +90,6 @@ extension ConfigKeyExtension on ConfigKey {
     switch (this) {
       case ConfigKey.url:
         return 'url';
-      case ConfigKey.gitHash:
-        return 'gitHash';
-      case ConfigKey.updateInterval:
-        return 'updateInterval';
     }
   }
 }

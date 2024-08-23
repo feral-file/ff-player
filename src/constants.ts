@@ -53,7 +53,7 @@ export enum LocalStorageItem {
 }
 
 export enum Platform {
-  android = 'android',
+  google = 'google',
   tizen = 'tizen',
   lg = 'lg',
 }
