@@ -249,7 +249,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     } else {
       if (castState !== CastState.None) {
         localStorage.setItem(
-          LocalStorageItem.doResetMixpanelAfterTracking,
+          LocalStorageItem.doResetMixpanelAfterTracking as string,
           'true'
         );
         // Disconnect
@@ -296,12 +296,12 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               (rotateRadius || 0) % 180 === 0)
               ? '100vh'
               : '100vw',
-          transform: `rotate(${(-rotateRadius || 0).toString()}deg) `,
+          transform: `rotate(${(rotateRadius || 0).toString()}deg) `,
           transformOrigin:
             (screenOrientation === Orientation.vertical &&
-              (rotateRadius || 0) % 360 !== 90) ||
+              (rotateRadius || 0) % 360 === 90) ||
             (screenOrientation === Orientation.horizontal &&
-              (rotateRadius || 0) % 360 !== 90)
+              (rotateRadius || 0) % 360 === 90)
               ? '50vw center'
               : 'center 50vh',
           transition: 'transform 0.2s',

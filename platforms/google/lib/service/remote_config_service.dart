@@ -18,10 +18,8 @@ class RemoteConfigServiceImpl implements RemoteConfigService {
   final PubdocAPI _pubdocAPI;
 
   static const Map<String, dynamic> _defaults = <String, dynamic>{
-    'tizen': {
-      'url': 'https://feralfile-display-prod.pages.dev?platform=tizen',
-      'gitHash': '1434d96c8ce703c4ed6d1485e18a5296a406bcdb',
-      'updateInterval': '30'
+    'google': {
+      'url': 'https://display.feralfile.com/?platform=google'
     }
   };
 
@@ -72,19 +70,19 @@ class RemoteConfigServiceImpl implements RemoteConfigService {
   }
 }
 
-enum ConfigGroup { tizen }
+enum ConfigGroup { google }
 
 // ConfigGroup getString extension
 extension ConfigGroupExtension on ConfigGroup {
   String get getString {
     switch (this) {
-      case ConfigGroup.tizen:
-        return 'tizen';
+      case ConfigGroup.google:
+        return 'google';
     }
   }
 }
 
-enum ConfigKey { url, gitHash, updateInterval }
+enum ConfigKey { url }
 
 // ConfigKey getString extension
 extension ConfigKeyExtension on ConfigKey {
@@ -92,10 +90,6 @@ extension ConfigKeyExtension on ConfigKey {
     switch (this) {
       case ConfigKey.url:
         return 'url';
-      case ConfigKey.gitHash:
-        return 'gitHash';
-      case ConfigKey.updateInterval:
-        return 'updateInterval';
     }
   }
 }

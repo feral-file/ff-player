@@ -23,10 +23,14 @@ export class KeyEvent extends PlatformEventReceiver {
     super.handlePlatformEvent(event);
     const [keyId, keyLabel] = event.split('_');
     console.log(`Handling key event: ${keyId} - ${keyLabel}`);
-    if (keyId === KeyCodes.enter.toString()) {
+    if (
+      [KeyCodes.enter.toString(), KeyCodes.select.toString()].includes(keyId)
+    ) {
       EventEmitter.emit(Event.toggleQrCode);
     }
-    if (keyId === KeyCodes.escape.toString()) {
+    if (
+      [KeyCodes.escape.toString(), KeyCodes.goBack.toString()].includes(keyId)
+    ) {
       EventEmitter.emit(Event.escape);
     }
   }
@@ -123,25 +127,6 @@ export interface PlatformConfigService {
 
   setString(key: string, value: string): Promise<void>;
 }
-
-export class AndroidConfigService implements PlatformConfigService {
-  // eslint-disable-next-line @typescript-eslint/require-await
-  async getString(key: string): Promise<string> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-    return (window as any).flutter_inappwebview.callHandler('getString', {
-      data: key,
-    });
-  }
-
-  // eslint-disable-next-line @typescript-eslint/require-await
-  async setString(key: string, value: string): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    return (window as any).flutter_inappwebview.callHandler('setString', {
-      data: { key: key, value: value },
-    });
-  }
-}
-
 export class TizenConfigService implements PlatformConfigService {
   async getString(key: string): Promise<string> {
     const id = uuidv4();
@@ -189,6 +174,8 @@ export class TizenConfigService implements PlatformConfigService {
     return future.promise;
   }
 }
+
+export class GoogleConfigService extends TizenConfigService {}
 
 export class WebConfigService implements PlatformConfigService {
   constructor() {

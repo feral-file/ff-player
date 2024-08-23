@@ -1,4 +1,4 @@
-package com.example.google
+package com.feralfile.display
 
 import io.flutter.embedding.android.FlutterActivity
 

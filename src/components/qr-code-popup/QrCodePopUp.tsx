@@ -110,7 +110,12 @@ const QrCodePopUp = () => {
           </p>
         </div>
       </div>
-      <div style={{ display: 'flex', gap: screenRatio * 20 }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: screenRatio * 20,
+          alignItems: 'flex-end',
+        }}>
         {branchLink ? (
           <QRCode value={branchLink} size={screenRatio * 86}></QRCode>
         ) : (
@@ -119,7 +124,7 @@ const QrCodePopUp = () => {
           </p>
         )}
         <div style={{ width: screenRatio * 500 }}>
-          <p style={{ width: '32%' }}>
+          <p style={{ width: '40%' }}>
             Get the Feral File app on your phone to browse and display over
             15,000 artworks on your tv.
           </p>
