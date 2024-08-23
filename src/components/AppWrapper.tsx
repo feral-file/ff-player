@@ -12,7 +12,6 @@ import React, { useContext, useEffect, useRef, useState } from 'react';
 import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
-import { initMixpanel } from '@/utils/mixpanel';
 
 const enum CastState {
   None, // Not casting
@@ -37,11 +36,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
   const [showQrCode, setShowQrCode] = useState<boolean>(false);
   const lastEventTime = useRef(0);
-
-  // Initialize mixpanel
-  useEffect(() => {
-    initMixpanel();
-  }, []);
 
   // Initialize platform events
   useEffect(() => {
@@ -249,7 +243,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     } else {
       if (castState !== CastState.None) {
         localStorage.setItem(
-          LocalStorageItem.doResetMixpanelAfterTracking,
+          LocalStorageItem.doResetMixpanelAfterTracking as string,
           'true'
         );
         // Disconnect
@@ -296,12 +290,12 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               (rotateRadius || 0) % 180 === 0)
               ? '100vh'
               : '100vw',
-          transform: `rotate(${(-rotateRadius || 0).toString()}deg) `,
+          transform: `rotate(${(rotateRadius || 0).toString()}deg) `,
           transformOrigin:
             (screenOrientation === Orientation.vertical &&
-              (rotateRadius || 0) % 360 !== 90) ||
+              (rotateRadius || 0) % 360 === 90) ||
             (screenOrientation === Orientation.horizontal &&
-              (rotateRadius || 0) % 360 !== 90)
+              (rotateRadius || 0) % 360 === 90)
               ? '50vw center'
               : 'center 50vh',
           transition: 'transform 0.2s',

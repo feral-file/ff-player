@@ -13,6 +13,7 @@ import 'package:feralfile_display/view/common_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 class InAppWebViewPage extends StatefulWidget {
   final InAppWebViewPayload payload;
@@ -55,51 +56,59 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Focus(
-          autofocus: true,
-          focusNode: _focusNode,
-          onKeyEvent: (node, event) {
-            log.info(event.toString());
+  Widget build(BuildContext context) {
+    if (_webViewController.platform is AndroidWebViewController) {
+      AndroidWebViewController.enableDebugging(true);
+      (_webViewController.platform as AndroidWebViewController)
+          .setMediaPlaybackRequiresUserGesture(false);
+    }
 
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Focus(
+        autofocus: true,
+        focusNode: _focusNode,
+        onKeyEvent: (node, event) {
+          log.info(event.toString());
+
+          if (event is KeyDownEvent) {
+            unawaited(_webViewController.runJavaScriptReturningResult(
+                'KeyEvent.handlePlatformEvent("${event.logicalKey.keyId}_'
+                '${event.logicalKey.keyLabel}");'));
+          }
+
+          if (_listAlwaysHandledKeys.contains(event.logicalKey)) {
+            log.info('KeyEventResult.handled');
+            return KeyEventResult.handled;
+          }
+
+          if (_isBackAble &&
+              event.logicalKey.keyId == LogicalKeyboardKey.escape.keyId) {
             if (event is KeyDownEvent) {
               unawaited(_webViewController.runJavaScriptReturningResult(
                   'KeyEvent.handlePlatformEvent("${event.logicalKey.keyId}_'
                   '${event.logicalKey.keyLabel}");'));
             }
 
-            if (_listAlwaysHandledKeys.contains(event.logicalKey)) {
-              log.info('KeyEventResult.handled');
-              return KeyEventResult.handled;
-            }
+            log.info('KeyEventResult.handled');
+            return KeyEventResult.handled;
+          }
 
-            if (_isBackAble &&
-                event.logicalKey.keyId == LogicalKeyboardKey.escape.keyId) {
-              if (event is KeyDownEvent) {
-                unawaited(_webViewController.runJavaScriptReturningResult(
-                    'KeyEvent.handlePlatformEvent("${event.logicalKey.keyId}_'
-                    '${event.logicalKey.keyLabel}");'));
-              }
-
-              log.info('KeyEventResult.handled');
-              return KeyEventResult.handled;
-            }
-
-            log.info('KeyEventResult.ignored');
-            return KeyEventResult.ignored;
-          },
-          child: Stack(
-            children: [
-              WebViewWidget(
-                controller: _webViewController,
-                key: Key(widget.payload.key),
-              ),
-              if (_isLoading) loadingWidget(context),
-            ],
-          ),
+          log.info('KeyEventResult.ignored');
+          return KeyEventResult.ignored;
+        },
+        child: Stack(
+          children: [
+            WebViewWidget(
+              controller: _webViewController,
+              key: Key(widget.payload.key),
+            ),
+            if (_isLoading) loadingWidget(context),
+          ],
         ),
-      );
+      ),
+    );
+  }
 
   void _initWebview() {
     final url = widget.payload.url;
