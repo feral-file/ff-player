@@ -125,8 +125,8 @@ const QrCodePopUp = () => {
         )}
         <div style={{ width: screenRatio * 500 }}>
           <p style={{ width: '40%' }}>
-            Get the Feral File app on your phone to browse and display over
-            15,000 artworks on your tv.
+            Get the Feral File mobile app to browse 15,000+ original artworks,
+            and choose what to display on your TV.
           </p>
         </div>
       </div>
