@@ -22,7 +22,7 @@ class DailyService {
   public async callingDailies(): Promise<Daily[]> {
     try {
       const dailies = await this.getUpcomingDaily(
-        ['includeArtwork'],
+        ['includeSuccessfulSwap'],
         'limit=10&offset=0'
       );
       const ids = dailies.map((d: Daily) => {
