@@ -185,6 +185,7 @@ export default function AIArtworkClient() {
     try {
       console.log('Text record: ', text);
       setMessage(text);
+      setSeriesID('');
       const aiArtwork = await conversationService.current.getConversation(text);
       console.log('AI Artwork:', aiArtwork);
       if (!aiArtwork) {
