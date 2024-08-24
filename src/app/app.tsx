@@ -1,29 +1,22 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const App: React.FC = () => {
   const router = useRouter();
 
-  useEffect(() => {
-    try {
-      if (typeof window !== 'undefined') {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-        const appState = (window as any).AppState;
-        if (appState) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-          appState.postMessage(
-            JSON.stringify({
-              handler: 'loaded',
-            })
-          );
-        }
-      }
-    } catch (error) {
-      console.error(error);
-    }
+  const searchParams = useSearchParams();
 
+  useEffect(() => {
+    const platform = searchParams.get('platform') ?? '';
+    if (platform) {
+      localStorage.setItem('platform', platform);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     router.replace('/daily');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

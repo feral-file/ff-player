@@ -8,7 +8,6 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppContext } from '@/context/AppContext';
 import { LocalStorageItem } from '@/constants';
-import { CastingArtworkType } from '@/utils/mixpanel';
 import { Daily } from '@/models';
 
 const DailyClient: React.FC = () => {
@@ -16,7 +15,6 @@ const DailyClient: React.FC = () => {
   if (!context) {
     return <p>There is no app context.</p>;
   }
-  const { canvasService } = context.websocketData;
   const dailyRef = useRef<Daily>();
   const dailyService = useRef(new DailyService());
   const timeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
@@ -31,20 +29,6 @@ const DailyClient: React.FC = () => {
   const [isDisplayWebAction, setIsDisplayWebAction] = useState<boolean>(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-        (window as any).AppState?.postMessage(
-          JSON.stringify({
-            handler: 'backAbleChanged',
-            data: false,
-          })
-        );
-      } catch (error) {
-        console.error(error);
-      }
-    }
-
     // Handle cast daily
     async function handleCastDaily() {
       try {
@@ -92,10 +76,6 @@ const DailyClient: React.FC = () => {
     handleCastDaily().catch((error: unknown) => {
       console.error(error);
     });
-    canvasService.current.disconnect({}).catch((error: unknown) => {
-      console.log('Error disconnecting canvas service:', error);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -114,7 +94,6 @@ const DailyClient: React.FC = () => {
           previewURL={castPreviewURL}
           artworkID={artworkID}
           artworkName={artworkName}
-          castingType={CastingArtworkType.Daily}
         />
       )}
       {isDisplayWebAction && (

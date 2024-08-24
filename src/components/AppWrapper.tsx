@@ -9,24 +9,13 @@ import {
 } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
-import DeviceManager from '@/utils/DeviceManager';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
-import { Config, DeviceName, KeyEvent } from '@/utils/platform';
-import { CastCommand, Orientation } from '@/utils/types';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { Orientation } from '@/utils/types';
+import { useRouter } from 'next/navigation';
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
 import FullScreen from './fullscreen';
-import { initMixpanel } from '@/utils/mixpanel';
-
-const enum CastState {
-  None, // Not casting
-  Artwork, // Displaying artwork, playlist, dallies
-  Exhibition, // Displaying exhibition
-  Daily, // Displaying exhibition
-}
 
 const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const context = useContext(AppContext);
@@ -35,49 +24,13 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   const router = useRouter();
-
-  const { castInfo, canvasService } = context.websocketData;
   const { screenOrientation, rotateRadius } = context.deviceRotation ?? {
     screenOrientation: Orientation.horizontal,
     rotateRadius: 0,
   };
-  const [castState, setCastState] = useState<CastState>(CastState.None);
-  const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
   const [showQrCode, setShowQrCode] = useState<boolean>(false);
   const lastEventTime = useRef(0);
   const [isDisplayWebAction, setIsDisplayWebAction] = useState<boolean>(false);
-  const searchParams = useSearchParams();
-
-  // Initialize mixpanel
-  useEffect(() => {
-    const platform = searchParams.get('platform') ?? '';
-    if (platform) {
-      localStorage.setItem('platform', platform);
-    }
-    initMixpanel();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Initialize platform events
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).KeyEvent = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: KeyEvent.handlePlatformEvent,
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).DeviceName = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: DeviceName.handlePlatformEvent,
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).Config = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: Config.handlePlatformEvent,
-      };
-    }
-  });
 
   // Handle keydown event
   useEffect(() => {
@@ -129,21 +82,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     setIsDisplayWebAction(!platform);
   }, [isDisplayWebAction]);
 
-  // Handle keydown event
-
-  // useEffect(() => {
-  //   const handleKeyDown = () => {
-  //     setShowQrCode(!showQrCode);
-  //   };
-
-  //   EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
-  //   EventEmitter.subscribe(Event.toggleQrCode, handleKeyDown);
-
-  //   return () => {
-  //     EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
-  //   };
-  // }, []);
-
   // Check version update
   useEffect(() => {
     const validateVersion = async () => {
@@ -176,136 +114,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
 
   useEffect(() => {
-    const handleEscapeKey = () => {
-      router.back();
-      canvasService.current.disconnect({}).catch((error: unknown) => {
-        console.log(error);
-      });
-    };
-
-    EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
-    EventEmitter.subscribe(Event.escape, handleEscapeKey);
-
-    // Cleanup the event listener on component unmount
-    return () => {
-      EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
-    };
-  });
-
-  useEffect(() => {
-    console.log('Cast Info:', castInfo);
-    if (castInfo) {
-      const disableBackChanged = () => {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-          (window as any).AppState?.postMessage(
-            JSON.stringify({
-              handler: 'backAbleChanged',
-              data: true,
-            })
-          );
-        } catch (error) {
-          console.error(error);
-        }
-      };
-      const handleCastCommand = async () => {
-        switch (castInfo.castCommand) {
-          case CastCommand.connect: {
-            setShowQrCode(false);
-            setCastState(CastState.None);
-            if (
-              !(await DeviceManager.isPreviouslyConnectedDevice(
-                castInfo.deviceInfo?.device_id ?? ''
-              ))
-            ) {
-              setDisplayOnboarding(true);
-              await DeviceManager.addPreviouslyConnectedDeviceId(
-                castInfo.deviceInfo?.device_id ?? ''
-              );
-            } else {
-              setDisplayOnboarding(false);
-            }
-            break;
-          }
-
-          case CastCommand.castListArtwork: {
-            setShowQrCode(false);
-            setDisplayOnboarding(false);
-            if (castState === CastState.Artwork) {
-              return;
-            }
-
-            setCastState(CastState.Artwork);
-            if (castState === CastState.None) {
-              router.push('/playlist');
-            } else {
-              router.replace('/playlist');
-            }
-            disableBackChanged();
-            break;
-          }
-
-          case CastCommand.castExhibition: {
-            setShowQrCode(false);
-            setDisplayOnboarding(false);
-            if (castState === CastState.Exhibition) {
-              return;
-            }
-
-            setCastState(CastState.Exhibition);
-            if (castState === CastState.None) {
-              router.push('/exhibitions');
-            } else {
-              router.replace('/exhibitions');
-            }
-            disableBackChanged();
-
-            break;
-          }
-
-          case CastCommand.castDaily: {
-            setShowQrCode(false);
-            setDisplayOnboarding(false);
-            if (castState === CastState.Daily) {
-              return;
-            }
-
-            setCastState(CastState.Daily);
-            if (castState === CastState.None) {
-              router.push('/daily');
-            } else {
-              router.replace('/daily');
-            }
-            disableBackChanged();
-            break;
-          }
-
-          default: {
-            if (castInfo.dataChecked) {
-              setShowQrCode(true);
-            }
-            break;
-          }
-        }
-      };
-      handleCastCommand().catch((error: unknown) => {
-        console.error(error);
-      });
-    } else {
-      if (castState !== CastState.None && castState !== CastState.Daily) {
-        localStorage.setItem(
-          LocalStorageItem.doResetMixpanelAfterTracking as string,
-          'true'
-        );
-        // Disconnect
-        setCastState(CastState.None);
-        router.back();
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [castInfo]);
-
-  useEffect(() => {
     if (showQrCode) {
       const timeoutID = setTimeout(() => {
         setShowQrCode(false);
@@ -324,7 +132,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         onLoad={() => {
           console.log('loaded');
         }}></Script>
-      {displayOnboarding && <OnboardingModal />}
       {isDisplayWebAction && (
         <div
           style={{

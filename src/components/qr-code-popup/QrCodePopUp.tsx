@@ -3,43 +3,19 @@
 import { AppContext } from '@/context/AppContext';
 import { Daily } from '@/models';
 import useDailies, { getDelayTime } from '@/services/qrCodePopUpService';
-import DeviceManager from '@/utils/DeviceManager';
 import Image from 'next/image';
-import QRCode from 'qrcode.react';
 import { useContext, useEffect, useState } from 'react';
 
 const QrCodePopUp = () => {
   const context = useContext(AppContext);
-  const [branchLink, setBranchLink] = useState('');
   const [currentDaily, setCurrentDaily] = useState<Daily>();
   const [nextArtwork, setNextArtwork] = useState<number>(0);
 
   const { screenRatio } = context?.deviceRotation ?? {
     screenRatio: 1,
   };
-  const { locationID, topicID } = context?.websocketData ?? {};
 
   const dailies = useDailies();
-
-  useEffect(() => {
-    if (locationID && topicID) {
-      DeviceManager.setLocationId(locationID);
-      DeviceManager.setTopicId(topicID);
-      const generateBranchLink = async () => {
-        try {
-          const url = await DeviceManager.getOrGenerateBranchLink();
-          if (url) {
-            setBranchLink(url);
-          }
-        } catch (error) {
-          console.log(error);
-        }
-      };
-      generateBranchLink().catch((error: unknown) => {
-        console.log(error);
-      });
-    }
-  }, [locationID, topicID]);
 
   useEffect(() => {
     if (dailies.length > 0) {
@@ -115,21 +91,7 @@ const QrCodePopUp = () => {
           display: 'flex',
           gap: screenRatio * 20,
           alignItems: 'flex-end',
-        }}>
-        {branchLink ? (
-          <QRCode value={branchLink} size={screenRatio * 86}></QRCode>
-        ) : (
-          <p style={{ width: screenRatio * 86, height: screenRatio * 86 }}>
-            Connecting...
-          </p>
-        )}
-        <div style={{ width: screenRatio * 500 }}>
-          <p style={{ width: '40%' }}>
-            Get the Feral File mobile app to browse 15,000+ original artworks,
-            and choose what to display on your TV.
-          </p>
-        </div>
-      </div>
+        }}></div>
     </div>
   );
 };
