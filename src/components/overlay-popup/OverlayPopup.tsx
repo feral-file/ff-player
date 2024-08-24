@@ -44,9 +44,10 @@ const OverlayPopup = () => {
         lastEventTime.current = now;
         if (AIRecordedKeyCodes.includes(event.keyCode as KeyCodes)) {
           if (showQrCode) {
-            router.push('/ai-artwork');
+            handleNavigateAIArtwork();
+          } else {
+            setShowQrCode(!showQrCode);
           }
-          setShowQrCode(!showQrCode);
           return;
         }
 
@@ -72,8 +73,7 @@ const OverlayPopup = () => {
             showQrCode &&
             microphoneStateRef.current === MicrophoneState.Active
           ) {
-            setShowQrCode(false);
-            router.push('/ai-artwork');
+            handleNavigateAIArtwork();
           }
         }
       }
@@ -98,6 +98,7 @@ const OverlayPopup = () => {
 
   const handleNavigateAIArtwork = () => {
     setShowQrCode(false);
+    microphoneStateRef.current = MicrophoneState.Inactive;
     router.push('/ai-artwork');
   };
 
