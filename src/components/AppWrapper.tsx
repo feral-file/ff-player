@@ -6,6 +6,7 @@ import {
   LocalStorageItem,
   AIRecordedKeyCodes,
   KeyCodes,
+  NavigationKeyCodes,
 } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
@@ -29,53 +30,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     rotateRadius: 0,
   };
   const [showQrCode, setShowQrCode] = useState<boolean>(true);
-  const lastEventTime = useRef(0);
   const [isDisplayWebAction, setIsDisplayWebAction] = useState<boolean>(false);
-
-  // Handle keydown event
-  useEffect(() => {
-    const handleKeyDown = () => {
-      setShowQrCode(!showQrCode);
-    };
-
-    EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
-    EventEmitter.subscribe(Event.toggleQrCode, handleKeyDown);
-
-    return () => {
-      EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
-    };
-  }, [showQrCode]);
-
-  // Add event listener for press button 0 to toggle QR code
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const now = Date.now();
-      const minInterval = 200; // Minimum interval between events in milliseconds
-
-      if (now - lastEventTime.current > minInterval) {
-        lastEventTime.current = now;
-        if (AIRecordedKeyCodes.includes(event.keyCode as KeyCodes)) {
-          setShowQrCode(false);
-          router.push('/ai-artwork');
-          return;
-        }
-
-        // Toggle QR code when user press Enter
-        if ((event.key as KeyDown) === KeyDown.enter) {
-          console.log('Toggle QR Code');
-          setShowQrCode(!showQrCode);
-        }
-      }
-    };
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', handleKeyDown);
-    }
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showQrCode]);
 
   useEffect(() => {
     const platform = localStorage.getItem(LocalStorageItem.platform);

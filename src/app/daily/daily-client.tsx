@@ -70,6 +70,10 @@ const DailyClient: React.FC = () => {
     handleCastDaily().catch((error: unknown) => {
       console.error(error);
     });
+
+    return () => {
+      clearTimer();
+    };
   }, []);
 
   return (

@@ -6,10 +6,19 @@ export enum KeyCodes {
   audioVolumeMute = 0x00100000a11,
   enter = 0x0010000000d,
   select = 4294968588,
+
+  // For LG TV
   red = 403,
   green = 404,
   yellow = 405,
   blue = 406,
+
+  left = 37,
+  up = 38,
+  right = 39,
+  down = 40,
+
+  back = 461,
 }
 
 export const IgnoreKeyCodes = [
@@ -24,6 +33,13 @@ export const AIRecordedKeyCodes = [
   KeyCodes.green,
   KeyCodes.yellow,
   KeyCodes.blue,
+];
+
+export const NavigationKeyCodes = [
+  KeyCodes.left,
+  KeyCodes.up,
+  KeyCodes.right,
+  KeyCodes.down,
 ];
 
 export enum KeyDown {

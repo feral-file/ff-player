@@ -4,14 +4,27 @@ import { AppContext } from '@/context/AppContext';
 import { Daily } from '@/models';
 import useDailies, { getDelayTime } from '@/services/qrCodePopUpService';
 import Image from 'next/image';
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import Microphone, { MicrophoneState } from '../microphone/Microphone';
 import { useRouter } from 'next/navigation';
+import {
+  AIRecordedKeyCodes,
+  KeyCodes,
+  KeyDown,
+  NavigationKeyCodes,
+} from '@/constants';
+import { set } from 'date-fns';
 
 const OverlayPopup = () => {
   const context = useContext(AppContext);
   const [currentDaily, setCurrentDaily] = useState<Daily>();
   const [nextArtwork, setNextArtwork] = useState<number>(0);
+  const [showQrCode, setShowQrCode] = useState<boolean>(true);
+  const [microphoneState, setMicrophoneState] = useState<MicrophoneState>(
+    MicrophoneState.Inactive
+  );
+
+  const lastEventTime = useRef(0);
 
   const { screenRatio } = context?.deviceRotation ?? {
     screenRatio: 1,
@@ -19,6 +32,52 @@ const OverlayPopup = () => {
 
   const dailies = useDailies();
   const router = useRouter();
+
+  // Add event listener for press button 0 to toggle QR code
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const now = Date.now();
+      const minInterval = 200; // Minimum interval between events in milliseconds
+
+      if (now - lastEventTime.current > minInterval) {
+        lastEventTime.current = now;
+        if (AIRecordedKeyCodes.includes(event.keyCode as KeyCodes)) {
+          setShowQrCode(false);
+          router.push('/ai-artwork');
+          return;
+        }
+
+        if (NavigationKeyCodes.includes(event.keyCode as KeyCodes)) {
+          setMicrophoneState(MicrophoneState.Active);
+          return;
+        }
+
+        if (KeyCodes.back === (event.keyCode as KeyCodes)) {
+          if (showQrCode) {
+            setShowQrCode(false);
+            return;
+          }
+
+          router.back();
+          return;
+        }
+
+        // Toggle QR code when user press Enter
+        if ((event.key as KeyDown) === KeyDown.enter) {
+          console.log('Toggle QR Code');
+          setShowQrCode(!showQrCode);
+        }
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showQrCode]);
 
   useEffect(() => {
     if (dailies.length > 0) {
@@ -40,7 +99,7 @@ const OverlayPopup = () => {
         left: 0,
         backgroundColor: '#2e2e2e',
         borderRadius: `0 20px 0 0`,
-        display: 'flex',
+        display: showQrCode ? 'flex' : 'none',
         flexDirection: 'column',
         padding: screenRatio * 40,
         gap: screenRatio * 40,
@@ -99,10 +158,7 @@ const OverlayPopup = () => {
           gap: screenRatio * 20,
           alignItems: 'center',
         }}>
-        <Microphone
-          onClick={handleNavigateAIArtwork}
-          state={MicrophoneState.Inactive}
-        />
+        <Microphone onClick={handleNavigateAIArtwork} state={microphoneState} />
         <div style={{ width: screenRatio * 400 }}>
           <p style={{ width: '40%' }}>
             Find the perfect artwork for any situation.
