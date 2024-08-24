@@ -5,8 +5,10 @@ import { Daily } from '@/models';
 import useDailies, { getDelayTime } from '@/services/qrCodePopUpService';
 import Image from 'next/image';
 import { useContext, useEffect, useState } from 'react';
+import Microphone, { MicrophoneState } from '../microphone/Microphone';
+import { useRouter } from 'next/navigation';
 
-const QrCodePopUp = () => {
+const OverlayPopup = () => {
   const context = useContext(AppContext);
   const [currentDaily, setCurrentDaily] = useState<Daily>();
   const [nextArtwork, setNextArtwork] = useState<number>(0);
@@ -16,6 +18,7 @@ const QrCodePopUp = () => {
   };
 
   const dailies = useDailies();
+  const router = useRouter();
 
   useEffect(() => {
     if (dailies.length > 0) {
@@ -24,6 +27,10 @@ const QrCodePopUp = () => {
       setNextArtwork(nextArtwork);
     }
   }, [dailies]);
+
+  const handleNavigateAIArtwork = () => {
+    router.push('/ai-artwork');
+  };
 
   return (
     <div
@@ -90,10 +97,20 @@ const QrCodePopUp = () => {
         style={{
           display: 'flex',
           gap: screenRatio * 20,
-          alignItems: 'flex-end',
-        }}></div>
+          alignItems: 'center',
+        }}>
+        <Microphone
+          onClick={handleNavigateAIArtwork}
+          state={MicrophoneState.Inactive}
+        />
+        <div style={{ width: screenRatio * 400 }}>
+          <p style={{ width: '40%' }}>
+            Find the perfect artwork for any situation.
+          </p>
+        </div>
+      </div>
     </div>
   );
 };
 
-export default QrCodePopUp;
+export default OverlayPopup;

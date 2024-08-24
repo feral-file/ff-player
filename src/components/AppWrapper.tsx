@@ -13,7 +13,7 @@ import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Orientation } from '@/utils/types';
 import { useRouter } from 'next/navigation';
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import QrCodePopUp from './qr-code-popup/QrCodePopUp';
+import OverlayPopup from './overlay-popup/OverlayPopup';
 import Script from 'next/script';
 import FullScreen from './fullscreen';
 
@@ -28,7 +28,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     screenOrientation: Orientation.horizontal,
     rotateRadius: 0,
   };
-  const [showQrCode, setShowQrCode] = useState<boolean>(false);
+  const [showQrCode, setShowQrCode] = useState<boolean>(true);
   const lastEventTime = useRef(0);
   const [isDisplayWebAction, setIsDisplayWebAction] = useState<boolean>(false);
 
@@ -117,7 +117,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (showQrCode) {
       const timeoutID = setTimeout(() => {
         setShowQrCode(false);
-      }, 30000);
+      }, 10000);
 
       return () => {
         clearTimeout(timeoutID);
@@ -174,7 +174,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        {showQrCode && <QrCodePopUp></QrCodePopUp>}
+        {showQrCode && <OverlayPopup></OverlayPopup>}
       </div>
     </>
   );

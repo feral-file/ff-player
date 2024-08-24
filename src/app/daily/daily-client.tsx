@@ -1,13 +1,10 @@
 'use client';
 
-import Microphone from '@/components/Microphone';
 import ArtworkPlayer from '../../components/ArtworkPlayer';
 import DailyService, { DailyInstanceService } from '@/services/DailyService';
 import { getDelayTime } from '@/services/qrCodePopUpService';
 import { useContext, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { AppContext } from '@/context/AppContext';
-import { LocalStorageItem } from '@/constants';
 import { Daily } from '@/models';
 
 const DailyClient: React.FC = () => {
@@ -23,10 +20,7 @@ const DailyClient: React.FC = () => {
   const [artworkID, setArtworkID] = useState<string | undefined>();
   const [artworkName, setArtworkName] = useState<string | undefined>();
 
-  const router = useRouter();
-
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
-  const [isDisplayWebAction, setIsDisplayWebAction] = useState<boolean>(false);
 
   useEffect(() => {
     // Handle cast daily
@@ -78,15 +72,6 @@ const DailyClient: React.FC = () => {
     });
   }, []);
 
-  useEffect(() => {
-    const platform = localStorage.getItem(LocalStorageItem.platform);
-    setIsDisplayWebAction(!platform);
-  }, [isDisplayWebAction]);
-
-  const handleNavigateAIArtwork = () => {
-    router.push('/ai-artwork');
-  };
-
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
       {castPreviewURL && (
@@ -95,17 +80,6 @@ const DailyClient: React.FC = () => {
           artworkID={artworkID}
           artworkName={artworkName}
         />
-      )}
-      {isDisplayWebAction && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: 20,
-            right: 20,
-            cursor: 'pointer',
-          }}>
-          <Microphone onClick={handleNavigateAIArtwork} />
-        </div>
       )}
     </div>
   );
