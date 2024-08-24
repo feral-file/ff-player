@@ -8,9 +8,8 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppContext } from '@/context/AppContext';
 import { LocalStorageItem } from '@/constants';
-
-import { Daily } from '@/utils/types';
 import { CastingArtworkType } from '@/utils/mixpanel';
+import { Daily } from '@/models';
 
 const DailyClient: React.FC = () => {
   const context = useContext(AppContext);
@@ -35,7 +34,7 @@ const DailyClient: React.FC = () => {
     if (typeof window !== 'undefined') {
       try {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-        (window as any).AppState.postMessage(
+        (window as any).AppState?.postMessage(
           JSON.stringify({
             handler: 'backAbleChanged',
             data: false,

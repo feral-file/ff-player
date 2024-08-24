@@ -1,4 +1,5 @@
 import { LocalStorageItem } from '@/constants';
+import { AppContext } from '@/context/AppContext';
 import mixpanel, {
   CastArtworkEventProperties,
   CastingArtworkType,
@@ -23,7 +24,7 @@ import {
 } from '@/utils/types';
 import Hls from 'hls.js';
 import Image from 'next/image';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -37,6 +38,10 @@ const ArtworkPlayer = ({
   castingType?: CastingArtworkType;
   keyboardCode?: number;
 }) => {
+  const context = useContext(AppContext);
+  const { screenRatio } = context?.deviceRotation ?? {
+    screenRatio: 1,
+  };
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -217,12 +222,18 @@ const ArtworkPlayer = ({
               }}>
               <Image
                 src="/ff-loading-still-v2.svg"
-                width={360}
-                height={360}
+                width={430 * screenRatio}
+                height={288 * screenRatio}
                 objectFit="contain"
                 alt="Loading"></Image>
             </div>
-            <p>Loading</p>
+            <p
+              style={{
+                fontSize: screenRatio * 28,
+                marginTop: 16 * screenRatio,
+              }}>
+              Loading
+            </p>
           </div>
         </div>
       )}
@@ -252,7 +263,6 @@ const ArtworkPlayer = ({
           style={{ width: '100%', height: '100%' }}
           autoPlay
           loop
-          controls
           playsInline
           crossOrigin="anonymous"></video>
       )}

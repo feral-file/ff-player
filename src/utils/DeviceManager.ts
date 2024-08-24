@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import createBranchLink from './createBranchLink';
 import {
-  AndroidConfigService,
+  GoogleConfigService,
   LgConfigService,
   PlatformConfigService,
   TizenConfigService,
@@ -27,8 +27,8 @@ class DeviceManager {
       `creating PlatformConfigService instance for platform: ${platform ?? ''}`
     );
     switch (platform) {
-      case Platform.android:
-        return new AndroidConfigService();
+      case Platform.google:
+        return new GoogleConfigService();
       case Platform.tizen:
         return new TizenConfigService();
       case Platform.lg:

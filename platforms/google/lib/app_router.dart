@@ -13,12 +13,10 @@ class AppRouter {
       case inAppWebViewScreen:
       case homePage:
         final url = injector<RemoteConfigService>().getConfig(
-            ConfigGroup.tizen,
+            ConfigGroup.google,
             ConfigKey.url,
-            'https://feralfile-display-prod.pages.dev?platform=tizen');
-        final gitHash = injector<RemoteConfigService>()
-            .getConfig(ConfigGroup.tizen, ConfigKey.gitHash, '');
-        final payload = InAppWebViewPayload(url, '${url}_$gitHash');
+            'https://display.feralfile.com/?platform=google');
+        final payload = InAppWebViewPayload(url, url);
         return PageTransition(
           type: PageTransitionType.fade,
           curve: Curves.easeIn,

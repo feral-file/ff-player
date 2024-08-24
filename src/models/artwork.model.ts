@@ -16,6 +16,8 @@ export interface Artwork {
   thumbnailURI?: string;
   series?: Series;
   metadata?: ArtworkMetadata;
+  artistAlias?: string;
+  swap?: Swap;
 }
 
 interface ArtworkMetadata {
@@ -24,4 +26,11 @@ interface ArtworkMetadata {
   alternativePreviewURI?: string;
   viewableAt?: string;
   ts044MergedIndexes?: number[];
+}
+
+export interface Swap {
+  id: string;
+  blockchainType: string;
+  contractAddress: string;
+  token: string;
 }

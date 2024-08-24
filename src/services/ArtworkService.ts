@@ -1,7 +1,6 @@
-import { Artwork } from '../utils/types';
 import { ApolloClient, gql, NormalizedCacheObject } from '@apollo/client';
 import createApolloClient from '@/utils/ApolloClient';
-import { IndexerToken } from '@/models';
+import { Artwork, IndexerToken } from '@/models';
 import axiosInstance from './axiosService';
 import { removeArtistAliasSuffixes } from '@/utils/ui/formatAlias';
 

@@ -13,7 +13,7 @@ import DeviceManager from '@/utils/DeviceManager';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
@@ -45,10 +45,16 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [showQrCode, setShowQrCode] = useState<boolean>(false);
   const lastEventTime = useRef(0);
   const [isDisplayWebAction, setIsDisplayWebAction] = useState<boolean>(false);
+  const searchParams = useSearchParams();
 
   // Initialize mixpanel
   useEffect(() => {
+    const platform = searchParams.get('platform') ?? '';
+    if (platform) {
+      localStorage.setItem('platform', platform);
+    }
     initMixpanel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Initialize platform events
@@ -191,7 +197,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       const disableBackChanged = () => {
         try {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-          (window as any).AppState.postMessage(
+          (window as any).AppState?.postMessage(
             JSON.stringify({
               handler: 'backAbleChanged',
               data: true,
@@ -270,7 +276,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     } else {
       if (castState !== CastState.None) {
         localStorage.setItem(
-          LocalStorageItem.doResetMixpanelAfterTracking,
+          LocalStorageItem.doResetMixpanelAfterTracking as string,
           'true'
         );
         // Disconnect
@@ -329,12 +335,12 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               (rotateRadius || 0) % 180 === 0)
               ? '100vh'
               : '100vw',
-          transform: `rotate(${(-rotateRadius || 0).toString()}deg) `,
+          transform: `rotate(${(rotateRadius || 0).toString()}deg) `,
           transformOrigin:
             (screenOrientation === Orientation.vertical &&
-              (rotateRadius || 0) % 360 !== 90) ||
+              (rotateRadius || 0) % 360 === 90) ||
             (screenOrientation === Orientation.horizontal &&
-              (rotateRadius || 0) % 360 !== 90)
+              (rotateRadius || 0) % 360 === 90)
               ? '50vw center'
               : 'center 50vh',
           transition: 'transform 0.2s',

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { Artwork, ViewMode } from '@/utils/types';
+import { ViewMode } from '@/utils/types';
 
 import styles from './home.module.scss';
 import clsx from 'clsx';
@@ -12,6 +12,7 @@ import { BrowserInfo, detect } from 'detect-browser';
 import ArtworkService from '@/services/ArtworkService';
 import DeviceManager from '@/utils/DeviceManager';
 import { AppContext } from '@/context/AppContext';
+import { Artwork } from '@/models';
 
 export default function HomeClient() {
   const context = useContext(AppContext);
