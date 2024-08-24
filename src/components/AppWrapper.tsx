@@ -1,19 +1,10 @@
 'use client';
 
-import {
-  AppSettings,
-  KeyDown,
-  LocalStorageItem,
-  AIRecordedKeyCodes,
-  KeyCodes,
-  NavigationKeyCodes,
-} from '@/constants';
+import { AppSettings, LocalStorageItem } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
-import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Orientation } from '@/utils/types';
-import { useRouter } from 'next/navigation';
-import React, { useContext, useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import OverlayPopup from './overlay-popup/OverlayPopup';
 import Script from 'next/script';
 import FullScreen from './fullscreen';
@@ -24,12 +15,10 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return <div></div>;
   }
 
-  const router = useRouter();
   const { screenOrientation, rotateRadius } = context.deviceRotation ?? {
     screenOrientation: Orientation.horizontal,
     rotateRadius: 0,
   };
-  const [showQrCode, setShowQrCode] = useState<boolean>(true);
   const [isDisplayWebAction, setIsDisplayWebAction] = useState<boolean>(false);
 
   useEffect(() => {
@@ -67,18 +56,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       window.location.reload();
     }
   };
-
-  useEffect(() => {
-    if (showQrCode) {
-      const timeoutID = setTimeout(() => {
-        setShowQrCode(false);
-      }, 10000);
-
-      return () => {
-        clearTimeout(timeoutID);
-      };
-    }
-  }, [showQrCode]);
 
   return (
     <>
@@ -129,7 +106,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        {showQrCode && <OverlayPopup></OverlayPopup>}
+        <OverlayPopup></OverlayPopup>
       </div>
     </>
   );

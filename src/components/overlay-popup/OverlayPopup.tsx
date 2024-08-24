@@ -13,7 +13,6 @@ import {
   KeyDown,
   NavigationKeyCodes,
 } from '@/constants';
-import { set } from 'date-fns';
 
 const OverlayPopup = () => {
   const context = useContext(AppContext);
@@ -90,6 +89,18 @@ const OverlayPopup = () => {
   const handleNavigateAIArtwork = () => {
     router.push('/ai-artwork');
   };
+
+  useEffect(() => {
+    if (showQrCode) {
+      const timeoutID = setTimeout(() => {
+        setShowQrCode(false);
+      }, 10000);
+
+      return () => {
+        clearTimeout(timeoutID);
+      };
+    }
+  }, [showQrCode]);
 
   return (
     <div
