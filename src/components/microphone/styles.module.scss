@@ -1,0 +1,18 @@
+.microphoneContainer {
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: 1px solid white;
+  cursor: pointer;
+  &:hover,
+  &:focus {
+    outline-width: 3px;
+  }
+}
+
+.active {
+  outline-width: 3px;
+}

@@ -6,8 +6,10 @@ import { ConversationService } from '@/services/conversationService';
 import { useEffect, useRef, useState } from 'react';
 import styles from './styles.module.scss';
 import clsx from 'clsx';
-import Microphone from '@/components/Microphone';
 import { AIRecordedKeyCodes, KeyCodes, LocalStorageItem } from '@/constants';
+import Microphone, {
+  MicrophoneState,
+} from '@/components/microphone/Microphone';
 
 declare global {
   interface Window {
@@ -183,6 +185,7 @@ export default function AIArtworkClient() {
     try {
       console.log('Text record: ', text);
       setMessage(text);
+      setSeriesID('');
       const aiArtwork = await conversationService.current.getConversation(text);
       console.log('AI Artwork:', aiArtwork);
       if (!aiArtwork) {
@@ -251,6 +254,7 @@ export default function AIArtworkClient() {
             onClick={() => {
               handleOnRecord(true);
             }}
+            state={MicrophoneState.Active}
           />
         </div>
       )}

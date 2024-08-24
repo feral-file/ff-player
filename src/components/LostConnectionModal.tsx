@@ -1,7 +1,7 @@
 'use client';
 
 import { AppContext } from '@/context/AppContext';
-import { useContext, useEffect, useState } from 'react';
+import { useContext } from 'react';
 import MessageModal from './MessageModal';
 
 export default function LostConnectionModal() {
@@ -10,26 +10,14 @@ export default function LostConnectionModal() {
     return <p>There is no context.</p>;
   }
 
-  const [isOnline, setIsOnline] = useState<boolean>(true);
-
-  useEffect(() => {
-    if (
-      !isOnline &&
-      context.isOnline &&
-      !context.websocketData.isDisconnected
-    ) {
-      setTimeout(() => {
-        window.location.reload();
-      }, 0);
-    }
-    setIsOnline(context.isOnline && !context.websocketData.isDisconnected);
-  }, [context, isOnline]);
+  const isOnline = context.isOnline;
+  const screenRatio = context.deviceRotation?.screenRatio ?? 1;
 
   return (
     <div>
       {!isOnline && (
         <MessageModal
-          screenRatio={1}
+          screenRatio={screenRatio}
           message="Internet connection lost. Reconnecting..."
         />
       )}
