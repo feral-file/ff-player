@@ -23,11 +23,7 @@ export default function Microphone({
         )}
         onClick={onClick}>
         <Image
-          src={
-            state === MicrophoneState.Active
-              ? '/images/microphone-active.svg'
-              : '/images/microphone-inactive.svg'
-          }
+          src={'/images/microphone-inactive.svg'}
           alt="fullscreen"
           width={27}
           height={43}
