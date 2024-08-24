@@ -136,48 +136,6 @@ const ArtworkPlayer = ({
         justifyContent: 'center',
         position: 'relative',
       }}>
-      {(previewType === null || loading) && (
-        <div
-          style={{
-            width: '100%',
-            height: '100%',
-            backgroundColor: '#000000',
-            color: '#ffffff',
-            display: 'flex',
-            position: 'absolute',
-            zIndex: 2,
-            justifyContent: 'center',
-            alignItems: 'center',
-            fontSize: 32,
-          }}>
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              position: 'relative',
-            }}>
-            <div
-              style={{
-                objectFit: 'contain',
-                position: 'relative',
-              }}>
-              <Image
-                src="/ff-loading-still-v2.svg"
-                width={430 * screenRatio}
-                height={288 * screenRatio}
-                objectFit="contain"
-                alt="Loading"></Image>
-            </div>
-            <p
-              style={{
-                fontSize: screenRatio * 28,
-                marginTop: 16 * screenRatio,
-              }}>
-              Loading
-            </p>
-          </div>
-        </div>
-      )}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (
         <div style={{ width: '100%', height: '100%', objectFit: 'contain' }}>
           <Image

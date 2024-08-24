@@ -18,7 +18,7 @@ const OverlayPopup = () => {
   const context = useContext(AppContext);
   const [currentDaily, setCurrentDaily] = useState<Daily>();
   const [nextArtwork, setNextArtwork] = useState<number>(0);
-  const [showQrCode, setShowQrCode] = useState<boolean>(true);
+  const [showQrCode, setShowQrCode] = useState<boolean>(false);
   const [microphoneState, setMicrophoneState] = useState<MicrophoneState>(
     MicrophoneState.Inactive
   );
@@ -91,8 +91,11 @@ const OverlayPopup = () => {
   useEffect(() => {
     if (dailies.length > 0) {
       setCurrentDaily(dailies[0]);
+      setShowQrCode(true);
       const nextArtwork = getDelayTime(dailies) / 3600000;
       setNextArtwork(nextArtwork);
+    } else {
+      setShowQrCode(false);
     }
   }, [dailies]);
 
@@ -167,13 +170,13 @@ const OverlayPopup = () => {
           <p>
             {currentDaily?.token?.asset.metadata.project.latest.artistName
               ? currentDaily.token.asset.metadata.project.latest.artistName
-              : '--'}
+              : ''}
             ,
           </p>
           <p style={{ fontStyle: 'italic', fontWeight: 'bold' }}>
             {currentDaily?.token?.asset.metadata.project.latest.title
               ? currentDaily.token.asset.metadata.project.latest.title
-              : '--'}
+              : ''}
           </p>
         </div>
       </div>
