@@ -5,7 +5,6 @@ import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import { Orientation } from '@/utils/types';
 import React, { useContext, useEffect, useState } from 'react';
-import OverlayPopup from './overlay-popup/OverlayPopup';
 import Script from 'next/script';
 import FullScreen from './fullscreen';
 
@@ -106,7 +105,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        <OverlayPopup></OverlayPopup>
       </div>
     </>
   );

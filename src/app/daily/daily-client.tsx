@@ -6,6 +6,7 @@ import { getDelayTime } from '@/services/qrCodePopUpService';
 import { useContext, useEffect, useRef, useState } from 'react';
 import { AppContext } from '@/context/AppContext';
 import { Daily } from '@/models';
+import OverlayPopup from '@/components/overlay-popup/OverlayPopup';
 
 const DailyClient: React.FC = () => {
   const context = useContext(AppContext);
@@ -85,6 +86,8 @@ const DailyClient: React.FC = () => {
           artworkName={artworkName}
         />
       )}
+
+      <OverlayPopup></OverlayPopup>
     </div>
   );
 };
