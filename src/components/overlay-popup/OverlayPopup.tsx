@@ -32,6 +32,8 @@ const OverlayPopup = () => {
   const dailies = useDailies();
   const router = useRouter();
 
+  const microphoneStateRef = useRef<MicrophoneState>(MicrophoneState.Inactive);
+
   // Add event listener for press button 0 to toggle QR code
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -41,13 +43,16 @@ const OverlayPopup = () => {
       if (now - lastEventTime.current > minInterval) {
         lastEventTime.current = now;
         if (AIRecordedKeyCodes.includes(event.keyCode as KeyCodes)) {
-          setShowQrCode(false);
-          router.push('/ai-artwork');
+          if (showQrCode) {
+            router.push('/ai-artwork');
+          }
+          setShowQrCode(!showQrCode);
           return;
         }
 
         if (NavigationKeyCodes.includes(event.keyCode as KeyCodes)) {
           setMicrophoneState(MicrophoneState.Active);
+          microphoneStateRef.current = MicrophoneState.Active;
           return;
         }
 
@@ -63,8 +68,13 @@ const OverlayPopup = () => {
 
         // Toggle QR code when user press Enter
         if ((event.key as KeyDown) === KeyDown.enter) {
-          console.log('Toggle QR Code');
-          setShowQrCode(!showQrCode);
+          if (
+            showQrCode &&
+            microphoneStateRef.current === MicrophoneState.Active
+          ) {
+            setShowQrCode(false);
+            router.push('/ai-artwork');
+          }
         }
       }
     };
@@ -87,6 +97,7 @@ const OverlayPopup = () => {
   }, [dailies]);
 
   const handleNavigateAIArtwork = () => {
+    setShowQrCode(false);
     router.push('/ai-artwork');
   };
 
@@ -99,6 +110,8 @@ const OverlayPopup = () => {
       return () => {
         clearTimeout(timeoutID);
       };
+    } else {
+      setMicrophoneState(MicrophoneState.Inactive);
     }
   }, [showQrCode]);
 
