@@ -59,21 +59,10 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const setDeviceName = () => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-      (window as any).webOS.service.request(
-        'luna://com.webos.service.systemservice',
-        {
-          method: 'deviceInfo',
-          parameters: {},
-          onSuccess: function (result: DeviceInfo) {
-            localStorage.setItem(LocalStorageItem.name, result.modelName);
-          },
-          onFailure: function (error: unknown) {
-            console.error(
-              'Failed to get device info: ' + JSON.stringify(error)
-            );
-          },
-        }
-      );
+      (window as any).webOS.deviceInfo((deviceInfo: DeviceInfo) => {
+        const deviceName = `LG-${deviceInfo.modelName}`;
+        localStorage.setItem(LocalStorageItem.name, deviceName);
+      });
     } catch (error) {
       console.log(error);
     }
