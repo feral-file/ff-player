@@ -204,13 +204,37 @@ export class LgConfigService implements PlatformConfigService {
   }
 
   async registerDB() {
+    // Clear the existing database kind (if it exists)
+    await new Promise<void>((resolve, reject) => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+      (window as any).webOS.service.request('luna://com.palm.db', {
+        method: 'delKind',
+        parameters: {
+          id: `com.feralfile.display:1`, // The ID of the kind you want to delete
+        },
+        onSuccess: function (response: unknown) {
+          console.log('Kind deleted successfully:', response);
+          resolve();
+        },
+        onFailure: function (error: { errorCode: number }) {
+          if (error.errorCode === 404) {
+            console.log('Kind not found, proceeding to register.');
+            resolve(); // Proceed if the kind does not exist
+          } else {
+            console.error('Failed to delete kind:', error);
+            reject(new Error('Failed to delete kind.'));
+          }
+        },
+      });
+    });
+
     // Register the kind first
     await new Promise<void>((resolve, reject) => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
       (window as any).webOS.service.request('luna://com.palm.db', {
         method: 'putKind',
         parameters: {
-          id: `com.feralfile.display:2`, // Unique identifier for your kind
+          id: `com.feralfile.display:1`, // Unique identifier for your kind
           owner: 'com.feralfile.display', // Your app's owner ID
           indexes: [
             { name: 'key', props: [{ name: 'key' }] }, // Define the properties that will be indexed
@@ -270,7 +294,8 @@ export class LgConfigService implements PlatformConfigService {
               'Success response from LG:',
               key,
               ':',
-              response.results[response.results.length - 1].value
+              response.results[response.results.length - 1].value,
+              response.results.length
             );
 
             resolve(response.results[response.results.length - 1].value);
