@@ -11,26 +11,31 @@ export default function LostConnectionModal() {
   }
 
   const [isOnline, setIsOnline] = useState<boolean>(true);
+  const { isDisconnected } = context.websocketData;
+  const { screenRatio } = context.deviceRotation ?? { screenRatio: 1 };
 
   useEffect(() => {
-    if (
-      !isOnline &&
-      context.isOnline &&
-      !context.websocketData.isDisconnected
-    ) {
+    if (!isOnline && context.isOnline) {
       setTimeout(() => {
         window.location.reload();
-      }, 0);
+      }, 100);
     }
-    setIsOnline(context.isOnline && !context.websocketData.isDisconnected);
-  }, [context, isOnline]);
+    setIsOnline(context.isOnline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context.isOnline]);
 
   return (
     <div>
       {!isOnline && (
         <MessageModal
-          screenRatio={1}
+          screenRatio={screenRatio}
           message="Internet connection lost. Reconnecting..."
+        />
+      )}
+      {isOnline && isDisconnected && (
+        <MessageModal
+          screenRatio={screenRatio}
+          message="Connection lost. Trouble communicating with the server. Please wait while attempting to reconnect."
         />
       )}
     </div>
