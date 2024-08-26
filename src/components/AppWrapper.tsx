@@ -63,7 +63,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       if (platform) {
         localStorage.setItem('platform', platform);
       }
-      initMixpanel();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -293,13 +292,18 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   }, [showQrCode]);
 
+  const registerService = () => {
+    if (typeof window !== 'undefined') {
+      // Make sure webOSTV.js is loaded before calling initMixpanel that can get device name for LG TV
+      initMixpanel();
+    }
+  };
+
   return (
     <>
       <Script
         src="/webOSTVjs-1.2.11/webOSTV.js"
-        onLoad={() => {
-          console.log('loaded');
-        }}></Script>
+        onLoad={registerService}></Script>
       {displayOnboarding && <OnboardingModal />}
       <div
         style={{
