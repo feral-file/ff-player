@@ -1,3 +1,4 @@
+import { LocalStorageItem } from '@/constants';
 import axios from 'axios';
 
 const tvAIInstance = axios.create({
@@ -16,8 +17,10 @@ export interface AIArtworkResponse {
 
 export class ConversationService {
   public async getConversation(message: string): Promise<AIArtworkResponse> {
+    const personalization_id = localStorage.getItem(LocalStorageItem.name);
     const response = await tvAIInstance.post('/conversation', {
       message,
+      personalization_id,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access

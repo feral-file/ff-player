@@ -98,6 +98,10 @@ export enum Platform {
   lg = 'lg',
 }
 
+export interface DeviceInfo {
+  modelName: string;
+}
+
 export const AppSettings = {
   VERSION_CHECK_INTERVAL_DURATION: 1000 * 60 * 60, // 1 minutes
   JG_043_EXHIBITION_ID: '46a0f68b-a657-4364-92a0-32a88b65fbd9',

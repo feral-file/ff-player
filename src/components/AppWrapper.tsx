@@ -1,6 +1,6 @@
 'use client';
 
-import { AppSettings, LocalStorageItem } from '@/constants';
+import { AppSettings, DeviceInfo, LocalStorageItem } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import { Orientation } from '@/utils/types';
@@ -56,13 +56,34 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   };
 
+  const setDeviceName = () => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+      (window as any).webOS.service.request(
+        'luna://com.webos.service.systemservice',
+        {
+          method: 'deviceInfo',
+          parameters: {},
+          onSuccess: function (result: DeviceInfo) {
+            localStorage.setItem(LocalStorageItem.name, result.modelName);
+          },
+          onFailure: function (error: unknown) {
+            console.error(
+              'Failed to get device info: ' + JSON.stringify(error)
+            );
+          },
+        }
+      );
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
   return (
     <>
       <Script
         src="/webOSTVjs-1.2.11/webOSTV.js"
-        onLoad={() => {
-          console.log('loaded');
-        }}></Script>
+        onLoad={setDeviceName}></Script>
       {isDisplayWebAction && (
         <div
           style={{
