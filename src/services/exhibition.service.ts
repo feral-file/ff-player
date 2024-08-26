@@ -19,7 +19,7 @@ export class ExhibitionService {
       // Format artist/ curator alias remove suffix
       if (exhibition.curator?.alumniAccount)
         exhibition.curator.alumniAccount.alias = removeArtistAliasSuffixes(
-          exhibition.curator.alumniAccount?.alias ?? ''
+          exhibition.curator.alumniAccount.alias ?? ''
         );
       if (exhibition.artists) {
         exhibition.artists.map(artist => {
