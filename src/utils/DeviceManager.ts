@@ -88,10 +88,24 @@ class DeviceManager {
   public async getName(): Promise<string> {
     try {
       const name = await this.getFromLocalStorage(LocalStorageItem.name);
-      return name ?? 'Unknown';
+      return name ? this.getDeviceNamePrefix() + name : 'Unknown';
     } catch (error) {
       console.error('Error getting device name', error);
       return 'Unknown';
+    }
+  }
+
+  private getDeviceNamePrefix(): string {
+    const platform = localStorage.getItem(LocalStorageItem.platform);
+    switch (platform) {
+      case Platform.google:
+        return 'Google-';
+      case Platform.tizen:
+        return 'Samsung-';
+      case Platform.lg:
+        return 'LG-';
+      default:
+        return '';
     }
   }
 

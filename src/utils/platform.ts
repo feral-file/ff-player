@@ -2,6 +2,7 @@ import { KeyCodes, LocalStorageItem } from '@/constants';
 import DeviceManager from './DeviceManager';
 import { v4 as uuidv4 } from 'uuid';
 import { Event, EventEmitter } from './EventEmitter';
+import { BrowserInfo, detect } from 'detect-browser';
 
 interface DeviceInfo {
   modelName: string;
@@ -179,8 +180,31 @@ export class GoogleConfigService extends TizenConfigService {}
 
 export class WebConfigService implements PlatformConfigService {
   constructor() {
-    const deviceId = uuidv4();
+    const deviceId = this.getOrCreateDeviceId();
     localStorage.setItem(LocalStorageItem.name, deviceId);
+  }
+
+  generateRandomString(length: number): string {
+    const characters =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    const charactersLength = characters.length;
+    for (let i = 0; i < length; i++) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    }
+    return result;
+  }
+
+  getOrCreateDeviceId() {
+    let deviceId = localStorage.getItem('deviceId');
+    if (!deviceId) {
+      const platform = navigator.platform;
+      const browser = detect() as BrowserInfo;
+      const randomString = this.generateRandomString(4);
+
+      deviceId = `${platform}-${browser.name}-${randomString}`;
+    }
+    return deviceId;
   }
   // eslint-disable-next-line @typescript-eslint/require-await
   async getString(key: string): Promise<string | null> {
@@ -257,7 +281,7 @@ export class LgConfigService implements PlatformConfigService {
     try {
       const deviceInfo = await this.getDeviceInfo();
       console.log(`LG Device name: ${deviceInfo.modelName}`);
-      DeviceManager.setName(`LG-${deviceInfo.modelName}`);
+      DeviceManager.setName(deviceInfo.modelName);
     } catch (error) {
       console.error('Error getting device info:', error);
     }
