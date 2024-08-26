@@ -210,7 +210,7 @@ export class LgConfigService implements PlatformConfigService {
       (window as any).webOS.service.request('luna://com.palm.db', {
         method: 'delKind',
         parameters: {
-          id: `com.feralfile.display:1`, // The ID of the kind you want to delete
+          id: `com.feralfile.display:1`,
         },
         onSuccess: function (response: unknown) {
           console.log('Kind deleted successfully:', response);
@@ -219,7 +219,7 @@ export class LgConfigService implements PlatformConfigService {
         onFailure: function (error: { errorCode: number }) {
           if (error.errorCode === 404) {
             console.log('Kind not found, proceeding to register.');
-            resolve(); // Proceed if the kind does not exist
+            resolve();
           } else {
             console.error('Failed to delete kind:', error);
             reject(new Error('Failed to delete kind.'));
@@ -234,10 +234,10 @@ export class LgConfigService implements PlatformConfigService {
       (window as any).webOS.service.request('luna://com.palm.db', {
         method: 'putKind',
         parameters: {
-          id: `com.feralfile.display:1`, // Unique identifier for your kind
-          owner: 'com.feralfile.display', // Your app's owner ID
+          id: `com.feralfile.display:1`,
+          owner: 'com.feralfile.display',
           indexes: [
-            { name: 'key', props: [{ name: 'key' }] }, // Define the properties that will be indexed
+            { name: 'key', props: [{ name: 'key' }] },
             { name: 'value', props: [{ name: 'value' }] },
           ],
         },
@@ -300,7 +300,7 @@ export class LgConfigService implements PlatformConfigService {
 
             resolve(response.results[response.results.length - 1].value);
           } else {
-            resolve(null); // Return null if no matching record is found
+            resolve(null);
           }
         },
         onFailure(error: unknown) {
@@ -339,7 +339,7 @@ export class LgConfigService implements PlatformConfigService {
       });
     } catch (error) {
       console.error('Error in setString:', error);
-      throw error; // Propagate the error to the caller
+      throw error;
     }
   }
 }
