@@ -13,6 +13,7 @@ const QrCodePopUp = () => {
   const [branchLink, setBranchLink] = useState('');
   const [currentDaily, setCurrentDaily] = useState<Daily>();
   const [nextArtwork, setNextArtwork] = useState<number>(0);
+  const [isShowComponent, setIsShowComponent] = useState<boolean>(false);
 
   const { screenRatio } = context?.deviceRotation ?? {
     screenRatio: 1,
@@ -47,6 +48,7 @@ const QrCodePopUp = () => {
       const nextArtwork = getDelayTime(dailies) / 3600000;
       setNextArtwork(nextArtwork);
     }
+    setIsShowComponent(dailies.length > 0);
   }, [dailies]);
 
   return (
@@ -57,7 +59,7 @@ const QrCodePopUp = () => {
         left: 0,
         backgroundColor: '#2e2e2e',
         borderRadius: `0 20px 0 0`,
-        display: 'flex',
+        display: isShowComponent ? 'flex' : 'none',
         flexDirection: 'column',
         padding: screenRatio * 40,
         gap: screenRatio * 40,
@@ -99,14 +101,14 @@ const QrCodePopUp = () => {
         <div style={{ paddingTop: screenRatio * 15 }}>
           <p>
             {currentDaily?.token?.asset.metadata.project.latest.artistName
-              ? currentDaily.token.asset.metadata.project.latest.artistName
-              : '--'}
-            ,
+              ? currentDaily.token.asset.metadata.project.latest.artistName +
+                ','
+              : ''}
           </p>
           <p style={{ fontStyle: 'italic', fontWeight: 'bold' }}>
             {currentDaily?.token?.asset.metadata.project.latest.title
               ? currentDaily.token.asset.metadata.project.latest.title
-              : '--'}
+              : ''}
           </p>
         </div>
       </div>

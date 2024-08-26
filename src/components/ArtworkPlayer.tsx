@@ -24,7 +24,8 @@ import {
 } from '@/utils/types';
 import Hls from 'hls.js';
 import Image from 'next/image';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import Loading from './loading/loading';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -38,10 +39,6 @@ const ArtworkPlayer = ({
   castingType?: CastingArtworkType;
   keyboardCode?: number;
 }) => {
-  const context = useContext(AppContext);
-  const { screenRatio } = context?.deviceRotation ?? {
-    screenRatio: 1,
-  };
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -195,48 +192,7 @@ const ArtworkPlayer = ({
         justifyContent: 'center',
         position: 'relative',
       }}>
-      {(previewType === null || loading) && (
-        <div
-          style={{
-            width: '100%',
-            height: '100%',
-            backgroundColor: '#000000',
-            color: '#ffffff',
-            display: 'flex',
-            position: 'absolute',
-            zIndex: 2,
-            justifyContent: 'center',
-            alignItems: 'center',
-            fontSize: 32,
-          }}>
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              position: 'relative',
-            }}>
-            <div
-              style={{
-                objectFit: 'contain',
-                position: 'relative',
-              }}>
-              <Image
-                src="/ff-loading-still-v2.svg"
-                width={430 * screenRatio}
-                height={288 * screenRatio}
-                objectFit="contain"
-                alt="Loading"></Image>
-            </div>
-            <p
-              style={{
-                fontSize: screenRatio * 28,
-                marginTop: 16 * screenRatio,
-              }}>
-              Loading
-            </p>
-          </div>
-        </div>
-      )}
+      {(previewType === null || loading) && <Loading />}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (
         <div style={{ width: '100%', height: '100%', objectFit: 'contain' }}>
           <Image
