@@ -7,7 +7,7 @@ import {
   TizenConfigService,
   WebConfigService,
 } from './platform';
-import { LocalStorageItem, Platform } from '@/constants';
+import { DeviceNamePrefix, LocalStorageItem, Platform } from '@/constants';
 
 class DeviceManager {
   static instance = new DeviceManager();
@@ -88,24 +88,34 @@ class DeviceManager {
   public async getName(): Promise<string> {
     try {
       const name = await this.getFromLocalStorage(LocalStorageItem.name);
-      return name ? this.getDeviceNamePrefix() + name : 'Unknown';
+      return this.getDeviceName(name);
     } catch (error) {
       console.error('Error getting device name', error);
       return 'Unknown';
     }
   }
 
-  private getDeviceNamePrefix(): string {
+  private getDeviceName(name: string | null): string {
+    if (!name) {
+      return 'Unknown';
+    }
+
     const platform = localStorage.getItem(LocalStorageItem.platform);
+    // Replace name if already starts with prefix
+    name = name
+      .replace(DeviceNamePrefix.google, '')
+      .replace(DeviceNamePrefix.samsung, '')
+      .replace(DeviceNamePrefix.lg, '');
+
     switch (platform) {
       case Platform.google:
-        return 'Google-';
+        return `${DeviceNamePrefix.google}${name}`;
       case Platform.tizen:
-        return 'Samsung-';
+        return `${DeviceNamePrefix.samsung}${name}`;
       case Platform.lg:
-        return 'LG-';
+        return `${DeviceNamePrefix.lg}${name}`;
       default:
-        return '';
+        return name;
     }
   }
 
