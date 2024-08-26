@@ -65,7 +65,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       }
       initMixpanel();
     }
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Handle keydown event
   useEffect(() => {
