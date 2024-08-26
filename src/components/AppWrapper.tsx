@@ -7,11 +7,12 @@ import DeviceManager from '@/utils/DeviceManager';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
+import { initMixpanel } from '@/utils/mixpanel';
 
 const enum CastState {
   None, // Not casting
@@ -37,6 +38,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
   const [showQrCode, setShowQrCode] = useState<boolean>(false);
   const lastEventTime = useRef(0);
+  const searchParams = useSearchParams();
 
   // Initialize platform events
   useEffect(() => {
@@ -56,6 +58,12 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         // eslint-disable-next-line @typescript-eslint/unbound-method
         handlePlatformEvent: Config.handlePlatformEvent,
       };
+
+      const platform = searchParams.get('platform') ?? '';
+      if (platform) {
+        localStorage.setItem('platform', platform);
+      }
+      initMixpanel();
     }
   });
 
