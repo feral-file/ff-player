@@ -9,13 +9,14 @@
   justify-content: center;
   align-items: center;
   font-size: 32px;
-  .loading-item {
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    .image {
-      object-fit: contain;
-      position: relative;
-    }
+  background: linear-gradient(90deg, #000000 33%, #191816 50%, #000000 66%)
+    #000000;
+  background-size: 300% 100%;
+  animation: l1 1s infinite linear;
+}
+
+@keyframes l1 {
+  0% {
+    background-position: right;
   }
 }
