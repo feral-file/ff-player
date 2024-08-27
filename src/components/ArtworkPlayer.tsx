@@ -125,8 +125,8 @@ const ArtworkPlayer = ({
       try {
         const url = new URL(previewURL);
         const extendPreviewURL = url.search
-          ? `${previewURL}&v=${Date.now().toString()}`
-          : `${previewURL}?v=${Date.now().toString()}`;
+          ? `${previewURL}&v=${Date.now().toString()}&x-request=xhr`
+          : `${previewURL}?v=${Date.now().toString()}&x-request=xhr`;
         const response = await fetch(extendPreviewURL, {
           method: 'HEAD',
         });
