@@ -13,15 +13,6 @@ export default function LostConnectionModal() {
   const [isOnline, setIsOnline] = useState<boolean>(true);
 
   useEffect(() => {
-    if (
-      !isOnline &&
-      context.isOnline &&
-      !context.websocketData.isDisconnected
-    ) {
-      setTimeout(() => {
-        window.location.reload();
-      }, 0);
-    }
     setIsOnline(context.isOnline && !context.websocketData.isDisconnected);
   }, [context, isOnline]);
 
