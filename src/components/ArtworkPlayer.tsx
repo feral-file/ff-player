@@ -1,5 +1,4 @@
 import { LocalStorageItem } from '@/constants';
-import { AppContext } from '@/context/AppContext';
 import mixpanel, {
   CastArtworkEventProperties,
   CastingArtworkType,
