@@ -1,5 +1,4 @@
 import { LocalStorageItem } from '@/constants';
-import { AppContext } from '@/context/AppContext';
 import mixpanel, {
   CastArtworkEventProperties,
   CastingArtworkType,
@@ -25,6 +24,8 @@ import {
 import Hls from 'hls.js';
 import Image from 'next/image';
 import { useContext, useEffect, useRef, useState } from 'react';
+import Loading from './loading/loading';
+import { AppContext } from '@/context/AppContext';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -39,9 +40,10 @@ const ArtworkPlayer = ({
   keyboardCode?: number;
 }) => {
   const context = useContext(AppContext);
-  const { screenRatio } = context?.deviceRotation ?? {
-    screenRatio: 1,
-  };
+  if (!context) {
+    return <p>There is no context.</p>;
+  }
+
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -124,9 +126,12 @@ const ArtworkPlayer = ({
     const detectPreviewType = async (previewURL: string) => {
       try {
         const url = new URL(previewURL);
+        // The second request could be failed, Chrome uses the cached response from the first request, which has no "Access-Control-Allow-Origin" response header.
+        // Workaround: Use a dummy "?x-some-key=some-value" query string parameter will convince the browser that the request is different.
+        // Ref: https://serverfault.com/questions/856904/chrome-s3-cloudfront-no-access-control-allow-origin-header-on-initial-xhr-req/856948#856948
         const extendPreviewURL = url.search
-          ? `${previewURL}&v=${Date.now().toString()}`
-          : `${previewURL}?v=${Date.now().toString()}`;
+          ? `${previewURL}&v=${Date.now().toString()}&x-request=xhr`
+          : `${previewURL}?v=${Date.now().toString()}&x-request=xhr`;
         const response = await fetch(extendPreviewURL, {
           method: 'HEAD',
         });
@@ -185,6 +190,20 @@ const ArtworkPlayer = ({
     }
   }, [previewType, isStreaming, previewURL]);
 
+  useEffect(() => {
+    if (context.isOnline && !context.websocketData.isDisconnected) {
+      if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+        videoRef.current.play().catch((error: unknown) => {
+          console.log('Error play video', error);
+        });
+      }
+    } else {
+      if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+        videoRef.current.pause();
+      }
+    }
+  }, [context, previewType]);
+
   return (
     <div
       style={{
@@ -195,48 +214,7 @@ const ArtworkPlayer = ({
         justifyContent: 'center',
         position: 'relative',
       }}>
-      {(previewType === null || loading) && (
-        <div
-          style={{
-            width: '100%',
-            height: '100%',
-            backgroundColor: '#000000',
-            color: '#ffffff',
-            display: 'flex',
-            position: 'absolute',
-            zIndex: 2,
-            justifyContent: 'center',
-            alignItems: 'center',
-            fontSize: 32,
-          }}>
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              position: 'relative',
-            }}>
-            <div
-              style={{
-                objectFit: 'contain',
-                position: 'relative',
-              }}>
-              <Image
-                src="/ff-loading-still-v2.svg"
-                width={430 * screenRatio}
-                height={288 * screenRatio}
-                objectFit="contain"
-                alt="Loading"></Image>
-            </div>
-            <p
-              style={{
-                fontSize: screenRatio * 28,
-                marginTop: 16 * screenRatio,
-              }}>
-              Loading
-            </p>
-          </div>
-        </div>
-      )}
+      {(previewType === null || loading) && <Loading />}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (
         <div style={{ width: '100%', height: '100%', objectFit: 'contain' }}>
           <Image

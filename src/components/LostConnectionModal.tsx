@@ -1,7 +1,7 @@
 'use client';
 
 import { AppContext } from '@/context/AppContext';
-import { useContext, useEffect, useState } from 'react';
+import { useContext } from 'react';
 import MessageModal from './MessageModal';
 
 export default function LostConnectionModal() {
@@ -10,19 +10,9 @@ export default function LostConnectionModal() {
     return <p>There is no context.</p>;
   }
 
-  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const { isOnline } = context;
   const { isDisconnected } = context.websocketData;
   const { screenRatio } = context.deviceRotation ?? { screenRatio: 1 };
-
-  useEffect(() => {
-    if (!isOnline && context.isOnline) {
-      setTimeout(() => {
-        window.location.reload();
-      }, 100);
-    }
-    setIsOnline(context.isOnline);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context.isOnline]);
 
   return (
     <div>

@@ -6,6 +6,7 @@ import DailyService, { DailyInstanceService } from '@/services/DailyService';
 import { getDelayTime } from '@/services/qrCodePopUpService';
 import { CastingArtworkType } from '@/utils/mixpanel';
 import { useEffect, useRef, useState } from 'react';
+import Loading from '@/components/loading/loading';
 
 export default function DailyClient() {
   const dailyRef = useRef<Daily>();
@@ -81,6 +82,10 @@ export default function DailyClient() {
       console.error(error);
     });
   }, []);
+
+  if (!castPreviewURL) {
+    return <Loading />;
+  }
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
