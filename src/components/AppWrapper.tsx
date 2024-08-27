@@ -1,6 +1,6 @@
 'use client';
 
-import { AppSettings, KeyDown, LocalStorageItem } from '@/constants';
+import { AppSettings, LocalStorageItem } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import DeviceManager from '@/utils/DeviceManager';
@@ -8,7 +8,7 @@ import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
 import { useRouter, useSearchParams } from 'next/navigation';
-import React, { useContext, useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
@@ -37,7 +37,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [castState, setCastState] = useState<CastState>(CastState.None);
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
   const [showQrCode, setShowQrCode] = useState<boolean>(false);
-  const lastEventTime = useRef(0);
   const searchParams = useSearchParams();
 
   // Initialize mixpanel
@@ -70,44 +69,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       };
     }
   });
-
-  // Handle keydown event
-  useEffect(() => {
-    const handleKeyDown = () => {
-      setShowQrCode(!showQrCode);
-    };
-
-    EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
-    EventEmitter.subscribe(Event.toggleQrCode, handleKeyDown);
-
-    return () => {
-      EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
-    };
-  }, [showQrCode]);
-
-  // Add event listener for press button 0 to toggle QR code
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const now = Date.now();
-      const minInterval = 200; // Minimum interval between events in milliseconds
-
-      if (now - lastEventTime.current > minInterval) {
-        lastEventTime.current = now;
-        // Toggle QR code when user press Enter
-        if ((event.key as KeyDown) === KeyDown.enter) {
-          console.log('Toggle QR Code');
-          setShowQrCode(!showQrCode);
-        }
-      }
-    };
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', handleKeyDown);
-    }
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showQrCode]);
 
   // Handle keydown event
 
@@ -260,9 +221,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           }
 
           default: {
-            if (castInfo.dataChecked) {
-              setShowQrCode(true);
-            }
             break;
           }
         }
@@ -283,18 +241,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [castInfo]);
-
-  useEffect(() => {
-    if (showQrCode) {
-      const timeoutID = setTimeout(() => {
-        setShowQrCode(false);
-      }, 30000);
-
-      return () => {
-        clearTimeout(timeoutID);
-      };
-    }
-  }, [showQrCode]);
 
   return (
     <>
@@ -334,7 +280,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        {showQrCode && <QrCodePopUp></QrCodePopUp>}
+        <QrCodePopUp showQrCode={showQrCode}></QrCodePopUp>
       </div>
     </>
   );

@@ -23,8 +23,9 @@ import {
 } from '@/utils/types';
 import Hls from 'hls.js';
 import Image from 'next/image';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import Loading from './loading/loading';
+import { AppContext } from '@/context/AppContext';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -38,6 +39,11 @@ const ArtworkPlayer = ({
   castingType?: CastingArtworkType;
   keyboardCode?: number;
 }) => {
+  const context = useContext(AppContext);
+  if (!context) {
+    return <p>There is no context.</p>;
+  }
+
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -180,6 +186,20 @@ const ArtworkPlayer = ({
       }
     }
   }, [previewType, isStreaming, previewURL]);
+
+  useEffect(() => {
+    if (context.isOnline && !context.websocketData.isDisconnected) {
+      if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+        videoRef.current.play().catch((error: unknown) => {
+          console.log('Error play video', error);
+        });
+      }
+    } else {
+      if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+        videoRef.current.pause();
+      }
+    }
+  }, [context, previewType]);
 
   return (
     <div
