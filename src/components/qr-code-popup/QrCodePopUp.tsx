@@ -6,9 +6,12 @@ import useDailies, { getDelayTime } from '@/services/qrCodePopUpService';
 import DeviceManager from '@/utils/DeviceManager';
 import Image from 'next/image';
 import QRCode from 'qrcode.react';
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import styles from './styles.module.scss';
+import { QrCodeSkeleton } from '../skeleton/skeleton';
+import { KeyDown } from '@/constants';
 
-const QrCodePopUp = () => {
+const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
   const context = useContext(AppContext);
   const [branchLink, setBranchLink] = useState('');
   const [currentDaily, setCurrentDaily] = useState<Daily>();
@@ -20,8 +23,8 @@ const QrCodePopUp = () => {
   };
   const { locationID, topicID } = context?.websocketData ?? {};
 
+  const lastEventTime = useRef(0);
   const dailies = useDailies();
-
   useEffect(() => {
     if (locationID && topicID) {
       DeviceManager.setLocationId(locationID);
@@ -45,11 +48,53 @@ const QrCodePopUp = () => {
   useEffect(() => {
     if (dailies.length > 0) {
       setCurrentDaily(dailies[0]);
+      setIsShowComponent(true);
       const nextArtwork = getDelayTime(dailies) / 3600000;
       setNextArtwork(nextArtwork);
+    } else {
+      setIsShowComponent(false);
     }
-    setIsShowComponent(dailies.length > 0);
   }, [dailies]);
+
+  useEffect(() => {
+    setIsShowComponent(showQrCode);
+  }, [showQrCode]);
+
+  useEffect(() => {
+    if (isShowComponent) {
+      const timeoutID = setTimeout(() => {
+        setIsShowComponent(false);
+      }, 5000);
+
+      return () => {
+        clearTimeout(timeoutID);
+      };
+    }
+  }, [isShowComponent]);
+
+  // Add event listener for press button 0 to toggle QR code
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const now = Date.now();
+      const minInterval = 200; // Minimum interval between events in milliseconds
+
+      if (now - lastEventTime.current > minInterval) {
+        lastEventTime.current = now;
+        // Toggle QR code when user press Enter
+        if ((event.key as KeyDown) === KeyDown.enter) {
+          console.log('Toggle QR Code');
+          setIsShowComponent(!isShowComponent);
+        }
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isShowComponent]);
 
   return (
     <div
@@ -81,7 +126,10 @@ const QrCodePopUp = () => {
           width={screenRatio * 224}
           height={screenRatio * 23}></Image>
       </div>
-      <div>
+      <div
+        style={{
+          fontSize: screenRatio * 20,
+        }}>
         <div
           style={{
             borderBottom: '1px solid #ffffff',
@@ -99,17 +147,18 @@ const QrCodePopUp = () => {
           </p>
         </div>
         <div style={{ paddingTop: screenRatio * 15 }}>
-          <p>
-            {currentDaily?.token?.asset.metadata.project.latest.artistName
-              ? currentDaily.token.asset.metadata.project.latest.artistName +
-                ','
-              : ''}
-          </p>
-          <p style={{ fontStyle: 'italic', fontWeight: 'bold' }}>
-            {currentDaily?.token?.asset.metadata.project.latest.title
-              ? currentDaily.token.asset.metadata.project.latest.title
-              : ''}
-          </p>
+          {currentDaily?.token?.asset.metadata.project.latest.artistName && (
+            <p>{currentDaily.token.asset.metadata.project.latest.artistName}</p>
+          )}
+          {currentDaily?.token?.asset.metadata.project.latest.title && (
+            <p
+              style={{
+                fontStyle: 'italic',
+                fontWeight: 'bold',
+              }}>
+              {currentDaily.token.asset.metadata.project.latest.title}
+            </p>
+          )}
         </div>
       </div>
       <div
@@ -117,20 +166,30 @@ const QrCodePopUp = () => {
           display: 'flex',
           gap: screenRatio * 20,
           alignItems: 'flex-end',
+          fontSize: screenRatio * 20,
         }}>
         {branchLink ? (
-          <QRCode value={branchLink} size={screenRatio * 86}></QRCode>
+          <QRCode
+            value={branchLink}
+            size={screenRatio * 194}
+            bgColor={'#2e2e2e'}
+            fgColor={'#ffffff'}></QRCode>
         ) : (
-          <p style={{ width: screenRatio * 86, height: screenRatio * 86 }}>
-            Connecting...
-          </p>
+          <div style={{ width: screenRatio * 194, height: screenRatio * 194 }}>
+            <QrCodeSkeleton />
+          </div>
         )}
         <div style={{ width: screenRatio * 500 }}>
-          <p style={{ width: '40%' }}>
+          <p style={{ width: '60%' }}>
             Get the Feral File mobile app to browse 15,000+ original artworks,
             and choose what to display on your TV.
           </p>
         </div>
+      </div>
+      <div
+        style={{ fontSize: screenRatio * 20 }}
+        className={styles['bottom-groups']}>
+        <p>Press Enter button to bring this back.</p>
       </div>
     </div>
   );
