@@ -294,15 +294,18 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const registerService = () => {
     if (typeof window !== 'undefined') {
-      // Make sure webOSTV.js is loaded before calling initMixpanel that can get device name for LG TV
+      // WebOSTV.js is use for get LG device model
+      // WebOSTV-dev.js is use for get device LGUDID for LG TV
+      // Make sure webOSTV-dev.js is loaded before calling initMixpanel that can get device id for LG TV
       initMixpanel();
     }
   };
 
   return (
     <>
+      <Script src="/webOSTVjs-1.2.11/webOSTV.js"></Script>
       <Script
-        src="/webOSTVjs-1.2.11/webOSTV.js"
+        src="/webOSTVjs-1.2.11/webOSTV-dev.js"
         onLoad={registerService}></Script>
       {displayOnboarding && <OnboardingModal />}
       <div

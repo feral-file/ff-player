@@ -42,7 +42,7 @@ export const IgnoreKeyDown = [
 ];
 
 export enum LocalStorageItem {
-  deviceId = 'deviceId',
+  deviceId = 'device_id',
   locationID = 'locationID',
   topicID = 'topicID',
   platform = 'platform',

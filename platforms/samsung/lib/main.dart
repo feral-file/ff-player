@@ -34,7 +34,9 @@ Future<void> main() async {
     DeviceInfoPluginTizen deviceInfo = DeviceInfoPluginTizen();
     TizenDeviceInfo tizenInfo = await deviceInfo.tizenInfo;
     final name = tizenInfo.modelName ?? 'Samsung TV';
+    final id = tizenInfo.tizenId ?? 'Samsung TV ID';
     await injector<ConfigurationService>().setString('device_name', name);
+    await injector<ConfigurationService>().setString('device_id', id);
 
     //UpdateManager(injector(), injector()).start();
 

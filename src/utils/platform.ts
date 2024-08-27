@@ -8,6 +8,10 @@ interface DeviceInfo {
   modelName: string;
 }
 
+interface LGUDIDInfo {
+  id: string;
+}
+
 interface LGSuccessResponse {
   results: { key: string; value: string }[];
 }
@@ -219,7 +223,7 @@ export class WebConfigService implements PlatformConfigService {
 
 export class LgConfigService implements PlatformConfigService {
   constructor() {
-    this.setDeviceName().catch((error: unknown) => {
+    this.setDeviceInfo().catch((error: unknown) => {
       console.log(error);
     });
     this.registerDB().catch((error: unknown) => {
@@ -277,11 +281,14 @@ export class LgConfigService implements PlatformConfigService {
     });
   }
 
-  async setDeviceName() {
+  async setDeviceInfo() {
     try {
       const deviceInfo = await this.getDeviceInfo();
       console.log(`LG Device name: ${deviceInfo.modelName}`);
       DeviceManager.setName(deviceInfo.modelName);
+      const lgInfo = await this.getDeviceID();
+      console.log(`LG Device ID: ${lgInfo.id}`);
+      DeviceManager.setDeviceId(lgInfo.id);
     } catch (error) {
       console.error('Error getting device info:', error);
     }
@@ -293,6 +300,25 @@ export class LgConfigService implements PlatformConfigService {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
         (window as any).webOS.deviceInfo((deviceInfo: DeviceInfo) => {
           resolve(deviceInfo);
+        });
+      } catch (error) {
+        console.log(error);
+        reject(error as Error);
+      }
+    });
+  }
+
+  async getDeviceID(): Promise<LGUDIDInfo> {
+    return new Promise((resolve, reject) => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+        (window as any).webOSDev.LGUDID({
+          onSuccess: function (response: LGUDIDInfo) {
+            resolve(response);
+          },
+          onFailure: function (error: unknown) {
+            console.log('Failed to get LG Device id:', error);
+          },
         });
       } catch (error) {
         console.log(error);

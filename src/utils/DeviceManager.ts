@@ -56,13 +56,22 @@ class DeviceManager {
     });
   }
 
-  public async getDeviceId(): Promise<string | null> {
-    let deviceId = await this.getFromLocalStorage(LocalStorageItem.deviceId);
-    if (!deviceId) {
-      deviceId = uuidv4();
-      this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
+  public async getDeviceId(): Promise<string> {
+    try {
+      let deviceId = await this.getFromLocalStorage(LocalStorageItem.deviceId);
+      if (!deviceId) {
+        deviceId = uuidv4();
+        this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
+      }
+      return deviceId;
+    } catch (error) {
+      console.error('Error getting device ID', error);
+      return '';
     }
-    return deviceId;
+  }
+
+  public setDeviceId(deviceId: string): void {
+    this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
   }
 
   public setLocationId(locationId: string): void {
