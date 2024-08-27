@@ -39,6 +39,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [showQrCode, setShowQrCode] = useState<boolean>(false);
   const lastEventTime = useRef(0);
   const searchParams = useSearchParams();
+  const [isWebOSTVLoaded, setIsWebOSTVLoaded] = useState(false);
+  const [isWebOSTVDevLoaded, setIsWebOSTVDevLoaded] = useState(false);
 
   // Initialize platform events
   useEffect(() => {
@@ -292,21 +294,26 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   }, [showQrCode]);
 
-  const registerService = () => {
-    if (typeof window !== 'undefined') {
-      // WebOSTV.js is use for get LG device model
-      // WebOSTV-dev.js is use for get device LGUDID for LG TV
-      // Make sure webOSTV-dev.js is loaded before calling initMixpanel that can get device id for LG TV
+  useEffect(() => {
+    if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
       initMixpanel();
     }
-  };
+  }, [isWebOSTVLoaded, isWebOSTVDevLoaded]);
 
   return (
     <>
-      <Script src="/webOSTVjs-1.2.11/webOSTV.js"></Script>
+      <Script
+        src="/webOSTVjs-1.2.11/webOSTV.js"
+        onLoad={() => {
+          setIsWebOSTVLoaded(true);
+        }}
+      />
       <Script
         src="/webOSTVjs-1.2.11/webOSTV-dev.js"
-        onLoad={registerService}></Script>
+        onLoad={() => {
+          setIsWebOSTVDevLoaded(true);
+        }}
+      />
       {displayOnboarding && <OnboardingModal />}
       <div
         style={{
