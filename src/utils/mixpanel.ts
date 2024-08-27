@@ -30,6 +30,7 @@ export const getHashedDeviceID = async (): Promise<string> => {
 };
 
 export const registerSupperProperties = async () => {
+  await DeviceManager.init();
   const device_id = await getHashedDeviceID();
   mixpanel.register({ device_id, user_agent: navigator.userAgent });
 };

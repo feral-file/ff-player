@@ -56,6 +56,10 @@ class DeviceManager {
     });
   }
 
+  public async init(): Promise<void> {
+    await this.configService.init();
+  }
+
   public async getDeviceId(): Promise<string> {
     try {
       let deviceId = await this.getFromLocalStorage(LocalStorageItem.deviceId);

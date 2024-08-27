@@ -128,11 +128,14 @@ export class Config extends PlatformEventReceiver {
 }
 
 export interface PlatformConfigService {
+  init(): Promise<void>;
   getString(key: string): Promise<string | null>;
 
   setString(key: string, value: string): Promise<void>;
 }
 export class TizenConfigService implements PlatformConfigService {
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  async init() {}
   async getString(key: string): Promise<string> {
     const id = uuidv4();
     const request = {
@@ -183,8 +186,11 @@ export class TizenConfigService implements PlatformConfigService {
 export class GoogleConfigService extends TizenConfigService {}
 
 export class WebConfigService implements PlatformConfigService {
-  constructor() {
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async init() {
     const deviceId = this.getOrCreateDeviceId();
+    // Use the device ID as the name for web
+    localStorage.setItem(LocalStorageItem.deviceId, deviceId);
     localStorage.setItem(LocalStorageItem.name, deviceId);
   }
 
@@ -222,13 +228,9 @@ export class WebConfigService implements PlatformConfigService {
 }
 
 export class LgConfigService implements PlatformConfigService {
-  constructor() {
-    this.setDeviceInfo().catch((error: unknown) => {
-      console.log(error);
-    });
-    this.registerDB().catch((error: unknown) => {
-      console.log(error);
-    });
+  async init() {
+    await this.registerDB();
+    await this.setDeviceInfo();
   }
 
   async registerDB() {
