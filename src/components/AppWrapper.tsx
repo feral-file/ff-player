@@ -70,8 +70,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   });
 
-  // Handle keydown event
-
   // useEffect(() => {
   //   const handleKeyDown = () => {
   //     setShowQrCode(!showQrCode);
