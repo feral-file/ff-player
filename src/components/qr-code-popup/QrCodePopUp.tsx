@@ -173,7 +173,7 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
             style={{
               color: '#A0A0A0',
             }}>
-            Next work: {nextArtwork > 0 ? nextArtwork.toFixed(0) : '--'}hr
+            Next work: {Math.floor(nextArtwork)}hr
           </p>
         </div>
         <div
