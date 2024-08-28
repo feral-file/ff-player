@@ -28,7 +28,10 @@ const useWebSocket = (url: string, apiKey: string) => {
 
       setCastInfo({ dataChecked: true });
 
-      ws.current = new ReconnectingWebSocket(wsUrl);
+      ws.current = new ReconnectingWebSocket(wsUrl, [], {
+        connectionTimeout: 30 * 1000,
+      });
+
       ws.current.onopen = () => {
         console.log('WebSocket connected');
         setIsDisconnected(false);
