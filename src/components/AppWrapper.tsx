@@ -38,16 +38,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
   const [showQrCode, setShowQrCode] = useState<boolean>(false);
   const searchParams = useSearchParams();
-
-  // Initialize mixpanel
-  useEffect(() => {
-    const platform = searchParams.get('platform') ?? '';
-    if (platform) {
-      localStorage.setItem('platform', platform);
-    }
-    initMixpanel();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [isWebOSTVLoaded, setIsWebOSTVLoaded] = useState(false);
+  const [isWebOSTVDevLoaded, setIsWebOSTVDevLoaded] = useState(false);
 
   // Initialize platform events
   useEffect(() => {
@@ -67,8 +59,14 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         // eslint-disable-next-line @typescript-eslint/unbound-method
         handlePlatformEvent: Config.handlePlatformEvent,
       };
+
+      const platform = searchParams.get('platform') ?? '';
+      if (platform) {
+        localStorage.setItem('platform', platform);
+      }
     }
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // useEffect(() => {
   //   const handleKeyDown = () => {
@@ -240,13 +238,26 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [castInfo]);
 
+  useEffect(() => {
+    if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
+      initMixpanel();
+    }
+  }, [isWebOSTVLoaded, isWebOSTVDevLoaded]);
+
   return (
     <>
       <Script
         src="/webOSTVjs-1.2.11/webOSTV.js"
         onLoad={() => {
-          console.log('loaded');
-        }}></Script>
+          setIsWebOSTVLoaded(true);
+        }}
+      />
+      <Script
+        src="/webOSTVjs-1.2.11/webOSTV-dev.js"
+        onLoad={() => {
+          setIsWebOSTVDevLoaded(true);
+        }}
+      />
       {displayOnboarding && <OnboardingModal />}
       <div
         style={{

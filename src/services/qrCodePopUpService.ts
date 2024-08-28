@@ -27,7 +27,9 @@ const useDailies = () => {
 
 export default useDailies;
 
-export const getDelayTime = (dailies: Daily[]) => {
+export const getDelayTime = (
+  dailies: Daily[]
+): { delay: number; duration: number } => {
   const now = Date.now();
   const currentDisplayTime = new Date(dailies[0].displayTime);
   let nextDisplayTime = currentDisplayTime.setDate(
@@ -37,5 +39,10 @@ export const getDelayTime = (dailies: Daily[]) => {
     nextDisplayTime = new Date(dailies[1].displayTime).getTime();
   }
 
-  return nextDisplayTime - now;
+  const previousDisplayTime = new Date(dailies[0].displayTime).getTime();
+
+  return {
+    delay: nextDisplayTime - now,
+    duration: nextDisplayTime - previousDisplayTime,
+  };
 };

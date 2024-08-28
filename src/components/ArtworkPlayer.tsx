@@ -155,6 +155,9 @@ const ArtworkPlayer = ({
 
   const loadedSource = () => {
     console.log('loaded source');
+    // When an iframe is present in a page, the parent window might not receive keydown events because the iframe itself captures these events when it is focused.
+    // This is work around to focus the parent window.
+    window.focus();
     setLoading(false);
   };
 

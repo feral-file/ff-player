@@ -9,7 +9,7 @@ import QRCode from 'qrcode.react';
 import { useContext, useEffect, useRef, useState } from 'react';
 import styles from './styles.module.scss';
 import { QrCodeSkeleton } from '../skeleton/skeleton';
-import { KeyDown } from '@/constants';
+import { KeyDown, TIME_PER_HOUR } from '@/constants';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 
 const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
@@ -18,6 +18,8 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
   const [currentDaily, setCurrentDaily] = useState<Daily>();
   const [nextArtwork, setNextArtwork] = useState<number>(0);
   const [isShowComponent, setIsShowComponent] = useState<boolean>(false);
+  const [countdownPercentage, setCountdownPercentage] = useState<number>(0);
+  const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
 
   const { screenRatio } = context?.deviceRotation ?? {
     screenRatio: 1,
@@ -47,14 +49,27 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
   }, [locationID, topicID]);
 
   useEffect(() => {
+    const calculateTimer = () => {
+      const { delay, duration } = getDelayTime(dailies);
+      setNextArtwork(delay / TIME_PER_HOUR);
+      setCountdownPercentage(((duration - delay) / duration) * 100);
+    };
+
     if (dailies.length > 0) {
       setCurrentDaily(dailies[0]);
       setIsShowComponent(true);
-      const nextArtwork = getDelayTime(dailies) / 3600000;
-      setNextArtwork(nextArtwork);
+      calculateTimer();
+
+      intervalIdRef.current = setInterval(calculateTimer, 1000);
     } else {
       setIsShowComponent(false);
     }
+
+    return () => {
+      if (intervalIdRef.current) {
+        clearInterval(intervalIdRef.current);
+      }
+    };
   }, [dailies]);
 
   useEffect(() => {
@@ -147,7 +162,7 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
         }}>
         <div
           style={{
-            borderBottom: '1px solid #ffffff',
+            // borderBottom: '1px solid #ffffff',
             display: 'flex',
             justifyContent: 'space-between',
             width: '100%',
@@ -158,8 +173,21 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
             style={{
               color: '#A0A0A0',
             }}>
-            Next work: {nextArtwork > 0 ? nextArtwork.toFixed(0) : '--'}hr
+            Next work: {Math.floor(nextArtwork)}hr
           </p>
+        </div>
+        <div
+          style={{
+            height: screenRatio,
+            width: '100%',
+            backgroundColor: '#4a4a4a',
+          }}>
+          <div
+            style={{
+              height: screenRatio,
+              width: `${countdownPercentage.toString()}%`,
+              backgroundColor: '#ffffff',
+            }}></div>
         </div>
         <div style={{ paddingTop: screenRatio * 15 }}>
           {currentDaily?.token?.asset.metadata.project.latest.artistName && (

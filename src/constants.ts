@@ -42,7 +42,7 @@ export const IgnoreKeyDown = [
 ];
 
 export enum LocalStorageItem {
-  deviceId = 'deviceId',
+  deviceId = 'device_id',
   locationID = 'locationID',
   topicID = 'topicID',
   platform = 'platform',
@@ -60,6 +60,12 @@ export enum Platform {
   lg = 'lg',
 }
 
+export enum DeviceNamePrefix {
+  google = 'Google-',
+  samsung = 'Samsung-',
+  lg = 'LG-',
+}
+
 export const AppSettings = {
   VERSION_CHECK_INTERVAL_DURATION: 1000 * 60 * 60, // 1 minutes
   JG_043_EXHIBITION_ID: '46a0f68b-a657-4364-92a0-32a88b65fbd9',
@@ -67,3 +73,5 @@ export const AppSettings = {
 };
 
 export const MixpanelAnonymousIDPrefix = '$device:';
+
+export const TIME_PER_HOUR = 60 * 60 * 1000;
