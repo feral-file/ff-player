@@ -235,52 +235,59 @@ export class LgConfigService implements PlatformConfigService {
 
   async registerDB() {
     // Clear the existing database kind (if it exists)
-    await new Promise<void>((resolve, reject) => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
-      (window as any).webOS.service.request('luna://com.palm.db', {
-        method: 'delKind',
-        parameters: {
-          id: `com.feralfile.display:1`,
-        },
-        onSuccess: function (response: unknown) {
-          console.log('Kind deleted successfully:', response);
-          resolve();
-        },
-        onFailure: function (error: { errorCode: number }) {
-          if (error.errorCode === 404) {
-            console.log('Kind not found, proceeding to register.');
+    try {
+      await new Promise<void>((resolve, reject) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+        (window as any).webOS.service.request('luna://com.palm.db', {
+          method: 'delKind',
+          parameters: {
+            id: `com.feralfile.display:1`,
+          },
+          onSuccess: function (response: unknown) {
+            console.log('Kind deleted successfully:', response);
             resolve();
-          } else {
-            console.error('Failed to delete kind:', error);
-            reject(new Error('Failed to delete kind.'));
-          }
-        },
+          },
+          onFailure: function (error: { errorCode: number }) {
+            if (error.errorCode === 404) {
+              console.log('Kind not found, proceeding to register.');
+              resolve();
+            } else {
+              console.error('Failed to delete kind:', error);
+              reject(new Error('Failed to delete kind.'));
+            }
+          },
+        });
       });
-    });
-
-    // Register the kind first
-    await new Promise<void>((resolve, reject) => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
-      (window as any).webOS.service.request('luna://com.palm.db', {
-        method: 'putKind',
-        parameters: {
-          id: `com.feralfile.display:1`,
-          owner: 'com.feralfile.display',
-          indexes: [
-            { name: 'key', props: [{ name: 'key' }] },
-            { name: 'value', props: [{ name: 'value' }] },
-          ],
-        },
-        onSuccess: function (response: unknown) {
-          console.log('Kind registered successfully:', response);
-          resolve();
-        },
-        onFailure: function (error: unknown) {
-          console.error('Failed to register kind:', error);
-          reject(new Error('Failed to register kind.'));
-        },
+    } catch (error) {
+      console.error('Error deleting kind:', error);
+    }
+    try {
+      // Register the kind first
+      await new Promise<void>((resolve, reject) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+        (window as any).webOS.service.request('luna://com.palm.db', {
+          method: 'putKind',
+          parameters: {
+            id: `com.feralfile.display:1`,
+            owner: 'com.feralfile.display',
+            indexes: [
+              { name: 'key', props: [{ name: 'key' }] },
+              { name: 'value', props: [{ name: 'value' }] },
+            ],
+          },
+          onSuccess: function (response: unknown) {
+            console.log('Kind registered successfully:', response);
+            resolve();
+          },
+          onFailure: function (error: unknown) {
+            console.error('Failed to register kind:', error);
+            reject(new Error('Failed to register kind.'));
+          },
+        });
       });
-    });
+    } catch (error) {
+      console.error('Error registering kind:', error);
+    }
   }
 
   async setDeviceInfo() {
