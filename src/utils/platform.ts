@@ -28,6 +28,11 @@ export class KeyEvent extends PlatformEventReceiver {
     super.handlePlatformEvent(event);
     const [keyId, keyLabel] = event.split('_');
     console.log(`Handling key event: ${keyId} - ${keyLabel}`);
+    if (keyId === KeyCodes.audioVolumeUp.toString()) {
+      window.location.reload();
+      return;
+    }
+
     if (
       [KeyCodes.enter.toString(), KeyCodes.select.toString()].includes(keyId)
     ) {
