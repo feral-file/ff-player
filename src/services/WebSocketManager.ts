@@ -26,21 +26,12 @@ const useWebSocket = (url: string, apiKey: string) => {
       if (storedLocationID) wsUrl += `&locationID=${storedLocationID}`;
       if (storedTopicID) wsUrl += `&topicID=${storedTopicID}`;
 
-      const castInfoString = localStorage.getItem(LocalStorageItem.castInfo);
-      if (castInfoString) {
-        canvasService.current.setCastInfo(
-          JSON.parse(castInfoString) as CastInfo
-        );
+      setCastInfo({ dataChecked: true });
 
-        setCastInfo({
-          ...JSON.parse(castInfoString),
-          dataChecked: true,
-        } as CastInfo);
-      } else {
-        setCastInfo({ dataChecked: true });
-      }
+      ws.current = new ReconnectingWebSocket(wsUrl, [], {
+        connectionTimeout: 30 * 1000,
+      });
 
-      ws.current = new ReconnectingWebSocket(wsUrl);
       ws.current.onopen = () => {
         console.log('WebSocket connected');
         setIsDisconnected(false);

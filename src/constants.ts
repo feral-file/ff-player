@@ -73,3 +73,5 @@ export const AppSettings = {
 };
 
 export const MixpanelAnonymousIDPrefix = '$device:';
+
+export const TIME_PER_HOUR = 60 * 60 * 1000;

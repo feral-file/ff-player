@@ -47,7 +47,7 @@ export default function DailyClient() {
             setArtworkName(dailyRef.current.tokenName);
           }
 
-          const delay = getDelayTime(dailies);
+          const { delay } = getDelayTime(dailies);
           if (dailies[0].previewURL) {
             setCastPreviewURL(dailies[0].previewURL);
           }
