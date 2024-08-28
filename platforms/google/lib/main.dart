@@ -33,8 +33,10 @@ Future<void> main() async {
     await injector<RemoteConfigService>().loadConfigs();
     DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
     AndroidDeviceInfo info = await deviceInfo.androidInfo;
-    final name = info.model;
+    final name = info.model; // Use the device ID as the device name
+    final id = info.id;
     await injector<ConfigurationService>().setString('device_name', name);
+    await injector<ConfigurationService>().setString('device_id', id);
 
     //UpdateManager(injector(), injector()).start();
 

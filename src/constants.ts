@@ -42,7 +42,7 @@ export const IgnoreKeyDown = [
 ];
 
 export enum LocalStorageItem {
-  deviceId = 'deviceId',
+  deviceId = 'device_id',
   locationID = 'locationID',
   topicID = 'topicID',
   platform = 'platform',
@@ -58,6 +58,12 @@ export enum Platform {
   google = 'google',
   tizen = 'tizen',
   lg = 'lg',
+}
+
+export enum DeviceNamePrefix {
+  google = 'Google-',
+  samsung = 'Samsung-',
+  lg = 'LG-',
 }
 
 export const AppSettings = {

@@ -2,9 +2,14 @@ import { KeyCodes, LocalStorageItem } from '@/constants';
 import DeviceManager from './DeviceManager';
 import { v4 as uuidv4 } from 'uuid';
 import { Event, EventEmitter } from './EventEmitter';
+import { BrowserInfo, detect } from 'detect-browser';
 
 interface DeviceInfo {
   modelName: string;
+}
+
+interface LGUDIDInfo {
+  id: string;
 }
 
 interface LGSuccessResponse {
@@ -123,11 +128,14 @@ export class Config extends PlatformEventReceiver {
 }
 
 export interface PlatformConfigService {
+  init(): Promise<void>;
   getString(key: string): Promise<string | null>;
 
   setString(key: string, value: string): Promise<void>;
 }
 export class TizenConfigService implements PlatformConfigService {
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  async init() {}
   async getString(key: string): Promise<string> {
     const id = uuidv4();
     const request = {
@@ -178,9 +186,35 @@ export class TizenConfigService implements PlatformConfigService {
 export class GoogleConfigService extends TizenConfigService {}
 
 export class WebConfigService implements PlatformConfigService {
-  constructor() {
-    const deviceId = uuidv4();
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async init() {
+    const deviceId = this.getOrCreateDeviceId();
+    // Use the device ID as the name for web
+    localStorage.setItem(LocalStorageItem.deviceId, deviceId);
     localStorage.setItem(LocalStorageItem.name, deviceId);
+  }
+
+  generateRandomString(length: number): string {
+    const characters =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    const charactersLength = characters.length;
+    for (let i = 0; i < length; i++) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    }
+    return result;
+  }
+
+  getOrCreateDeviceId() {
+    let deviceId = localStorage.getItem('deviceId');
+    if (!deviceId) {
+      const platform = navigator.platform;
+      const browser = detect() as BrowserInfo;
+      const randomString = this.generateRandomString(4);
+
+      deviceId = `${platform}-${browser.name}-${randomString}`;
+    }
+    return deviceId;
   }
   // eslint-disable-next-line @typescript-eslint/require-await
   async getString(key: string): Promise<string | null> {
@@ -194,46 +228,76 @@ export class WebConfigService implements PlatformConfigService {
 }
 
 export class LgConfigService implements PlatformConfigService {
-  constructor() {
-    this.setDeviceName().catch((error: unknown) => {
-      console.log(error);
-    });
-    this.registerDB().catch((error: unknown) => {
-      console.log(error);
-    });
+  async init() {
+    await this.registerDB();
+    await this.setDeviceInfo();
   }
 
   async registerDB() {
-    // Register the kind first
-    await new Promise<void>((resolve, reject) => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
-      (window as any).webOS.service.request('luna://com.palm.db', {
-        method: 'putKind',
-        parameters: {
-          id: `com.feralfile.display:2`, // Unique identifier for your kind
-          owner: 'com.feralfile.display', // Your app's owner ID
-          indexes: [
-            { name: 'key', props: [{ name: 'key' }] }, // Define the properties that will be indexed
-            { name: 'value', props: [{ name: 'value' }] },
-          ],
-        },
-        onSuccess: function (response: unknown) {
-          console.log('Kind registered successfully:', response);
-          resolve();
-        },
-        onFailure: function (error: unknown) {
-          console.error('Failed to register kind:', error);
-          reject(new Error('Failed to register kind.'));
-        },
+    // Clear the existing database kind (if it exists)
+    try {
+      await new Promise<void>((resolve, reject) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+        (window as any).webOS.service.request('luna://com.palm.db', {
+          method: 'delKind',
+          parameters: {
+            id: `com.feralfile.display:1`,
+          },
+          onSuccess: function (response: unknown) {
+            console.log('Kind deleted successfully:', response);
+            resolve();
+          },
+          onFailure: function (error: { errorCode: number }) {
+            if (error.errorCode === 404) {
+              console.log('Kind not found, proceeding to register.');
+              resolve();
+            } else {
+              console.error('Failed to delete kind:', error);
+              reject(new Error('Failed to delete kind.'));
+            }
+          },
+        });
       });
-    });
+    } catch (error) {
+      console.error('Error deleting kind:', error);
+    }
+    try {
+      // Register the kind first
+      await new Promise<void>((resolve, reject) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+        (window as any).webOS.service.request('luna://com.palm.db', {
+          method: 'putKind',
+          parameters: {
+            id: `com.feralfile.display:1`,
+            owner: 'com.feralfile.display',
+            indexes: [
+              { name: 'key', props: [{ name: 'key' }] },
+              { name: 'value', props: [{ name: 'value' }] },
+            ],
+          },
+          onSuccess: function (response: unknown) {
+            console.log('Kind registered successfully:', response);
+            resolve();
+          },
+          onFailure: function (error: unknown) {
+            console.error('Failed to register kind:', error);
+            reject(new Error('Failed to register kind.'));
+          },
+        });
+      });
+    } catch (error) {
+      console.error('Error registering kind:', error);
+    }
   }
 
-  async setDeviceName() {
+  async setDeviceInfo() {
     try {
       const deviceInfo = await this.getDeviceInfo();
       console.log(`LG Device name: ${deviceInfo.modelName}`);
-      DeviceManager.setName(`LG-${deviceInfo.modelName}`);
+      DeviceManager.setName(deviceInfo.modelName);
+      const lgInfo = await this.getDeviceID();
+      console.log(`LG Device ID: ${lgInfo.id}`);
+      DeviceManager.setDeviceId(lgInfo.id);
     } catch (error) {
       console.error('Error getting device info:', error);
     }
@@ -245,6 +309,25 @@ export class LgConfigService implements PlatformConfigService {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
         (window as any).webOS.deviceInfo((deviceInfo: DeviceInfo) => {
           resolve(deviceInfo);
+        });
+      } catch (error) {
+        console.log(error);
+        reject(error as Error);
+      }
+    });
+  }
+
+  async getDeviceID(): Promise<LGUDIDInfo> {
+    return new Promise((resolve, reject) => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
+        (window as any).webOSDev.LGUDID({
+          onSuccess: function (response: LGUDIDInfo) {
+            resolve(response);
+          },
+          onFailure: function (error: unknown) {
+            console.log('Failed to get LG Device id:', error);
+          },
         });
       } catch (error) {
         console.log(error);
@@ -270,12 +353,13 @@ export class LgConfigService implements PlatformConfigService {
               'Success response from LG:',
               key,
               ':',
-              response.results[response.results.length - 1].value
+              response.results[response.results.length - 1].value,
+              response.results.length
             );
 
             resolve(response.results[response.results.length - 1].value);
           } else {
-            resolve(null); // Return null if no matching record is found
+            resolve(null);
           }
         },
         onFailure(error: unknown) {
@@ -314,7 +398,7 @@ export class LgConfigService implements PlatformConfigService {
       });
     } catch (error) {
       console.error('Error in setString:', error);
-      throw error; // Propagate the error to the caller
+      throw error;
     }
   }
 }

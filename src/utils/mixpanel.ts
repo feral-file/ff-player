@@ -21,7 +21,7 @@ export enum MixpanelEventName {
 
 export const getHashedDeviceID = async (): Promise<string> => {
   try {
-    const deviceID = await DeviceManager.getName();
+    const deviceID = await DeviceManager.getDeviceId();
     return hashStringToSHA256(deviceID);
   } catch (error) {
     console.error('Error identifying device:', error);
@@ -30,6 +30,7 @@ export const getHashedDeviceID = async (): Promise<string> => {
 };
 
 export const registerSupperProperties = async () => {
+  await DeviceManager.init();
   const device_id = await getHashedDeviceID();
   mixpanel.register({ device_id, user_agent: navigator.userAgent });
 };

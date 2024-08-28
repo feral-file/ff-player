@@ -7,7 +7,7 @@ import {
   TizenConfigService,
   WebConfigService,
 } from './platform';
-import { LocalStorageItem, Platform } from '@/constants';
+import { DeviceNamePrefix, LocalStorageItem, Platform } from '@/constants';
 
 class DeviceManager {
   static instance = new DeviceManager();
@@ -56,13 +56,26 @@ class DeviceManager {
     });
   }
 
-  public async getDeviceId(): Promise<string | null> {
-    let deviceId = await this.getFromLocalStorage(LocalStorageItem.deviceId);
-    if (!deviceId) {
-      deviceId = uuidv4();
-      this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
+  public async init(): Promise<void> {
+    await this.configService.init();
+  }
+
+  public async getDeviceId(): Promise<string> {
+    try {
+      let deviceId = await this.getFromLocalStorage(LocalStorageItem.deviceId);
+      if (!deviceId) {
+        deviceId = uuidv4();
+        this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
+      }
+      return deviceId;
+    } catch (error) {
+      console.error('Error getting device ID', error);
+      return '';
     }
-    return deviceId;
+  }
+
+  public setDeviceId(deviceId: string): void {
+    this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
   }
 
   public setLocationId(locationId: string): void {
@@ -88,10 +101,34 @@ class DeviceManager {
   public async getName(): Promise<string> {
     try {
       const name = await this.getFromLocalStorage(LocalStorageItem.name);
-      return name ?? 'Unknown';
+      return this.getDeviceName(name);
     } catch (error) {
       console.error('Error getting device name', error);
       return 'Unknown';
+    }
+  }
+
+  private getDeviceName(name: string | null): string {
+    if (!name) {
+      return 'Unknown';
+    }
+
+    const platform = localStorage.getItem(LocalStorageItem.platform);
+    // Replace name if already starts with prefix
+    name = name
+      .replace(DeviceNamePrefix.google, '')
+      .replace(DeviceNamePrefix.samsung, '')
+      .replace(DeviceNamePrefix.lg, '');
+
+    switch (platform) {
+      case Platform.google:
+        return `${DeviceNamePrefix.google}${name}`;
+      case Platform.tizen:
+        return `${DeviceNamePrefix.samsung}${name}`;
+      case Platform.lg:
+        return `${DeviceNamePrefix.lg}${name}`;
+      default:
+        return name;
     }
   }
 
