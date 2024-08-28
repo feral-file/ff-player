@@ -176,6 +176,12 @@ const ArtworkPlayer = ({
             .finally(() => {
               setLoading(false);
             });
+          videoRef.current?.addEventListener('ended', () => {
+            console.log('Video ended');
+            videoRef.current?.play().catch((error: unknown) => {
+              console.log('Error play video', error);
+            });
+          });
         });
       } else {
         videoRef.current.src = previewURL;
