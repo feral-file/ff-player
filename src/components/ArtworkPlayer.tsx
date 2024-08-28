@@ -126,9 +126,12 @@ const ArtworkPlayer = ({
     const detectPreviewType = async (previewURL: string) => {
       try {
         const url = new URL(previewURL);
+        // The second request could be failed, Chrome uses the cached response from the first request, which has no "Access-Control-Allow-Origin" response header.
+        // Workaround: Use a dummy "?x-some-key=some-value" query string parameter will convince the browser that the request is different.
+        // Ref: https://serverfault.com/questions/856904/chrome-s3-cloudfront-no-access-control-allow-origin-header-on-initial-xhr-req/856948#856948
         const extendPreviewURL = url.search
-          ? `${previewURL}&v=${Date.now().toString()}`
-          : `${previewURL}?v=${Date.now().toString()}`;
+          ? `${previewURL}&v=${Date.now().toString()}&x-request=xhr`
+          : `${previewURL}?v=${Date.now().toString()}&x-request=xhr`;
         const response = await fetch(extendPreviewURL, {
           method: 'HEAD',
         });

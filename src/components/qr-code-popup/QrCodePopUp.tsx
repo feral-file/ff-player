@@ -10,6 +10,7 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import styles from './styles.module.scss';
 import { QrCodeSkeleton } from '../skeleton/skeleton';
 import { KeyDown } from '@/constants';
+import { EventEmitter, Event } from '@/utils/EventEmitter';
 
 const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
   const context = useContext(AppContext);
@@ -64,7 +65,7 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
     if (isShowComponent) {
       const timeoutID = setTimeout(() => {
         setIsShowComponent(false);
-      }, 5000);
+      }, 30000);
 
       return () => {
         clearTimeout(timeoutID);
@@ -93,6 +94,20 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isShowComponent]);
+
+  // Handle keydown event
+  useEffect(() => {
+    const handleKeyDown = () => {
+      setIsShowComponent(!isShowComponent);
+    };
+
+    EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
+    EventEmitter.subscribe(Event.toggleQrCode, handleKeyDown);
+
+    return () => {
+      EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
     };
   }, [isShowComponent]);
 
@@ -148,7 +163,10 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
         </div>
         <div style={{ paddingTop: screenRatio * 15 }}>
           {currentDaily?.token?.asset.metadata.project.latest.artistName && (
-            <p>{currentDaily.token.asset.metadata.project.latest.artistName}</p>
+            <p>
+              {currentDaily.token.asset.metadata.project.latest.artistName +
+                ','}
+            </p>
           )}
           {currentDaily?.token?.asset.metadata.project.latest.title && (
             <p
