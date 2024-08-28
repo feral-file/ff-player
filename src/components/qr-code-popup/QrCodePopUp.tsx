@@ -19,6 +19,7 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
   const [nextArtwork, setNextArtwork] = useState<number>(0);
   const [isShowComponent, setIsShowComponent] = useState<boolean>(false);
   const [countdownPercentage, setCountdownPercentage] = useState<number>(0);
+  const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
 
   const { screenRatio } = context?.deviceRotation ?? {
     screenRatio: 1,
@@ -48,15 +49,27 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
   }, [locationID, topicID]);
 
   useEffect(() => {
-    if (dailies.length > 0) {
-      setCurrentDaily(dailies[0]);
-      setIsShowComponent(true);
+    const calculateTimer = () => {
       const { delay, duration } = getDelayTime(dailies);
       setNextArtwork(delay / TIME_PER_HOUR);
       setCountdownPercentage(((duration - delay) / duration) * 100);
+    };
+
+    if (dailies.length > 0) {
+      setCurrentDaily(dailies[0]);
+      setIsShowComponent(true);
+      calculateTimer();
+
+      intervalIdRef.current = setInterval(calculateTimer, 1000);
     } else {
       setIsShowComponent(false);
     }
+
+    return () => {
+      if (intervalIdRef.current) {
+        clearInterval(intervalIdRef.current);
+      }
+    };
   }, [dailies]);
 
   useEffect(() => {
