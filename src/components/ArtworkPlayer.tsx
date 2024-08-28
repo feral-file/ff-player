@@ -167,6 +167,7 @@ const ArtworkPlayer = ({
         const hls = new Hls();
         hls.loadSource(previewURL);
         hls.attachMedia(videoRef.current);
+
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           videoRef.current
             ?.play()
@@ -182,6 +183,17 @@ const ArtworkPlayer = ({
               console.log('Error play video', error);
             });
           });
+        });
+
+        hls.on(Hls.Events.KEY_LOADED, () => {
+          console.log('Video KEY_LOADED');
+        });
+
+        hls.on(Hls.Events.LIVE_BACK_BUFFER_REACHED, () => {
+          console.log('Video LIVE_BACK_BUFFER_REACHED');
+        });
+        hls.on(Hls.Events.BUFFER_RESET, () => {
+          console.log('Video BUFFER_RESET');
         });
       } else {
         videoRef.current.src = previewURL;
