@@ -100,6 +100,11 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     validateVersion().catch((error: unknown) => {
       console.error(error);
     });
+
+    // Call the function to keep the screen awake
+    keepAwake().catch((error: unknown) => {
+      console.log(error);
+    });
   }, []);
 
   const checkVersion = async () => {
@@ -109,6 +114,30 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     console.log('New Version:', newVersion);
     if (newVersion !== currentVersion) {
       window.location.reload();
+    }
+  };
+  // Function to request a wake lock
+  const keepAwake = async () => {
+    try {
+      // Check if the Wake Lock API is supported
+      if ('wakeLock' in navigator) {
+        // Request a wake lock to keep the screen on
+        const wakeLock = await navigator.wakeLock.request('screen');
+        console.log('Wake Lock is active');
+
+        // Release the wake lock when the tab or window is hidden
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'hidden') {
+            wakeLock.release().catch((error: unknown) => {
+              console.error(error);
+            });
+          }
+        });
+      } else {
+        console.log('Wake Lock API is not supported on this browser.');
+      }
+    } catch (error) {
+      console.log('Wake Lock API is not supported on this browser.', error);
     }
   };
 
