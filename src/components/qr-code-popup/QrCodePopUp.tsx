@@ -65,7 +65,7 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
     if (isShowComponent) {
       const timeoutID = setTimeout(() => {
         setIsShowComponent(false);
-      }, 5000);
+      }, 30000);
 
       return () => {
         clearTimeout(timeoutID);
