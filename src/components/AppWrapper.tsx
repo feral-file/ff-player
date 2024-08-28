@@ -68,8 +68,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Handle keydown event
-
   // useEffect(() => {
   //   const handleKeyDown = () => {
   //     setShowQrCode(!showQrCode);
