@@ -1,22 +1,32 @@
 .loading {
-  width: 100%;
-  height: 100%;
-  background-color: #000000;
-  color: #ffffff;
-  display: flex;
-  position: absolute;
-  z-index: 2;
-  justify-content: center;
-  align-items: center;
   font-size: 32px;
-  background: linear-gradient(90deg, #000000 33%, #191816 50%, #000000 66%)
-    #000000;
-  background-size: 300% 100%;
-  animation: l1 1s infinite linear;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.loader {
+  height: 4px;
+  width: 100%;
+  --c: no-repeat linear-gradient(#a0a0a0 0 0);
+  background: var(--c), var(--c), #2e2e2e;
+  background-size: 60% 100%;
+  animation: l16 3s infinite;
 }
 
-@keyframes l1 {
+@keyframes l16 {
   0% {
-    background-position: right;
+    background-position:
+      -150% 0,
+      -150% 0;
+  }
+  66% {
+    background-position:
+      250% 0,
+      -150% 0;
+  }
+  100% {
+    background-position:
+      250% 0,
+      250% 0;
   }
 }
