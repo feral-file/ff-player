@@ -2,6 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { LocalStorageItem } from '@/constants';
 
 const App: React.FC = () => {
   const router = useRouter();
@@ -25,6 +26,7 @@ const App: React.FC = () => {
     }
 
     router.replace('/daily');
+    localStorage.setItem(LocalStorageItem.castInfo, '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
