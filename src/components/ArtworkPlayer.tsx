@@ -185,15 +185,10 @@ const ArtworkPlayer = ({
           });
         });
 
-        hls.on(Hls.Events.KEY_LOADED, () => {
-          console.log('Video KEY_LOADED');
-        });
-
-        hls.on(Hls.Events.LIVE_BACK_BUFFER_REACHED, () => {
-          console.log('Video LIVE_BACK_BUFFER_REACHED');
-        });
-        hls.on(Hls.Events.BUFFER_RESET, () => {
-          console.log('Video BUFFER_RESET');
+        Object.values(Hls.Events).map(event => {
+          hls.on(event, (data: unknown) => {
+            console.log('Video event:', event, data);
+          });
         });
       } else {
         videoRef.current.src = previewURL;
@@ -263,6 +258,7 @@ const ArtworkPlayer = ({
           autoPlay
           loop
           playsInline
+          controls={true}
           crossOrigin="anonymous"></video>
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.audio && (
