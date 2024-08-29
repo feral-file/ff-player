@@ -87,7 +87,7 @@ class DailyService {
       return convertDailies;
     } catch (error) {
       console.error(error);
-      return [];
+      return [this.getDefaultDaily()];
     }
   }
 
