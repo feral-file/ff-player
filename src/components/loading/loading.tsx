@@ -5,7 +5,7 @@ export default function Loading() {
     <div className={styles.loading}>
       <div className={styles.loadingContainer}>
         <div>
-          <div>Loading ...</div>
+          <div>Loading...</div>
           <div className={styles.loader}></div>
         </div>
       </div>
