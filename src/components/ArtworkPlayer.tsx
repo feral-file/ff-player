@@ -177,6 +177,13 @@ const ArtworkPlayer = ({
               setLoading(false);
             });
         });
+
+        // Play video when it reaches the end (play in loop)
+        hls.on(Hls.Events.BUFFER_EOS, () => {
+          videoRef.current?.play().catch((error: unknown) => {
+            console.log('Error play video', error);
+          });
+        });
       } else {
         videoRef.current.src = previewURL;
         videoRef.current.addEventListener('loadeddata', () => {
