@@ -20,6 +20,7 @@ import {
   MIMETypeUseStream,
   MIMETypeVideo,
   SeriesPreviewHTMLTag,
+  ViewMode,
 } from '@/utils/types';
 import Hls from 'hls.js';
 import Image from 'next/image';
@@ -47,6 +48,7 @@ const ArtworkPlayer = ({
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
 
   function compareToGetFileType(type: string) {
@@ -161,6 +163,26 @@ const ArtworkPlayer = ({
     setLoading(false);
   };
 
+  const rotateVideo = () => {
+    if (videoRef.current && containerRef.current && context.deviceRotation) {
+      const viewMode = context.deviceRotation.viewMode;
+      // Adjust size based on rotation
+      if (viewMode === ViewMode.portrait) {
+        // Portrait swap width and height
+        videoRef.current.style.width = `${containerRef.current.clientHeight}px`;
+        videoRef.current.style.height = `${containerRef.current.clientWidth}px`;
+        videoRef.current.style.top = `${(containerRef.current.clientHeight - videoRef.current.clientHeight) / 2}px`;
+        videoRef.current.style.left = `${(containerRef.current.clientWidth - videoRef.current.clientWidth) / 2}px`;
+      } else {
+        // Landscape, reset to original size
+        videoRef.current.style.width = '100%';
+        videoRef.current.style.height = '100%';
+        videoRef.current.style.top = '0';
+        videoRef.current.style.left = '0';
+      }
+    }
+  };
+
   useEffect(() => {
     if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
       if (isStreaming && Hls.isSupported()) {
@@ -205,10 +227,15 @@ const ArtworkPlayer = ({
         videoRef.current.pause();
       }
     }
+
+    if (context.deviceRotation && previewType === SeriesPreviewHTMLTag.video) {
+      rotateVideo();
+    }
   }, [context, previewType]);
 
   return (
     <div
+      ref={containerRef}
       style={{
         display: 'flex',
         width: '100%',
