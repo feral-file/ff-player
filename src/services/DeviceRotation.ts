@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 const useDeviceRotation = (castInfo: CastInfo | null) => {
   const [screenOrientation, setScreenOrientation] = useState<Orientation>(
-    Orientation.horizontal
+    Orientation.vertical
   );
   const [screenRatio, setScreenRatio] = useState<number>(1);
   const [viewMode, setViewMode] = useState<ViewMode | null>(null);
@@ -18,10 +18,13 @@ const useDeviceRotation = (castInfo: CastInfo | null) => {
         console.log('window.innerWidth', window.innerWidth);
 
         if (window.innerHeight > window.innerWidth) {
+          console.log('setViewMode portrait');
           setViewMode(ViewMode.portrait);
           minSize = window.innerWidth;
           setScreenOrientation(Orientation.vertical);
+          console.log();
         } else {
+          console.log('setViewMode landscape');
           setViewMode(ViewMode.landscape);
           minSize = window.innerHeight;
           setScreenOrientation(Orientation.horizontal);
