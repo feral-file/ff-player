@@ -14,6 +14,9 @@ const useDeviceRotation = (castInfo: CastInfo | null) => {
     if (typeof window !== 'undefined') {
       const resizeHandler = () => {
         let minSize;
+        console.log('window.innerHeight', window.innerHeight);
+        console.log('window.innerWidth', window.innerWidth);
+
         if (window.innerHeight > window.innerWidth) {
           setViewMode(ViewMode.portrait);
           minSize = window.innerWidth;

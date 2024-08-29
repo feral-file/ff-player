@@ -30,10 +30,12 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const router = useRouter();
 
   const { castInfo, canvasService } = context.websocketData;
-  const { screenOrientation, rotateRadius } = context.deviceRotation ?? {
-    screenOrientation: Orientation.horizontal,
-    rotateRadius: 0,
-  };
+  const { screenOrientation, rotateRadius, viewMode } =
+    context.deviceRotation ?? {
+      screenOrientation: Orientation.horizontal,
+      rotateRadius: 0,
+    };
+
   const [castState, setCastState] = useState<CastState>(CastState.None);
   const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
   const [showQrCode, setShowQrCode] = useState<boolean>(false);
@@ -273,6 +275,10 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   }, [isWebOSTVLoaded, isWebOSTVDevLoaded]);
 
+  console.log('screenOrientation', screenOrientation);
+  console.log('rotateRadius', rotateRadius);
+  console.log('viewMode:', viewMode);
+
   return (
     <>
       <Script
@@ -304,7 +310,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               (rotateRadius || 0) % 180 === 0)
               ? '100vh'
               : '100vw',
-          transform: `rotate(${(rotateRadius || 0).toString()}deg) `,
+          transform: `rotate(${(rotateRadius || 0).toString()}deg)`,
           transformOrigin:
             (screenOrientation === Orientation.vertical &&
               (rotateRadius || 0) % 360 === 90) ||
