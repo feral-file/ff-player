@@ -4,6 +4,9 @@ import CanvasService from './CanvasService';
 import { LocalStorageItem } from '@/constants';
 import { CastInfo } from '@/utils/types';
 
+const pingIntervalTime = 5 * 60 * 1000; // 5 minutes
+const pongWaitTime = 10 * 1000;
+
 const useWebSocket = (url: string, apiKey: string) => {
   const [locationID, setLocationID] = useState<string | null>(null);
   const [topicID, setTopicID] = useState<string | null>(null);
@@ -13,6 +16,8 @@ const useWebSocket = (url: string, apiKey: string) => {
   const [isDisconnected, setIsDisconnected] = useState<boolean>(false);
   const ws = useRef<ReconnectingWebSocket | null>(null);
   const canvasService = useRef(new CanvasService());
+  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pongTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!url || !apiKey) return;
@@ -33,6 +38,18 @@ const useWebSocket = (url: string, apiKey: string) => {
       ws.current.onopen = () => {
         console.log('WebSocket connected');
         setIsDisconnected(false);
+
+        pingIntervalRef.current = setInterval(() => {
+          ws.current?.send(
+            JSON.stringify({ messageID: 'ping', message: 'ping' })
+          );
+          pongTimeoutRef.current = setTimeout(() => {
+            console.log(
+              'No pong received within the expected time. WebSocket seems disconnected.'
+            );
+            setIsDisconnected(true);
+          }, pongWaitTime);
+        }, pingIntervalTime); // ping every 5 minutes
       };
 
       // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -55,6 +72,17 @@ const useWebSocket = (url: string, apiKey: string) => {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             data.message.topicID as string
           );
+        }
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        else if (data.messageID === 'ping') {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+          if (data.message === 'pong') {
+            console.log('Pong received');
+            setIsDisconnected(false);
+            if (pongTimeoutRef.current) {
+              clearTimeout(pongTimeoutRef.current);
+            }
+          }
         } else {
           const responseMessage =
             await canvasService.current.processMessage(event);
@@ -73,6 +101,9 @@ const useWebSocket = (url: string, apiKey: string) => {
       ws.current.onclose = () => {
         console.log('WebSocket disconnected, attempting to reconnect...');
         setIsDisconnected(true);
+        if (pingIntervalRef.current) {
+          clearInterval(pingIntervalRef.current);
+        }
       };
     };
 
