@@ -42,7 +42,8 @@ const useWebSocket = (url: string, apiKey: string) => {
         const castInfo = localStorage.getItem(LocalStorageItem.castInfo);
         if (castInfo) {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-          setCastInfo(JSON.parse(castInfo));
+          canvasService.current.setCastInfo(JSON.parse(castInfo));
+          setCastInfo(canvasService.current.getCastInfo());
         }
 
         pingIntervalRef.current = setInterval(() => {
