@@ -189,6 +189,11 @@ const ArtworkPlayer = ({
         Object.values(Hls.Events).map(event => {
           hls.on(event, (data: unknown) => {
             console.log('Video event:', event, data);
+            if (event === Hls.Events.BUFFER_EOS) {
+              videoRef.current?.play().catch((error: unknown) => {
+                console.log('Error play video', error);
+              });
+            }
           });
         });
       } else {
