@@ -7,6 +7,7 @@ import { getDelayTime } from '@/services/qrCodePopUpService';
 import { CastingArtworkType } from '@/utils/mixpanel';
 import { useEffect, useRef, useState } from 'react';
 import Loading from '@/components/loading/loading';
+import { DEFAULT_DELAY } from '@/utils/constants';
 
 export default function DailyClient() {
   const dailyRef = useRef<Daily>();
@@ -52,9 +53,7 @@ export default function DailyClient() {
             setCastPreviewURL(dailies[0].previewURL);
           }
 
-          if (delay > 0) {
-            startTimeout(delay);
-          }
+          startTimeout(delay > 0 ? delay : DEFAULT_DELAY);
         }
       } catch (error) {
         console.error(error);

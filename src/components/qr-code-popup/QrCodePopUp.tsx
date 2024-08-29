@@ -2,7 +2,7 @@
 
 import { AppContext } from '@/context/AppContext';
 import { Daily } from '@/models';
-import useDailies, { getDelayTime } from '@/services/qrCodePopUpService';
+import { getDelayTime } from '@/services/qrCodePopUpService';
 import DeviceManager from '@/utils/DeviceManager';
 import Image from 'next/image';
 import QRCode from 'qrcode.react';
@@ -11,6 +11,7 @@ import styles from './styles.module.scss';
 import { QrCodeSkeleton } from '../skeleton/skeleton';
 import { KeyDown, TIME_PER_HOUR } from '@/constants';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
+import DailyService, { DailyInstanceService } from '@/services/DailyService';
 
 const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
   const context = useContext(AppContext);
@@ -20,14 +21,21 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
   const [isShowComponent, setIsShowComponent] = useState<boolean>(false);
   const [countdownPercentage, setCountdownPercentage] = useState<number>(0);
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
+  const dailyService = useRef(new DailyService());
+  const [dailies, setDailies] = useState<Daily[]>([]);
 
   const { screenRatio } = context?.deviceRotation ?? {
     screenRatio: 1,
   };
   const { locationID, topicID } = context?.websocketData ?? {};
-
   const lastEventTime = useRef(0);
-  const dailies = useDailies();
+
+  useEffect(() => {
+    fetchDailies().catch((error: unknown) => {
+      console.log(error);
+    });
+  }, []);
+
   useEffect(() => {
     if (locationID && topicID) {
       DeviceManager.setLocationId(locationID);
@@ -51,8 +59,16 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
   useEffect(() => {
     const calculateTimer = () => {
       const { delay, duration } = getDelayTime(dailies);
-      setNextArtwork(delay / TIME_PER_HOUR);
-      setCountdownPercentage(((duration - delay) / duration) * 100);
+
+      setNextArtwork((delay > 0 ? delay : 0) / TIME_PER_HOUR);
+      let percentage = ((duration - delay) / duration) * 100;
+      if (percentage < 0) {
+        percentage = 0;
+      }
+      if (percentage > 100) {
+        percentage = 100;
+      }
+      setCountdownPercentage(percentage);
     };
 
     if (dailies.length > 0) {
@@ -76,8 +92,19 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
     setIsShowComponent(showQrCode);
   }, [showQrCode]);
 
+  const fetchDailies = async () => {
+    let dailies = DailyInstanceService.getDailies();
+    if (dailies.length === 0) {
+      dailies = await dailyService.current.callingDailies();
+    }
+    setDailies(dailies);
+  };
+
   useEffect(() => {
     if (isShowComponent) {
+      fetchDailies.call(this).catch((error: unknown) => {
+        console.log(error);
+      });
       const timeoutID = setTimeout(() => {
         setIsShowComponent(false);
       }, 30000);
