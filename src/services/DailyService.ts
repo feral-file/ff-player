@@ -21,10 +21,15 @@ class DailyService {
 
   public async callingDailies(): Promise<Daily[]> {
     try {
-      const dailies = await this.getUpcomingDaily(
+      let dailies = await this.getUpcomingDaily(
         ['includeSuccessfulSwap'],
         'limit=10&offset=0'
       );
+
+      if (dailies.length === 0) {
+        dailies = [this.getDefaultDaily()];
+      }
+
       const ids = dailies.map((d: Daily) => {
         if (d.artwork?.swap) {
           const swap = d.artwork.swap;
@@ -108,6 +113,18 @@ class DailyService {
         return '';
       }
     }
+  }
+
+  private getDefaultDaily(): Daily {
+    // Payphone Token
+    return {
+      blockchain: 'ethereum',
+      contractAddress: '0x1D9787369B1DCf709f92Da1d8743c2A4b6028a83',
+      displayTime: new Date().setHours(0, 0, 0, 0).toString(),
+      id: '',
+      tokenName: '#1',
+      tokenID: '339348595130070749814751437599411258966098496',
+    };
   }
 }
 
