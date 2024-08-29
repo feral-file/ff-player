@@ -16,6 +16,8 @@ const useDeviceRotation = (castInfo: CastInfo | null) => {
         let minSize;
         console.log('window.innerHeight', window.innerHeight);
         console.log('window.innerWidth', window.innerWidth);
+        console.log('window.outerHeight', window.outerHeight);
+        console.log('window.outerWidth', window.outerWidth);
 
         if (window.innerHeight > window.innerWidth) {
           console.log('setViewMode portrait');
