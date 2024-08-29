@@ -171,14 +171,10 @@ const ArtworkPlayer = ({
         // Portrait swap width and height
         videoRef.current.style.width = `${containerRef.current.clientHeight}px`;
         videoRef.current.style.height = `${containerRef.current.clientWidth}px`;
-        videoRef.current.style.top = `${(containerRef.current.clientHeight - videoRef.current.clientHeight) / 2}px`;
-        videoRef.current.style.left = `${(containerRef.current.clientWidth - videoRef.current.clientWidth) / 2}px`;
       } else {
         // Landscape, reset to original size
         videoRef.current.style.width = '100%';
         videoRef.current.style.height = '100%';
-        videoRef.current.style.top = '0';
-        videoRef.current.style.left = '0';
       }
     }
   };
@@ -242,6 +238,7 @@ const ArtworkPlayer = ({
         height: '100%',
         backgroundColor: '#000000',
         justifyContent: 'center',
+        alignItems: 'center',
         position: 'relative',
       }}>
       {(previewType === null || loading) && <Loading />}
