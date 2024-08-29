@@ -16,6 +16,8 @@ const useWebSocket = (url: string, apiKey: string) => {
   const [isDisconnected, setIsDisconnected] = useState<boolean>(false);
   const ws = useRef<ReconnectingWebSocket | null>(null);
   const canvasService = useRef(new CanvasService());
+  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pongTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!url || !apiKey) return;
@@ -32,18 +34,16 @@ const useWebSocket = (url: string, apiKey: string) => {
       setCastInfo({ dataChecked: true });
 
       ws.current = new ReconnectingWebSocket(wsUrl);
-      let pingInterval: NodeJS.Timeout;
-      let pongTimeout: NodeJS.Timeout;
 
       ws.current.onopen = () => {
         console.log('WebSocket connected');
         setIsDisconnected(false);
 
-        pingInterval = setInterval(() => {
+        pingIntervalRef.current = setInterval(() => {
           ws.current?.send(
             JSON.stringify({ messageID: 'ping', message: 'ping' })
           );
-          pongTimeout = setTimeout(() => {
+          pongTimeoutRef.current = setTimeout(() => {
             console.log(
               'No pong received within the expected time. WebSocket seems disconnected.'
             );
@@ -79,7 +79,9 @@ const useWebSocket = (url: string, apiKey: string) => {
           if (data.message === 'pong') {
             console.log('Pong received');
             setIsDisconnected(false);
-            clearTimeout(pongTimeout);
+            if (pongTimeoutRef.current) {
+              clearTimeout(pongTimeoutRef.current);
+            }
           }
         } else {
           const responseMessage =
@@ -99,7 +101,9 @@ const useWebSocket = (url: string, apiKey: string) => {
       ws.current.onclose = () => {
         console.log('WebSocket disconnected, attempting to reconnect...');
         setIsDisconnected(true);
-        clearInterval(pingInterval);
+        if (pingIntervalRef.current) {
+          clearInterval(pingIntervalRef.current);
+        }
       };
     };
 
