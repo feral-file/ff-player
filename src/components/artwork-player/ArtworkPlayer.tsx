@@ -24,8 +24,9 @@ import {
 import Hls from 'hls.js';
 import Image from 'next/image';
 import { useContext, useEffect, useRef, useState } from 'react';
-import Loading from './loading/loading';
+import Loading from '../loading/loading';
 import { AppContext } from '@/context/AppContext';
+import styles from './styles.module.scss';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -253,6 +254,7 @@ const ArtworkPlayer = ({
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.video && (
         <video
+          className={styles['videoContainer']}
           ref={videoRef}
           style={{ width: '100%', height: '100%' }}
           autoPlay

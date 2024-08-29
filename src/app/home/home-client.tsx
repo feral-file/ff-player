@@ -6,13 +6,13 @@ import { ViewMode } from '@/utils/types';
 import styles from './home.module.scss';
 import clsx from 'clsx';
 import Image from 'next/image';
-import ArtworkPlayer from '@/components/ArtworkPlayer';
 import QRCode from 'qrcode.react';
 import { BrowserInfo, detect } from 'detect-browser';
 import ArtworkService from '@/services/ArtworkService';
 import DeviceManager from '@/utils/DeviceManager';
 import { AppContext } from '@/context/AppContext';
 import { Artwork } from '@/models';
+import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 
 export default function HomeClient() {
   const context = useContext(AppContext);

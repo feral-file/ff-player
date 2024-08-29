@@ -1,12 +1,12 @@
 'use client';
 
 import { Daily } from '@/models';
-import ArtworkPlayer from '../../components/ArtworkPlayer';
 import DailyService, { DailyInstanceService } from '@/services/DailyService';
 import { getDelayTime } from '@/services/qrCodePopUpService';
 import { CastingArtworkType } from '@/utils/mixpanel';
 import { useEffect, useRef, useState } from 'react';
 import Loading from '@/components/loading/loading';
+import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 
 export default function DailyClient() {
   const dailyRef = useRef<Daily>();

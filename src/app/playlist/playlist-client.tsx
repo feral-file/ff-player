@@ -1,6 +1,6 @@
 'use client';
 
-import ArtworkPlayer from '@/components/ArtworkPlayer';
+import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { AppContext } from '@/context/AppContext';
 import { IndexerToken } from '@/models';
 import ArtworkService from '@/services/ArtworkService';
