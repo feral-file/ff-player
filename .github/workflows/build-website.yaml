@@ -5,6 +5,10 @@ on:
     branches:
       - main
       - develop
+    paths: 
+      - 'src/**'
+      - 'package.json'
+      - 'tsconfig.json'
 
 jobs:
   build:
