@@ -25,7 +25,7 @@ export default function LostConnectionModal() {
       {isOnline && isDisconnected && (
         <MessageModal
           screenRatio={screenRatio}
-          message="Connection lost. Trouble communicating with the server. Please wait while attempting to reconnect."
+          message="Connection lost. Please wait while attempting to reconnect."
         />
       )}
     </div>
