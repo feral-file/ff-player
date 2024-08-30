@@ -3,6 +3,7 @@ node_modules
 .next
 .env.local
 out
+dist
 platforms/samsung/build/*
 platforms/samsung/.idea/*
 platforms/samsung/android/*
