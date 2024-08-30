@@ -72,8 +72,15 @@ export default function PlaylistClient() {
   const handleUpdateDuration = (artworks: PlayArtworkV2[]) => {
     const durationMap = new Map<string, number>();
     artworks.forEach((a: PlayArtworkV2) => {
-      durationMap.set(a.id, a.duration);
+      if (a.token) {
+        durationMap.set(a.token.id, a.duration);
+      }
     });
+    let index = currentIndex % playlist.length;
+    const currentPlaylistItem = playlist[currentIndex];
+    const currentArtwork = artworks.find(
+      a => a.token?.id === currentPlaylistItem.token.id
+    );
 
     const updatedPlaylist = playlist.map((p: PlaylistToken, i: number) => {
       return {
@@ -82,14 +89,37 @@ export default function PlaylistClient() {
       };
     });
 
-    const i = currentIndex % playlist.length;
-    const remainTime = Date.now() - startPlayArtworkTime.current;
-    const st = calculateStartTime(updatedPlaylist, i, remainTime + 100);
-    setStartTime(st);
+    let startTime = calculateStartTime(updatedPlaylist, index);
+    if (currentArtwork) {
+      const playTime = Date.now() - startPlayArtworkTime.current;
+      if (currentPlaylistItem.duration < currentArtwork.duration) {
+        const remainTime = new Date(
+          currentPlaylistItem.duration -
+            playTime +
+            (currentArtwork.duration - currentPlaylistItem.duration)
+        ).setMilliseconds(0);
+        startTime = calculateStartTime(updatedPlaylist, index, remainTime);
+        startInterval(remainTime);
+      } else if (currentPlaylistItem.duration > currentArtwork.duration) {
+        if (playTime >= currentArtwork.duration) {
+          index = (index + 1) % playlist.length;
+          startTime = calculateStartTime(updatedPlaylist, index);
+        } else {
+          const remainTime = new Date(
+            currentArtwork.duration - playTime
+          ).setMilliseconds(0);
+          startTime = calculateStartTime(updatedPlaylist, index, remainTime);
+          startInterval(remainTime);
+        }
+      }
+    }
+
+    setStartTime(startTime);
     setPlaylist(updatedPlaylist);
   };
 
   const handlePauseCasting = () => {
+    console.log('handlePauseCasting');
     clearTimer();
     const now = Date.now();
     elapsedTimeRef.current = now - startPlayArtworkTime.current;
@@ -97,10 +127,11 @@ export default function PlaylistClient() {
   };
 
   const handleResumeCasting = () => {
+    console.log('handleResumeCasting');
     const st = calculateStartTime(
       playlist,
       currentIndex,
-      elapsedTimeRef.current
+      new Date(elapsedTimeRef.current).setMilliseconds(0)
     );
     setStartTime(st);
     startInterval(remainTimeRef.current);
@@ -258,6 +289,15 @@ export default function PlaylistClient() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [castInfo]);
+
+  useEffect(() => {
+    if (context.isOnline && !context.websocketData.isDisconnected) {
+      handleResumeCasting();
+    } else {
+      handlePauseCasting();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context]);
 
   return (
     <>
