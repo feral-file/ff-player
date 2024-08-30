@@ -78,14 +78,16 @@ const ArtworkPlayer = ({
 
   // Mixpanel
   useEffect(() => {
+    if (!castingType || !artworkID || !artworkName) return;
+
     trackTimeEvent(MixpanelEventName.CastArtworkEventName);
 
     const cleanup = async () => {
-      if (artworkID && castingType) {
+      if (artworkID) {
         const event: CastArtworkEventProperties = {
           casting_type: castingType,
           token_id: artworkID,
-          token_name: artworkName ?? '',
+          token_name: artworkName,
         };
         try {
           await trackEvent(MixpanelEventName.CastArtworkEventName, event);
