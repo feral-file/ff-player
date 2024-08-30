@@ -38,6 +38,13 @@ const useWebSocket = (url: string, apiKey: string) => {
       ws.current.onopen = () => {
         console.log('WebSocket connected');
         setIsDisconnected(false);
+        // Retrieve cast info from local storage to keep the state when refresh page
+        const castInfo = localStorage.getItem(LocalStorageItem.castInfo);
+        if (castInfo) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+          canvasService.current.setCastInfo(JSON.parse(castInfo));
+          setCastInfo(canvasService.current.getCastInfo());
+        }
 
         pingIntervalRef.current = setInterval(() => {
           ws.current?.send(

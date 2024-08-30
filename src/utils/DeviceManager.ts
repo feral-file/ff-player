@@ -171,10 +171,6 @@ class DeviceManager {
       const topicId = await this.getTopicId();
       const name = await this.getName();
 
-      if (!locationId || !topicId) {
-        return null;
-      }
-
       return {
         deviceId,
         locationId,

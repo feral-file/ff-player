@@ -33,7 +33,7 @@ export function calculateStartTime(
   index: number,
   elapsedTime?: number
 ): number {
-  let startTime = Date.now();
+  let startTime = new Date().setMilliseconds(0);
   for (let i = 0; i < index; i++) {
     startTime -= playlistTokens[i].duration || 0;
   }
