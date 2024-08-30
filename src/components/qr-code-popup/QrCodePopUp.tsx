@@ -271,7 +271,7 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
       <div
         style={{ fontSize: screenRatio * 20 }}
         className={styles['bottom-groups']}>
-        <p>Press Enter button to bring this back.</p>
+        <p>Press Enter to hide/show this window.</p>
       </div>
     </div>
   );
