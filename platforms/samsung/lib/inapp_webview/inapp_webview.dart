@@ -9,7 +9,6 @@ import 'package:feralfile_display_tizen/service/configuration_service.dart';
 import 'package:feralfile_display_tizen/utils/config_manager.dart';
 import 'package:feralfile_display_tizen/utils/injector.dart';
 import 'package:feralfile_display_tizen/utils/log.dart';
-import 'package:feralfile_display_tizen/view/common_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -92,14 +91,9 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
             log.info('KeyEventResult.ignored');
             return KeyEventResult.ignored;
           },
-          child: Stack(
-            children: [
-              WebViewWidget(
-                controller: _webViewController,
-                key: Key(widget.payload.key),
-              ),
-              if (_isLoading) loadingWidget(context),
-            ],
+          child: WebViewWidget(
+            controller: _webViewController,
+            key: Key(widget.payload.key),
           ),
         ),
       );
