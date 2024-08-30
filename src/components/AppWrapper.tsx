@@ -289,6 +289,16 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         {children}
         <QrCodePopUp showQrCode={showQrCode}></QrCodePopUp>
       </div>
+      <div
+        style={{
+          position: 'fixed',
+          width: '100%',
+          height: '100%',
+          zIndex: 9999,
+          background: 'transparent',
+          top: 0,
+          left: 0,
+        }}></div>
     </>
   );
 };
