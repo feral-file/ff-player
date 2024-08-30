@@ -130,12 +130,21 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
         }
       }
     };
+
+    const handleClick = (event: MouseEvent) => {
+      if (event.target instanceof HTMLElement) {
+        console.log('Toggle QR Code');
+        setIsShowComponent(!isShowComponent);
+      }
+    };
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('click', handleClick);
     }
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('click', handleClick);
     };
   }, [isShowComponent]);
 
