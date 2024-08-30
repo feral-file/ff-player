@@ -225,6 +225,7 @@ class CanvasService {
       connectedDevice: this.castInfo?.deviceInfo,
       exhibitionId: this.castInfo?.exhibitionId,
       displayKey: this.castInfo?.displayKey,
+      catalogId: this.castInfo?.catalogId,
     });
   }
 
