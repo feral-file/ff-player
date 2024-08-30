@@ -206,7 +206,7 @@ export class WebConfigService implements PlatformConfigService {
   }
 
   getOrCreateDeviceId() {
-    let deviceId = localStorage.getItem('deviceId');
+    let deviceId = localStorage.getItem(LocalStorageItem.deviceId);
     if (!deviceId) {
       const platform = navigator.platform;
       const browser = detect() as BrowserInfo;
