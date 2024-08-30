@@ -168,12 +168,17 @@ export default function PlaylistClient() {
     }
 
     const st = calculateStartTime(playlist, index);
+
     setStartTime(st);
     clearTimer();
     setCurrentIndex(index);
   };
 
   const startInterval = (duration: number) => {
+    if (duration === 0) {
+      return;
+    }
+
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
@@ -297,7 +302,7 @@ export default function PlaylistClient() {
       handlePauseCasting();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context]);
+  }, [context.isOnline, context.websocketData.isDisconnected]);
 
   return (
     <>
