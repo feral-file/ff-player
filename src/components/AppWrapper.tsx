@@ -105,8 +105,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const checkVersion = async () => {
     const currentVersion = await AppService.getCurrentVersion();
     const newVersion = await AppService.getVersion();
-    console.log('Current Version:', currentVersion);
-    console.log('New Version:', newVersion);
+    console.log('Current Version: ', currentVersion);
+    console.log('New Version: ', newVersion);
     if (newVersion !== currentVersion) {
       window.location.reload();
     }
