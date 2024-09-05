@@ -1,6 +1,6 @@
 'use client';
 
-import { AppSettings, LocalStorageItem } from '@/constants';
+import { LocalStorageItem } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 // import DeviceManager from '@/utils/DeviceManager';
@@ -84,13 +84,15 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Check version update
   useEffect(() => {
     const validateVersion = async () => {
+      const duration = await AppService.getVersionCheckIntervalDuration();
+
       await checkVersion();
 
       const intervalID = setInterval(() => {
         checkVersion().catch((error: unknown) => {
           console.error(error);
         });
-      }, AppSettings.VERSION_CHECK_INTERVAL_DURATION);
+      }, duration);
 
       return () => {
         clearInterval(intervalID);

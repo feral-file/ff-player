@@ -1,3 +1,4 @@
+import { AppSettings } from '@/constants';
 import axios from 'axios';
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
@@ -5,6 +6,7 @@ class AppService {
   private static instance: AppService | null = null;
   private static currentVersion: string;
   private static isFirstOpen?: boolean = undefined;
+  private static versionCheckIntervalDuration: number;
 
   public static getInstance(): AppService {
     if (!AppService.instance) {
@@ -12,6 +14,14 @@ class AppService {
     }
 
     return AppService.instance;
+  }
+
+  public static async getVersionCheckIntervalDuration() {
+    if (!this.versionCheckIntervalDuration) {
+      this.versionCheckIntervalDuration = await this.getDurationFromConfig();
+    }
+
+    return this.versionCheckIntervalDuration;
   }
 
   public static async getCurrentVersion() {
@@ -42,6 +52,24 @@ class AppService {
 
   public static setIsFirstOpen(value: boolean) {
     this.isFirstOpen = value;
+  }
+
+  private static async getDurationFromConfig() {
+    try {
+      const response = await axios.get(
+        `${
+          process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
+        }/configs/display_app/configs.json`
+      );
+      console.log('Config:', response.data);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      return response.data.duration as number;
+    } catch (error) {
+      console.log('Failed to load config:', error);
+      // Return default value if failed to load config
+      return AppSettings.VERSION_CHECK_INTERVAL_DURATION;
+    }
   }
 }
 
