@@ -1,13 +1,16 @@
 'use client';
 
 import { Daily } from '@/models';
-import ArtworkPlayer from '../../components/ArtworkPlayer';
+import ArtworkPlayer from '../../components/artwork-player/ArtworkPlayer';
 import DailyService, { DailyInstanceService } from '@/services/DailyService';
 import { getDelayTime } from '@/services/qrCodePopUpService';
 import { CastingArtworkType } from '@/utils/mixpanel';
 import { useEffect, useRef, useState } from 'react';
 import Loading from '@/components/loading/loading';
-import { DEFAULT_DELAY } from '@/utils/constants';
+import {
+  DEFAULT_DELAY,
+  LeeMullican_EXHIBITION_CONTRACT,
+} from '@/utils/constants';
 
 export default function DailyClient() {
   const dailyRef = useRef<Daily>();
@@ -19,6 +22,8 @@ export default function DailyClient() {
   const [artworkName, setArtworkName] = useState<string | undefined>();
 
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
+  const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
+    useState<boolean>(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -51,6 +56,9 @@ export default function DailyClient() {
           const { delay } = getDelayTime(dailies);
           if (dailies[0].previewURL) {
             setCastPreviewURL(dailies[0].previewURL);
+            setIsLeeMucianExhibition(
+              dailies[0].contractAddress === LeeMullican_EXHIBITION_CONTRACT
+            );
           }
 
           startTimeout(delay > 0 ? delay : DEFAULT_DELAY);
@@ -94,6 +102,7 @@ export default function DailyClient() {
           artworkID={artworkID}
           artworkName={artworkName}
           castingType={CastingArtworkType.Daily}
+          isCustomView={isLeeMucianExhibition}
         />
       )}
     </div>
