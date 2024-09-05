@@ -1,10 +1,10 @@
-import { Post } from "./post.model";
-import { Series } from "./series.model";
-import { Artist, Curator } from "./user.model";
+import { Post } from './post.model';
+import { Series } from './series.model';
+import { Artist, Curator } from './user.model';
 
 export enum ExhibitionType {
-  solo = "solo",
-  group = "group",
+  solo = 'solo',
+  group = 'group',
 }
 
 export interface Exhibition {
@@ -21,4 +21,9 @@ export interface Exhibition {
   curator?: Curator;
   posts?: Post[];
   series?: Series[];
+  contracts?: ExhibitionContract[];
+}
+
+interface ExhibitionContract {
+  address: string;
 }

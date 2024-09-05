@@ -182,6 +182,7 @@ export interface PlaylistToken {
   artwork?: Artwork;
   duration: number;
   previewURL: string;
+  contractAddress?: string;
   token: {
     id: string;
     name: string;

@@ -24,19 +24,22 @@ import {
 import Hls from 'hls.js';
 import Image from 'next/image';
 import { useContext, useEffect, useRef, useState } from 'react';
-import Loading from './loading/loading';
+import Loading from '../loading/loading';
 import { AppContext } from '@/context/AppContext';
+import styles from './styles.module.scss';
 
 const ArtworkPlayer = ({
   previewURL,
   artworkID,
   artworkName,
   castingType,
+  isCustomView,
 }: {
   previewURL: string;
   artworkID?: string;
   artworkName?: string;
   castingType?: CastingArtworkType;
+  isCustomView?: boolean;
   keyboardCode?: number;
 }) => {
   const context = useContext(AppContext);
@@ -228,7 +231,9 @@ const ArtworkPlayer = ({
       }}>
       {(previewType === null || loading) && <Loading />}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (
-        <div style={{ width: '100%', height: '100%', objectFit: 'contain' }}>
+        <div
+          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          className={isCustomView ? styles.customRendering : ''}>
           <Image
             src={previewURL}
             alt="Preview"
