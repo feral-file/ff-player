@@ -6,11 +6,12 @@ import styles from './exhibition.module.scss';
 import './exhibition.module.scss';
 import { CastCommand, ExhibitionCatalog, ViewMode } from '@/utils/types';
 import Carousel from './components/carousel/carousel';
-import ArtworkPlayer from '@/components/ArtworkPlayer';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
 import Image from 'next/image';
 import { AppContext } from '@/context/AppContext';
 import { CastingArtworkType } from '@/utils/mixpanel';
+import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
+import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
 
 const ExhibitionHall = () => {
   const context = useContext(AppContext);
@@ -252,6 +253,11 @@ const ExhibitionHall = () => {
               artworkID={artworkID}
               artworkName={artworkName}
               castingType={CastingArtworkType.Exhibition}
+              isCustomView={
+                exhibitionDetail.contracts &&
+                exhibitionDetail.contracts[0]?.address ===
+                  LeeMullican_EXHIBITION_CONTRACT
+              }
             />
           )}
         </div>
