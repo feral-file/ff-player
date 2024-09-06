@@ -43,7 +43,8 @@ export const initMixpanel = () => {
     }
 
     mixpanel.init(mixpanelToken, {
-      debug: process.env.NODE_ENV !== 'production',
+      debug: true,
+      // debug: process.env.NODE_ENV !== 'production',
       loaded: () => {
         registerSupperProperties().catch((error: unknown) => {
           console.error(error);
