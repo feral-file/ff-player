@@ -270,7 +270,7 @@ const ArtworkPlayer = ({
         (previewType === SeriesPreviewHTMLTag.iframe ||
           previewType === SeriesPreviewHTMLTag.iframePDF) && (
           <iframe
-            style={{ width: '100%', height: '100%' }}
+            style={{ width: '100%', height: '100%', backgroundColor: '#000' }}
             src={previewURL}
             onLoad={loadedSource}
             sandbox="allow-same-origin allow-scripts"></iframe>
