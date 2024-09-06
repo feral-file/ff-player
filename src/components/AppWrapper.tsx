@@ -84,13 +84,17 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Check version update
   useEffect(() => {
     const validateVersion = async () => {
+      let duration = await AppService.getVersionCheckIntervalDuration();
+      duration =
+        duration > 0 ? duration : AppSettings.VERSION_CHECK_INTERVAL_DURATION;
+
       await checkVersion();
 
       const intervalID = setInterval(() => {
         checkVersion().catch((error: unknown) => {
           console.error(error);
         });
-      }, AppSettings.VERSION_CHECK_INTERVAL_DURATION);
+      }, duration);
 
       return () => {
         clearInterval(intervalID);
