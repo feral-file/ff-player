@@ -170,7 +170,7 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
         left: 0,
         backgroundColor: '#2e2e2e',
         borderRadius: `0 20px 0 0`,
-        display: isShowComponent ? 'flex' : 'none',
+        display: isShowComponent ? 'grid' : 'none',
         flexDirection: 'column',
         padding: screenRatio * 40,
         gap: screenRatio * 40,
@@ -245,8 +245,9 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
       </div>
       <div
         style={{
-          display: 'flex',
+          display: 'grid',
           gap: screenRatio * 20,
+          gridTemplateColumns: 'auto 1fr',
           alignItems: 'flex-end',
           fontSize: screenRatio * 20,
         }}>
