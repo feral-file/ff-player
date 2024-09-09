@@ -1,0 +1,14 @@
+{
+  "presets": [
+    [
+      "@babel/preset-env",
+      {
+        "targets": {
+          "browsers": ["Chrome >= 43"]
+        }
+      }
+    ],
+    "next/babel"
+  ],
+  "plugins": ["@babel/plugin-proposal-class-properties"]
+}
