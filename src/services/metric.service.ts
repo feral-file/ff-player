@@ -11,7 +11,6 @@ export enum CastingArtworkType {
 const accountsRequester: AxiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_ACCOUNTS_URL,
   headers: {
-    // 'Content-Type': 'application/json',
     'x-api-key': process.env.NEXT_PUBLIC_ACCOUNTS_API_KEY,
   },
 });
