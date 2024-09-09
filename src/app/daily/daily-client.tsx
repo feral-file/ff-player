@@ -2,7 +2,7 @@
 
 import { Daily } from '@/models';
 import ArtworkPlayer from '../../components/artwork-player/ArtworkPlayer';
-import DailyService, { DailyInstanceService } from '@/services/DailyService';
+import DailyService from '@/services/DailyService';
 import { getDelayTime } from '@/services/qrCodePopUpService';
 import { CastingArtworkType } from '@/utils/mixpanel';
 import { useEffect, useRef, useState } from 'react';
@@ -11,11 +11,14 @@ import {
   DEFAULT_DELAY,
   LeeMullican_EXHIBITION_CONTRACT,
 } from '@/utils/constants';
+import { TIME_PER_HOUR } from '@/constants';
 
 export default function DailyClient() {
   const dailyRef = useRef<Daily>();
-  const dailyService = useRef(new DailyService());
   const timeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
+    undefined
+  );
+  const dailyTimeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
   const [artworkID, setArtworkID] = useState<string | undefined>();
@@ -43,8 +46,11 @@ export default function DailyClient() {
     // Handle cast daily
     async function handleCastDaily() {
       try {
-        const dailies = await dailyService.current.callingDailies();
-        DailyInstanceService.setDailies(dailies);
+        const isRefreshDaily = await DailyService.isRefreshDailies();
+        if (isRefreshDaily) {
+          dailies = DailyService.getDailies();
+        }
+
         if (dailies.length > 0) {
           // Set mixpanel metadata
           if (dailyRef.current !== dailies[0]) {
@@ -66,6 +72,13 @@ export default function DailyClient() {
       } catch (error) {
         console.error(error);
       }
+
+      dailyTimeoutRef.current = setInterval(() => {
+        clearDailyTimeout();
+        handleCastDaily().catch((error: unknown) => {
+          console.error(error);
+        });
+      }, TIME_PER_HOUR); // Check refresh daily every hour
     }
 
     const startTimeout = (duration: number) => {
@@ -88,6 +101,17 @@ export default function DailyClient() {
     handleCastDaily().catch((error: unknown) => {
       console.error(error);
     });
+
+    let dailies: Daily[] = [];
+    const clearDailyTimeout = () => {
+      if (dailyTimeoutRef.current) {
+        clearInterval(dailyTimeoutRef.current);
+      }
+    };
+
+    return () => {
+      clearDailyTimeout();
+    };
   }, []);
 
   if (!castPreviewURL) {

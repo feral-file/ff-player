@@ -11,7 +11,7 @@ import styles from './styles.module.scss';
 import { QrCodeSkeleton } from '../skeleton/skeleton';
 import { KeyDown, TIME_PER_HOUR } from '@/constants';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
-import DailyService, { DailyInstanceService } from '@/services/DailyService';
+import DailyService from '@/services/DailyService';
 import { CastCommand } from '@/utils/types';
 
 const QrCodePopUp = () => {
@@ -22,7 +22,6 @@ const QrCodePopUp = () => {
   const [isShowComponent, setIsShowComponent] = useState<boolean>(false);
   const [countdownPercentage, setCountdownPercentage] = useState<number>(0);
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
-  const dailyService = useRef(new DailyService());
   const [dailies, setDailies] = useState<Daily[]>([]);
 
   const { screenRatio } = context?.deviceRotation ?? {
@@ -105,9 +104,10 @@ const QrCodePopUp = () => {
   }, [castInfo]);
 
   const fetchDailies = async () => {
-    let dailies = DailyInstanceService.getDailies();
+    let dailies = DailyService.getDailies();
+
     if (dailies.length === 0) {
-      dailies = await dailyService.current.callingDailies();
+      dailies = await DailyService.callingDailies();
     }
     setDailies(dailies);
   };
