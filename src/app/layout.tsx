@@ -1,4 +1,6 @@
 import 'core-js/stable';
+import 'regenerator-runtime/runtime';
+import 'core-js/features/global-this';
 import type { Metadata } from 'next';
 import './globals.css';
 import { AppProvider } from '../context/AppContext';
