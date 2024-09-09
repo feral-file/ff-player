@@ -4,9 +4,9 @@ import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { AppContext } from '@/context/AppContext';
 import { IndexerToken } from '@/models';
 import ArtworkService from '@/services/ArtworkService';
+import { CastingArtworkType } from '@/services/metric.service';
 import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
 import { getIndexerTokenName } from '@/utils/indexer';
-import { CastingArtworkType } from '@/utils/mixpanel';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
 import { CastCommand, PlayArtworkV2, PlaylistToken } from '@/utils/types';
 import { useContext, useEffect, useRef, useState } from 'react';
@@ -20,7 +20,6 @@ export default function PlaylistClient() {
   const { castInfo } = context.websocketData;
 
   const [artworkID, setArtworkID] = useState<string | undefined>();
-  const [artworkName, setArtworkName] = useState<string | undefined>();
   const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
     useState<boolean>(false);
 
@@ -61,7 +60,6 @@ export default function PlaylistClient() {
     if (currentPlaylist !== currentPlaylistRef.current) {
       currentPlaylistRef.current = currentPlaylist;
       setArtworkID(currentPlaylist.token.id);
-      setArtworkName(currentPlaylist.token.name);
     }
     setCastPreviewURL(currentPlaylist.previewURL);
     setIsLeeMucianExhibition(
@@ -321,7 +319,6 @@ export default function PlaylistClient() {
         <ArtworkPlayer
           previewURL={castPreviewURL ?? ''}
           artworkID={artworkID}
-          artworkName={artworkName}
           castingType={CastingArtworkType.Playlist}
           isCustomView={isLeeMucianExhibition}
         />

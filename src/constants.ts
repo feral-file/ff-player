@@ -50,8 +50,7 @@ export enum LocalStorageItem {
   name = 'device_name',
   branchLink = 'branchLink',
   previouslyConnectedDeviceIds = 'previouslyConnectedDeviceIds',
-  doResetMixpanelAfterTracking = 'doResetMixpanelAfterTracking',
-  newMixpanelUserID = 'newMixpanelUserID',
+  metricIdentifier = 'metricIdentifier',
 }
 
 export enum Platform {
@@ -72,6 +71,6 @@ export const AppSettings = {
   STANDARD_HEIGHT: 1080,
 };
 
-export const MixpanelAnonymousIDPrefix = '$device:';
-
 export const TIME_PER_HOUR = 60 * 60 * 1000;
+
+export const MetricDuration = 18 * 1000;

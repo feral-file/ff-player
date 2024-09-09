@@ -1,12 +1,4 @@
-import { LocalStorageItem } from '@/constants';
-import mixpanel, {
-  CastArtworkEventProperties,
-  CastingArtworkType,
-  MixpanelEventName,
-  registerSupperProperties,
-  trackEvent,
-  trackTimeEvent,
-} from '@/utils/mixpanel';
+// import { LocalStorageItem } from '@/constants';
 import {
   FileUseAudio,
   FileUseIframe,
@@ -27,17 +19,17 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import Loading from '../loading/loading';
 import { AppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
+import { CastingArtworkType, uploadNewMetric } from '@/services/metric.service';
+import { MetricDuration } from '@/constants';
 
 const ArtworkPlayer = ({
   previewURL,
   artworkID,
-  artworkName,
   castingType,
   isCustomView,
 }: {
   previewURL: string;
   artworkID?: string;
-  artworkName?: string;
   castingType?: CastingArtworkType;
   isCustomView?: boolean;
   keyboardCode?: number;
@@ -51,6 +43,9 @@ const ArtworkPlayer = ({
   const [loading, setLoading] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
+
+  const lastLogTimeRef = useRef(Date.now());
+  const timerIdRef = useRef<NodeJS.Timeout | number | null>(null);
 
   function compareToGetFileType(type: string) {
     setIsStreaming(false);
@@ -79,53 +74,29 @@ const ArtworkPlayer = ({
     }
   }
 
-  // Mixpanel
+  // Metric
   useEffect(() => {
-    if (!castingType || !artworkID || !artworkName) return;
+    if (!castingType || !artworkID) return;
 
-    trackTimeEvent(MixpanelEventName.CastArtworkEventName);
+    const logMessage = () => {
+      const currentTime = Date.now();
+      uploadNewMetric(castingType, artworkID, MetricDuration);
 
-    const cleanup = async () => {
-      if (artworkID) {
-        const event: CastArtworkEventProperties = {
-          casting_type: castingType,
-          token_id: artworkID,
-          token_name: artworkName,
-        };
-        try {
-          await trackEvent(MixpanelEventName.CastArtworkEventName, event);
-          if (
-            localStorage.getItem(
-              LocalStorageItem.doResetMixpanelAfterTracking
-            ) === 'true'
-          ) {
-            localStorage.setItem(
-              LocalStorageItem.doResetMixpanelAfterTracking,
-              'false'
-            );
-            mixpanel.reset();
-          }
-
-          const newUserID = localStorage.getItem(
-            LocalStorageItem.newMixpanelUserID
-          );
-          if (newUserID) {
-            localStorage.setItem(LocalStorageItem.newMixpanelUserID, '');
-            await registerSupperProperties();
-            mixpanel.identify(newUserID);
-          }
-        } catch (error: unknown) {
-          console.error(error);
-        }
-      }
+      lastLogTimeRef.current = currentTime;
+      timerIdRef.current = setTimeout(logMessage, MetricDuration);
     };
+
+    timerIdRef.current = setTimeout(logMessage, MetricDuration);
 
     return () => {
-      cleanup().catch((error: unknown) => {
-        console.error(error);
-      });
+      if (timerIdRef.current) {
+        clearTimeout(timerIdRef.current);
+      }
+      const currentTime = Date.now();
+      const timeElapsed = currentTime - lastLogTimeRef.current;
+      uploadNewMetric(castingType, artworkID, timeElapsed);
     };
-  }, [castingType, artworkID, artworkName]);
+  }, [castingType, artworkID]);
 
   useEffect(() => {
     const detectPreviewType = async (previewURL: string) => {

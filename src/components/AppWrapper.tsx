@@ -8,11 +8,12 @@ import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
 import { useRouter, useSearchParams } from 'next/navigation';
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useState } from 'react';
 // import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
-import { initMixpanel } from '@/utils/mixpanel';
+import DeviceManager from '@/utils/DeviceManager';
+import { hashStringToSHA256 } from '@/utils/crypto';
 
 const enum CastState {
   None, // Not casting
@@ -133,6 +134,24 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     };
   });
 
+  const setMetricIdentifier = useCallback(async () => {
+    try {
+      const deviceID = await DeviceManager.getDeviceId();
+      if (!deviceID) {
+        throw new Error('Device ID is not available');
+      }
+      const metricIdentifier = hashStringToSHA256(deviceID);
+      console.log('METRIC: set identifier:', metricIdentifier);
+      localStorage.setItem(LocalStorageItem.metricIdentifier, metricIdentifier);
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error('Error setting metric identifier:', error.message);
+      } else {
+        console.error('Unknown error setting metric identifier:', error);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     console.log('Cast Info:', castInfo);
     if (castInfo) {
@@ -228,10 +247,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       handleCastCommand();
     } else {
       if (castState !== CastState.None && castState !== CastState.Daily) {
-        localStorage.setItem(
-          LocalStorageItem.doResetMixpanelAfterTracking as string,
-          'true'
-        );
+        setMetricIdentifier().catch((error: unknown) => {
+          console.error(error);
+        });
         // Disconnect
         setCastState(CastState.None);
         router.back();
@@ -242,9 +260,11 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
-      initMixpanel();
+      setMetricIdentifier().catch((error: unknown) => {
+        console.error(error);
+      });
     }
-  }, [isWebOSTVLoaded, isWebOSTVDevLoaded]);
+  }, [isWebOSTVLoaded, isWebOSTVDevLoaded, setMetricIdentifier]);
 
   return (
     <>

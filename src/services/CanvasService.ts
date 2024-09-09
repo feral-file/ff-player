@@ -40,7 +40,6 @@ import {
 } from '../utils/types';
 
 import { LocalStorageItem } from '@/constants';
-import mixpanel from '@/utils/mixpanel';
 import { hashStringToSHA256 } from '@/utils/crypto';
 
 class CanvasService {
@@ -201,11 +200,8 @@ class CanvasService {
 
   private setIdentifyingUser(connectingUser: string) {
     const castingUser = hashStringToSHA256(connectingUser);
-    const mixpanelCurrentUser = mixpanel.get_distinct_id() as string;
-    if (mixpanelCurrentUser !== castingUser) {
-      // Fix for Tizen: Tizen frame automatically clears the super props after a while
-      localStorage.setItem(LocalStorageItem.newMixpanelUserID, castingUser);
-    }
+    console.log('METRIC: identifying user:', castingUser);
+    localStorage.setItem(LocalStorageItem.metricIdentifier, castingUser);
   }
 
   public async disconnect(request: unknown): Promise<DisconnectReplyV2> {
