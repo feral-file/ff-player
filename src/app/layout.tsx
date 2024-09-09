@@ -1,3 +1,4 @@
+import 'core-js/stable';
 import type { Metadata } from 'next';
 import './globals.css';
 import { AppProvider } from '../context/AppContext';

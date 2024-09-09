@@ -21,7 +21,6 @@ import {
   MIMETypeVideo,
   SeriesPreviewHTMLTag,
 } from '@/utils/types';
-import Hls from 'hls.js';
 import Image from 'next/image';
 import { useContext, useEffect, useRef, useState } from 'react';
 import Loading from '../loading/loading';
@@ -168,40 +167,17 @@ const ArtworkPlayer = ({
 
   useEffect(() => {
     if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
-      if (isStreaming && Hls.isSupported()) {
-        const hls = new Hls();
-        hls.loadSource(previewURL);
-        hls.attachMedia(videoRef.current);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          videoRef.current
-            ?.play()
-            .catch((error: unknown) => {
-              console.log(error);
-            })
-            .finally(() => {
-              setLoading(false);
-            });
-        });
-
-        // Play video when it reaches the end (play in loop)
-        hls.on(Hls.Events.BUFFER_EOS, () => {
-          videoRef.current?.play().catch((error: unknown) => {
+      videoRef.current.src = previewURL;
+      videoRef.current.addEventListener('loadeddata', () => {
+        videoRef.current
+          ?.play()
+          .catch((error: unknown) => {
             console.log('Error play video', error);
+          })
+          .finally(() => {
+            setLoading(false);
           });
-        });
-      } else {
-        videoRef.current.src = previewURL;
-        videoRef.current.addEventListener('loadeddata', () => {
-          videoRef.current
-            ?.play()
-            .catch((error: unknown) => {
-              console.log('Error play video', error);
-            })
-            .finally(() => {
-              setLoading(false);
-            });
-        });
-      }
+      });
     }
   }, [previewType, isStreaming, previewURL]);
 

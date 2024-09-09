@@ -4,8 +4,10 @@
       "@babel/preset-env",
       {
         "targets": {
-          "browsers": ["Chrome >= 43"]
-        }
+          "browsers": ["Chrome >= 40"]
+        },
+        "useBuiltIns": "entry",
+        "corejs": 3
       }
     ],
     "next/babel"
