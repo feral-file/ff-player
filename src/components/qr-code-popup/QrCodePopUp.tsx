@@ -12,8 +12,9 @@ import { QrCodeSkeleton } from '../skeleton/skeleton';
 import { KeyDown, TIME_PER_HOUR } from '@/constants';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import DailyService, { DailyInstanceService } from '@/services/DailyService';
+import { CastCommand } from '@/utils/types';
 
-const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
+const QrCodePopUp = () => {
   const context = useContext(AppContext);
   const [branchLink, setBranchLink] = useState('');
   const [currentDaily, setCurrentDaily] = useState<Daily>();
@@ -29,6 +30,7 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
   };
   const { locationID, topicID } = context?.websocketData ?? {};
   const lastEventTime = useRef(0);
+  const { castInfo } = context?.websocketData ?? {};
 
   useEffect(() => {
     fetchDailies().catch((error: unknown) => {
@@ -89,8 +91,18 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
   }, [dailies]);
 
   useEffect(() => {
-    setIsShowComponent(showQrCode);
-  }, [showQrCode]);
+    if (castInfo) {
+      switch (castInfo.castCommand) {
+        case CastCommand.connect:
+        case CastCommand.castDaily:
+        case CastCommand.castListArtwork:
+        case CastCommand.castExhibition: {
+          setIsShowComponent(false);
+          break;
+        }
+      }
+    }
+  }, [castInfo]);
 
   const fetchDailies = async () => {
     let dailies = DailyInstanceService.getDailies();
