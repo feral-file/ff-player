@@ -40,7 +40,6 @@ import {
 } from '../utils/types';
 
 import { LocalStorageItem } from '@/constants';
-import { hashStringToSHA256 } from '@/utils/crypto';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -178,9 +177,6 @@ class CanvasService {
 
   private async connect(request: ConnectRequestV2): Promise<ConnectReplyV2> {
     console.log('connect', JSON.stringify(request));
-    if (request.primaryAddress) {
-      this.setIdentifyingUser(request.primaryAddress);
-    }
 
     const deviceInfo = await DeviceManager.getDeviceInfo();
     if (!deviceInfo) {
@@ -196,12 +192,6 @@ class CanvasService {
 
     console.log('_connected device:', JSON.stringify(this.clientDeviceInfo));
     return { ok: true };
-  }
-
-  private setIdentifyingUser(connectingUser: string) {
-    const castingUser = hashStringToSHA256(connectingUser);
-    console.log('METRIC: identifying user:', castingUser);
-    localStorage.setItem(LocalStorageItem.metricIdentifier, castingUser);
   }
 
   public async disconnect(request: unknown): Promise<DisconnectReplyV2> {

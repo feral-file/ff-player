@@ -1,6 +1,9 @@
 import { LocalStorageItem } from '@/constants';
 import axios, { AxiosInstance } from 'axios';
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
+
 export enum CastingArtworkType {
   Unknown = 'UNKNOWN',
   Daily = 'DAILY_DISPLAY',
@@ -18,16 +21,31 @@ const accountsRequester: AxiosInstance = axios.create({
 export function uploadNewMetric(
   event: CastingArtworkType,
   tokenID: string,
-  duration: number // At milliseconds
+  duration: number, // At milliseconds
+  retriedTimes = 0
 ) {
-  const identifier = localStorage.getItem(LocalStorageItem.metricIdentifier);
-  console.log('METRIC TRACKING', event, tokenID, duration, identifier);
+  const deviceID = localStorage.getItem(LocalStorageItem.deviceId);
+  console.log(
+    'METRIC TRACKING',
+    event,
+    tokenID,
+    duration,
+    deviceID,
+    retriedTimes
+  );
 
-  if (!identifier) {
+  if (retriedTimes >= MAX_RETRIES) {
     return;
   }
 
-  accountsRequester.defaults.headers['x-device-id'] = identifier;
+  if (!deviceID) {
+    setTimeout(() => {
+      uploadNewMetric(event, tokenID, duration, retriedTimes + 1);
+    }, RETRY_DELAY_MS);
+    return;
+  }
+
+  accountsRequester.defaults.headers['x-device-id'] = deviceID;
   accountsRequester
     .post('/apis/metrics', {
       event,
