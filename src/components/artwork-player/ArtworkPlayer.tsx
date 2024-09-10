@@ -76,9 +76,12 @@ const ArtworkPlayer = ({
   // Metric
   useEffect(() => {
     if (!castingType || !artworkID) return;
+    console.log(1, castingType, artworkID);
 
     const logMessage = () => {
       const currentTime = Date.now();
+      console.log(2, currentTime);
+
       uploadNewMetric(castingType, artworkID, MetricDuration);
 
       lastLogTimeRef.current = currentTime;
@@ -88,6 +91,8 @@ const ArtworkPlayer = ({
     timerIdRef.current = setTimeout(logMessage, MetricDuration);
 
     return () => {
+      console.log(3, timerIdRef.current);
+
       if (timerIdRef.current) {
         clearTimeout(timerIdRef.current);
       }
