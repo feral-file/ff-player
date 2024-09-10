@@ -23,6 +23,7 @@ const QrCodePopUp = () => {
   const [countdownPercentage, setCountdownPercentage] = useState<number>(0);
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
   const [dailies, setDailies] = useState<Daily[]>([]);
+  const [isMobileView, setIsMobileView] = useState<boolean>(false);
 
   const { screenRatio } = context?.deviceRotation ?? {
     screenRatio: 1,
@@ -35,7 +36,14 @@ const QrCodePopUp = () => {
     fetchDailies().catch((error: unknown) => {
       console.log(error);
     });
+
+    const userAgent = navigator.userAgent.toLowerCase();
+    setIsMobileView(isMobile(userAgent));
   }, []);
+
+  const isMobile = (userAgent: string): boolean => {
+    return /android.+mobile|ip(hone|[oa]d)/i.test(userAgent);
+  };
 
   useEffect(() => {
     if (locationID && topicID) {
@@ -190,6 +198,7 @@ const QrCodePopUp = () => {
         fontSize: screenRatio * 14,
         lineHeight: 1.4,
         color: '#ffffff',
+        paddingBottom: isMobileView ? 125 : screenRatio * 40,
       }}>
       <div
         style={{
