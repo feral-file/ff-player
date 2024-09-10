@@ -2,7 +2,7 @@ import { LocalStorageItem } from '@/constants';
 import axios, { AxiosInstance } from 'axios';
 
 const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 2000;
+const RETRY_DELAY_MS = 3000;
 
 export enum CastingArtworkType {
   Unknown = 'UNKNOWN',
@@ -18,44 +18,47 @@ const accountsRequester: AxiosInstance = axios.create({
   },
 });
 
-export function uploadNewMetric(
+export async function uploadNewMetric(
   event: CastingArtworkType,
   tokenID: string,
-  duration: number, // At milliseconds
   retriedTimes = 0
-) {
-  const deviceID = localStorage.getItem(LocalStorageItem.deviceId);
-  console.log(
-    'METRIC TRACKING',
-    event,
-    tokenID,
-    duration,
-    deviceID,
-    retriedTimes
-  );
+): Promise<void> {
+  console.log('METRIC TRACKING', event, tokenID, retriedTimes);
 
+  const deviceID = localStorage.getItem(LocalStorageItem.deviceId);
   if (retriedTimes >= MAX_RETRIES) {
     return;
   }
 
   if (!deviceID) {
+    console.warn('Device ID not found. Retrying...');
     setTimeout(() => {
-      uploadNewMetric(event, tokenID, duration, retriedTimes + 1);
+      uploadNewMetric(event, tokenID, retriedTimes + 1).catch(
+        (error: unknown) => {
+          console.error(error);
+        }
+      );
     }, RETRY_DELAY_MS);
     return;
   }
 
   accountsRequester.defaults.headers['x-device-id'] = deviceID;
-  accountsRequester
-    .post('/apis/metrics', {
+  try {
+    await accountsRequester.post('/apis/metrics', {
       event,
       timestamp: new Date().toISOString(),
       parameters: {
-        duration: Math.floor((duration || 0) / 1000),
         tokenID,
       },
-    })
-    .catch((error: unknown) => {
-      console.error('Error uploading metric', error);
     });
+  } catch (error) {
+    console.error('Error uploading metric', error);
+    setTimeout(() => {
+      uploadNewMetric(event, tokenID, retriedTimes + 1).catch(
+        (error: unknown) => {
+          console.error(error);
+        }
+      );
+    }, RETRY_DELAY_MS);
+  }
 }

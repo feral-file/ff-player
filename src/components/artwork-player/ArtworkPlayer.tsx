@@ -19,7 +19,6 @@ import Loading from '../loading/loading';
 import { AppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
 import { CastingArtworkType, uploadNewMetric } from '@/services/metric.service';
-import { MetricDuration } from '@/constants';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -42,9 +41,6 @@ const ArtworkPlayer = ({
   const [loading, setLoading] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
-
-  const lastLogTimeRef = useRef(Date.now());
-  const timerIdRef = useRef<NodeJS.Timeout | number | null>(null);
 
   function compareToGetFileType(type: string) {
     setIsStreaming(false);
@@ -75,31 +71,11 @@ const ArtworkPlayer = ({
 
   // Metric
   useEffect(() => {
-    if (!castingType || !artworkID) return;
-    console.log(1, castingType, artworkID);
-
-    const logMessage = () => {
-      const currentTime = Date.now();
-      console.log(2, currentTime);
-
-      uploadNewMetric(castingType, artworkID, MetricDuration);
-
-      lastLogTimeRef.current = currentTime;
-      timerIdRef.current = setTimeout(logMessage, MetricDuration);
-    };
-
-    timerIdRef.current = setTimeout(logMessage, MetricDuration);
-
-    return () => {
-      console.log(3, timerIdRef.current);
-
-      if (timerIdRef.current) {
-        clearTimeout(timerIdRef.current);
-      }
-      const currentTime = Date.now();
-      const timeElapsed = currentTime - lastLogTimeRef.current;
-      uploadNewMetric(castingType, artworkID, timeElapsed);
-    };
+    if (castingType && artworkID) {
+      uploadNewMetric(castingType, artworkID).catch((error: unknown) => {
+        console.error('Error upload metric', error);
+      });
+    }
   }, [castingType, artworkID]);
 
   useEffect(() => {
