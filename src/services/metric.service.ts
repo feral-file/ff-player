@@ -2,10 +2,10 @@ import { LocalStorageItem } from '@/constants';
 import axios, { AxiosInstance } from 'axios';
 
 export enum CastingArtworkType {
-  Unknown = 'Unknown',
-  Daily = 'Daily',
-  Playlist = 'Playlist',
-  Exhibition = 'Exhibition',
+  Unknown = 'UNKNOWN',
+  Daily = 'DAILY_DISPLAY',
+  Playlist = 'PLAYLIST_DISPLAY',
+  Exhibition = 'EXHIBITION_DISPLAY',
 }
 
 const accountsRequester: AxiosInstance = axios.create({
