@@ -12,6 +12,7 @@ import { AppContext } from '@/context/AppContext';
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
 import { CastingArtworkType } from '@/services/metric.service';
+import { formatArtworkIndexID } from '@/utils/indexer';
 
 const ExhibitionHall = () => {
   const context = useContext(AppContext);
@@ -67,7 +68,12 @@ const ExhibitionHall = () => {
     // Set mixpanel metadata
     if (artwork !== artworkRef.current) {
       artworkRef.current = artwork;
-      setArtworkID(artworkRef.current.id);
+      if (exhibition) {
+        const artworkID = formatArtworkIndexID(artworkRef.current, exhibition);
+        setArtworkID(artworkID);
+      } else {
+        setArtworkID(artworkRef.current.id);
+      }
     }
   };
 

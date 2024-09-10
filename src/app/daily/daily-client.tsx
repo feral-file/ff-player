@@ -11,6 +11,7 @@ import {
 } from '@/utils/constants';
 import { CastingArtworkType } from '@/services/metric.service';
 import { Daily } from '@/models';
+import { convertToTokenID } from '@/utils/indexer';
 
 export default function DailyClient() {
   const dailyRef = useRef<Daily>();
@@ -48,7 +49,13 @@ export default function DailyClient() {
           // Set metric metadata
           if (dailyRef.current !== dailies[0]) {
             dailyRef.current = dailies[0];
-            setArtworkID(dailyRef.current.tokenID);
+            setArtworkID(
+              convertToTokenID(
+                dailyRef.current.blockchain,
+                dailyRef.current.contractAddress,
+                dailyRef.current.tokenID
+              )
+            );
           }
 
           const { delay } = getDelayTime(dailies);
