@@ -18,6 +18,9 @@ import Script from 'next/script';
 import { uploadMetricEventsFromLocalStorage } from '@/services/metric.service';
 import DeviceManager from '@/utils/DeviceManager';
 
+import { AbstractIntlMessages, NextIntlClientProvider } from 'next-intl';
+import { getUserLocale } from '@/utils/locale';
+
 const enum CastState {
   None, // Not casting
   Artwork, // Displaying artwork, playlist, dallies
@@ -47,6 +50,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     NodeJS.Timeout | string | number | undefined
   >(undefined);
   const sendLogEventInterval = useRef<NodeJS.Timeout | null>(null);
+  const [messages, setMessages] = useState<AbstractIntlMessages>();
+  const locale = getUserLocale();
 
   // Initialize platform events
   useEffect(() => {
@@ -67,7 +72,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         handlePlatformEvent: Config.handlePlatformEvent,
       };
 
-      const platform = searchParams.get('platform') ?? '';
+      const platform = searchParams?.get('platform') ?? '';
       if (platform) {
         localStorage.setItem('platform', platform);
       }
@@ -126,6 +131,18 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
     };
   });
+
+  useEffect(() => {
+    const fetchMessages = async () => {
+      setMessages(
+        (await import(`../../locales/${locale}.json`))
+          .default as AbstractIntlMessages
+      );
+    };
+    fetchMessages().catch((error: unknown) => {
+      console.error(error);
+    });
+  }, [locale]);
 
   useEffect(() => {
     const sendLog = async () => {
@@ -286,8 +303,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     };
   }, [isWebOSTVLoaded, isWebOSTVDevLoaded]);
 
-  return (
-    <>
+  return messages != undefined ? (
+    <NextIntlClientProvider locale={locale} messages={messages}>
       <Script
         src="/webOSTVjs-1.2.11/webOSTV.js"
         onLoad={() => {
@@ -342,7 +359,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           top: 0,
           left: 0,
         }}></div>
-    </>
+    </NextIntlClientProvider>
+  ) : (
+    <></>
   );
 };
 

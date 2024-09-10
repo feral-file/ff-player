@@ -1,0 +1,16 @@
+{
+  "QrCodePopUp": {
+    "today_daily": "today_daily",
+    "next_work": "next_work",
+    "hour": "hr",
+    "get_the_Feral_File": "get_the_Feral_File",
+    "press_enter_to_hide_show": "press_enter_to_hide_show"
+  },
+  "LostConnectionModal": {
+    "internet_connection_lost": "internet_connection_lost",
+    "connection_lost": "connection_lost"
+  },
+  "Loading": {
+    "loading": "loading..."
+  }
+}
