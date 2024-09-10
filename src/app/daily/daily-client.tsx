@@ -18,7 +18,7 @@ export default function DailyClient() {
   const timeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
-  const dailyTimeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
+  const dailyIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
   const [artworkID, setArtworkID] = useState<string | undefined>();
@@ -73,8 +73,8 @@ export default function DailyClient() {
         console.error(error);
       }
 
-      dailyTimeoutRef.current = setInterval(() => {
-        clearDailyTimeout();
+      dailyIntervalRef.current = setInterval(() => {
+        clearDailyInterval();
         handleCastDaily().catch((error: unknown) => {
           console.error(error);
         });
@@ -103,14 +103,14 @@ export default function DailyClient() {
     });
 
     let dailies: Daily[] = [];
-    const clearDailyTimeout = () => {
-      if (dailyTimeoutRef.current) {
-        clearInterval(dailyTimeoutRef.current);
+    const clearDailyInterval = () => {
+      if (dailyIntervalRef.current) {
+        clearInterval(dailyIntervalRef.current);
       }
     };
 
     return () => {
-      clearDailyTimeout();
+      clearDailyInterval();
     };
   }, []);
 
