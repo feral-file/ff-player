@@ -80,7 +80,7 @@ export default function DailyClient() {
             console.error(error);
           });
         },
-        3 * 60 * 3000
+        3 * 60 * 1000
       ); // Check refresh daily every hour
     }
 
