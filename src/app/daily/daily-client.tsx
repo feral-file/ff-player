@@ -73,12 +73,15 @@ export default function DailyClient() {
         console.error(error);
       }
 
-      dailyIntervalRef.current = setInterval(() => {
-        clearDailyInterval();
-        handleCastDaily().catch((error: unknown) => {
-          console.error(error);
-        });
-      }, TIME_PER_HOUR); // Check refresh daily every hour
+      dailyIntervalRef.current = setInterval(
+        () => {
+          clearDailyInterval();
+          handleCastDaily().catch((error: unknown) => {
+            console.error(error);
+          });
+        },
+        3 * 60 * 3000
+      ); // Check refresh daily every hour
     }
 
     const startTimeout = (duration: number) => {
