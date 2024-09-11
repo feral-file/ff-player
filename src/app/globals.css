@@ -4,9 +4,26 @@
 
 @font-face {
   font-family: 'PP Mori';
-  src: 'url(../fonts/PP_Mori/WEB/PPMori-Regular.woff2)';
+  src:
+    url(/fonts/PP_Mori/PPMori-Regular.woff2) format('woff2'),
+    url(/fonts/PP_Mori/PPMori-Regular.woff) format('woff');
   font-weight: 400;
-  font-style: normal;
+}
+
+@font-face {
+  font-family: 'PP Mori';
+  src:
+    url(/fonts/PP_Mori/PPMori-Light.woff2) format('woff2'),
+    url(/fonts/PP_Mori/WEB/PPMori-Light.woff) format('woff');
+  font-weight: 300;
+}
+
+@font-face {
+  font-family: 'PP Mori';
+  src:
+    url(/fonts/PP_Mori/PPMori-Bold.woff2) format('woff2'),
+    url(/fonts/PP_Mori/PPMori-Bold.woff) format('woff');
+  font-weight: 700;
 }
 
 :root {
@@ -23,9 +40,29 @@
   }
 }
 
+/* Reset some default styles */
+html,
+body,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+ul,
+ol,
+dl,
+dt,
+dd,
+blockquote,
+input,
+pre {
+  font-family: 'PP Mori', sans-serif;
+}
+
 html,
 body {
-  font-family: 'PP Mori', sans-serif;
   width: 100%;
   height: 100%;
   cursor: none;
