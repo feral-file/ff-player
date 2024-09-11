@@ -9,9 +9,10 @@ import Carousel from './components/carousel/carousel';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
 import Image from 'next/image';
 import { AppContext } from '@/context/AppContext';
-import { CastingArtworkType } from '@/utils/mixpanel';
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
+import { CastingArtworkType } from '@/services/metric.service';
+import { formatArtworkIndexID } from '@/utils/indexer';
 
 const ExhibitionHall = () => {
   const context = useContext(AppContext);
@@ -29,7 +30,6 @@ const ExhibitionHall = () => {
   const [catalogID, setCatalogID] = useState<string | undefined>();
   const [screen, setScreen] = useState<ExhibitionCatalog | undefined>();
   const [artworkID, setArtworkID] = useState<string | undefined>();
-  const [artworkName, setArtworkName] = useState<string | undefined>();
 
   const [pageSection, setSection] = useState<ExhibitionCatalog>(
     ExhibitionCatalog.home
@@ -68,12 +68,12 @@ const ExhibitionHall = () => {
     // Set mixpanel metadata
     if (artwork !== artworkRef.current) {
       artworkRef.current = artwork;
-      setArtworkName(
-        (artworkRef.current.series?.title ?? '') +
-          ' ' +
-          (artworkRef.current.name ?? '')
-      );
-      setArtworkID(artworkRef.current.id);
+      if (exhibition) {
+        const artworkID = formatArtworkIndexID(artworkRef.current, exhibition);
+        setArtworkID(artworkID);
+      } else {
+        setArtworkID(artworkRef.current.id);
+      }
     }
   };
 
@@ -251,7 +251,6 @@ const ExhibitionHall = () => {
               key={artwork.id}
               previewURL={artwork.previewURI}
               artworkID={artworkID}
-              artworkName={artworkName}
               castingType={CastingArtworkType.Exhibition}
               isCustomView={
                 exhibitionDetail.contracts &&

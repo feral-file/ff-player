@@ -7,6 +7,12 @@ export enum ExhibitionType {
   group = 'group',
 }
 
+export enum Blockchain {
+  Bitmark = 'bitmark',
+  Tezos = 'tezos',
+  Ethereum = 'ethereum',
+}
+
 export interface Exhibition {
   id?: string;
   title?: string;
@@ -14,7 +20,7 @@ export interface Exhibition {
   noteTitle?: string;
   noteBrief?: string;
   coverURI?: string;
-  mintBlockchain?: string;
+  mintBlockchain?: Blockchain;
   status?: number;
   type?: ExhibitionType;
   artists?: Artist[];

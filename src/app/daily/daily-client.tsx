@@ -1,16 +1,17 @@
 'use client';
 
-import { Daily } from '@/models';
 import ArtworkPlayer from '../../components/artwork-player/ArtworkPlayer';
 import DailyService from '@/services/DailyService';
 import { getDelayTime } from '@/services/qrCodePopUpService';
-import { CastingArtworkType } from '@/utils/mixpanel';
 import { useEffect, useRef, useState } from 'react';
 import Loading from '@/components/loading/loading';
 import {
   DEFAULT_DELAY,
   LeeMullican_EXHIBITION_CONTRACT,
 } from '@/utils/constants';
+import { CastingArtworkType } from '@/services/metric.service';
+import { Daily } from '@/models';
+import { convertToTokenID } from '@/utils/indexer';
 import { TIME_PER_HOUR } from '@/constants';
 
 export default function DailyClient() {
@@ -22,7 +23,6 @@ export default function DailyClient() {
     undefined
   );
   const [artworkID, setArtworkID] = useState<string | undefined>();
-  const [artworkName, setArtworkName] = useState<string | undefined>();
 
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
@@ -52,11 +52,16 @@ export default function DailyClient() {
         }
 
         if (dailies.length > 0) {
-          // Set mixpanel metadata
+          // Set metric metadata
           if (dailyRef.current !== dailies[0]) {
             dailyRef.current = dailies[0];
-            setArtworkID(dailyRef.current.tokenID);
-            setArtworkName(dailyRef.current.tokenName);
+            setArtworkID(
+              convertToTokenID(
+                dailyRef.current.blockchain,
+                dailyRef.current.contractAddress,
+                dailyRef.current.tokenID
+              )
+            );
           }
 
           const { delay } = getDelayTime(dailies);
@@ -124,7 +129,6 @@ export default function DailyClient() {
         <ArtworkPlayer
           previewURL={castPreviewURL}
           artworkID={artworkID}
-          artworkName={artworkName}
           castingType={CastingArtworkType.Daily}
           isCustomView={isLeeMucianExhibition}
         />

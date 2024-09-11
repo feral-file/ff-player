@@ -1,12 +1,3 @@
-import { LocalStorageItem } from '@/constants';
-import mixpanel, {
-  CastArtworkEventProperties,
-  CastingArtworkType,
-  MixpanelEventName,
-  registerSupperProperties,
-  trackEvent,
-  trackTimeEvent,
-} from '@/utils/mixpanel';
 import {
   FileUseAudio,
   FileUseIframe,
@@ -27,17 +18,16 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import Loading from '../loading/loading';
 import { AppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
+import { CastingArtworkType, uploadNewMetric } from '@/services/metric.service';
 
 const ArtworkPlayer = ({
   previewURL,
   artworkID,
-  artworkName,
   castingType,
   isCustomView,
 }: {
   previewURL: string;
   artworkID?: string;
-  artworkName?: string;
   castingType?: CastingArtworkType;
   isCustomView?: boolean;
   keyboardCode?: number;
@@ -79,53 +69,14 @@ const ArtworkPlayer = ({
     }
   }
 
-  // Mixpanel
+  // Metric
   useEffect(() => {
-    if (!castingType || !artworkID || !artworkName) return;
-
-    trackTimeEvent(MixpanelEventName.CastArtworkEventName);
-
-    const cleanup = async () => {
-      if (artworkID) {
-        const event: CastArtworkEventProperties = {
-          casting_type: castingType,
-          token_id: artworkID,
-          token_name: artworkName,
-        };
-        try {
-          await trackEvent(MixpanelEventName.CastArtworkEventName, event);
-          if (
-            localStorage.getItem(
-              LocalStorageItem.doResetMixpanelAfterTracking
-            ) === 'true'
-          ) {
-            localStorage.setItem(
-              LocalStorageItem.doResetMixpanelAfterTracking,
-              'false'
-            );
-            mixpanel.reset();
-          }
-
-          const newUserID = localStorage.getItem(
-            LocalStorageItem.newMixpanelUserID
-          );
-          if (newUserID) {
-            localStorage.setItem(LocalStorageItem.newMixpanelUserID, '');
-            await registerSupperProperties();
-            mixpanel.identify(newUserID);
-          }
-        } catch (error: unknown) {
-          console.error(error);
-        }
-      }
-    };
-
-    return () => {
-      cleanup().catch((error: unknown) => {
-        console.error(error);
+    if (castingType && artworkID) {
+      uploadNewMetric(castingType, artworkID).catch((error: unknown) => {
+        console.error('Error upload metric', error);
       });
-    };
-  }, [castingType, artworkID, artworkName]);
+    }
+  }, [castingType, artworkID]);
 
   useEffect(() => {
     const detectPreviewType = async (previewURL: string) => {

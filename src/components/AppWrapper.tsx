@@ -1,6 +1,6 @@
 'use client';
 
-import { AppSettings, LocalStorageItem } from '@/constants';
+import { AppSettings } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 // import DeviceManager from '@/utils/DeviceManager';
@@ -12,7 +12,6 @@ import React, { useContext, useEffect, useState } from 'react';
 // import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
-import { initMixpanel } from '@/utils/mixpanel';
 
 const enum CastState {
   None, // Not casting
@@ -204,10 +203,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       handleCastCommand();
     } else {
       if (castState !== CastState.None && castState !== CastState.Daily) {
-        localStorage.setItem(
-          LocalStorageItem.doResetMixpanelAfterTracking as string,
-          'true'
-        );
         // Disconnect
         setCastState(CastState.None);
         router.back();
@@ -218,7 +213,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
-      initMixpanel();
+      console.log('WebOS TV SDK loaded');
     }
   }, [isWebOSTVLoaded, isWebOSTVDevLoaded]);
 

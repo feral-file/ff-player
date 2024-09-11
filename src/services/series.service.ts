@@ -27,7 +27,7 @@ export class SeriesService {
       }
 
       const response = await axiosInstance.get<{ result: Artwork }>(
-        `/api/artworks/${id}?includeSeries=true`
+        `/api/artworks/${id}?includeSeries=true&includeActiveSwap=true`
       );
       return response.data.result;
     } catch (error) {

@@ -1,7 +1,7 @@
 import { Daily, IndexerToken } from '@/models';
 import ArtworkService from './ArtworkService';
 import axiosInstance from './axiosService';
-import { getIndexerTokenName } from '@/utils/indexer';
+import { convertToTokenID, getIndexerTokenName } from '@/utils/indexer';
 import { convertToQueryParams } from '@/utils/queryParams';
 
 class DailyService {
@@ -49,18 +49,14 @@ class DailyService {
       const ids = dailies.map((d: Daily) => {
         if (d.artwork?.swap) {
           const swap = d.artwork.swap;
-          return this.convertToTokenID(
+          return convertToTokenID(
             swap.blockchainType,
             swap.contractAddress,
             swap.token
           );
         }
 
-        return this.convertToTokenID(
-          d.blockchain,
-          d.contractAddress,
-          d.tokenID
-        );
+        return convertToTokenID(d.blockchain, d.contractAddress, d.tokenID);
       });
 
       if (ids.length === 0) {
@@ -104,30 +100,6 @@ class DailyService {
     } catch (error) {
       console.error(error);
       return [this.getDefaultDaily()];
-    }
-  }
-
-  private convertToTokenID(
-    blockchain: string,
-    contractAddress: string,
-    tokenID: string
-  ): string {
-    switch (blockchain) {
-      case 'ethereum': {
-        return `eth-${contractAddress}-${tokenID}`;
-      }
-
-      case 'bitmark': {
-        return `bmk--${tokenID}`;
-      }
-
-      case 'tezos': {
-        return `tez-${contractAddress}-${tokenID}`;
-      }
-
-      default: {
-        return '';
-      }
     }
   }
 

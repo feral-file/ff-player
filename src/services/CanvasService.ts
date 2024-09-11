@@ -40,8 +40,6 @@ import {
 } from '../utils/types';
 
 import { LocalStorageItem } from '@/constants';
-import mixpanel from '@/utils/mixpanel';
-import { hashStringToSHA256 } from '@/utils/crypto';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -179,9 +177,6 @@ class CanvasService {
 
   private async connect(request: ConnectRequestV2): Promise<ConnectReplyV2> {
     console.log('connect', JSON.stringify(request));
-    if (request.primaryAddress) {
-      this.setIdentifyingUser(request.primaryAddress);
-    }
 
     const deviceInfo = await DeviceManager.getDeviceInfo();
     if (!deviceInfo) {
@@ -197,15 +192,6 @@ class CanvasService {
 
     console.log('_connected device:', JSON.stringify(this.clientDeviceInfo));
     return { ok: true };
-  }
-
-  private setIdentifyingUser(connectingUser: string) {
-    const castingUser = hashStringToSHA256(connectingUser);
-    const mixpanelCurrentUser = mixpanel.get_distinct_id() as string;
-    if (mixpanelCurrentUser !== castingUser) {
-      // Fix for Tizen: Tizen frame automatically clears the super props after a while
-      localStorage.setItem(LocalStorageItem.newMixpanelUserID, castingUser);
-    }
   }
 
   public async disconnect(request: unknown): Promise<DisconnectReplyV2> {
