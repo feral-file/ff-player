@@ -11,9 +11,10 @@ import styles from './styles.module.scss';
 import { QrCodeSkeleton } from '../skeleton/skeleton';
 import { KeyDown, TIME_PER_HOUR } from '@/constants';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
-import DailyService, { DailyInstanceService } from '@/services/DailyService';
+import DailyService from '@/services/DailyService';
+import { CastCommand } from '@/utils/types';
 
-const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
+const QrCodePopUp = () => {
   const context = useContext(AppContext);
   const [branchLink, setBranchLink] = useState('');
   const [currentDaily, setCurrentDaily] = useState<Daily>();
@@ -21,7 +22,6 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
   const [isShowComponent, setIsShowComponent] = useState<boolean>(false);
   const [countdownPercentage, setCountdownPercentage] = useState<number>(0);
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
-  const dailyService = useRef(new DailyService());
   const [dailies, setDailies] = useState<Daily[]>([]);
 
   const { screenRatio } = context?.deviceRotation ?? {
@@ -29,6 +29,7 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
   };
   const { locationID, topicID } = context?.websocketData ?? {};
   const lastEventTime = useRef(0);
+  const { castInfo } = context?.websocketData ?? {};
 
   useEffect(() => {
     fetchDailies().catch((error: unknown) => {
@@ -89,13 +90,24 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
   }, [dailies]);
 
   useEffect(() => {
-    setIsShowComponent(showQrCode);
-  }, [showQrCode]);
+    if (castInfo) {
+      switch (castInfo.castCommand) {
+        case CastCommand.connect:
+        case CastCommand.castDaily:
+        case CastCommand.castListArtwork:
+        case CastCommand.castExhibition: {
+          setIsShowComponent(false);
+          break;
+        }
+      }
+    }
+  }, [castInfo]);
 
   const fetchDailies = async () => {
-    let dailies = DailyInstanceService.getDailies();
+    let dailies = DailyService.getDailies();
+
     if (dailies.length === 0) {
-      dailies = await dailyService.current.callingDailies();
+      dailies = await DailyService.callingDailies();
     }
     setDailies(dailies);
   };
@@ -170,7 +182,7 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
         left: 0,
         backgroundColor: '#2e2e2e',
         borderRadius: `0 20px 0 0`,
-        display: isShowComponent ? 'flex' : 'none',
+        display: isShowComponent ? 'grid' : 'none',
         flexDirection: 'column',
         padding: screenRatio * 40,
         gap: screenRatio * 40,
@@ -245,8 +257,9 @@ const QrCodePopUp = ({ showQrCode }: { showQrCode: boolean }) => {
       </div>
       <div
         style={{
-          display: 'flex',
+          display: 'grid',
           gap: screenRatio * 20,
+          gridTemplateColumns: 'auto 1fr',
           alignItems: 'flex-end',
           fontSize: screenRatio * 20,
         }}>

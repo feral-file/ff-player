@@ -6,6 +6,22 @@ import { convertToQueryParams } from '@/utils/queryParams';
 
 class DailyService {
   private artworkService = new ArtworkService();
+  static instance = new DailyService();
+  private dailies: Daily[] = [];
+
+  public getDailies(): Daily[] {
+    return this.dailies;
+  }
+
+  public async isRefreshDailies(): Promise<boolean> {
+    const newDailies = await this.callingDailies();
+    if (newDailies !== this.dailies) {
+      this.dailies = newDailies;
+      return true;
+    }
+
+    return false;
+  }
 
   public async getUpcomingDaily(
     expand: string[],
@@ -23,7 +39,7 @@ class DailyService {
     try {
       let dailies = await this.getUpcomingDaily(
         ['includeSuccessfulSwap'],
-        'limit=10&offset=0'
+        'limit=2&offset=0'
       );
 
       if (dailies.length === 0) {
@@ -100,26 +116,4 @@ class DailyService {
   }
 }
 
-export default DailyService;
-
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
-export class DailyInstanceService {
-  private static instance: DailyInstanceService | null = null;
-  private static dailies: Daily[] = [];
-
-  public static getInstance(): DailyInstanceService {
-    if (!DailyInstanceService.instance) {
-      DailyInstanceService.instance = new DailyInstanceService();
-    }
-
-    return DailyInstanceService.instance;
-  }
-
-  public static getDailies() {
-    return this.dailies;
-  }
-
-  public static setDailies(dailies: Daily[]) {
-    this.dailies = dailies;
-  }
-}
+export default DailyService.instance;

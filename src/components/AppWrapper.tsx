@@ -35,7 +35,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
   const [castState, setCastState] = useState<CastState>(CastState.None);
   // const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
-  const [showQrCode, setShowQrCode] = useState<boolean>(false);
   const searchParams = useSearchParams();
   const [isWebOSTVLoaded, setIsWebOSTVLoaded] = useState(false);
   const [isWebOSTVDevLoaded, setIsWebOSTVDevLoaded] = useState(false);
@@ -150,26 +149,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       };
       const handleCastCommand = () => {
         switch (castInfo.castCommand) {
-          case CastCommand.connect: {
-            setShowQrCode(false);
-            // if (
-            //   !(await DeviceManager.isPreviouslyConnectedDevice(
-            //     castInfo.deviceInfo?.device_id ?? ''
-            //   ))
-            // ) {
-            //   setDisplayOnboarding(true);
-            //   await DeviceManager.addPreviouslyConnectedDeviceId(
-            //     castInfo.deviceInfo?.device_id ?? ''
-            //   );
-            // } else {
-            //   setDisplayOnboarding(false);
-            // }
-            break;
-          }
-
           case CastCommand.castListArtwork: {
-            setShowQrCode(false);
-            // setDisplayOnboarding(false);
             if (castState === CastState.Artwork) {
               return;
             }
@@ -185,8 +165,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           }
 
           case CastCommand.castExhibition: {
-            setShowQrCode(false);
-            // setDisplayOnboarding(false);
             if (castState === CastState.Exhibition) {
               return;
             }
@@ -203,8 +181,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           }
 
           case CastCommand.castDaily: {
-            setShowQrCode(false);
-            // setDisplayOnboarding(false);
             if (castState === CastState.Daily) {
               return;
             }
@@ -286,7 +262,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        <QrCodePopUp showQrCode={showQrCode}></QrCodePopUp>
+        <QrCodePopUp></QrCodePopUp>
       </div>
       <div
         style={{
