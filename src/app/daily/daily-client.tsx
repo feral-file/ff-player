@@ -119,7 +119,7 @@ export default function DailyClient() {
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh' }}>
+    <div style={{ width: '100%', height: '100%' }}>
       {castPreviewURL && (
         <ArtworkPlayer
           previewURL={castPreviewURL}
