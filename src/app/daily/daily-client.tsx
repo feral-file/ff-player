@@ -9,10 +9,10 @@ import {
   DEFAULT_DELAY,
   LeeMullican_EXHIBITION_CONTRACT,
 } from '@/utils/constants';
-import { CastingArtworkType } from '@/services/metric.service';
 import { Daily } from '@/models';
 import { convertToTokenID } from '@/utils/indexer';
 import { TIME_PER_HOUR } from '@/constants';
+import { CastingArtworkType } from '@/models/metric.model';
 
 export default function DailyClient() {
   const dailyRef = useRef<Daily>();

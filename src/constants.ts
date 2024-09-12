@@ -50,6 +50,7 @@ export enum LocalStorageItem {
   name = 'device_name',
   branchLink = 'branchLink',
   previouslyConnectedDeviceIds = 'previouslyConnectedDeviceIds',
+  metricEvents = 'metricEvents',
 }
 
 export enum Platform {
@@ -71,3 +72,5 @@ export const AppSettings = {
 };
 
 export const TIME_PER_HOUR = 60 * 60 * 1000;
+
+export const PUSH_METRIC_INTERVAL = 60 * 1000;

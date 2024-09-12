@@ -3,8 +3,8 @@
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { AppContext } from '@/context/AppContext';
 import { IndexerToken } from '@/models';
+import { CastingArtworkType } from '@/models/metric.model';
 import ArtworkService from '@/services/ArtworkService';
-import { CastingArtworkType } from '@/services/metric.service';
 import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
 import { getIndexerTokenName } from '@/utils/indexer';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';

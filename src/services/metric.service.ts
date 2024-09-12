@@ -1,15 +1,6 @@
 import { LocalStorageItem } from '@/constants';
+import { MetricEvent } from '@/models/metric.model';
 import axios, { AxiosInstance } from 'axios';
-
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 3000;
-
-export enum CastingArtworkType {
-  Unknown = 'UNKNOWN',
-  Daily = 'DAILY_DISPLAY',
-  Playlist = 'PLAYLIST_DISPLAY',
-  Exhibition = 'EXHIBITION_DISPLAY',
-}
 
 const accountsRequester: AxiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_ACCOUNTS_URL,
@@ -18,47 +9,59 @@ const accountsRequester: AxiosInstance = axios.create({
   },
 });
 
-export async function uploadNewMetric(
-  event: CastingArtworkType,
-  tokenID: string,
-  retriedTimes = 0
-): Promise<void> {
-  console.log('METRIC TRACKING', event, tokenID, retriedTimes);
-
+export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
+  console.log('METRIC: sending API', events);
   const deviceID = localStorage.getItem(LocalStorageItem.deviceId);
-  if (retriedTimes >= MAX_RETRIES) {
-    return;
-  }
 
   if (!deviceID) {
-    console.warn('Device ID not found. Retrying...');
-    setTimeout(() => {
-      uploadNewMetric(event, tokenID, retriedTimes + 1).catch(
-        (error: unknown) => {
-          console.error(error);
-        }
-      );
-    }, RETRY_DELAY_MS);
-    return;
+    throw new Error('Device ID not found');
   }
 
   accountsRequester.defaults.headers['x-device-id'] = deviceID;
-  try {
-    await accountsRequester.post('/apis/metrics', {
-      event,
-      timestamp: new Date().toISOString(),
-      parameters: {
-        tokenID,
-      },
-    });
-  } catch (error) {
-    console.error('Error uploading metric', error);
-    setTimeout(() => {
-      uploadNewMetric(event, tokenID, retriedTimes + 1).catch(
-        (error: unknown) => {
-          console.error(error);
-        }
-      );
-    }, RETRY_DELAY_MS);
+  if (events.length > 0) {
+    await accountsRequester.post('/apis/metrics', { metrics: events });
+  }
+}
+
+export function appendMetricEventToLocalStorage(event: MetricEvent) {
+  console.log('METRIC: append event to localStorage', event);
+  const metricEvents = localStorage.getItem(LocalStorageItem.metricEvents);
+  let events: MetricEvent[] = [];
+  if (metricEvents) {
+    try {
+      events = JSON.parse(metricEvents) as MetricEvent[];
+    } catch (error) {
+      console.error('Error parsing metric events from local storage', error);
+      events = [];
+    }
+  }
+
+  events.push(event);
+  localStorage.setItem(LocalStorageItem.metricEvents, JSON.stringify(events));
+  uploadMetricEventsFromLocalStorage();
+}
+
+export function uploadMetricEventsFromLocalStorage() {
+  console.log('METRIC: start uploading events from localStorage');
+  const metricEvents = localStorage.getItem(LocalStorageItem.metricEvents);
+  let events: MetricEvent[] = [];
+  if (metricEvents) {
+    try {
+      events = JSON.parse(metricEvents) as MetricEvent[];
+    } catch (error) {
+      localStorage.removeItem(LocalStorageItem.metricEvents);
+      console.error('Error parsing metric events from local storage', error);
+      events = [];
+    }
+  }
+
+  if (events.length > 0) {
+    uploadNewMetric(events)
+      .then(() => {
+        localStorage.removeItem(LocalStorageItem.metricEvents);
+      })
+      .catch((error: unknown) => {
+        console.error('Error uploading metric events', error);
+      });
   }
 }

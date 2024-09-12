@@ -18,7 +18,8 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import Loading from '../loading/loading';
 import { AppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
-import { CastingArtworkType, uploadNewMetric } from '@/services/metric.service';
+import { appendMetricEventToLocalStorage } from '@/services/metric.service';
+import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -41,6 +42,9 @@ const ArtworkPlayer = ({
   const [loading, setLoading] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
+  const newDayCheckTimeOutID = useRef<
+    NodeJS.Timeout | string | number | undefined
+  >(undefined);
 
   function compareToGetFileType(type: string) {
     setIsStreaming(false);
@@ -72,9 +76,45 @@ const ArtworkPlayer = ({
   // Metric
   useEffect(() => {
     if (castingType && artworkID) {
-      uploadNewMetric(castingType, artworkID).catch((error: unknown) => {
-        console.error('Error upload metric', error);
-      });
+      const handleMetric = () => {
+        if (newDayCheckTimeOutID.current) {
+          clearTimeout(newDayCheckTimeOutID.current as number);
+        }
+
+        const event: MetricEvent = {
+          event: castingType,
+          timestamp: new Date().toISOString(),
+          parameters: {
+            tokenID: artworkID,
+          },
+        };
+
+        const checkNewDay = () => {
+          const now = new Date();
+          const newDay = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate() + 1
+          );
+          newDay.setHours(0, 0, 0, 0);
+          const delay = newDay.getTime() - now.getTime();
+          newDayCheckTimeOutID.current = setTimeout(() => {
+            console.log('METRIC: New day');
+            handleMetric();
+          }, delay);
+        };
+
+        appendMetricEventToLocalStorage(event);
+        checkNewDay();
+      };
+
+      handleMetric();
+
+      return () => {
+        if (newDayCheckTimeOutID.current) {
+          clearTimeout(newDayCheckTimeOutID.current as number);
+        }
+      };
     }
   }, [castingType, artworkID]);
 
