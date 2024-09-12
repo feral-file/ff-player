@@ -1,6 +1,9 @@
 import 'package:feralfile_display_tizen/gateway/support_api.dart';
 import 'package:feralfile_display_tizen/model/send_attactment.dart';
-import 'package:feralfile_display_tizen/utils/injectorvice _instance = SupportService._internal();
+import 'package:feralfile_display_tizen/utils/injector.dart';
+
+class SupportService {
+  static final SupportService _instance = SupportService._internal();
 
   factory SupportService() => _instance;
 
@@ -33,6 +36,8 @@ import 'package:feralfile_display_tizen/utils/injectorvice _instance = SupportSe
       'announcement_context_id': announcementID ?? '',
     };
 
-    return await supportApi.createIssue(payload);
+    const deviceId = "DeviceId";
+
+    return await supportApi.createIssue(payload, deviceId);
   }
 }

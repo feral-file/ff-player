@@ -19,10 +19,12 @@ class _SupportApi implements SupportApi {
   String? baseUrl;
 
   @override
-  Future<dynamic> createIssue(Map<String, Object> body) async {
+  Future<dynamic> createIssue(Map<String, Object> body, String deviceId) async {
     const _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
-    final _headers = <String, dynamic>{};
+    final _headers = <String, dynamic>{
+      'x-device-id': deviceId,
+    };
     final _data = <String, dynamic>{};
     _data.addAll(body);
     final _result = await _dio.fetch(_setStreamType<dynamic>(Options(

@@ -9,5 +9,6 @@ abstract class SupportApi {
   @POST("/v1/issues/")
   Future<dynamic> createIssue(
     @Body() Map<String, Object> body,
+    @Header('x-device-id') String deviceId,
   );
 }
