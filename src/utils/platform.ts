@@ -188,10 +188,12 @@ export class GoogleConfigService extends TizenConfigService {}
 export class WebConfigService implements PlatformConfigService {
   // eslint-disable-next-line @typescript-eslint/require-await
   async init() {
-    const deviceId = this.getOrCreateDeviceId();
+    const deviceId = uuidv4();
+    const deviceName = this.getOrCreateDeviceName();
+
     // Use the device ID as the name for web
     localStorage.setItem(LocalStorageItem.deviceId, deviceId);
-    localStorage.setItem(LocalStorageItem.name, deviceId);
+    localStorage.setItem(LocalStorageItem.name, deviceName);
   }
 
   generateRandomString(length: number): string {
@@ -205,16 +207,16 @@ export class WebConfigService implements PlatformConfigService {
     return result;
   }
 
-  getOrCreateDeviceId() {
-    let deviceId = localStorage.getItem(LocalStorageItem.deviceId);
-    if (!deviceId) {
+  getOrCreateDeviceName() {
+    let deviceName = localStorage.getItem(LocalStorageItem.name);
+    if (!deviceName) {
       const platform = navigator.platform;
       const browser = detect() as BrowserInfo;
       const randomString = this.generateRandomString(4);
 
-      deviceId = `${platform}-${browser.name}-${randomString}`;
+      deviceName = `${platform}-${browser.name}-${randomString}`;
     }
-    return deviceId;
+    return deviceName;
   }
   // eslint-disable-next-line @typescript-eslint/require-await
   async getString(key: string): Promise<string | null> {
