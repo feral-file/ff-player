@@ -13,6 +13,7 @@ import React, { useContext, useEffect, useRef, useState } from 'react';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
 import { uploadMetricEventsFromLocalStorage } from '@/services/metric.service';
+import DeviceManager from '@/utils/DeviceManager';
 
 const enum CastState {
   None, // Not casting
@@ -217,6 +218,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
+      DeviceManager.init().catch((error: unknown) => {
+        console.log(error);
+      });
       if (pushMetricIntervalID.current) {
         clearInterval(pushMetricIntervalID.current);
       }
