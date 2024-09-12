@@ -76,35 +76,39 @@ const ArtworkPlayer = ({
   // Metric
   useEffect(() => {
     if (castingType && artworkID) {
-      if (newDayCheckTimeOutID.current) {
-        clearTimeout(newDayCheckTimeOutID.current as number);
-      }
+      const handleMetric = () => {
+        if (newDayCheckTimeOutID.current) {
+          clearTimeout(newDayCheckTimeOutID.current as number);
+        }
 
-      const event: MetricEvent = {
-        event: castingType,
-        timestamp: new Date().toISOString(),
-        parameters: {
-          tokenID: artworkID,
-        },
+        const event: MetricEvent = {
+          event: castingType,
+          timestamp: new Date().toISOString(),
+          parameters: {
+            tokenID: artworkID,
+          },
+        };
+
+        const checkNewDay = () => {
+          const now = new Date();
+          const newDay = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate() + 1
+          );
+          newDay.setHours(0, 0, 0, 0);
+          const delay = newDay.getTime() - now.getTime();
+          newDayCheckTimeOutID.current = setTimeout(() => {
+            console.log('METRIC: New day');
+            handleMetric();
+          }, delay);
+        };
+
+        appendMetricEventToLocalStorage(event);
+        checkNewDay();
       };
 
-      const checkNewDay = () => {
-        const now = new Date();
-        const newDay = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate() + 1
-        );
-        newDay.setHours(0, 0, 0, 0);
-        const delay = newDay.getTime() - now.getTime();
-        newDayCheckTimeOutID.current = setTimeout(() => {
-          console.log('METRIC: New day');
-          appendMetricEventToLocalStorage(event);
-        }, delay);
-      };
-
-      appendMetricEventToLocalStorage(event);
-      checkNewDay();
+      handleMetric();
 
       return () => {
         if (newDayCheckTimeOutID.current) {
