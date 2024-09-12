@@ -1,6 +1,7 @@
 import 'package:feralfile_display_tizen/gateway/support_api.dart';
 import 'package:feralfile_display_tizen/model/send_attactment.dart';
 import 'package:feralfile_display_tizen/utils/injector.dart';
+import 'package:feralfile_display_tizen/utils/log.dart';
 
 class SupportService {
   static final SupportService _instance = SupportService._internal();
@@ -13,7 +14,8 @@ class SupportService {
 
   Future<dynamic> createIssue(
     String? message,
-    List<SendAttachment>? attachments, {
+    List<SendAttachment>? attachments,
+    String userId, {
     String? title,
     List<String>? mutedText,
     String? announcementID,
@@ -24,7 +26,7 @@ class SupportService {
     }
 
     // add tags
-    var tags = ['Tizen'];
+    var tags = ['Tizen TV'];
 
     final submitMessage = message ?? '';
 
@@ -35,9 +37,8 @@ class SupportService {
       'tags': tags,
       'announcement_context_id': announcementID ?? '',
     };
+    log.info('createIssue: $payload');
 
-    const deviceId = "DeviceId";
-
-    return await supportApi.createIssue(payload, deviceId);
+    return await supportApi.createIssue(payload, userId);
   }
 }

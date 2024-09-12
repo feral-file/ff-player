@@ -5,6 +5,7 @@
 //  that can be found in the LICENSE file.
 //
 
+import 'dart:convert';
 import 'dart:core';
 import 'dart:io';
 
@@ -16,16 +17,8 @@ import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:synchronized/synchronized.dart' as synchronization;
 
-final log = AuLog('App');
+final log = Logger('App');
 final apiLog = Logger('API');
-
-class AuLog {
-  String name;
-  AuLog(this.name);
-  void info(String message) {
-    debugPrint(message);
-  }
-}
 
 Future<File> getLogFile() async {
   final directory = (await getTemporaryDirectory()).path;
@@ -74,7 +67,7 @@ class FileLogger {
 
   static Future logRecord(LogRecord record) async {
     var text = '$record\n';
-    debugPrint(text);
+    debugPrint('debug print $text');
     return _lock.synchronized(() async {
       await _logFile.writeAsString('${record.time}: $text',
           mode: FileMode.append, flush: true);
@@ -85,14 +78,15 @@ class FileLogger {
     await _logFile.writeAsString('');
   }
 
-  static Future<void> sendLog() async {
-    print('send log');
-    final data = await _logFile.readAsString();
+  static Future<void> sendLog({required String userId}) async {
+    final data = await _logFile.readAsBytes();
     final title = '${DateTime.now().millisecondsSinceEpoch}_app.log';
-    final attachments = [SendAttachment(data: data, title: title)];
+    final attachments = [
+      SendAttachment(data: base64Encode(data), title: title)
+    ];
     try {
       await injector<SupportService>()
-          .createIssue('Log', attachments, title: title);
+          .createIssue('Log', attachments, userId, title: title);
     } catch (e) {
       log.info('error: $e');
     }
