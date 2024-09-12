@@ -18,7 +18,8 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import Loading from '../loading/loading';
 import { AppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
-import { CastingArtworkType, uploadNewMetric } from '@/services/metric.service';
+import { appendMetricEventToLocalStorage } from '@/services/metric.service';
+import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -72,9 +73,15 @@ const ArtworkPlayer = ({
   // Metric
   useEffect(() => {
     if (castingType && artworkID) {
-      uploadNewMetric(castingType, artworkID).catch((error: unknown) => {
-        console.error('Error upload metric', error);
-      });
+      const event: MetricEvent = {
+        event: castingType,
+        timestamp: new Date().toISOString(),
+        parameters: {
+          tokenID: artworkID,
+        },
+      };
+
+      appendMetricEventToLocalStorage(event);
     }
   }, [castingType, artworkID]);
 

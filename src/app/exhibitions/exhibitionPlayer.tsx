@@ -11,8 +11,8 @@ import Image from 'next/image';
 import { AppContext } from '@/context/AppContext';
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
-import { CastingArtworkType } from '@/services/metric.service';
 import { formatArtworkIndexID } from '@/utils/indexer';
+import { CastingArtworkType } from '@/models/metric.model';
 
 const ExhibitionHall = () => {
   const context = useContext(AppContext);

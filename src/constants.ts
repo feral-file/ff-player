@@ -50,6 +50,7 @@ export enum LocalStorageItem {
   name = 'device_name',
   branchLink = 'branchLink',
   previouslyConnectedDeviceIds = 'previouslyConnectedDeviceIds',
+  metricEvents = 'metricEvents',
 }
 
 export enum Platform {
