@@ -1,6 +1,6 @@
 import { match } from '@formatjs/intl-localematcher';
 
-const SUPPORTED_LOCALES = ['en', 'vi', 'ja'];
+const SUPPORTED_LOCALES = ['en', 'vi', 'ja', 'zh'];
 const DEFAULT_LOCALE = 'en';
 
 export function getUserLocale() {

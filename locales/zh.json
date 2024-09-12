@@ -1,0 +1,16 @@
+{
+  "QrCodePopUp": {
+    "today_daily": "今天的日報",
+    "next_work": "下一步工作",
+    "hour": "hr",
+    "get_the_Feral_File": "取得 Feral File 行動應用程式來瀏覽 15,000 多件原創藝術作品，並選擇在電視上顯示的內容。",
+    "press_enter_to_hide_show": "按 Enter 鍵隱藏/顯示該視窗。"
+  },
+  "LostConnectionModal": {
+    "internet_connection_lost": "網路連線遺失。正在重新連接...",
+    "connection_lost": "連線遺失。嘗試重新連線時請稍候。"
+  },
+  "Loading": {
+    "loading": "載入中..."
+  }
+}
