@@ -171,6 +171,13 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
       ConfigManager.instance.quarterTurns.value +=
           rotate == 'clockwise' ? 1 : -1;
     });
+
+    _webViewController.addJavaScriptChannel('Log',
+        onMessageReceived: (message) async {
+      final json = jsonDecode(message.message);
+      final userId = json['userId'];
+      FileLogger.sendLog(userId: userId);
+    });
   }
 
   void _addConfigHandler() {
