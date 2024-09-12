@@ -119,20 +119,16 @@ export default function DailyClient() {
     };
   }, []);
 
-  if (!castPreviewURL) {
-    return <Loading />;
-  }
-
   return (
-    <div style={{ width: '100%', height: '100%' }}>
-      {castPreviewURL && (
+    <>
+      <div style={{ width: '100%', height: '100%' }}>
         <ArtworkPlayer
-          previewURL={castPreviewURL}
+          previewURL={castPreviewURL ?? ''}
           artworkID={artworkID}
           castingType={CastingArtworkType.Daily}
           isCustomView={isLeeMucianExhibition}
         />
-      )}
-    </div>
+      </div>
+    </>
   );
 }
