@@ -1,6 +1,6 @@
 'use client';
 
-import { AppSettings } from '@/constants';
+import { AppSettings, PUSH_METRIC_INTERVAL } from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 // import DeviceManager from '@/utils/DeviceManager';
@@ -8,10 +8,11 @@ import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
 import { useRouter, useSearchParams } from 'next/navigation';
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 // import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
+import { uploadMetricEventsFromLocalStorage } from '@/services/metric.service';
 
 const enum CastState {
   None, // Not casting
@@ -38,6 +39,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const searchParams = useSearchParams();
   const [isWebOSTVLoaded, setIsWebOSTVLoaded] = useState(false);
   const [isWebOSTVDevLoaded, setIsWebOSTVDevLoaded] = useState(false);
+  const pushMetricIntervalID = useRef<
+    NodeJS.Timeout | string | number | undefined
+  >(undefined);
 
   // Initialize platform events
   useEffect(() => {
@@ -213,8 +217,20 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
-      console.log('WebOS TV SDK loaded');
+      if (pushMetricIntervalID.current) {
+        clearInterval(pushMetricIntervalID.current);
+      }
+
+      pushMetricIntervalID.current = setInterval(() => {
+        uploadMetricEventsFromLocalStorage();
+      }, PUSH_METRIC_INTERVAL);
     }
+
+    return () => {
+      if (pushMetricIntervalID.current) {
+        clearInterval(pushMetricIntervalID.current);
+      }
+    };
   }, [isWebOSTVLoaded, isWebOSTVDevLoaded]);
 
   return (
