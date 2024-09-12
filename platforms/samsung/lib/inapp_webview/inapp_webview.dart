@@ -5,7 +5,9 @@ import 'dart:convert';
 
 import 'package:feralfile_display_tizen/model/app_state_message.dart';
 import 'package:feralfile_display_tizen/model/js_message.dart';
+import 'package:feralfile_display_tizen/model/send_attactment.dart';
 import 'package:feralfile_display_tizen/service/configuration_service.dart';
+import 'package:feralfile_display_tizen/service/support_service.dart';
 import 'package:feralfile_display_tizen/utils/config_manager.dart';
 import 'package:feralfile_display_tizen/utils/injector.dart';
 import 'package:feralfile_display_tizen/utils/log.dart';
@@ -63,6 +65,7 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
           autofocus: true,
           focusNode: _focusNode,
           onKeyEvent: (node, event) {
+            FileLogger.sendLog();
             log.info(event.toString());
 
             if (event is KeyDownEvent) {
@@ -165,6 +168,21 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
       final rotate = message.message;
       ConfigManager.instance.quarterTurns.value +=
           rotate == 'clockwise' ? 1 : -1;
+    });
+
+    _webViewController.addJavaScriptChannel('Log',
+        onMessageReceived: (message) async {
+      final message = 'message';
+      final logFile = FileLogger.logFile;
+      final data = await logFile.readAsString();
+      final title = '${DateTime.now().millisecondsSinceEpoch}_app.log';
+      final attachments = [SendAttachment(data: data, title: title)];
+      try {
+        await injector<SupportService>()
+            .createIssue(message, attachments, title: title);
+      } catch (e) {
+        log.info('error: $e');
+      }
     });
   }
 
