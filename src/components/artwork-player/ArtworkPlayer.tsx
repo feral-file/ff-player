@@ -42,6 +42,9 @@ const ArtworkPlayer = ({
   const [loading, setLoading] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
+  const newDayCheckTimeOutID = useRef<
+    NodeJS.Timeout | string | number | undefined
+  >(undefined);
 
   function compareToGetFileType(type: string) {
     setIsStreaming(false);
@@ -73,6 +76,10 @@ const ArtworkPlayer = ({
   // Metric
   useEffect(() => {
     if (castingType && artworkID) {
+      if (newDayCheckTimeOutID.current) {
+        clearTimeout(newDayCheckTimeOutID.current as number);
+      }
+
       const event: MetricEvent = {
         event: castingType,
         timestamp: new Date().toISOString(),
@@ -81,7 +88,29 @@ const ArtworkPlayer = ({
         },
       };
 
+      const checkNewDay = () => {
+        const now = new Date();
+        const newDay = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() + 1
+        );
+        newDay.setHours(0, 0, 0, 0);
+        const delay = newDay.getTime() - now.getTime();
+        newDayCheckTimeOutID.current = setTimeout(() => {
+          console.log('METRIC: New day');
+          appendMetricEventToLocalStorage(event);
+        }, delay);
+      };
+
       appendMetricEventToLocalStorage(event);
+      checkNewDay();
+
+      return () => {
+        if (newDayCheckTimeOutID.current) {
+          clearTimeout(newDayCheckTimeOutID.current as number);
+        }
+      };
     }
   }, [castingType, artworkID]);
 
