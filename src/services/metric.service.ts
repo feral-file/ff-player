@@ -1,5 +1,6 @@
 import { LocalStorageItem } from '@/constants';
 import { MetricEvent } from '@/models/metric.model';
+import DeviceManager from '@/utils/DeviceManager';
 import axios, { AxiosInstance } from 'axios';
 
 const accountsRequester: AxiosInstance = axios.create({
@@ -11,7 +12,7 @@ const accountsRequester: AxiosInstance = axios.create({
 
 export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
   console.log('[METRIC]: sending API', JSON.stringify(events));
-  const deviceID = localStorage.getItem(LocalStorageItem.deviceId);
+  const deviceID = await DeviceManager.getDeviceId();
 
   if (!deviceID) {
     throw new Error('Device ID not found');

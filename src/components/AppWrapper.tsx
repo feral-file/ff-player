@@ -136,7 +136,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       const tags: string[] = ['TV Log'];
 
       const data = {
-        userId: primaryAddress ?? deviceId,
+        userId: deviceId,
         logTitle,
         metadata: {
           primaryAddress,
