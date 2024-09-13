@@ -225,7 +225,12 @@ const ArtworkPlayer = ({
           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
           className={isCustomView ? styles.customRendering : ''}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={previewURL} alt="Preview" onLoad={loadedSource} />
+          <img
+            className={styles.image}
+            src={previewURL}
+            alt="Preview"
+            onLoad={loadedSource}
+          />
         </div>
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.object && (

@@ -222,8 +222,6 @@ const ExhibitionHall = () => {
               <img
                 src={FERAL_FILE_ASSET_URL + (exhibitionDetail.coverURI ?? '')}
                 alt={exhibitionDetail.title ?? ''}
-                width={1080}
-                height={1080}
               />
             </div>
           </div>

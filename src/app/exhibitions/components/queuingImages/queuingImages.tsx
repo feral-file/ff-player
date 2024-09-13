@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import styles from './queuingImages.module.scss';
 
 const youtubeFailedThumbnailHeight = 90;
 
@@ -40,8 +41,7 @@ const QueuingImages: React.FC<QueuingImagesProps> = ({ urls, alt }) => {
             src={currentUrl}
             alt={alt}
             onLoad={handleImageLoading}
-            width={500}
-            height={500}
+            className={styles.image}
           />
         </div>
       )}

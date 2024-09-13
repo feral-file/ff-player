@@ -199,10 +199,9 @@ const QrCodePopUp = () => {
         }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
+          className={styles.image}
           src={'/feralfile-logo.svg'}
-          alt="FF logo"
-          width={screenRatio * 224}
-          height={screenRatio * 23}></img>
+          alt="FF logo"></img>
       </div>
       <div
         style={{
