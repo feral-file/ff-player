@@ -132,8 +132,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       const primaryAddress = await DeviceManager.getPrimaryAddress();
       const deviceId = await DeviceManager.getDeviceId();
       const deviceName = await DeviceManager.getName();
-      const logTitle = `${deviceName}_${deviceId}_${primaryAddress ?? ''}${new Date().toISOString()}.log`;
-      const tags: string[] = ['TV Log'];
+      const logTitle = `${deviceName}_${deviceId}_${primaryAddress ?? ''}_${new Date().toISOString()}.log`;
+      const tags: string[] = [];
 
       const data = {
         userId: primaryAddress ? primaryAddress : deviceId,
