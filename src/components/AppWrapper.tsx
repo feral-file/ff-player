@@ -136,7 +136,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       const tags: string[] = ['TV Log'];
 
       const data = {
-        userId: deviceId,
+        userId: primaryAddress ? primaryAddress : deviceId,
         logTitle,
         metadata: {
           primaryAddress,
@@ -145,10 +145,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         },
         tags,
       };
-
-      console.log('Send log primary address:', primaryAddress);
-      console.log('Send log device id:', deviceId);
-      console.log('Send log data:', JSON.stringify(data));
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       (window as any).Log?.postMessage(
