@@ -169,6 +169,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     return () => {
       EventEmitter.unSubscribe(Event.sendLog, handleSendLogEvent);
+      if (sendLogEventInterval.current) {
+        clearInterval(sendLogEventInterval.current);
+      }
     };
   });
 
