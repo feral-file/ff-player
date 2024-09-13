@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'dart:core';
 import 'dart:io';
 
+import 'package:feralfile_display_tizen/inapp_webview/inapp_webview.dart';
 import 'package:feralfile_display_tizen/model/send_attactment.dart';
 import 'package:feralfile_display_tizen/service/support_service.dart';
 import 'package:feralfile_display_tizen/utils/injector.dart';
@@ -78,15 +79,24 @@ class FileLogger {
     await _logFile.writeAsString('');
   }
 
-  static Future<void> sendLog({required String userId}) async {
+  static Future<void> sendLog({required LogData logData}) async {
     final data = await _logFile.readAsBytes();
-    final title = '${DateTime.now().millisecondsSinceEpoch}_app.log';
+    final title = logData.logTitle;
     final attachments = [
       SendAttachment(data: base64Encode(data), title: title)
     ];
+    String muteText = '';
+    logData.metadata.forEach((key, value) {
+      muteText += '$key: $value\n';
+    });
     try {
-      await injector<SupportService>()
-          .createIssue('Log', attachments, userId, title: title);
+      await injector<SupportService>().createIssue(
+        muteText,
+        attachments,
+        logData.userId,
+        title: title,
+        tags: logData.tags,
+      );
     } catch (e) {
       log.info('error: $e');
     }

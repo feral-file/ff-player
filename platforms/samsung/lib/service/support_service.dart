@@ -19,6 +19,7 @@ class SupportService {
     String? title,
     List<String>? mutedText,
     String? announcementID,
+    List<String> tags = const [],
   }) async {
     var issueTitle = title ?? message;
     if (issueTitle == null || issueTitle.isEmpty) {
@@ -26,7 +27,7 @@ class SupportService {
     }
 
     // add tags
-    var tags = ['Tizen TV'];
+    var customTags = [tags, 'Tizen TV'];
 
     final submitMessage = message ?? '';
 
@@ -34,7 +35,7 @@ class SupportService {
       'attachments': attachments ?? [],
       'title': issueTitle,
       'message': submitMessage,
-      'tags': tags,
+      'tags': customTags,
       'announcement_context_id': announcementID ?? '',
     };
     log.info('createIssue: $payload');

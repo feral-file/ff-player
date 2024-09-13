@@ -169,10 +169,14 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
 
     _webViewController.addJavaScriptChannel('Log',
         onMessageReceived: (message) async {
-      log.info('Log: ${message.message}');
-      final json = jsonDecode(message.message);
-      final String userId = json['data'] ?? 'unknown_user_${DateTime.now()}';
-      await FileLogger.sendLog(userId: userId);
+      try {
+        log.info('Log: ${message.message}');
+        final json = jsonDecode(message.message);
+        final logData = LogData.fromJson(json['data']);
+        await FileLogger.sendLog(logData: logData);
+      } catch (e) {
+        log.info('Error: $e');
+      }
     });
   }
 
@@ -242,4 +246,32 @@ class InAppWebViewPayload {
   final String key;
 
   InAppWebViewPayload(this.url, this.key);
+}
+
+class LogData {
+  final String userId;
+  final String logTitle;
+  final Map<String, String> metadata;
+  final List<String> tags;
+
+  LogData({
+    required this.userId,
+    required this.logTitle,
+    required this.metadata,
+    required this.tags,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'userId': userId,
+        'logTitle': logTitle,
+        'metadata': metadata,
+        'tags': tags,
+      };
+
+  factory LogData.fromJson(Map<String, dynamic> json) => LogData(
+        userId: json['userId'] as String,
+        logTitle: json['logTitle'] as String,
+        metadata: json['metadata'] as Map<String, String>,
+        tags: json['tags'] as List<String>,
+      );
 }
