@@ -5,6 +5,7 @@
 //  that can be found in the LICENSE file.
 //
 
+import 'dart:convert';
 import 'dart:core';
 import 'dart:io';
 
@@ -79,9 +80,11 @@ class FileLogger {
   }
 
   static Future<void> sendLog({required LogData logData}) async {
-    final data = await _logFile.readAsString();
+    final data = await _logFile.readAsBytes();
     final title = logData.logTitle;
-    final attachments = [SendAttachment(data: data, title: title)];
+    final attachments = [
+      SendAttachment(data: base64Encode(data), title: title)
+    ];
     String muteText = '';
     logData.metadata.forEach((key, value) {
       muteText += '$key: $value\n';
