@@ -129,17 +129,26 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     const sendLog = async () => {
-      let data = await DeviceManager.getPrimaryAddress();
-      if (!data) {
-        data = await DeviceManager.getDeviceId();
-      }
-
-      console.log('Primary Address:', data);
+      const primaryAddress = await DeviceManager.getPrimaryAddress();
+      const deviceId = await DeviceManager.getDeviceId();
+      const deviceName = await DeviceManager.getName();
+      const logTitle = `${deviceName}_${deviceId}_${primaryAddress ?? ''}${new Date().toISOString()}.log`;
+      const metadata = {
+        primaryAddress,
+        deviceName,
+        deviceId,
+      };
+      const tags: string[] = [];
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       (window as any).Log?.postMessage(
         JSON.stringify({
-          data: data,
+          data: {
+            userId: primaryAddress ?? deviceId,
+            logTitle,
+            metadata,
+            tags,
+          },
         })
       );
     };
