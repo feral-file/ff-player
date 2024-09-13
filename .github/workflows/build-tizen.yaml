@@ -73,6 +73,9 @@ jobs:
         run: |
           cd platforms/samsung
           echo "PUB_DOC_URL = ${{ vars.PUB_DOC_URL }}" >> .env
+          echo "SUPPORT_URL = ${{ vars.SUPPORT_URL }}" >> .env
+          
+          echo "SUPPORT_API_KEY = ${{ secrets.SUPPORT_API_KEY }}" >> .env
 
       - name: Install Flutter dependencies and build app
         run: |
