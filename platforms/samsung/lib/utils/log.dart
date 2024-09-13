@@ -9,7 +9,7 @@ import 'dart:convert';
 import 'dart:core';
 import 'dart:io';
 
-import 'package:feralfile_display_tizen/inapp_webview/inapp_webview.dart';
+import 'package:feralfile_display_tizen/model/log_data.dart';
 import 'package:feralfile_display_tizen/model/send_attactment.dart';
 import 'package:feralfile_display_tizen/service/support_service.dart';
 import 'package:feralfile_display_tizen/utils/injector.dart';

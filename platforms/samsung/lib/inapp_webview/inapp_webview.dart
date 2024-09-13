@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:feralfile_display_tizen/model/app_state_message.dart';
 import 'package:feralfile_display_tizen/model/js_message.dart';
+import 'package:feralfile_display_tizen/model/log_data.dart';
 import 'package:feralfile_display_tizen/service/configuration_service.dart';
 import 'package:feralfile_display_tizen/utils/config_manager.dart';
 import 'package:feralfile_display_tizen/utils/injector.dart';
@@ -246,34 +247,4 @@ class InAppWebViewPayload {
   final String key;
 
   InAppWebViewPayload(this.url, this.key);
-}
-
-class LogData {
-  final String userId;
-  final String logTitle;
-  final Map<String, String> metadata;
-  final List<String> tags;
-
-  LogData({
-    required this.userId,
-    required this.logTitle,
-    required this.metadata,
-    required this.tags,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'userId': userId,
-        'logTitle': logTitle,
-        'metadata': metadata,
-        'tags': tags,
-      };
-
-  factory LogData.fromJson(Map<String, dynamic> json) => LogData(
-        userId: json['userId'] as String,
-        logTitle: json['logTitle'] as String,
-        metadata: (json['metadata'] as Map<String, dynamic>).map(
-          (key, value) => MapEntry(key, value as String),
-        ),
-        tags: (json['tags'] as List<dynamic>).map((e) => e as String).toList(),
-      );
 }
