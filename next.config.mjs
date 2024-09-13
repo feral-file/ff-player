@@ -45,6 +45,13 @@ const nextConfig = {
         entries['main-app'].unshift('core-js/stable/queue-microtask');
       }
 
+      if (
+        entries['main-app'] &&
+        !entries['main-app'].includes('core-js/proposals/object-from-entries')
+      ) {
+        entries['main-app'].unshift('core-js/proposals/object-from-entries');
+      }
+
       return entries;
     };
 
