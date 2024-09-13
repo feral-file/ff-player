@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:feralfile_display/model/app_state_message.dart';
 import 'package:feralfile_display/model/js_message.dart';
+import 'package:feralfile_display/model/log_data.dart';
 import 'package:feralfile_display/service/configuration_service.dart';
 import 'package:feralfile_display/utils/config_manager.dart';
 import 'package:feralfile_display/utils/injector.dart';
@@ -174,9 +175,14 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
 
     _webViewController.addJavaScriptChannel('Log',
         onMessageReceived: (message) async {
-      final json = jsonDecode(message.message);
-      final userId = json['userId'];
-      FileLogger.sendLog(userId: userId);
+      try {
+        log.info('Log: ${message.message}');
+        final json = jsonDecode(message.message);
+        final logData = LogData.fromJson(json['data']);
+        await FileLogger.sendLog(logData: logData);
+      } catch (e) {
+        log.info('Error: $e');
+      }
     });
   }
 

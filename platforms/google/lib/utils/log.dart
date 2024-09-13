@@ -8,6 +8,7 @@
 import 'dart:core';
 import 'dart:io';
 
+import 'package:feralfile_display/model/log_data.dart';
 import 'package:feralfile_display/model/send_attactment.dart';
 import 'package:feralfile_display/service/support_service.dart';
 import 'package:feralfile_display/utils/injector.dart';
@@ -16,16 +17,8 @@ import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:synchronized/synchronized.dart' as synchronization;
 
-final log = AuLog('App');
+final log = Logger('App');
 final apiLog = Logger('API');
-
-class AuLog {
-  String name;
-  AuLog(this.name);
-  void info(String message) {
-    debugPrint(message);
-  }
-}
 
 Future<File> getLogFile() async {
   final directory = (await getTemporaryDirectory()).path;
@@ -85,13 +78,22 @@ class FileLogger {
     await _logFile.writeAsString('');
   }
 
-  static Future<void> sendLog({required String userId}) async {
+  static Future<void> sendLog({required LogData logData}) async {
     final data = await _logFile.readAsString();
-    final title = '${DateTime.now().millisecondsSinceEpoch}_app.log';
+    final title = logData.logTitle;
     final attachments = [SendAttachment(data: data, title: title)];
+    String muteText = '';
+    logData.metadata.forEach((key, value) {
+      muteText += '$key: $value\n';
+    });
     try {
-      await injector<SupportService>()
-          .createIssue('Log', attachments, userId, title: title);
+      await injector<SupportService>().createIssue(
+        muteText,
+        attachments,
+        logData.userId,
+        title: title,
+        tags: logData.tags,
+      );
     } catch (e) {
       log.info('error: $e');
     }
