@@ -38,14 +38,6 @@ class DeviceManager {
     }
   }
 
-  private readonly deviceIdKey = 'deviceId';
-  private readonly locationIdKey = 'locationId';
-  private readonly topicIdKey = 'topicId';
-  private readonly nameKey = 'device_name';
-  private readonly branchLinkKey = 'branchLink';
-  private readonly previouslyConnectedDeviceIdsKey =
-    'previouslyConnectedDeviceIds';
-
   private async getFromLocalStorage(key: string): Promise<string | null> {
     return await this.configService.getString(key);
   }
@@ -132,36 +124,12 @@ class DeviceManager {
     }
   }
 
-  public setPreviouslyConnectedDeviceIds(deviceIds: string[]): void {
-    this.setToLocalStorage(
-      LocalStorageItem.previouslyConnectedDeviceIds,
-      JSON.stringify(deviceIds)
-    );
+  public setPrimaryAddress(primaryAddress: string): void {
+    this.setToLocalStorage(LocalStorageItem.primaryAddress, primaryAddress);
   }
 
-  public async getPreviouslyConnectedDeviceIds(): Promise<string[]> {
-    const deviceIdsJson = await this.getFromLocalStorage(
-      LocalStorageItem.previouslyConnectedDeviceIds
-    );
-    if (!deviceIdsJson) {
-      return [];
-    }
-    return JSON.parse(deviceIdsJson) as string[];
-  }
-
-  public async addPreviouslyConnectedDeviceId(deviceId: string): Promise<void> {
-    const deviceIds = await this.getPreviouslyConnectedDeviceIds();
-    deviceIds.push(deviceId);
-    this.setPreviouslyConnectedDeviceIds(deviceIds);
-  }
-
-  public clearPreviouslyConnectedDeviceIds(): void {
-    this.setPreviouslyConnectedDeviceIds([]);
-  }
-
-  public async isPreviouslyConnectedDevice(deviceId: string): Promise<boolean> {
-    const deviceIds = await this.getPreviouslyConnectedDeviceIds();
-    return deviceIds.includes(deviceId);
+  public async getPrimaryAddress(): Promise<string | null> {
+    return await this.getFromLocalStorage(LocalStorageItem.primaryAddress);
   }
 
   public async getDeviceInfo() {

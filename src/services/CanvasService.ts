@@ -177,7 +177,7 @@ class CanvasService {
 
   private async connect(request: ConnectRequestV2): Promise<ConnectReplyV2> {
     console.log('connect', JSON.stringify(request));
-
+    DeviceManager.setPrimaryAddress(request.primaryAddress ?? '');
     const deviceInfo = await DeviceManager.getDeviceInfo();
     if (!deviceInfo) {
       console.error('Device info is not available');

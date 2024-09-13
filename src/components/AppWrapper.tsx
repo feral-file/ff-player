@@ -1,15 +1,18 @@
 'use client';
 
-import { AppSettings, PUSH_METRIC_INTERVAL } from '@/constants';
+import {
+  AppSettings,
+  PUSH_METRIC_INTERVAL,
+  SEND_LOG_EVENT_NUMBER,
+  SEND_LOG_INTERVAL,
+} from '@/constants';
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
-// import DeviceManager from '@/utils/DeviceManager';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
 import { useRouter, useSearchParams } from 'next/navigation';
 import React, { useContext, useEffect, useRef, useState } from 'react';
-// import OnboardingModal from './onboarding-modal/OnboardingModal';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
 import { uploadMetricEventsFromLocalStorage } from '@/services/metric.service';
@@ -43,6 +46,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const pushMetricIntervalID = useRef<
     NodeJS.Timeout | string | number | undefined
   >(undefined);
+  const sendLogEventInterval = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize platform events
   useEffect(() => {
@@ -70,19 +74,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // useEffect(() => {
-  //   const handleKeyDown = () => {
-  //     setShowQrCode(!showQrCode);
-  //   };
-
-  //   EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
-  //   EventEmitter.subscribe(Event.toggleQrCode, handleKeyDown);
-
-  //   return () => {
-  //     EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
-  //   };
-  // }, []);
 
   // Check version update
   useEffect(() => {
@@ -133,6 +124,51 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // Cleanup the event listener on component unmount
     return () => {
       EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+    };
+  });
+
+  useEffect(() => {
+    const sendLog = async () => {
+      let data = await DeviceManager.getPrimaryAddress();
+      if (!data) {
+        data = await DeviceManager.getDeviceId();
+      }
+
+      console.log('Primary Address:', data);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      (window as any).Log?.postMessage(
+        JSON.stringify({
+          data: data,
+        })
+      );
+    };
+
+    const handleSendLogEvent = () => {
+      countEvent++;
+      // Send log after reach event number
+      if (countEvent >= SEND_LOG_EVENT_NUMBER) {
+        sendLog().catch((error: unknown) => {
+          console.log('Error when send log', error);
+        });
+      }
+
+      if (sendLogEventInterval.current) {
+        clearInterval(sendLogEventInterval.current);
+      }
+
+      // Reset counter after 10 seconds if not receive another event
+      sendLogEventInterval.current = setInterval(() => {
+        countEvent = 0;
+      }, SEND_LOG_INTERVAL);
+    };
+
+    let countEvent = 0;
+    EventEmitter.unSubscribe(Event.sendLog, handleSendLogEvent);
+    EventEmitter.subscribe(Event.sendLog, handleSendLogEvent);
+
+    return () => {
+      EventEmitter.unSubscribe(Event.sendLog, handleSendLogEvent);
     };
   });
 
@@ -251,7 +287,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           setIsWebOSTVDevLoaded(true);
         }}
       />
-      {/* {displayOnboarding && <OnboardingModal />} */}
       <div
         style={{
           width:

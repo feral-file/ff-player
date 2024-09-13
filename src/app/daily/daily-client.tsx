@@ -4,7 +4,6 @@ import ArtworkPlayer from '../../components/artwork-player/ArtworkPlayer';
 import DailyService from '@/services/DailyService';
 import { getDelayTime } from '@/services/qrCodePopUpService';
 import { useEffect, useRef, useState } from 'react';
-import Loading from '@/components/loading/loading';
 import {
   DEFAULT_DELAY,
   LeeMullican_EXHIBITION_CONTRACT,
