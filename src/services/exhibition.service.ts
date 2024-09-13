@@ -29,7 +29,7 @@ export class ExhibitionService {
 
       return exhibition;
     } catch (error) {
-      console.log('Failed to load exhibition:', error);
+      console.log('[API] Failed to load exhibition:', JSON.stringify(error));
     }
   }
 
@@ -46,7 +46,10 @@ export class ExhibitionService {
       exhibition.series = series;
       return exhibition;
     } catch (error) {
-      console.log('Failed to load Source exhibition:', error);
+      console.log(
+        '[API] Failed to load Source exhibition:',
+        JSON.stringify(error)
+      );
     }
   }
 
@@ -61,7 +64,7 @@ export class ExhibitionService {
       const series = response.data as Series[];
       return series;
     } catch (error) {
-      console.log('Failed to load Source series:', error);
+      console.log('[API] Failed to load Source series:', JSON.stringify(error));
     }
   }
 }

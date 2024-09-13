@@ -138,7 +138,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         deviceName,
         deviceId,
       };
-      const tags: string[] = [];
+      const tags: string[] = ['TV Log'];
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       (window as any).Log?.postMessage(

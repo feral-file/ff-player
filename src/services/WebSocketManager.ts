@@ -36,7 +36,7 @@ const useWebSocket = (url: string, apiKey: string) => {
       ws.current = new ReconnectingWebSocket(wsUrl);
 
       ws.current.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('[WS] WebSocket connected to:', wsUrl);
         setIsDisconnected(false);
         // Retrieve cast info from local storage to keep the state when refresh page
         const castInfo = localStorage.getItem(LocalStorageItem.castInfo);
@@ -52,7 +52,7 @@ const useWebSocket = (url: string, apiKey: string) => {
           );
           pongTimeoutRef.current = setTimeout(() => {
             console.log(
-              'No pong received within the expected time. WebSocket seems disconnected.'
+              '[WS] No pong received within the expected time. WebSocket seems disconnected.'
             );
             setIsDisconnected(true);
           }, pongWaitTime);
@@ -84,7 +84,7 @@ const useWebSocket = (url: string, apiKey: string) => {
         else if (data.messageID === 'ping') {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
           if (data.message === 'pong') {
-            console.log('Pong received');
+            console.log('[WS] Pong received');
             setIsDisconnected(false);
             if (pongTimeoutRef.current) {
               clearTimeout(pongTimeoutRef.current);
@@ -101,12 +101,12 @@ const useWebSocket = (url: string, apiKey: string) => {
       };
 
       ws.current.onerror = error => {
-        console.error('WebSocket error:', error);
+        console.error('[WS] WebSocket error:', JSON.stringify(error));
         setIsDisconnected(true);
       };
 
       ws.current.onclose = () => {
-        console.log('WebSocket disconnected, attempting to reconnect...');
+        console.log('[WS] WebSocket disconnected, attempting to reconnect...');
         setIsDisconnected(true);
         if (pingIntervalRef.current) {
           clearInterval(pingIntervalRef.current);

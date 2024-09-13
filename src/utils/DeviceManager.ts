@@ -24,7 +24,7 @@ class DeviceManager {
     const platform = localStorage.getItem(LocalStorageItem.platform);
 
     console.log(
-      `creating PlatformConfigService instance for platform: ${platform ?? ''}`
+      `[DEVICE] creating PlatformConfigService instance for platform: ${platform ?? ''}`
     );
     switch (platform) {
       case Platform.google:
@@ -44,7 +44,10 @@ class DeviceManager {
 
   private setToLocalStorage(key: string, value: string): void {
     this.configService.setString(key, value).catch((error: unknown) => {
-      console.error('Error setting value to local storage', error);
+      console.error(
+        '[DEVICE] Error setting value to local storage',
+        JSON.stringify(error)
+      );
     });
   }
 
@@ -61,7 +64,7 @@ class DeviceManager {
       }
       return deviceId;
     } catch (error) {
-      console.error('Error getting device ID', error);
+      console.error('[DEVICE] Error getting device ID', JSON.stringify(error));
       return '';
     }
   }
@@ -95,7 +98,10 @@ class DeviceManager {
       const name = await this.getFromLocalStorage(LocalStorageItem.name);
       return this.getDeviceName(name);
     } catch (error) {
-      console.error('Error getting device name', error);
+      console.error(
+        '[DEVICE] Error getting device name',
+        JSON.stringify(error)
+      );
       return 'Unknown';
     }
   }
@@ -147,7 +153,10 @@ class DeviceManager {
         platform: 'web',
       };
     } catch (error) {
-      console.error('Error getting device info', error);
+      console.error(
+        '[DEVICE] Error getting device info',
+        JSON.stringify(error)
+      );
       return null;
     }
   }
@@ -184,13 +193,18 @@ class DeviceManager {
       if (!deviceInfo) {
         return null;
       }
+      console.log(
+        '[DEVICE] Generating branch link with device info: ',
+        JSON.stringify(deviceInfo)
+      );
+
       const data = {
         source: 'feralfile_display',
         device: deviceInfo,
       };
       return await createBranchLink(data);
     } catch (e) {
-      console.error(e);
+      console.error('[DEVICE] Error generate branch link: ', JSON.stringify(e));
       return null;
     }
   }

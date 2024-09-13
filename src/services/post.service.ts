@@ -38,7 +38,7 @@ export class PostService {
       }
       return posts;
     } catch (error) {
-      console.log('Failed to load exhibition:', error);
+      console.log('[API] Failed to load exhibition:', JSON.stringify(error));
       return [];
     }
   }
@@ -65,7 +65,10 @@ export class PostService {
       }
       return [];
     } catch (error) {
-      console.log('Failed to load SOURCE exhibition', error);
+      console.log(
+        '[API] Failed to load SOURCE exhibition',
+        JSON.stringify(error)
+      );
       return [];
     }
   }
@@ -97,7 +100,7 @@ export class PostService {
         resource.thumbUrls = [resource.coverURI];
       }
     } catch (error) {
-      console.log('Failed to format post:', error);
+      console.log('[API] Failed to format post:', JSON.stringify(error));
     }
   }
 }

@@ -38,7 +38,7 @@ class ArtworkService {
 
       return tokens;
     } catch (error) {
-      console.log('Error querying tokens:', JSON.stringify(error));
+      console.log('[API] Error querying tokens:', JSON.stringify(error));
     }
 
     return [];
@@ -163,7 +163,7 @@ class ArtworkService {
           resolve(result.data.tokens);
         })
         .catch((error: unknown) => {
-          console.log('Error querying tokens:', JSON.stringify(error));
+          console.log('[API] Error querying tokens:', JSON.stringify(error));
           // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
           reject(error);
         });
