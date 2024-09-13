@@ -27,7 +27,7 @@ class SupportService {
     }
 
     // add tags
-    var customTags = [tags, 'Tizen TV'];
+    var customTags = [...tags, 'Tizen TV'];
 
     final submitMessage = message ?? '';
 
