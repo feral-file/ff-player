@@ -4,7 +4,6 @@ import { AppContext } from '@/context/AppContext';
 import { Daily } from '@/models';
 import { getDelayTime } from '@/services/qrCodePopUpService';
 import DeviceManager from '@/utils/DeviceManager';
-import Image from 'next/image';
 import QRCode from 'qrcode.react';
 import { useContext, useEffect, useRef, useState } from 'react';
 import styles from './styles.module.scss';
@@ -198,11 +197,12 @@ const QrCodePopUp = () => {
           gap: screenRatio * 100,
           width: '100%',
         }}>
-        <Image
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src={'/feralfile-logo.svg'}
           alt="FF logo"
           width={screenRatio * 224}
-          height={screenRatio * 23}></Image>
+          height={screenRatio * 23}></img>
       </div>
       <div
         style={{

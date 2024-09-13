@@ -13,7 +13,6 @@ import {
   SeriesPreviewHTMLTag,
 } from '@/utils/types';
 import Hls from 'hls.js';
-import Image from 'next/image';
 import { useContext, useEffect, useRef, useState } from 'react';
 import Loading from '../loading/loading';
 import { AppContext } from '@/context/AppContext';
@@ -225,13 +224,8 @@ const ArtworkPlayer = ({
         <div
           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
           className={isCustomView ? styles.customRendering : ''}>
-          <Image
-            src={previewURL}
-            alt="Preview"
-            layout="fill"
-            objectFit="contain"
-            onLoad={loadedSource}
-          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={previewURL} alt="Preview" onLoad={loadedSource} />
         </div>
       )}
       {previewURL && previewType === SeriesPreviewHTMLTag.object && (

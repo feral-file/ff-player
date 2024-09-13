@@ -1,6 +1,5 @@
 import { AppContext } from '@/context/AppContext';
 import QRCode from 'qrcode.react';
-import Image from 'next/image';
 import { useContext, useEffect, useState } from 'react';
 import { ViewMode } from '@/utils/types';
 import styles from './styles.module.scss';
@@ -83,11 +82,12 @@ const OnboardingModal = () => {
               3. Tap the display button on your <b>{connectedDeviceName}</b> to
               display your art on <b>{displayName}</b>.
             </p>
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={'/cast-btn.svg'}
               width={76}
               height={58}
-              alt="cas-button"></Image>
+              alt="cas-button"></img>
           </div>
           <div className={styles.qrCodeContainer}>
             <div
