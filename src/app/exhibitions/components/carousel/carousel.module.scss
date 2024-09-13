@@ -22,7 +22,6 @@
   }
 
   .postTitle {
-    margin-top: calc(45px * var(--screen-ratio));
     color: #fff;
     font-style: normal;
     font-weight: 700;
@@ -30,7 +29,6 @@
   }
 
   .content {
-    margin-top: calc(45px * var(--screen-ratio));
     color: #fff;
     font-style: normal;
     font-weight: 400;
@@ -44,7 +42,6 @@
   }
 
   .thumbnail {
-    margin-top: calc(45px * var(--screen-ratio));
     width: 100%;
     height: 100%;
     position: relative;
