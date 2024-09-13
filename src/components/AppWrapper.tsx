@@ -103,8 +103,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const checkVersion = async () => {
     const currentVersion = await AppService.getCurrentVersion();
     const newVersion = await AppService.getVersion();
-    console.log('Current Version:', currentVersion);
-    console.log('New Version:', newVersion);
+    console.log('[INFO] Current Version:', currentVersion);
+    console.log('[INFO] New Version:', newVersion);
     if (newVersion !== currentVersion) {
       window.location.reload();
     }
@@ -133,22 +133,27 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       const deviceId = await DeviceManager.getDeviceId();
       const deviceName = await DeviceManager.getName();
       const logTitle = `${deviceName}_${deviceId}_${primaryAddress ?? ''}${new Date().toISOString()}.log`;
-      const metadata = {
-        primaryAddress,
-        deviceName,
-        deviceId,
-      };
       const tags: string[] = ['TV Log'];
+
+      const data = {
+        userId: primaryAddress ?? deviceId,
+        logTitle,
+        metadata: {
+          primaryAddress,
+          deviceName,
+          deviceId,
+        },
+        tags,
+      };
+
+      console.log('Send log primary address:', primaryAddress);
+      console.log('Send log device id:', deviceId);
+      console.log('Send log data:', JSON.stringify(data));
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
       (window as any).Log?.postMessage(
         JSON.stringify({
-          data: {
-            userId: primaryAddress ?? deviceId,
-            logTitle,
-            metadata,
-            tags,
-          },
+          data: data,
         })
       );
     };
@@ -185,7 +190,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   });
 
   useEffect(() => {
-    console.log('Cast Info:', castInfo);
+    console.log('[CAST] process cast info:', JSON.stringify(castInfo));
     if (castInfo) {
       const disableBackChanged = () => {
         try {
