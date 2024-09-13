@@ -4,7 +4,6 @@
   padding: 40px;
   flex-direction: column;
   align-items: flex-start;
-  gap: 45px;
   border-radius: 20px;
   background: var(--Dark-Grey, #2e2e2e);
   max-height: 90%;
@@ -23,6 +22,7 @@
   }
 
   .postTitle {
+    margin-top: calc(45px * var(--screen-ratio));
     color: #fff;
     font-style: normal;
     font-weight: 700;
@@ -30,6 +30,7 @@
   }
 
   .content {
+    margin-top: calc(45px * var(--screen-ratio));
     color: #fff;
     font-style: normal;
     font-weight: 400;
@@ -43,6 +44,7 @@
   }
 
   .thumbnail {
+    margin-top: calc(45px * var(--screen-ratio));
     width: 100%;
     height: 100%;
     position: relative;

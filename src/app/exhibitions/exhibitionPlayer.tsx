@@ -174,7 +174,7 @@ const ExhibitionHall = () => {
           <div
             className={styles.leftSection}
             style={{ padding: 60 * screenRatio }}>
-            <div className={styles.info} style={{ gap: 40 * screenRatio }}>
+            <div className={styles.info} style={{ gridGap: 40 * screenRatio }}>
               <p
                 className={styles.title}
                 style={{ fontSize: 48 * screenRatio }}>

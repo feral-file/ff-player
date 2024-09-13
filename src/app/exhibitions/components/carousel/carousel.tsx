@@ -84,7 +84,12 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
               item.type === PostType.CuratorNote) && (
               <div
                 className={styles.card}
-                style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
+                style={
+                  {
+                    padding: 40 * screenRatio,
+                    '--screen-ratio': screenRatio,
+                  } as React.CSSProperties
+                }>
                 <p
                   className={styles.type}
                   style={{ fontSize: 22 * screenRatio }}>
@@ -105,7 +110,7 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
             {item.type === PostType.J043Custom && (
               <div
                 className={styles.card}
-                style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
+                style={{ padding: 40 * screenRatio }}>
                 <p
                   className={styles.type}
                   style={{ fontSize: 32 * screenRatio }}>
@@ -121,7 +126,7 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
             {item.type === PostType.CloseUp && (
               <div
                 className={styles.card}
-                style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
+                style={{ padding: 40 * screenRatio }}>
                 <p
                   className={styles.type}
                   style={{ fontSize: 22 * screenRatio }}>
@@ -160,7 +165,7 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
             ].includes(item.type) && (
               <div
                 className={styles.card}
-                style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
+                style={{ padding: 40 * screenRatio }}>
                 <p
                   className={`${styles.type} ${styles.capitalizedFirstChar}`}
                   style={{ fontSize: 22 * screenRatio }}>

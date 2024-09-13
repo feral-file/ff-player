@@ -184,7 +184,7 @@ const QrCodePopUp = () => {
         display: isShowComponent ? 'grid' : 'none',
         flexDirection: 'column',
         padding: screenRatio * 40,
-        gap: screenRatio * 40,
+        gridGap: screenRatio * 40,
         zIndex: 3,
         fontSize: screenRatio * 14,
         lineHeight: 1.4,
@@ -194,7 +194,6 @@ const QrCodePopUp = () => {
         style={{
           display: 'flex',
           justifyContent: 'space-between',
-          gap: screenRatio * 100,
           width: '100%',
         }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -257,7 +256,7 @@ const QrCodePopUp = () => {
       <div
         style={{
           display: 'grid',
-          gap: screenRatio * 20,
+          gridGap: screenRatio * 20,
           gridTemplateColumns: 'auto 1fr',
           alignItems: 'flex-end',
           fontSize: screenRatio * 20,
