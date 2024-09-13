@@ -38,6 +38,13 @@ const nextConfig = {
         entries['main-app'].unshift('core-js/features/global-this');
       }
 
+      if (
+        entries['main-app'] &&
+        !entries['main-app'].includes('core-js/stable/queue-microtask')
+      ) {
+        entries['main-app'].unshift('core-js/stable/queue-microtask');
+      }
+
       return entries;
     };
 

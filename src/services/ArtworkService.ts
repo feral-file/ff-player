@@ -38,7 +38,7 @@ class ArtworkService {
 
       return tokens;
     } catch (error) {
-      console.log('Error querying tokens:', JSON.stringify(error));
+      console.log('Error querying tokens:', error);
     }
 
     return [];
