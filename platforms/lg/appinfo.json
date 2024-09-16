@@ -1,6 +1,6 @@
 {
   "id": "com.feralfile.display",
-  "version": "0.0.1",
+  "version": "1.0.3",
   "vendor": "Feral File",
   "type": "web",
   "main": "index.html",
