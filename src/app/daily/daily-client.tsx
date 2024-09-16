@@ -45,6 +45,7 @@ export default function DailyClient() {
   useEffect(() => {
     const previewURL = previewURLs[index];
     if (previewURL) {
+      console.log('---Kien---', previewURL);
       setCastPreviewURL(previewURL);
     }
   }, [index]);
