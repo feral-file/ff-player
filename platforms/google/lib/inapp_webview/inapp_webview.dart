@@ -105,11 +105,7 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
     );
   }
 
-  void _initWebview() {
-    final url = widget.payload.url;
-    log.info('load url: $url');
-    _addJavaScriptChannel();
-    _addConfigHandler();
+  void _reloadWhenNoInternet() {
     Connectivity().checkConnectivity().then((result) {
       log.info('Connectivity: $result');
       if (result == ConnectivityResult.none) {
@@ -123,6 +119,13 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
         });
       }
     });
+  }
+
+  void _initWebview() {
+    final url = widget.payload.url;
+    log.info('load url: $url');
+    _addJavaScriptChannel();
+    _addConfigHandler();
 
     _webViewController.loadRequest(Uri.parse(url));
 
@@ -137,6 +140,13 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
         setState(() {
           _isLoading = false;
         });
+      },
+      onPageStarted: (url) {
+        log.info('page started: $url');
+        setState(() {
+          _isLoading = true;
+        });
+        _reloadWhenNoInternet();
       },
     ));
   }
