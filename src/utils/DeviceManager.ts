@@ -24,7 +24,7 @@ class DeviceManager {
     const platform = localStorage.getItem(LocalStorageItem.platform);
 
     console.log(
-      `[DEVICE] creating PlatformConfigService instance for platform: ${platform ?? ''}`
+      `[DEVICE] creating PlatformConfigService instance for platform: ${platform ?? 'Web'}`
     );
     switch (platform) {
       case Platform.google:

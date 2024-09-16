@@ -183,7 +183,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         clearInterval(sendLogEventInterval.current);
       }
     };
-  });
+  }, []);
 
   useEffect(() => {
     console.log('[CAST] process cast info:', JSON.stringify(castInfo));
