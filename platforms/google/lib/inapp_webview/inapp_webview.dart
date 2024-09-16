@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:feralfile_display/model/app_state_message.dart';
 import 'package:feralfile_display/model/js_message.dart';
 import 'package:feralfile_display/service/configuration_service.dart';
@@ -109,6 +110,19 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
     log.info('load url: $url');
     _addJavaScriptChannel();
     _addConfigHandler();
+    Connectivity().checkConnectivity().then((result) {
+      log.info('Connectivity: $result');
+      if (result == ConnectivityResult.none) {
+        Connectivity()
+            .onConnectivityChanged
+            .listen((ConnectivityResult result) {
+          log.info('Connectivity changed: $result');
+          if (result != ConnectivityResult.none && _isLoading) {
+            _webViewController.reload();
+          }
+        });
+      }
+    });
 
     _webViewController.loadRequest(Uri.parse(url));
 
