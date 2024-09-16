@@ -43,6 +43,7 @@ class DailyService {
       );
 
       if (dailies.length === 0) {
+        console.log('[DAILY] No upcoming dailies, using default daily');
         dailies = [this.getDefaultDaily()];
       }
 
@@ -98,7 +99,10 @@ class DailyService {
 
       return convertDailies;
     } catch (error) {
-      console.error(error);
+      console.error(
+        '[DAILY] Error when convert dailies',
+        JSON.stringify(error)
+      );
       return [this.getDefaultDaily()];
     }
   }

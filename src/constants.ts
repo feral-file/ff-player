@@ -6,6 +6,7 @@ export enum KeyCodes {
   audioVolumeMute = 0x00100000a11,
   enter = 0x0010000000d,
   select = 4294968588,
+  arrowUp = 0x00100000304,
 }
 
 export const IgnoreKeyCodes = [
@@ -49,8 +50,8 @@ export enum LocalStorageItem {
   castInfo = 'castInfo',
   name = 'device_name',
   branchLink = 'branchLink',
-  previouslyConnectedDeviceIds = 'previouslyConnectedDeviceIds',
   metricEvents = 'metricEvents',
+  primaryAddress = 'primaryAddress',
 }
 
 export enum Platform {
@@ -74,3 +75,7 @@ export const AppSettings = {
 export const TIME_PER_HOUR = 60 * 60 * 1000;
 
 export const PUSH_METRIC_INTERVAL = 60 * 1000;
+
+export const SEND_LOG_INTERVAL = 10 * 1000;
+
+export const SEND_LOG_EVENT_NUMBER = 4;

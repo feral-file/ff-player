@@ -99,7 +99,7 @@ const ArtworkPlayer = ({
           newDay.setHours(0, 0, 0, 0);
           const delay = newDay.getTime() - now.getTime();
           newDayCheckTimeOutID.current = setTimeout(() => {
-            console.log('METRIC: New day');
+            console.log('[METRIC]: New day');
             handleMetric();
           }, delay);
         };
@@ -133,9 +133,9 @@ const ArtworkPlayer = ({
         });
         const contentType = response.headers.get('Content-Type');
         compareToGetFileType(contentType ?? '');
-        console.log('Content-Type:', contentType);
+        console.log('[CAST] Content-Type:', contentType);
       } catch (error) {
-        console.log('Error get content-type', error);
+        console.log('[CAST] Error get content-type', JSON.stringify(error));
         setPreviewType(SeriesPreviewHTMLTag.iframe);
       }
     };
@@ -150,7 +150,7 @@ const ArtworkPlayer = ({
   }, [previewURL]);
 
   const loadedSource = () => {
-    console.log('loaded source');
+    console.log('[CAST] loaded source', previewURL);
     // When an iframe is present in a page, the parent window might not receive keydown events because the iframe itself captures these events when it is focused.
     // This is work around to focus the parent window.
     window.focus();
@@ -177,7 +177,7 @@ const ArtworkPlayer = ({
         // Play video when it reaches the end (play in loop)
         hls.on(Hls.Events.BUFFER_EOS, () => {
           videoRef.current?.play().catch((error: unknown) => {
-            console.log('Error play video', error);
+            console.log('[CAST] Error play video', JSON.stringify(error));
           });
         });
       } else {
@@ -186,7 +186,7 @@ const ArtworkPlayer = ({
           videoRef.current
             ?.play()
             .catch((error: unknown) => {
-              console.log('Error play video', error);
+              console.log('[CAST] Error play video', JSON.stringify(error));
             })
             .finally(() => {
               setLoading(false);
@@ -200,7 +200,7 @@ const ArtworkPlayer = ({
     if (context.isOnline && !context.websocketData.isDisconnected) {
       if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
         videoRef.current.play().catch((error: unknown) => {
-          console.log('Error play video', error);
+          console.log('[CAST] Error play video', JSON.stringify(error));
         });
       }
     } else {
