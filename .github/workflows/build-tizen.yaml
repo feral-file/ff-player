@@ -30,7 +30,7 @@ jobs:
         env: 
           DOTNET_INSTALL_DIR: $GITHUB_WORKSPACE/dotnet
         with:
-          dotnet-version: '6.0.x'
+          dotnet-version: '4.0.x'
 
       - name: Install Tizen studio
         run: |
