@@ -268,7 +268,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               (rotateRadius || 0) % 180 === 0)
               ? '100vh'
               : '100vw',
-          transform: `rotate(${(rotateRadius || 0).toString()}deg) `,
+          transform: rotateRadius
+            ? `rotate(${rotateRadius.toString()}deg) `
+            : 'none',
           transformOrigin:
             (screenOrientation === Orientation.vertical &&
               (rotateRadius || 0) % 360 === 90) ||
