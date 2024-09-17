@@ -48,7 +48,7 @@ const useDeviceRotation = (castInfo: CastInfo | null) => {
         }
       };
 
-      orientationSetting().catch(error => {
+      orientationSetting().catch((error: unknown) => {
         console.error('Error getting orientation setting', error);
         // Retry to set default orientation setting
         resizeHandler();
