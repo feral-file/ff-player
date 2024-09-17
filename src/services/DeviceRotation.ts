@@ -32,7 +32,13 @@ const useDeviceRotation = (castInfo: CastInfo | null) => {
         const catchOrientationSetting = await DeviceManager.getOrientation();
 
         if (catchOrientationSetting) {
-          const orientation = JSON.parse(catchOrientationSetting);
+          const orientation = JSON.parse(catchOrientationSetting) as {
+            screenOrientation: Orientation;
+            screenRatio: number;
+            viewMode: ViewMode;
+            rotateRadius: number;
+          };
+
           setScreenOrientation(orientation.screenOrientation);
           setScreenRatio(orientation.screenRatio);
           setViewMode(orientation.viewMode);
@@ -42,7 +48,11 @@ const useDeviceRotation = (castInfo: CastInfo | null) => {
         }
       };
 
-      orientationSetting();
+      orientationSetting().catch(error => {
+        console.error('Error getting orientation setting', error);
+        // Retry to set default orientation setting
+        resizeHandler();
+      });
     }
   }, []);
 
