@@ -1,16 +1,16 @@
 {
   "QrCodePopUp": {
-    "today_daily": "today_daily",
-    "next_work": "next_work",
-    "hour": "hr",
-    "get_the_Feral_File": "get_the_Feral_File",
-    "press_enter_to_hide_show": "press_enter_to_hide_show"
+    "today_daily": "Daily hôm nay",
+    "next_work": "Tác phẩm tiếp theo",
+    "hour": " giờ",
+    "get_the_Feral_File": "Tải ứng dụng di động Feral File để duyệt qua hơn 15.000 tác phẩm nghệ thuật gốc và chọn nội dung muốn hiển thị trên TV của bạn.",
+    "press_enter_to_hide_show": "Nhấn Enter để ẩn/hiện cửa sổ này."
   },
   "LostConnectionModal": {
-    "internet_connection_lost": "internet_connection_lost",
-    "connection_lost": "connection_lost"
+    "internet_connection_lost": "Mất kết nối Internet. Đang kết nối lại...",
+    "connection_lost": "Mất kết nối. Vui lòng đợi trong khi cố gắng kết nối lại."
   },
   "Loading": {
-    "loading": "loading..."
+    "loading": "Đang tải..."
   }
 }
