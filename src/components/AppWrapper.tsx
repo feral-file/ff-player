@@ -134,10 +134,10 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     const fetchMessages = async () => {
-      setMessages(
-        (await import(`../../locales/${locale}.json`))
-          .default as AbstractIntlMessages
-      );
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const localeJson = await import(`../../locales/${locale}.json`);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      setMessages(localeJson.default as AbstractIntlMessages);
     };
     fetchMessages().catch((error: unknown) => {
       console.error(error);
