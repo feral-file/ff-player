@@ -38,6 +38,10 @@ export class KeyEvent extends PlatformEventReceiver {
     ) {
       EventEmitter.emit(Event.escape);
     }
+
+    if ([KeyCodes.arrowUp.toString()].includes(keyId)) {
+      EventEmitter.emit(Event.sendLog);
+    }
   }
 }
 
@@ -188,11 +192,7 @@ export class GoogleConfigService extends TizenConfigService {}
 export class WebConfigService implements PlatformConfigService {
   // eslint-disable-next-line @typescript-eslint/require-await
   async init() {
-    const deviceId = uuidv4();
     const deviceName = this.getOrCreateDeviceName();
-
-    // Use the device ID as the name for web
-    localStorage.setItem(LocalStorageItem.deviceId, deviceId);
     localStorage.setItem(LocalStorageItem.name, deviceName);
   }
 

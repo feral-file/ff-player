@@ -5,6 +5,7 @@ export enum Event {
   escape,
   keyDown,
   toggleQrCode,
+  sendLog,
 }
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class

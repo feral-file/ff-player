@@ -1,5 +1,6 @@
 import { LocalStorageItem } from '@/constants';
 import { MetricEvent } from '@/models/metric.model';
+import DeviceManager from '@/utils/DeviceManager';
 import axios, { AxiosInstance } from 'axios';
 
 const accountsRequester: AxiosInstance = axios.create({
@@ -10,8 +11,8 @@ const accountsRequester: AxiosInstance = axios.create({
 });
 
 export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
-  console.log('METRIC: sending API', events);
-  const deviceID = localStorage.getItem(LocalStorageItem.deviceId);
+  console.log('[METRIC]: sending API', JSON.stringify(events));
+  const deviceID = await DeviceManager.getDeviceId();
 
   if (!deviceID) {
     throw new Error('Device ID not found');
@@ -24,14 +25,17 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
 }
 
 export function appendMetricEventToLocalStorage(event: MetricEvent) {
-  console.log('METRIC: append event to localStorage', event);
+  console.log('[METRIC]: append event to localStorage', JSON.stringify(event));
   const metricEvents = localStorage.getItem(LocalStorageItem.metricEvents);
   let events: MetricEvent[] = [];
   if (metricEvents) {
     try {
       events = JSON.parse(metricEvents) as MetricEvent[];
     } catch (error) {
-      console.error('Error parsing metric events from local storage', error);
+      console.error(
+        '[METRIC] Error parsing metric events from local storage',
+        JSON.stringify(error)
+      );
       events = [];
     }
   }
@@ -42,7 +46,7 @@ export function appendMetricEventToLocalStorage(event: MetricEvent) {
 }
 
 export function uploadMetricEventsFromLocalStorage() {
-  console.log('METRIC: start uploading events from localStorage');
+  console.log('[METRIC]: start uploading events from localStorage');
   const metricEvents = localStorage.getItem(LocalStorageItem.metricEvents);
   let events: MetricEvent[] = [];
   if (metricEvents) {
@@ -50,7 +54,10 @@ export function uploadMetricEventsFromLocalStorage() {
       events = JSON.parse(metricEvents) as MetricEvent[];
     } catch (error) {
       localStorage.removeItem(LocalStorageItem.metricEvents);
-      console.error('Error parsing metric events from local storage', error);
+      console.error(
+        '[METRIC] Error parsing metric events from local storage',
+        JSON.stringify(error)
+      );
       events = [];
     }
   }
@@ -61,7 +68,10 @@ export function uploadMetricEventsFromLocalStorage() {
         localStorage.removeItem(LocalStorageItem.metricEvents);
       })
       .catch((error: unknown) => {
-        console.error('Error uploading metric events', error);
+        console.error(
+          '[METRIC] Error uploading metric events',
+          JSON.stringify(error)
+        );
       });
   }
 }
