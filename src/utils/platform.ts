@@ -193,7 +193,8 @@ export class WebConfigService implements PlatformConfigService {
   // eslint-disable-next-line @typescript-eslint/require-await
   async init() {
     const deviceName = this.getOrCreateDeviceName();
-    localStorage.setItem(LocalStorageItem.name, deviceName);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    localStorage?.setItem(LocalStorageItem.name, deviceName);
   }
 
   generateRandomString(length: number): string {
@@ -208,6 +209,11 @@ export class WebConfigService implements PlatformConfigService {
   }
 
   getOrCreateDeviceName() {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (!localStorage) {
+      return 'Unknown';
+    }
+
     let deviceName = localStorage.getItem(LocalStorageItem.name);
     if (!deviceName) {
       const platform = navigator.platform;
@@ -220,12 +226,14 @@ export class WebConfigService implements PlatformConfigService {
   }
   // eslint-disable-next-line @typescript-eslint/require-await
   async getString(key: string): Promise<string | null> {
-    return localStorage.getItem(key);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    return localStorage?.getItem(key);
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
   async setString(key: string, value: string): Promise<void> {
-    localStorage.setItem(key, value);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    localStorage?.setItem(key, value);
   }
 }
 
