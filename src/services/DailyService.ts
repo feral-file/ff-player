@@ -35,12 +35,28 @@ class DailyService {
     return response.data.result as Daily[];
   }
 
+  public async getDailiesByDate(
+    date: string,
+    expand?: string[]
+  ): Promise<Daily[]> {
+    let expandParams = '';
+    if (expand) {
+      expandParams = convertToQueryParams(expand);
+    }
+
+    const response = await axiosInstance.get(
+      `/api/dailies/by-date?date=${date}`
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    return response.data.result as Daily[];
+  }
+
   public async callingDailies(): Promise<Daily[]> {
     try {
-      let dailies = await this.getUpcomingDaily(
-        ['includeSuccessfulSwap'],
-        'limit=2&offset=0'
-      );
+      let dailies = await this.getDailiesByDate(new Date().toISOString(), [
+        'includeSuccessfulSwap',
+      ]);
 
       if (dailies.length === 0) {
         console.log('[DAILY] No upcoming dailies, using default daily');
