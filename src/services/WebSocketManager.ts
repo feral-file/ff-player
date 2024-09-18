@@ -23,6 +23,11 @@ const useWebSocket = (url: string, apiKey: string) => {
     if (!url || !apiKey) return;
 
     const connect = () => {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      if (!localStorage) {
+        return;
+      }
+
       let wsUrl = `${url}?apiKey=${apiKey}`;
       const storedLocationID = localStorage.getItem(
         LocalStorageItem.locationID

@@ -46,6 +46,15 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [messages, setMessages] = useState<AbstractIntlMessages>();
   const locale = getUserLocale();
 
+  const [hasLocalStorage, setHasLocalStorage] = useState<boolean>(false);
+
+  useEffect(() => {
+    setHasLocalStorage(
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      typeof window !== 'undefined' && window.localStorage ? true : false
+    );
+  }, []);
+
   // Initialize platform events
   useEffect(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -302,7 +311,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        <QrCodePopUp></QrCodePopUp>
+        {hasLocalStorage && <QrCodePopUp></QrCodePopUp>}
       </div>
       <div
         style={{

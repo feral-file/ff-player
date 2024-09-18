@@ -21,7 +21,8 @@ class DeviceManager {
   }
 
   private createConfigService(): PlatformConfigService {
-    const platform = localStorage.getItem(LocalStorageItem.platform);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    const platform = localStorage?.getItem(LocalStorageItem.platform);
 
     console.log(
       `[DEVICE] creating PlatformConfigService instance for platform: ${platform ?? 'Web'}`
@@ -107,7 +108,8 @@ class DeviceManager {
   }
 
   private getDeviceName(name: string | null): string {
-    if (!name) {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (!name || !localStorage) {
       return 'Unknown';
     }
 
