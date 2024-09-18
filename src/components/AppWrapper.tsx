@@ -72,7 +72,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         handlePlatformEvent: Config.handlePlatformEvent,
       };
 
-      const platform = searchParams?.get('platform') ?? '';
+      const platform = searchParams.get('platform') ?? '';
       if (platform) {
         localStorage.setItem('platform', platform);
       }

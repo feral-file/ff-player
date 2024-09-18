@@ -4,7 +4,6 @@ const SUPPORTED_LOCALES = ['en', 'vi', 'ja'];
 const DEFAULT_LOCALE = 'en';
 
 export function getUserLocale() {
-  let locale = DEFAULT_LOCALE;
   let languages: string[] = [];
 
   if (typeof window !== 'undefined') {
@@ -15,11 +14,5 @@ export function getUserLocale() {
     languages = [];
   }
 
-  try {
-    locale = match(languages, SUPPORTED_LOCALES, DEFAULT_LOCALE);
-    return locale;
-  } catch (error) {
-    console.log('Invalid language', error);
-    return DEFAULT_LOCALE;
-  }
+  return match(languages, SUPPORTED_LOCALES, DEFAULT_LOCALE);
 }
