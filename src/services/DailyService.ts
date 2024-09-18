@@ -45,7 +45,7 @@ class DailyService {
     }
 
     const response = await axiosInstance.get(
-      `/api/dailies/by-date?date=${date}`
+      `/api/dailies/by-date?date=${date}&${expandParams}`
     );
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
