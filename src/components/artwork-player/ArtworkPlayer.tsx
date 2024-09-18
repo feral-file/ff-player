@@ -129,6 +129,7 @@ const ArtworkPlayer = ({
           : `${previewURL}?v=${Date.now().toString()}&x-request=xhr`;
         const response = await fetch(extendPreviewURL, {
           method: 'HEAD',
+          mode: 'no-cors',
         });
         const contentType = response.headers.get('Content-Type');
         compareToGetFileType(contentType ?? '');
