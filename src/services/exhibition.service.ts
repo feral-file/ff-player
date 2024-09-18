@@ -17,13 +17,17 @@ export class ExhibitionService {
       const exhibition = response.data.result as Exhibition;
 
       // Format artist/ curator alias remove suffix
-      if (exhibition.curator)
-        exhibition.curator.alias = removeArtistAliasSuffixes(
-          exhibition.curator.alias ?? ''
+      if (exhibition.curator?.alumniAccount)
+        exhibition.curator.alumniAccount.alias = removeArtistAliasSuffixes(
+          exhibition.curator.alumniAccount.alias ?? ''
         );
       if (exhibition.artists) {
         exhibition.artists.map(artist => {
-          artist.alias = removeArtistAliasSuffixes(artist.alias ?? '');
+          if (artist.alumniAccount) {
+            artist.alumniAccount.alias = removeArtistAliasSuffixes(
+              artist.alumniAccount.alias ?? ''
+            );
+          }
         });
       }
 
