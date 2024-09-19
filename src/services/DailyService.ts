@@ -3,6 +3,7 @@ import ArtworkService from './ArtworkService';
 import axiosInstance from './axiosService';
 import { convertToTokenID, getIndexerTokenName } from '@/utils/indexer';
 import { convertToQueryParams } from '@/utils/queryParams';
+import { NEW_DAILY_HOUR } from '@/utils/constants';
 
 class DailyService {
   private artworkService = new ArtworkService();
@@ -137,8 +138,18 @@ class DailyService {
   }
 
   private getCurrentLocaleDateOnly(): string {
+    const now = new Date();
+    let currentTimestamp: number;
+    // Previous day if the current time is before 6:00 AM
+    const newDailyAt = new Date().setHours(NEW_DAILY_HOUR, 0, 0, 0); // 6:00 AM
+    if (now.getTime() < newDailyAt) {
+      currentTimestamp = now.setDate(now.getDate() - 1);
+    } else {
+      currentTimestamp = now.getTime();
+    }
+
+    const date = new Date(currentTimestamp);
     // Format date to yyyy-mm-dd
-    const date = new Date();
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
