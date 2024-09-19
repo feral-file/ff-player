@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:feralfile_display/model/app_state_message.dart';
 import 'package:feralfile_display/model/js_message.dart';
+import 'package:feralfile_display/model/log_data.dart';
 import 'package:feralfile_display/service/configuration_service.dart';
 import 'package:feralfile_display/utils/config_manager.dart';
 import 'package:feralfile_display/utils/injector.dart';
@@ -194,6 +195,18 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
       final rotate = message.message;
       ConfigManager.instance.quarterTurns.value +=
           rotate == 'clockwise' ? 1 : -1;
+    });
+
+    _webViewController.addJavaScriptChannel('Log',
+        onMessageReceived: (message) async {
+      try {
+        log.info('Log: ${message.message}');
+        final json = jsonDecode(message.message);
+        final logData = LogData.fromJson(json['data']);
+        await FileLogger.sendLog(logData: logData);
+      } catch (e) {
+        log.info('Error: $e');
+      }
     });
   }
 
