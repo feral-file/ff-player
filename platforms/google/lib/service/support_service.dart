@@ -40,8 +40,6 @@ class SupportService {
     };
     log.info('createIssue: $payload');
 
-    const deviceId = "DeviceId";
-
-    return await supportApi.createIssue(payload, deviceId);
+    return await supportApi.createIssue(payload, userId);
   }
 }
