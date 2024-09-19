@@ -1,4 +1,8 @@
 /** @type {import('next').NextConfig} */
+import createNextIntlPlugin from 'next-intl/plugin';
+
+const withNextIntl = createNextIntlPlugin();
+
 const nextConfig = {
   output: 'export',
   env: {
@@ -26,4 +30,4 @@ const nextConfig = {
   reactStrictMode: false,
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);
