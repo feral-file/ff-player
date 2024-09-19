@@ -41,6 +41,9 @@ jobs:
         run: |
           cd platforms/google
           echo "PUB_DOC_URL = ${{ vars.PUB_DOC_URL }}" >> .env
+          echo "SUPPORT_URL = ${{ vars.SUPPORT_URL }}" >> .env
+          
+          echo "SUPPORT_API_KEY = ${{ secrets.SUPPORT_API_KEY }}" >> .env
 
       - name: Build APK for Android TV
         run: |
