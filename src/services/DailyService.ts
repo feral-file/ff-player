@@ -45,7 +45,7 @@ class DailyService {
     }
 
     const response = await axiosInstance.get(
-      `/api/dailies/by-date?date=${date}&${expandParams}`
+      `/api/dailies/date/${date}?${expandParams}`
     );
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -54,7 +54,8 @@ class DailyService {
 
   public async callingDailies(): Promise<Daily[]> {
     try {
-      let dailies = await this.getDailiesByDate(new Date().toISOString(), [
+      const date = this.getCurrentLocaleDateOnly();
+      let dailies = await this.getDailiesByDate(date, [
         'includeSuccessfulSwap',
       ]);
 
@@ -133,6 +134,15 @@ class DailyService {
       tokenName: '#1',
       tokenID: '339348595130070749814751437599411258966098496',
     };
+  }
+
+  private getCurrentLocaleDateOnly(): string {
+    // Format date to yyyy-mm-dd
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 }
 
