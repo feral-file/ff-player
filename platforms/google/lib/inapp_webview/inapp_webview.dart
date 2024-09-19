@@ -30,6 +30,7 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
   final FocusNode _focusNode = FocusNode();
 
   bool _isLoading = true;
+  bool _shouldReload = true;
   bool _isBackAble = false;
 
   static const _listAlwaysHandledKeys = [
@@ -114,10 +115,17 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
             .onConnectivityChanged
             .listen((ConnectivityResult result) {
           log.info('Connectivity changed: $result');
-          if (result != ConnectivityResult.none && _isLoading) {
-            _webViewController.reload();
+          if (result != ConnectivityResult.none && _shouldReload) {
+            Future.delayed(const Duration(seconds: 2), () {
+              _webViewController.reload().then((value) {
+                log.info('Reloaded');
+                _shouldReload = false;
+              });
+            });
           }
         });
+      } else {
+        _shouldReload = false;
       }
     });
   }
@@ -147,7 +155,17 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
         setState(() {
           _isLoading = true;
         });
-        _reloadWhenNoInternet();
+        try {
+          _reloadWhenNoInternet();
+        } catch (e) {
+          log.info('Error when reload: $e');
+        }
+      },
+      onHttpError: (error) {
+        log.info('http error: $error');
+      },
+      onWebResourceError: (error) {
+        log.info('web resource error: $error');
       },
     ));
   }
