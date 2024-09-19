@@ -188,7 +188,7 @@ const ExhibitionHall = () => {
                     style={{ fontSize: 18 * screenRatio }}>
                     Curator
                   </p>
-                  <p>{exhibitionDetail.curator.alumniAccount?.alias}</p>
+                  <p>{exhibitionDetail.curator.alias}</p>
                 </div>
               )}
               <div>
@@ -209,7 +209,7 @@ const ExhibitionHall = () => {
                 {exhibitionDetail.artists?.length && (
                   <p>
                     {exhibitionDetail.artists
-                      .map(artist => artist.alumniAccount?.alias)
+                      .map(artist => artist.alias)
                       .join(', ')}
                   </p>
                 )}
