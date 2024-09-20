@@ -3,12 +3,9 @@ import ArtworkService from './ArtworkService';
 import axiosInstance from './axiosService';
 import { convertToTokenID, getIndexerTokenName } from '@/utils/indexer';
 import { convertToQueryParams } from '@/utils/queryParams';
-import RemoteConfigService from './remoteConfigService';
-import { AppSettings } from '@/constants';
 
 class DailyService {
   private artworkService = new ArtworkService();
-  private remoteConfigService = new RemoteConfigService();
   static instance = new DailyService();
   private dailies: Daily[] = [];
 
@@ -57,7 +54,7 @@ class DailyService {
 
   public async callingDailies(newDailyHour: number): Promise<Daily[]> {
     try {
-      const date = await this.getCurrentLocaleDateOnly(newDailyHour);
+      const date = this.getCurrentLocaleDateOnly(newDailyHour);
       let dailies = await this.getDailiesByDate(date, [
         'includeSuccessfulSwap',
       ]);
@@ -139,9 +136,7 @@ class DailyService {
     };
   }
 
-  private async getCurrentLocaleDateOnly(
-    newDailyHour: number
-  ): Promise<string> {
+  private getCurrentLocaleDateOnly(newDailyHour: number): string {
     const now = new Date();
     let currentTimestamp: number;
     // Previous day if the current time is before 6:00 AM
