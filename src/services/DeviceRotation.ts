@@ -66,6 +66,17 @@ const useDeviceRotation = (castInfo: CastInfo | null) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [castInfo]);
 
+  useEffect(() => {
+    const rotateSetting = {
+      screenOrientation,
+      screenRatio,
+      viewMode,
+      rotateRadius,
+    };
+    console.log('set rotateSetting', rotateSetting);
+    DeviceManager.setOrientation(JSON.stringify(rotateSetting));
+  }, [screenOrientation, screenRatio, viewMode, rotateRadius]);
+
   if (viewMode === null) {
     return null;
   }
@@ -76,7 +87,6 @@ const useDeviceRotation = (castInfo: CastInfo | null) => {
     viewMode,
     rotateRadius,
   };
-  DeviceManager.setOrientation(JSON.stringify(rotateSetting));
   return rotateSetting;
 };
 
