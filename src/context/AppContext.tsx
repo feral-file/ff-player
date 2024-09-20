@@ -17,6 +17,7 @@ import RemoteConfigService, {
   AppRemoteConfig,
 } from '@/services/remoteConfigService';
 import { AppSettings } from '@/constants';
+import { useSearchParams } from 'next/navigation';
 
 interface AppContextProps {
   children: ReactNode;
@@ -49,6 +50,13 @@ export const AppContext = createContext<AppContextValue | undefined>(undefined);
 export const AppProvider = ({ children }: AppContextProps) => {
   const [appRemoteConfig, setAppConfig] = useState({} as AppRemoteConfig);
   const remoteConfigService = useRef(new RemoteConfigService());
+
+  // Get platform from URL at initial load
+  const searchParams = useSearchParams();
+  const platform = searchParams.get('platform') ?? '';
+  if (platform) {
+    localStorage.setItem('platform', platform);
+  }
 
   const websocketData = useWebSocket(
     `${process.env.NEXT_PUBLIC_WEBSOCKET_URL ?? ''}/api/connection`,

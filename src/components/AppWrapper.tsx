@@ -11,7 +11,7 @@ import AppService from '@/services/app.service';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import Script from 'next/script';
@@ -43,7 +43,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
   const [castState, setCastState] = useState<CastState>(CastState.None);
   // const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
-  const searchParams = useSearchParams();
   const [isWebOSTVLoaded, setIsWebOSTVLoaded] = useState(false);
   const [isWebOSTVDevLoaded, setIsWebOSTVDevLoaded] = useState(false);
   const pushMetricIntervalID = useRef<
@@ -71,11 +70,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         // eslint-disable-next-line @typescript-eslint/unbound-method
         handlePlatformEvent: Config.handlePlatformEvent,
       };
-
-      const platform = searchParams.get('platform') ?? '';
-      if (platform) {
-        localStorage.setItem('platform', platform);
-      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
