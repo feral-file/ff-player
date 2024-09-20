@@ -67,6 +67,10 @@ const useDeviceRotation = (castInfo: CastInfo | null) => {
   }, [castInfo]);
 
   useEffect(() => {
+    if (rotateRadius === 0) {
+      return;
+    }
+
     const rotateSetting = {
       screenOrientation,
       screenRatio,
@@ -75,7 +79,7 @@ const useDeviceRotation = (castInfo: CastInfo | null) => {
     };
     console.log('set rotateSetting', rotateSetting);
     DeviceManager.setOrientation(JSON.stringify(rotateSetting));
-  }, [screenOrientation, screenRatio, viewMode, rotateRadius]);
+  }, [rotateRadius]);
 
   if (viewMode === null) {
     return null;
