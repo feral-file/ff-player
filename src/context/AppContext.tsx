@@ -51,29 +51,17 @@ export const AppContext = createContext<AppContextValue | undefined>(undefined);
 export const AppProvider = ({ children }: AppContextProps) => {
   const [appRemoteConfig, setAppConfig] = useState({} as AppRemoteConfig);
   const remoteConfigService = useRef(new RemoteConfigService());
-  if (typeof window !== 'undefined') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    (window as any).KeyEvent = {
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      handlePlatformEvent: KeyEvent.handlePlatformEvent,
-    };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    (window as any).DeviceName = {
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      handlePlatformEvent: DeviceName.handlePlatformEvent,
-    };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    (window as any).Config = {
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      handlePlatformEvent: Config.handlePlatformEvent,
-    };
-  }
+  const [platform, setPlatform] = useState<string | null>(null);
+  const [deviceRotation, setDeviceRotation] = useState<DeviceRotation | null>(
+    null
+  );
 
   // Get platform from URL at initial load
   const searchParams = useSearchParams();
-  const platform = searchParams.get('platform') ?? '';
-  if (platform) {
-    localStorage.setItem('platform', platform);
+  const pl = searchParams.get('platform') ?? '';
+  if (pl) {
+    localStorage.setItem('platform', pl);
+    setPlatform(pl);
   }
 
   const websocketData = useWebSocket(
@@ -82,7 +70,35 @@ export const AppProvider = ({ children }: AppContextProps) => {
   );
 
   const isOnline = useNetworkManger();
-  const deviceRotation = useDeviceRotation(websocketData.castInfo);
+  // const deviceRotation = useDeviceRotation(websocketData.castInfo);
+
+  // Initialize platform events
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      (window as any).KeyEvent = {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        handlePlatformEvent: KeyEvent.handlePlatformEvent,
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      (window as any).DeviceName = {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        handlePlatformEvent: DeviceName.handlePlatformEvent,
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      (window as any).Config = {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        handlePlatformEvent: Config.handlePlatformEvent,
+      };
+    }
+  }, []);
+
+  useEffect(() => {
+    if (platform && websocketData.castInfo) {
+      const rotate = useDeviceRotation(websocketData.castInfo);
+      setDeviceRotation(rotate);
+    }
+  }, [platform, websocketData.castInfo]);
 
   useEffect(() => {
     const fetchConfig = async () => {
