@@ -74,7 +74,7 @@ export default function DailyClient() {
     {
       title: 'Nostalgia (2024) #1',
       previewURL:
-        'https://cdn.feralfileassets.com/previews/ccd387c2-4762-4037-8752-bbc223957199/1724764457/index.html?edition_number=0&artwork_number=1&blockchain=ethereum&token_id=1348537551383340122739544414467967762981016640&token_id_hash=0x0d9ea64e929000e71e02adcb40bacd55da8acc21f7d804604cfa8b896983edd5',
+        'https://cdn.feralfileassets.com/previews/ccd387c2-4762-4037-8752-bbc223957199/1726825472/index.html?edition_number=0&artwork_number=1&blockchain=ethereum&token_id=1348537551383340122739544414467967762981016640&token_id_hash=0x0d9ea64e929000e71e02adcb40bacd55da8acc21f7d804604cfa8b896983edd5',
     },
     {
       title: '響く残響 / Resonant Echo (2024) #1',
