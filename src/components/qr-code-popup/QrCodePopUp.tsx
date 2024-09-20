@@ -111,7 +111,9 @@ const QrCodePopUp = () => {
     let dailies = DailyService.getDailies();
 
     if (dailies.length === 0) {
-      dailies = await DailyService.callingDailies();
+      dailies = await DailyService.callingDailies(
+        newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
+      );
     }
     setDailies(dailies);
   };

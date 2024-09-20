@@ -16,8 +16,8 @@ class DailyService {
     return this.dailies;
   }
 
-  public async isRefreshDailies(): Promise<boolean> {
-    const newDailies = await this.callingDailies();
+  public async isRefreshDailies(newDailyHour: number): Promise<boolean> {
+    const newDailies = await this.callingDailies(newDailyHour);
     if (newDailies !== this.dailies) {
       this.dailies = newDailies;
       return true;
@@ -55,9 +55,9 @@ class DailyService {
     return response.data.result as Daily[];
   }
 
-  public async callingDailies(): Promise<Daily[]> {
+  public async callingDailies(newDailyHour: number): Promise<Daily[]> {
     try {
-      const date = await this.getCurrentLocaleDateOnly();
+      const date = await this.getCurrentLocaleDateOnly(newDailyHour);
       let dailies = await this.getDailiesByDate(date, [
         'includeSuccessfulSwap',
       ]);
@@ -139,14 +139,13 @@ class DailyService {
     };
   }
 
-  private async getCurrentLocaleDateOnly(): Promise<string> {
+  private async getCurrentLocaleDateOnly(
+    newDailyHour: number
+  ): Promise<string> {
     const now = new Date();
     let currentTimestamp: number;
     // Previous day if the current time is before 6:00 AM
-    const config = await this.remoteConfigService.getAppRemoteConfig();
-    const dailyHour =
-      config.new_daily_hour || AppSettings.DEFAULT_NEW_DAILY_HOUR;
-    const newDailyAt = new Date().setHours(dailyHour, 0, 0, 0); // 6:00 AM
+    const newDailyAt = new Date().setHours(newDailyHour, 0, 0, 0); // 6:00 AM
     if (now.getTime() < newDailyAt) {
       currentTimestamp = now.setDate(now.getDate() - 1);
     } else {

@@ -49,7 +49,9 @@ export default function DailyClient() {
     // Handle cast daily
     async function handleCastDaily() {
       try {
-        const isRefreshDaily = await DailyService.isRefreshDailies();
+        const isRefreshDaily = await DailyService.isRefreshDailies(
+          newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
+        );
         if (isRefreshDaily) {
           dailies = DailyService.getDailies();
         }
