@@ -3,10 +3,12 @@ import ArtworkService from './ArtworkService';
 import axiosInstance from './axiosService';
 import { convertToTokenID, getIndexerTokenName } from '@/utils/indexer';
 import { convertToQueryParams } from '@/utils/queryParams';
-import { NEW_DAILY_HOUR } from '@/utils/constants';
+import RemoteConfigService from './remoteConfigService';
+import { AppSettings } from '@/constants';
 
 class DailyService {
   private artworkService = new ArtworkService();
+  private remoteConfigService = new RemoteConfigService();
   static instance = new DailyService();
   private dailies: Daily[] = [];
 
@@ -55,7 +57,7 @@ class DailyService {
 
   public async callingDailies(): Promise<Daily[]> {
     try {
-      const date = this.getCurrentLocaleDateOnly();
+      const date = await this.getCurrentLocaleDateOnly();
       let dailies = await this.getDailiesByDate(date, [
         'includeSuccessfulSwap',
       ]);
@@ -137,11 +139,14 @@ class DailyService {
     };
   }
 
-  private getCurrentLocaleDateOnly(): string {
+  private async getCurrentLocaleDateOnly(): Promise<string> {
     const now = new Date();
     let currentTimestamp: number;
     // Previous day if the current time is before 6:00 AM
-    const newDailyAt = new Date().setHours(NEW_DAILY_HOUR, 0, 0, 0); // 6:00 AM
+    const config = await this.remoteConfigService.getAppRemoteConfig();
+    const dailyHour =
+      config?.new_daily_hour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR;
+    const newDailyAt = new Date().setHours(dailyHour, 0, 0, 0); // 6:00 AM
     if (now.getTime() < newDailyAt) {
       currentTimestamp = now.setDate(now.getDate() - 1);
     } else {

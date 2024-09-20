@@ -68,6 +68,7 @@ export enum DeviceNamePrefix {
 
 export const AppSettings = {
   VERSION_CHECK_INTERVAL_DURATION: 1000 * 60 * 60, // 1 minutes
+  DEFAULT_NEW_DAILY_HOUR: 6, // 6:00 AM
   JG_043_EXHIBITION_ID: '46a0f68b-a657-4364-92a0-32a88b65fbd9',
   STANDARD_HEIGHT: 1080,
 };
