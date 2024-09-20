@@ -9,7 +9,6 @@ import {
 import { AppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
-import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
 import { useRouter } from 'next/navigation';
 import React, { useContext, useEffect, useRef, useState } from 'react';
@@ -53,26 +52,26 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const locale = getUserLocale();
 
   // Initialize platform events
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).KeyEvent = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: KeyEvent.handlePlatformEvent,
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).DeviceName = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: DeviceName.handlePlatformEvent,
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).Config = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: Config.handlePlatformEvent,
-      };
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // useEffect(() => {
+  //   if (typeof window !== 'undefined') {
+  //     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+  //     (window as any).KeyEvent = {
+  //       // eslint-disable-next-line @typescript-eslint/unbound-method
+  //       handlePlatformEvent: KeyEvent.handlePlatformEvent,
+  //     };
+  //     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+  //     (window as any).DeviceName = {
+  //       // eslint-disable-next-line @typescript-eslint/unbound-method
+  //       handlePlatformEvent: DeviceName.handlePlatformEvent,
+  //     };
+  //     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+  //     (window as any).Config = {
+  //       // eslint-disable-next-line @typescript-eslint/unbound-method
+  //       handlePlatformEvent: Config.handlePlatformEvent,
+  //     };
+  //   }
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, []);
 
   // Check version update
   useEffect(() => {

@@ -32,6 +32,7 @@ const useDeviceRotation = (castInfo: CastInfo | null) => {
         const catchOrientationSetting = await DeviceManager.getOrientation();
 
         if (catchOrientationSetting) {
+          console.log('catchOrientationSetting', catchOrientationSetting);
           const orientation = JSON.parse(catchOrientationSetting) as {
             screenOrientation: Orientation;
             screenRatio: number;

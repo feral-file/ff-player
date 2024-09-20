@@ -18,6 +18,7 @@ import RemoteConfigService, {
 } from '@/services/remoteConfigService';
 import { AppSettings } from '@/constants';
 import { useSearchParams } from 'next/navigation';
+import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 
 interface AppContextProps {
   children: ReactNode;
@@ -50,6 +51,23 @@ export const AppContext = createContext<AppContextValue | undefined>(undefined);
 export const AppProvider = ({ children }: AppContextProps) => {
   const [appRemoteConfig, setAppConfig] = useState({} as AppRemoteConfig);
   const remoteConfigService = useRef(new RemoteConfigService());
+  if (typeof window !== 'undefined') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).KeyEvent = {
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      handlePlatformEvent: KeyEvent.handlePlatformEvent,
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).DeviceName = {
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      handlePlatformEvent: DeviceName.handlePlatformEvent,
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).Config = {
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      handlePlatformEvent: Config.handlePlatformEvent,
+    };
+  }
 
   // Get platform from URL at initial load
   const searchParams = useSearchParams();
