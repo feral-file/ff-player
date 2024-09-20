@@ -29,7 +29,7 @@ export default function DailyClient() {
   const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
     useState<boolean>(false);
 
-  const newDailyHour = context?.appRemoteConfig?.new_daily_hour;
+  const newDailyHour = context?.appRemoteConfig.new_daily_hour;
 
   useEffect(() => {
     if (typeof window !== 'undefined') {

@@ -73,7 +73,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
       }
     };
 
-    fetchConfig().catch(error => {
+    fetchConfig().catch((error: unknown) => {
       console.log('[API] Failed to load config:', error);
     });
   }, []);

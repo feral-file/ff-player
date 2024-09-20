@@ -25,7 +25,6 @@ class RemoteConfigService {
         }/configs/display_app/configs.json`
       );
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       return response.data;
     } catch (error) {
       console.log('[API] Failed to load config:', error);

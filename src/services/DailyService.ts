@@ -145,7 +145,7 @@ class DailyService {
     // Previous day if the current time is before 6:00 AM
     const config = await this.remoteConfigService.getAppRemoteConfig();
     const dailyHour =
-      config?.new_daily_hour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR;
+      config.new_daily_hour || AppSettings.DEFAULT_NEW_DAILY_HOUR;
     const newDailyAt = new Date().setHours(dailyHour, 0, 0, 0); // 6:00 AM
     if (now.getTime() < newDailyAt) {
       currentTimestamp = now.setDate(now.getDate() - 1);
