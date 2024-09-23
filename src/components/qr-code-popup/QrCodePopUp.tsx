@@ -9,7 +9,7 @@ import QRCode from 'qrcode.react';
 import { useContext, useEffect, useRef, useState } from 'react';
 import styles from './styles.module.scss';
 import { QrCodeSkeleton } from '../skeleton/skeleton';
-import { KeyDown, TIME_PER_HOUR } from '@/constants';
+import { AppSettings, KeyDown, TIME_PER_HOUR } from '@/constants';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import DailyService from '@/services/DailyService';
 import { CastCommand } from '@/utils/types';
@@ -31,6 +31,7 @@ const QrCodePopUp = () => {
   const { locationID, topicID } = context?.websocketData ?? {};
   const lastEventTime = useRef(0);
   const { castInfo } = context?.websocketData ?? {};
+  const newDailyHour = context?.appRemoteConfig?.new_daily_hour;
 
   const t = useTranslations('QrCodePopUp');
 
@@ -62,7 +63,10 @@ const QrCodePopUp = () => {
 
   useEffect(() => {
     const calculateTimer = () => {
-      const { delay, duration } = getDelayTime(dailies);
+      const { delay, duration } = getDelayTime(
+        dailies,
+        newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
+      );
 
       setNextArtwork((delay > 0 ? delay : 0) / TIME_PER_HOUR);
       let percentage = ((duration - delay) / duration) * 100;
@@ -110,7 +114,9 @@ const QrCodePopUp = () => {
     let dailies = DailyService.getDailies();
 
     if (dailies.length === 0) {
-      dailies = await DailyService.callingDailies();
+      dailies = await DailyService.callingDailies(
+        newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
+      );
     }
     setDailies(dailies);
   };

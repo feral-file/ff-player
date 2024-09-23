@@ -3,17 +3,19 @@
 import ArtworkPlayer from '../../components/artwork-player/ArtworkPlayer';
 import DailyService from '@/services/DailyService';
 import { getDelayTime } from '@/services/qrCodePopUpService';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_DELAY,
   LeeMullican_EXHIBITION_CONTRACT,
 } from '@/utils/constants';
 import { Daily } from '@/models';
 import { convertToTokenID } from '@/utils/indexer';
-import { TIME_PER_HOUR } from '@/constants';
+import { AppSettings, TIME_PER_HOUR } from '@/constants';
 import { CastingArtworkType } from '@/models/metric.model';
+import { AppContext } from '@/context/AppContext';
 
 export default function DailyClient() {
+  const context = useContext(AppContext);
   const dailyRef = useRef<Daily>();
   const timeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
@@ -26,6 +28,8 @@ export default function DailyClient() {
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
     useState<boolean>(false);
+
+  const newDailyHour = context?.appRemoteConfig.new_daily_hour;
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -45,7 +49,9 @@ export default function DailyClient() {
     // Handle cast daily
     async function handleCastDaily() {
       try {
-        const isRefreshDaily = await DailyService.isRefreshDailies();
+        const isRefreshDaily = await DailyService.isRefreshDailies(
+          newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
+        );
         if (isRefreshDaily) {
           dailies = DailyService.getDailies();
         }
@@ -63,7 +69,10 @@ export default function DailyClient() {
             );
           }
 
-          const { delay } = getDelayTime(dailies);
+          const { delay } = getDelayTime(
+            dailies,
+            newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
+          );
           if (dailies[0].previewURL) {
             setCastPreviewURL(dailies[0].previewURL);
             setIsLeeMucianExhibition(
