@@ -1,4 +1,4 @@
-import { AppContext } from '@/context/AppContext';
+import { useAppContext } from '@/context/AppContext';
 import QRCode from 'qrcode.react';
 import Image from 'next/image';
 import { useContext, useEffect, useState } from 'react';
@@ -7,7 +7,8 @@ import styles from './styles.module.scss';
 import DeviceManager from '@/utils/DeviceManager';
 
 const OnboardingModal = () => {
-  const { deviceRotation, websocketData } = useContext(AppContext) ?? {};
+  const { context } = useAppContext();
+  const { deviceRotation, websocketData } = context ?? {};
   const screenRatio = deviceRotation?.screenRatio ?? 1;
   const viewMode = deviceRotation?.viewMode ?? ViewMode.landscape;
   const connectedDeviceName = websocketData?.castInfo?.deviceInfo?.device_name;

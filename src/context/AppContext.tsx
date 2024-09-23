@@ -4,6 +4,7 @@ import {
   MutableRefObject,
   ReactNode,
   createContext,
+  useContext,
   useEffect,
   useRef,
   useState,
@@ -19,12 +20,20 @@ import RemoteConfigService, {
 import { AppSettings } from '@/constants';
 import { useSearchParams } from 'next/navigation';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
+import DeviceManager from '@/utils/DeviceManager';
+import DeviceRotationService, {
+  DeviceRotation,
+} from '@/services/deviceRotation.service';
 
 interface AppContextProps {
   children: ReactNode;
 }
 
 interface AppContextValue {
+  context: AppConfigContext;
+}
+
+interface AppConfigContext {
   websocketData: WebSocketMessage;
   isOnline: boolean;
   deviceRotation: DeviceRotation | null;
@@ -39,38 +48,53 @@ interface WebSocketMessage {
   isDisconnected: boolean;
 }
 
-interface DeviceRotation {
-  screenOrientation: Orientation;
-  screenRatio: number;
-  viewMode: ViewMode | null;
-  rotateRadius: number;
-}
-
 export const AppContext = createContext<AppContextValue | undefined>(undefined);
+
+export const useAppContext = () => {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useAppContext must be used within a AppProvider');
+  }
+
+  return context;
+};
 
 export const AppProvider = ({ children }: AppContextProps) => {
   const [appRemoteConfig, setAppConfig] = useState({} as AppRemoteConfig);
   const remoteConfigService = useRef(new RemoteConfigService());
-  const [platform, setPlatform] = useState<string | null>(null);
-  const [deviceRotation, setDeviceRotation] = useState<DeviceRotation | null>(
-    null
+  const [context, setContextConfig] = useState<AppConfigContext>(
+    {} as AppConfigContext
   );
-
-  // Get platform from URL at initial load
-  const searchParams = useSearchParams();
-  const pl = searchParams.get('platform') ?? '';
-  if (pl) {
-    localStorage.setItem('platform', pl);
-    setPlatform(pl);
-  }
+  const [rotation, setRotation] = useState<DeviceRotation | null>(null);
 
   const websocketData = useWebSocket(
     `${process.env.NEXT_PUBLIC_WEBSOCKET_URL ?? ''}/api/connection`,
     process.env.NEXT_PUBLIC_API_KEY ?? ''
   );
-
   const isOnline = useNetworkManger();
-  // const deviceRotation = useDeviceRotation(websocketData.castInfo);
+  const deviceRotation = useDeviceRotation(websocketData.castInfo, rotation);
+  const searchParams = useSearchParams();
+
+  const initialOrientation = async () => {
+    try {
+      const data = await DeviceManager.getOrientation();
+      if (!data) {
+        setRotation(DeviceRotationService.defaultRotation());
+        return;
+      }
+
+      const orientation = JSON.parse(data) as {
+        screenOrientation: Orientation;
+        screenRatio: number;
+        viewMode: ViewMode;
+        rotateRadius: number;
+      };
+      setRotation(orientation);
+    } catch (error) {
+      console.log('Error initial orientation', error);
+      setRotation(DeviceRotationService.defaultRotation());
+    }
+  };
 
   // Initialize platform events
   useEffect(() => {
@@ -90,15 +114,29 @@ export const AppProvider = ({ children }: AppContextProps) => {
         // eslint-disable-next-line @typescript-eslint/unbound-method
         handlePlatformEvent: Config.handlePlatformEvent,
       };
+
+      const pl = searchParams.get('platform') ?? '';
+      if (pl) {
+        localStorage.setItem('platform', pl);
+      }
+      setContextConfig({
+        websocketData,
+        isOnline,
+        deviceRotation,
+        appRemoteConfig,
+      });
+      initialOrientation();
     }
   }, []);
 
   useEffect(() => {
-    if (platform && websocketData.castInfo) {
-      const rotate = useDeviceRotation(websocketData.castInfo);
-      setDeviceRotation(rotate);
-    }
-  }, [platform, websocketData.castInfo]);
+    setContextConfig({
+      websocketData,
+      isOnline,
+      deviceRotation,
+      appRemoteConfig,
+    });
+  }, [rotation]);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -123,10 +161,12 @@ export const AppProvider = ({ children }: AppContextProps) => {
   return (
     <AppContext.Provider
       value={{
-        websocketData,
-        isOnline,
-        deviceRotation,
-        appRemoteConfig,
+        context: {
+          websocketData,
+          isOnline,
+          deviceRotation,
+          appRemoteConfig,
+        },
       }}>
       {children}
     </AppContext.Provider>

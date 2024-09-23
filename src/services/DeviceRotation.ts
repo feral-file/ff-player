@@ -2,8 +2,12 @@ import { AppSettings } from '@/constants';
 import { CastCommand, CastInfo, Orientation, ViewMode } from '@/utils/types';
 import { useEffect, useState } from 'react';
 import DeviceManager from '@/utils/DeviceManager';
+import { DeviceRotation } from './deviceRotation.service';
 
-const useDeviceRotation = (castInfo: CastInfo | null) => {
+const useDeviceRotation = (
+  castInfo: CastInfo | null,
+  cacheSetting: DeviceRotation | null
+) => {
   const [screenOrientation, setScreenOrientation] = useState<Orientation>(
     Orientation.horizontal
   );
@@ -28,32 +32,7 @@ const useDeviceRotation = (castInfo: CastInfo | null) => {
         setScreenRatio(minSize / AppSettings.STANDARD_HEIGHT);
       };
 
-      const orientationSetting = async () => {
-        const catchOrientationSetting = await DeviceManager.getOrientation();
-
-        if (catchOrientationSetting) {
-          console.log('catchOrientationSetting', catchOrientationSetting);
-          const orientation = JSON.parse(catchOrientationSetting) as {
-            screenOrientation: Orientation;
-            screenRatio: number;
-            viewMode: ViewMode;
-            rotateRadius: number;
-          };
-
-          setScreenOrientation(orientation.screenOrientation);
-          setScreenRatio(orientation.screenRatio);
-          setViewMode(orientation.viewMode);
-          setRotateRadius(orientation.rotateRadius);
-        } else {
-          resizeHandler();
-        }
-      };
-
-      orientationSetting().catch((error: unknown) => {
-        console.error('Error getting orientation setting', error);
-        // Retry to set default orientation setting
-        resizeHandler();
-      });
+      resizeHandler();
     }
   }, []);
 
@@ -66,6 +45,15 @@ const useDeviceRotation = (castInfo: CastInfo | null) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [castInfo]);
+
+  useEffect(() => {
+    if (cacheSetting) {
+      setScreenOrientation(cacheSetting.screenOrientation);
+      setScreenRatio(cacheSetting.screenRatio);
+      setViewMode(cacheSetting.viewMode);
+      setRotateRadius(cacheSetting.rotateRadius);
+    }
+  }, [cacheSetting]);
 
   useEffect(() => {
     if (rotateRadius === 0) {
@@ -82,17 +70,7 @@ const useDeviceRotation = (castInfo: CastInfo | null) => {
     DeviceManager.setOrientation(JSON.stringify(rotateSetting));
   }, [rotateRadius]);
 
-  if (viewMode === null) {
-    return null;
-  }
-
-  const rotateSetting = {
-    screenOrientation,
-    screenRatio,
-    viewMode,
-    rotateRadius,
-  };
-  return rotateSetting;
+  return { screenOrientation, screenRatio, viewMode, rotateRadius };
 };
 
 export default useDeviceRotation;

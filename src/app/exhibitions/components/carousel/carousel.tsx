@@ -5,11 +5,11 @@ import 'swiper/scss/effect-coverflow';
 import 'swiper/scss/effect-fade';
 import styles from './carousel.module.scss';
 import { formatDateTime } from '@/utils/ui/formatDate';
-import { useContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ViewMode } from '@/utils/types';
 import QueuingImages from '../queuingImages/queuingImages';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { AppContext } from '@/context/AppContext';
+import { useAppContext } from '@/context/AppContext';
 
 interface CarouselProps {
   items: Post[];
@@ -20,7 +20,8 @@ interface CarouselProps {
 const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
   const [swiper, setSwiper] = useState<SwiperType | null>(null);
   const [spaceBetween, setSpaceBetween] = useState(250);
-  const viewMode = useContext(AppContext)?.deviceRotation?.viewMode;
+  const { context } = useAppContext();
+  const viewMode = context?.deviceRotation?.viewMode;
   const handleSwiper = (swiperInstance: SwiperType) => {
     setSwiper(swiperInstance);
   };

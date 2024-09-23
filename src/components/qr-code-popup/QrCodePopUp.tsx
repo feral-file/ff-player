@@ -1,12 +1,12 @@
 'use client';
 
-import { AppContext } from '@/context/AppContext';
+import { useAppContext } from '@/context/AppContext';
 import { Daily } from '@/models';
 import { getDelayTime } from '@/services/qrCodePopUpService';
 import DeviceManager from '@/utils/DeviceManager';
 import Image from 'next/image';
 import QRCode from 'qrcode.react';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import styles from './styles.module.scss';
 import { QrCodeSkeleton } from '../skeleton/skeleton';
 import { AppSettings, KeyDown, TIME_PER_HOUR } from '@/constants';
@@ -16,7 +16,7 @@ import { CastCommand } from '@/utils/types';
 import { useTranslations } from 'next-intl';
 
 const QrCodePopUp = () => {
-  const context = useContext(AppContext);
+  const { context } = useAppContext();
   const [branchLink, setBranchLink] = useState('');
   const [currentDaily, setCurrentDaily] = useState<Daily>();
   const [nextArtwork, setNextArtwork] = useState<number>(0);
