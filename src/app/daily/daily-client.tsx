@@ -33,7 +33,7 @@ export default function DailyClient() {
     {
       title: 'Nostalgia (2024) #1',
       previewURL:
-        'https://cdn.feralfileassets.com/previews/ccd387c2-4762-4037-8752-bbc223957199/1726825472/index.html?edition_number=0&artwork_number=1&blockchain=ethereum&token_id=1348537551383340122739544414467967762981016640&token_id_hash=0x0d9ea64e929000e71e02adcb40bacd55da8acc21f7d804604cfa8b896983edd5',
+        'https://wetmarket-assets-testnet.s3.ap-northeast-1.amazonaws.com/previews/0009a727-04e4-4853-a37d-0a8d5cdf08b0/1727056153/index.html?edition_number=0&artwork_number=1&blockchain=ethereum&token_id=1348537551383340122739544414467967762981016640&token_id_hash=0x0d9ea64e929000e71e02adcb40bacd55da8acc21f7d804604cfa8b896983edd5',
     },
     {
       title: 'Path of Tones (2024) #1',
