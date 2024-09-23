@@ -13,6 +13,7 @@ import { KeyDown, TIME_PER_HOUR } from '@/constants';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import DailyService from '@/services/DailyService';
 import { CastCommand } from '@/utils/types';
+import { useTranslations } from 'next-intl';
 
 const QrCodePopUp = () => {
   const context = useContext(AppContext);
@@ -30,6 +31,8 @@ const QrCodePopUp = () => {
   const { locationID, topicID } = context?.websocketData ?? {};
   const lastEventTime = useRef(0);
   const { castInfo } = context?.websocketData ?? {};
+
+  const t = useTranslations('QrCodePopUp');
 
   useEffect(() => {
     fetchDailies().catch((error: unknown) => {
@@ -216,12 +219,13 @@ const QrCodePopUp = () => {
             width: '100%',
             paddingBottom: screenRatio * 10,
           }}>
-          <p>Today’s daily</p>
+          <p>{t('today_daily')}</p>
           <p
             style={{
               color: '#A0A0A0',
             }}>
-            Next work: {Math.floor(nextArtwork)}hr
+            {t('next_work')}: {Math.floor(nextArtwork)}
+            {t('hour')}
           </p>
         </div>
         <div
@@ -275,16 +279,13 @@ const QrCodePopUp = () => {
           </div>
         )}
         <div style={{ width: screenRatio * 500 }}>
-          <p style={{ width: '60%' }}>
-            Get the Feral File mobile app to browse 15,000+ original artworks,
-            and choose what to display on your TV.
-          </p>
+          <p style={{ width: '60%' }}>{t('get_the_Feral_File')}</p>
         </div>
       </div>
       <div
         style={{ fontSize: screenRatio * 20 }}
         className={styles['bottom-groups']}>
-        <p>Press Enter to hide/show this window.</p>
+        <p>{t('press_enter_to_hide_show')}</p>
       </div>
     </div>
   );
