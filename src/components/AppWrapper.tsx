@@ -254,9 +254,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
-      DeviceManager.init().catch((error: unknown) => {
-        console.log(error);
-      });
       if (pushMetricIntervalID.current) {
         clearInterval(pushMetricIntervalID.current);
       }

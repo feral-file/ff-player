@@ -21,11 +21,11 @@ import useDeviceRotation, {
 import RemoteConfigService, {
   AppRemoteConfig,
 } from '@/services/remoteConfigService';
-import { AppSettings } from '@/constants';
+import { AppSettings, Platform } from '@/constants';
 import { useSearchParams } from 'next/navigation';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import DeviceManager from '@/utils/DeviceManager';
-import Script from 'next/script';
+import useLoadScript from '@/services/LoadScripts';
 
 interface AppContextProps {
   children: ReactNode;
@@ -71,9 +71,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
   );
   const [rotation, setRotation] = useState<DeviceRotation | null>(null);
   const [platformInitialized, setPlatformInitialized] = useState(false);
-  const [isWebOSTVLoaded, setIsWebOSTVLoaded] = useState(false);
-  const [isWebOSTVDevLoaded, setIsWebOSTVDevLoaded] = useState(false);
+  const [platform, setPlatform] = useState<Platform | null>(null);
 
+  const isWebOSTVLoaded = useLoadScript('/webOSTVjs-1.2.11/webOSTV.js');
+  const isWebOSTVDevLoaded = useLoadScript('/webOSTVjs-1.2.11/webOSTV-dev.js');
   const websocketData = useWebSocket(
     `${process.env.NEXT_PUBLIC_WEBSOCKET_URL ?? ''}/api/connection`,
     process.env.NEXT_PUBLIC_API_KEY ?? ''
@@ -91,8 +92,25 @@ export const AppProvider = ({ children }: AppContextProps) => {
     isWebOSTVDevLoaded,
   };
 
+  const initContext = async () => {
+    try {
+      if (platform === Platform.lg && isWebOSTVLoaded && isWebOSTVDevLoaded) {
+        console.log('WebOS TV loaded, initializing DeviceManager');
+        await DeviceManager.init();
+      }
+
+      setContextConfig(contextConfig);
+      initialOrientation().catch((error: unknown) => {
+        console.log('Error initial orientation', error);
+      });
+    } catch (error) {
+      console.log('Error init context', error);
+    }
+  };
+
   const initialOrientation = async () => {
     try {
+      console.log('Initial orientation');
       const data = await DeviceManager.getOrientation();
       if (!data) {
         setRotation(defaultRotation());
@@ -129,6 +147,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
       const pl = searchParams.get('platform') ?? '';
       if (pl) {
         localStorage.setItem('platform', pl);
+        setPlatform(pl as Platform);
       }
       setPlatformInitialized(true);
     }
@@ -138,12 +157,11 @@ export const AppProvider = ({ children }: AppContextProps) => {
   useEffect(() => {
     if (!platformInitialized) return;
 
-    setContextConfig(contextConfig);
-    initialOrientation().catch((error: unknown) => {
-      console.log('Error initial orientation', error);
+    initContext().catch((error: unknown) => {
+      console.log('Error init context', error);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platformInitialized]);
+  }, [platformInitialized, isWebOSTVLoaded, isWebOSTVDevLoaded]);
 
   useEffect(() => {
     setContextConfig(contextConfig);
@@ -182,18 +200,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
           isWebOSTVDevLoaded,
         },
       }}>
-      <Script
-        src="/webOSTVjs-1.2.11/webOSTV.js"
-        onLoad={() => {
-          setIsWebOSTVLoaded(true);
-        }}
-      />
-      <Script
-        src="/webOSTVjs-1.2.11/webOSTV-dev.js"
-        onLoad={() => {
-          setIsWebOSTVDevLoaded(true);
-        }}
-      />
       {children}
     </AppContext.Provider>
   );
