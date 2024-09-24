@@ -63,7 +63,7 @@ export const useAppContext = () => {
 export const AppProvider = ({ children }: AppContextProps) => {
   const [appRemoteConfig, setAppConfig] = useState({} as AppRemoteConfig);
   const remoteConfigService = useRef(new RemoteConfigService());
-  const [_, setContextConfig] = useState<AppConfigContext>(
+  const [, setContextConfig] = useState<AppConfigContext>(
     {} as AppConfigContext
   );
   const [rotation, setRotation] = useState<DeviceRotation | null>(null);
@@ -146,6 +146,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
       deviceRotation,
       appRemoteConfig,
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rotation]);
 
   useEffect(() => {

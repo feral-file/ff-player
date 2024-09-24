@@ -8,7 +8,7 @@ import DeviceManager from '@/utils/DeviceManager';
 
 const OnboardingModal = () => {
   const { context } = useAppContext();
-  const { deviceRotation, websocketData } = context || {};
+  const { deviceRotation, websocketData } = context;
   const screenRatio = deviceRotation?.screenRatio ?? 1;
   const viewMode = deviceRotation?.viewMode ?? ViewMode.landscape;
   const connectedDeviceName = websocketData?.castInfo?.deviceInfo?.device_name;
