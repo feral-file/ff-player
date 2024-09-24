@@ -21,7 +21,7 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
   const [swiper, setSwiper] = useState<SwiperType | null>(null);
   const [spaceBetween, setSpaceBetween] = useState(250);
   const { context } = useAppContext();
-  const viewMode = context?.deviceRotation?.viewMode;
+  const viewMode = context.deviceRotation?.viewMode;
   const handleSwiper = (swiperInstance: SwiperType) => {
     setSwiper(swiperInstance);
   };

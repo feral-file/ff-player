@@ -11,9 +11,13 @@ import {
 } from 'react';
 import CanvasService from '../services/CanvasService';
 import useWebSocket from '../services/WebSocketManager';
-import { CastInfo, Orientation, ViewMode } from '@/utils/types';
+import { CastInfo } from '@/utils/types';
 import useNetworkManger from '@/services/NetworkManager';
-import useDeviceRotation from '@/services/DeviceRotation';
+import useDeviceRotation, {
+  DeviceRotation,
+  cacheStringToRotation,
+  defaultRotation,
+} from '@/services/DeviceRotation';
 import RemoteConfigService, {
   AppRemoteConfig,
 } from '@/services/remoteConfigService';
@@ -21,9 +25,6 @@ import { AppSettings } from '@/constants';
 import { useSearchParams } from 'next/navigation';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import DeviceManager from '@/utils/DeviceManager';
-import DeviceRotationService, {
-  DeviceRotation,
-} from '@/services/deviceRotation.service';
 
 interface AppContextProps {
   children: ReactNode;
@@ -62,7 +63,7 @@ export const useAppContext = () => {
 export const AppProvider = ({ children }: AppContextProps) => {
   const [appRemoteConfig, setAppConfig] = useState({} as AppRemoteConfig);
   const remoteConfigService = useRef(new RemoteConfigService());
-  const [context, setContextConfig] = useState<AppConfigContext>(
+  const [_, setContextConfig] = useState<AppConfigContext>(
     {} as AppConfigContext
   );
   const [rotation, setRotation] = useState<DeviceRotation | null>(null);
@@ -80,17 +81,17 @@ export const AppProvider = ({ children }: AppContextProps) => {
     try {
       const data = await DeviceManager.getOrientation();
       if (!data) {
-        setRotation(DeviceRotationService.defaultRotation());
+        setRotation(defaultRotation());
         return;
       }
 
       console.log('Initial orientation from cache', data);
-      const orientation = DeviceRotationService.cacheStringToRotation(data);
+      const orientation = cacheStringToRotation(data);
       console.log('Parsed orientation from cache', orientation);
       setRotation(orientation);
     } catch (error) {
       console.log('Error initial orientation', error);
-      setRotation(DeviceRotationService.defaultRotation());
+      setRotation(defaultRotation());
     }
   };
 
@@ -119,17 +120,23 @@ export const AppProvider = ({ children }: AppContextProps) => {
       }
       setPlatformInitialized(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     console.log('platformInitialized', platformInitialized);
+    if (!platformInitialized) return;
+
     setContextConfig({
       websocketData,
       isOnline,
       deviceRotation,
       appRemoteConfig,
     });
-    initialOrientation();
+    initialOrientation().catch((error: unknown) => {
+      console.log('Error initial orientation', error);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [platformInitialized]);
 
   useEffect(() => {
