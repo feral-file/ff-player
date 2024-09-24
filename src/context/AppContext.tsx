@@ -25,6 +25,7 @@ import { AppSettings } from '@/constants';
 import { useSearchParams } from 'next/navigation';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import DeviceManager from '@/utils/DeviceManager';
+import Script from 'next/script';
 
 interface AppContextProps {
   children: ReactNode;
@@ -39,6 +40,8 @@ interface AppConfigContext {
   isOnline: boolean;
   deviceRotation: DeviceRotation | null;
   appRemoteConfig: AppRemoteConfig;
+  isWebOSTVLoaded: boolean;
+  isWebOSTVDevLoaded: boolean;
 }
 
 interface WebSocketMessage {
@@ -68,6 +71,8 @@ export const AppProvider = ({ children }: AppContextProps) => {
   );
   const [rotation, setRotation] = useState<DeviceRotation | null>(null);
   const [platformInitialized, setPlatformInitialized] = useState(false);
+  const [isWebOSTVLoaded, setIsWebOSTVLoaded] = useState(false);
+  const [isWebOSTVDevLoaded, setIsWebOSTVDevLoaded] = useState(false);
 
   const websocketData = useWebSocket(
     `${process.env.NEXT_PUBLIC_WEBSOCKET_URL ?? ''}/api/connection`,
@@ -76,6 +81,15 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const isOnline = useNetworkManger();
   const deviceRotation = useDeviceRotation(websocketData.castInfo, rotation);
   const searchParams = useSearchParams();
+
+  const contextConfig = {
+    websocketData,
+    isOnline,
+    deviceRotation,
+    appRemoteConfig,
+    isWebOSTVLoaded,
+    isWebOSTVDevLoaded,
+  };
 
   const initialOrientation = async () => {
     try {
@@ -124,12 +138,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   useEffect(() => {
     if (!platformInitialized) return;
 
-    setContextConfig({
-      websocketData,
-      isOnline,
-      deviceRotation,
-      appRemoteConfig,
-    });
+    setContextConfig(contextConfig);
     initialOrientation().catch((error: unknown) => {
       console.log('Error initial orientation', error);
     });
@@ -137,12 +146,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   }, [platformInitialized]);
 
   useEffect(() => {
-    setContextConfig({
-      websocketData,
-      isOnline,
-      deviceRotation,
-      appRemoteConfig,
-    });
+    setContextConfig(contextConfig);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rotation]);
 
@@ -174,8 +178,22 @@ export const AppProvider = ({ children }: AppContextProps) => {
           isOnline,
           deviceRotation,
           appRemoteConfig,
+          isWebOSTVLoaded,
+          isWebOSTVDevLoaded,
         },
       }}>
+      <Script
+        src="/webOSTVjs-1.2.11/webOSTV.js"
+        onLoad={() => {
+          setIsWebOSTVLoaded(true);
+        }}
+      />
+      <Script
+        src="/webOSTVjs-1.2.11/webOSTV-dev.js"
+        onLoad={() => {
+          setIsWebOSTVDevLoaded(true);
+        }}
+      />
       {children}
     </AppContext.Provider>
   );
