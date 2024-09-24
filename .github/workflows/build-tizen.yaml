@@ -22,9 +22,35 @@ jobs:
         uses: actions/checkout@v4
 
       - run: |
-          sudo apt update
-          sudo apt -y install python3 libncurses-dev
-          sudo apt -y install cpio rpm2cpio libkf5itemmodels5 libkf5kiowidgets5 libkchart2
+          sudo apt update -y
+          sudo apt install -y wget
+
+          # Download necessary .deb files
+          echo "Downloading libpython2.7..."
+          wget http://archive.ubuntu.com/ubuntu/pool/universe/p/python2.7/libpython2.7_2.7.18-1~20.04_amd64.deb
+
+          echo "Downloading python2.7..."
+          wget http://archive.ubuntu.com/ubuntu/pool/universe/p/python2.7/python2.7_2.7.18-1~20.04_amd64.deb
+
+          echo "Downloading libncurses5..."
+          wget http://archive.ubuntu.com/ubuntu/pool/main/n/ncurses/libncurses5_6.2-0ubuntu2_amd64.deb
+
+          # Install downloaded packages
+          echo "Installing libpython2.7..."
+          sudo dpkg -i libpython2.7_2.7.18-1~20.04_amd64.deb
+
+          echo "Installing python2.7..."
+          sudo dpkg -i python2.7_2.7.18-1~20.04_amd64.deb
+
+          echo "Installing libncurses5..."
+          sudo dpkg -i libncurses5_6.2-0ubuntu2_amd64.deb
+
+          # Resolve any missing dependencies
+          echo "Fixing broken dependencies..."
+          sudo apt --fix-broken install -y
+
+          # Verify installation
+          python2.7 --version
         shell: bash
 
       - uses: actions/setup-dotnet@v4
