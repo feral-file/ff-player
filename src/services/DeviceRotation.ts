@@ -2,7 +2,9 @@ import { AppSettings } from '@/constants';
 import { CastCommand, CastInfo, Orientation, ViewMode } from '@/utils/types';
 import { useEffect, useState } from 'react';
 import DeviceManager from '@/utils/DeviceManager';
-import { DeviceRotation } from './deviceRotation.service';
+import DeviceRotationService, {
+  DeviceRotation,
+} from './deviceRotation.service';
 
 const useDeviceRotation = (
   castInfo: CastInfo | null,
@@ -66,8 +68,9 @@ const useDeviceRotation = (
       viewMode,
       rotateRadius,
     };
-    console.log('set rotateSetting', rotateSetting);
-    DeviceManager.setOrientation(JSON.stringify(rotateSetting));
+    const cacheString =
+      DeviceRotationService.rotationToCacheString(rotateSetting);
+    DeviceManager.setOrientation(cacheString);
   }, [rotateRadius]);
 
   return { screenOrientation, screenRatio, viewMode, rotateRadius };

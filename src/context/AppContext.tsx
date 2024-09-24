@@ -66,6 +66,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
     {} as AppConfigContext
   );
   const [rotation, setRotation] = useState<DeviceRotation | null>(null);
+  const [platformInitialized, setPlatformInitialized] = useState(false);
 
   const websocketData = useWebSocket(
     `${process.env.NEXT_PUBLIC_WEBSOCKET_URL ?? ''}/api/connection`,
@@ -83,12 +84,9 @@ export const AppProvider = ({ children }: AppContextProps) => {
         return;
       }
 
-      const orientation = JSON.parse(data) as {
-        screenOrientation: Orientation;
-        screenRatio: number;
-        viewMode: ViewMode;
-        rotateRadius: number;
-      };
+      console.log('Initial orientation from cache', data);
+      const orientation = DeviceRotationService.cacheStringToRotation(data);
+      console.log('Parsed orientation from cache', orientation);
       setRotation(orientation);
     } catch (error) {
       console.log('Error initial orientation', error);
@@ -119,15 +117,20 @@ export const AppProvider = ({ children }: AppContextProps) => {
       if (pl) {
         localStorage.setItem('platform', pl);
       }
-      setContextConfig({
-        websocketData,
-        isOnline,
-        deviceRotation,
-        appRemoteConfig,
-      });
-      initialOrientation();
+      setPlatformInitialized(true);
     }
   }, []);
+
+  useEffect(() => {
+    console.log('platformInitialized', platformInitialized);
+    setContextConfig({
+      websocketData,
+      isOnline,
+      deviceRotation,
+      appRemoteConfig,
+    });
+    initialOrientation();
+  }, [platformInitialized]);
 
   useEffect(() => {
     setContextConfig({

@@ -33,6 +33,22 @@ class DeviceRotationService {
       rotateRadius: 0,
     };
   };
+
+  public static rotationToCacheString = (r: DeviceRotation) => {
+    return `${r.screenOrientation}|${r.screenRatio}|${r.viewMode}|${r.rotateRadius}`;
+  };
+
+  public static cacheStringToRotation = (s: string): DeviceRotation => {
+    const [screenOrientation, screenRatio, viewMode, rotateRadius] =
+      s.split('|');
+
+    return {
+      screenOrientation: screenOrientation as Orientation,
+      screenRatio: parseFloat(screenRatio),
+      viewMode: viewMode as ViewMode,
+      rotateRadius: parseInt(rotateRadius, 10),
+    };
+  };
 }
 
 export default DeviceRotationService;
