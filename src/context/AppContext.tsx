@@ -119,12 +119,14 @@ export const AppProvider = ({ children }: AppContextProps) => {
     try {
       console.log('Initial orientation');
       const data = await DeviceManager.getOrientation();
+      console.log('Cached orientation data:', data);
       if (!data) {
         setRotation(defaultRotation());
         return;
       }
 
       const orientation = cacheStringToRotation(data);
+      console.log('Parsed Orientation:', orientation);
       setRotation(orientation);
     } catch (error) {
       console.log('Error initial orientation', error);
@@ -171,7 +173,11 @@ export const AppProvider = ({ children }: AppContextProps) => {
   }, [platformInitialized, isWebOSTVLoaded, isWebOSTVDevLoaded]);
 
   useEffect(() => {
-    setContextConfig(contextConfig);
+    console.log('Set Rotation:', rotation);
+    setContextConfig({
+      ...contextConfig,
+      deviceRotation: rotation,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rotation]);
 
