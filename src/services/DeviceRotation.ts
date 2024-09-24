@@ -36,8 +36,7 @@ const defaultRotation = () => {
 };
 
 const rotationToCacheString = (r: DeviceRotation) => {
-  const viewMode = r.viewMode || '';
-  return `${r.screenOrientation}|${r.screenRatio.toString()}|${viewMode}|${r.rotateRadius.toString()}`;
+  return `${r.screenOrientation}|${r.screenRatio.toString()}|${r.viewMode ?? ''}|${r.rotateRadius.toString()}`;
 };
 
 const cacheStringToRotation = (s: string): DeviceRotation => {
