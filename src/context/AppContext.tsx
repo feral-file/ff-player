@@ -94,15 +94,22 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
   const initContext = async () => {
     try {
-      if (platform === Platform.lg && isWebOSTVLoaded && isWebOSTVDevLoaded) {
-        console.log('WebOS TV loaded, initializing DeviceManager');
-        await DeviceManager.init();
-      }
-
       setContextConfig(contextConfig);
-      initialOrientation().catch((error: unknown) => {
-        console.log('Error initial orientation', error);
-      });
+
+      if (platform === Platform.lg) {
+        // If LG platform, wait for both webOS TV and webOS TV dev to be loaded
+        if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
+          console.log('WebOS TV loaded, initializing DeviceManager');
+          await DeviceManager.init();
+          initialOrientation().catch((error: unknown) => {
+            console.log('Error initial orientation', error);
+          });
+        }
+      } else {
+        initialOrientation().catch((error: unknown) => {
+          console.log('Error initial orientation', error);
+        });
+      }
     } catch (error) {
       console.log('Error init context', error);
     }
