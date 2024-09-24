@@ -235,7 +235,7 @@ export class LgConfigService implements PlatformConfigService {
     await this.setDeviceInfo();
   }
 
-  async registerDB() {
+  async clearRegisterDB() {
     // Clear the existing database kind (if it exists)
     try {
       await new Promise<void>((resolve, reject) => {
@@ -263,6 +263,9 @@ export class LgConfigService implements PlatformConfigService {
     } catch (error) {
       console.error('Error deleting kind:', error);
     }
+  }
+
+  async registerDB() {
     try {
       // Register the kind first
       await new Promise<void>((resolve, reject) => {
