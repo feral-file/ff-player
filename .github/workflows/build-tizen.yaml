@@ -23,7 +23,7 @@ jobs:
 
       - run: |
           sudo apt update
-          sudo apt -y install libpython3 python3 libncurses-dev
+          sudo apt -y install python3 libncurses-dev
           sudo apt -y install cpio rpm2cpio libkf5itemmodels5 libkf5kiowidgets5 libkchart2
         shell: bash
 
