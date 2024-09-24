@@ -85,9 +85,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
         return;
       }
 
-      console.log('Initial orientation from cache', data);
       const orientation = cacheStringToRotation(data);
-      console.log('Parsed orientation from cache', orientation);
       setRotation(orientation);
     } catch (error) {
       console.log('Error initial orientation', error);
@@ -124,7 +122,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
   }, []);
 
   useEffect(() => {
-    console.log('platformInitialized', platformInitialized);
     if (!platformInitialized) return;
 
     setContextConfig({
