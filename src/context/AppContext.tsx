@@ -105,6 +105,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
           });
         }
       } else {
+        await DeviceManager.init();
         initialOrientation().catch((error: unknown) => {
           console.log('Error initial orientation', error);
         });
