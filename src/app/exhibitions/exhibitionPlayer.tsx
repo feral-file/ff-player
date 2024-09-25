@@ -1,24 +1,20 @@
 'use client';
 
 import { Exhibition, ExhibitionType, Post, Artwork } from '@/models';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import styles from './exhibition.module.scss';
 import './exhibition.module.scss';
 import { CastCommand, ExhibitionCatalog, ViewMode } from '@/utils/types';
 import Carousel from './components/carousel/carousel';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
-import { AppContext } from '@/context/AppContext';
+import { useAppContext } from '@/context/AppContext';
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
 import { formatArtworkIndexID } from '@/utils/indexer';
 import { CastingArtworkType } from '@/models/metric.model';
 
 const ExhibitionHall = () => {
-  const context = useContext(AppContext);
-  if (!context) {
-    return <p>There is no App context.</p>;
-  }
-
+  const { context } = useAppContext();
   const { castInfo } = context.websocketData;
   const { screenRatio, viewMode } = context.deviceRotation ?? {
     screenRatio: 1,

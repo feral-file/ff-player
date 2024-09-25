@@ -3,7 +3,7 @@
 import ArtworkPlayer from '../../components/artwork-player/ArtworkPlayer';
 import DailyService from '@/services/DailyService';
 import { getDelayTime } from '@/services/qrCodePopUpService';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_DELAY,
   LeeMullican_EXHIBITION_CONTRACT,
@@ -12,10 +12,10 @@ import { Daily } from '@/models';
 import { convertToTokenID } from '@/utils/indexer';
 import { AppSettings, TIME_PER_HOUR } from '@/constants';
 import { CastingArtworkType } from '@/models/metric.model';
-import { AppContext } from '@/context/AppContext';
+import { useAppContext } from '@/context/AppContext';
 
 export default function DailyClient() {
-  const context = useContext(AppContext);
+  const { context } = useAppContext();
   const dailyRef = useRef<Daily>();
   const timeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined

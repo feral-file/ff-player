@@ -13,9 +13,9 @@ import {
   SeriesPreviewHTMLTag,
 } from '@/utils/types';
 import Hls from 'hls.js';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Loading from '../loading/loading';
-import { AppContext } from '@/context/AppContext';
+import { useAppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
 import { appendMetricEventToLocalStorage } from '@/services/metric.service';
 import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
@@ -32,11 +32,7 @@ const ArtworkPlayer = ({
   isCustomView?: boolean;
   keyboardCode?: number;
 }) => {
-  const context = useContext(AppContext);
-  if (!context) {
-    return <p>There is no context.</p>;
-  }
-
+  const { context } = useAppContext();
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);

@@ -6,15 +6,13 @@ import {
   SEND_LOG_EVENT_NUMBER,
   SEND_LOG_INTERVAL,
 } from '@/constants';
-import { AppContext } from '@/context/AppContext';
+import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
-import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
-import { useRouter, useSearchParams } from 'next/navigation';
-import React, { useContext, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import React, { useEffect, useRef, useState } from 'react';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
-import Script from 'next/script';
 import { uploadMetricEventsFromLocalStorage } from '@/services/metric.service';
 import DeviceManager from '@/utils/DeviceManager';
 
@@ -29,11 +27,7 @@ const enum CastState {
 }
 
 const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const context = useContext(AppContext);
-  if (!context) {
-    return <div></div>;
-  }
-
+  const { context } = useAppContext();
   const router = useRouter();
 
   const { castInfo, canvasService } = context.websocketData;
@@ -43,9 +37,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
   const [castState, setCastState] = useState<CastState>(CastState.None);
   // const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
-  const searchParams = useSearchParams();
-  const [isWebOSTVLoaded, setIsWebOSTVLoaded] = useState(false);
-  const [isWebOSTVDevLoaded, setIsWebOSTVDevLoaded] = useState(false);
+  const isWebOSTVLoaded = context.isWebOSTVLoaded;
+  const isWebOSTVDevLoaded = context.isWebOSTVDevLoaded;
   const pushMetricIntervalID = useRef<
     NodeJS.Timeout | string | number | undefined
   >(undefined);
@@ -55,28 +48,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // Initialize platform events
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).KeyEvent = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: KeyEvent.handlePlatformEvent,
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).DeviceName = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: DeviceName.handlePlatformEvent,
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).Config = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: Config.handlePlatformEvent,
-      };
-
-      const platform = searchParams.get('platform') ?? '';
-      if (platform) {
-        localStorage.setItem('platform', platform);
-      }
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -283,9 +254,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
-      DeviceManager.init().catch((error: unknown) => {
-        console.log(error);
-      });
       if (pushMetricIntervalID.current) {
         clearInterval(pushMetricIntervalID.current);
       }
@@ -304,18 +272,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return messages != undefined ? (
     <NextIntlClientProvider locale={locale} messages={messages}>
-      <Script
-        src="/webOSTVjs-1.2.11/webOSTV.js"
-        onLoad={() => {
-          setIsWebOSTVLoaded(true);
-        }}
-      />
-      <Script
-        src="/webOSTVjs-1.2.11/webOSTV-dev.js"
-        onLoad={() => {
-          setIsWebOSTVDevLoaded(true);
-        }}
-      />
       <div
         style={{
           width:
