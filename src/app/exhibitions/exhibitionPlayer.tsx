@@ -7,7 +7,6 @@ import './exhibition.module.scss';
 import { CastCommand, ExhibitionCatalog, ViewMode } from '@/utils/types';
 import Carousel from './components/carousel/carousel';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
-import Image from 'next/image';
 import { AppContext } from '@/context/AppContext';
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
@@ -175,7 +174,7 @@ const ExhibitionHall = () => {
           <div
             className={styles.leftSection}
             style={{ padding: 60 * screenRatio }}>
-            <div className={styles.info} style={{ gap: 40 * screenRatio }}>
+            <div className={styles.info} style={{ gridGap: 40 * screenRatio }}>
               <p
                 className={styles.title}
                 style={{ fontSize: 48 * screenRatio }}>
@@ -219,12 +218,10 @@ const ExhibitionHall = () => {
           <div className={styles.rightSection}>
             <div
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}>
-              <Image
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
                 src={FERAL_FILE_ASSET_URL + (exhibitionDetail.coverURI ?? '')}
                 alt={exhibitionDetail.title ?? ''}
-                objectFit="contain"
-                width={1080}
-                height={1080}
               />
             </div>
           </div>

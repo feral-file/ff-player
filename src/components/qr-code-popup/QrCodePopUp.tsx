@@ -4,7 +4,6 @@ import { AppContext } from '@/context/AppContext';
 import { Daily } from '@/models';
 import { getDelayTime } from '@/services/qrCodePopUpService';
 import DeviceManager from '@/utils/DeviceManager';
-import Image from 'next/image';
 import QRCode from 'qrcode.react';
 import { useContext, useEffect, useRef, useState } from 'react';
 import styles from './styles.module.scss';
@@ -194,7 +193,7 @@ const QrCodePopUp = () => {
         display: isShowComponent ? 'grid' : 'none',
         flexDirection: 'column',
         padding: screenRatio * 40,
-        gap: screenRatio * 40,
+        gridGap: screenRatio * 40,
         zIndex: 3,
         fontSize: screenRatio * 14,
         lineHeight: 1.4,
@@ -204,14 +203,13 @@ const QrCodePopUp = () => {
         style={{
           display: 'flex',
           justifyContent: 'space-between',
-          gap: screenRatio * 100,
           width: '100%',
         }}>
-        <Image
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          className={styles.image}
           src={'/feralfile-logo.svg'}
-          alt="FF logo"
-          width={screenRatio * 224}
-          height={screenRatio * 23}></Image>
+          alt="FF logo"></img>
       </div>
       <div
         style={{
@@ -268,7 +266,7 @@ const QrCodePopUp = () => {
       <div
         style={{
           display: 'grid',
-          gap: screenRatio * 20,
+          gridGap: screenRatio * 20,
           gridTemplateColumns: 'auto 1fr',
           alignItems: 'flex-end',
           fontSize: screenRatio * 20,

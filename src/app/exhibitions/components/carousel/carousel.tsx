@@ -84,7 +84,9 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
               item.type === PostType.CuratorNote) && (
               <div
                 className={styles.card}
-                style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
+                style={{
+                  padding: 40 * screenRatio,
+                }}>
                 <p
                   className={styles.type}
                   style={{ fontSize: 22 * screenRatio }}>
@@ -92,12 +94,18 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
                 </p>
                 <p
                   className={styles.postTitle}
-                  style={{ fontSize: 32 * screenRatio }}>
+                  style={{
+                    fontSize: 32 * screenRatio,
+                    marginTop: 45 * screenRatio,
+                  }}>
                   {item.title}
                 </p>
                 <p
                   className={styles.content}
-                  style={{ fontSize: 32 * screenRatio }}
+                  style={{
+                    fontSize: 32 * screenRatio,
+                    marginTop: 45 * screenRatio,
+                  }}
                   dangerouslySetInnerHTML={{ __html: item.content ?? '' }}></p>
               </div>
             )}
@@ -105,7 +113,9 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
             {item.type === PostType.J043Custom && (
               <div
                 className={styles.card}
-                style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
+                style={{
+                  padding: 40 * screenRatio,
+                }}>
                 <p
                   className={styles.type}
                   style={{ fontSize: 32 * screenRatio }}>
@@ -113,7 +123,10 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
                 </p>
                 <p
                   className={styles.content}
-                  style={{ fontSize: 32 * screenRatio }}
+                  style={{
+                    fontSize: 32 * screenRatio,
+                    marginTop: 45 * screenRatio,
+                  }}
                   dangerouslySetInnerHTML={{ __html: item.content ?? '' }}></p>
               </div>
             )}
@@ -121,7 +134,9 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
             {item.type === PostType.CloseUp && (
               <div
                 className={styles.card}
-                style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
+                style={{
+                  padding: 40 * screenRatio,
+                }}>
                 <p
                   className={styles.type}
                   style={{ fontSize: 22 * screenRatio }}>
@@ -129,6 +144,7 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
                 </p>
                 {item.thumbUrls?.length && (
                   <div
+                    style={{ marginTop: 45 * screenRatio }}
                     className={`${styles.thumbnail} ${
                       viewMode === ViewMode.landscape
                         ? styles.landscapeThumbnail
@@ -139,13 +155,19 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
                 )}
                 <p
                   className={styles.postTitle}
-                  style={{ fontSize: 32 * screenRatio }}>
+                  style={{
+                    fontSize: 32 * screenRatio,
+                    marginTop: 45 * screenRatio,
+                  }}>
                   {item.title}
                 </p>
                 {item.author && (
                   <p
                     className={styles.subContent}
-                    style={{ fontSize: 26 * screenRatio }}>
+                    style={{
+                      fontSize: 26 * screenRatio,
+                      marginTop: 45 * screenRatio,
+                    }}>
                     by {item.author}
                   </p>
                 )}
@@ -160,7 +182,9 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
             ].includes(item.type) && (
               <div
                 className={styles.card}
-                style={{ padding: 40 * screenRatio, gap: 45 * screenRatio }}>
+                style={{
+                  padding: 40 * screenRatio,
+                }}>
                 <p
                   className={`${styles.type} ${styles.capitalizedFirstChar}`}
                   style={{ fontSize: 22 * screenRatio }}>
@@ -169,19 +193,27 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
                     : item.type}
                 </p>
                 {item.thumbUrls?.length && (
-                  <div className={styles.thumbnail}>
+                  <div
+                    style={{ marginTop: 45 * screenRatio }}
+                    className={styles.thumbnail}>
                     <QueuingImages urls={item.thumbUrls} alt="thumbnail" />
                   </div>
                 )}
                 <p
                   className={styles.postTitle}
-                  style={{ fontSize: 32 * screenRatio }}>
+                  style={{
+                    fontSize: 32 * screenRatio,
+                    marginTop: 45 * screenRatio,
+                  }}>
                   {item.title}
                 </p>
                 {item.date && item.time && (
                   <div
                     className={styles.content}
-                    style={{ fontSize: 32 * screenRatio }}>
+                    style={{
+                      fontSize: 32 * screenRatio,
+                      marginTop: 45 * screenRatio,
+                    }}>
                     <p>Date: {item.date}</p>
                     <p>Time: {item.time}</p>
                   </div>
@@ -189,7 +221,10 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
                 {item.author && (
                   <p
                     className={styles.subContent}
-                    style={{ fontSize: 26 * screenRatio }}>
+                    style={{
+                      fontSize: 26 * screenRatio,
+                      marginTop: 45 * screenRatio,
+                    }}>
                     by {item.author}
                   </p>
                 )}
