@@ -53,7 +53,7 @@ const QrCodePopUp = () => {
     setCountdownPercentage(percentage);
 
     // If the delay reach to 0, fetch new dailies
-    if (delay <= 0) {
+    if (delay < 0) {
       fetchDailies().catch((error: unknown) => {
         console.log(error);
       });
@@ -68,8 +68,8 @@ const QrCodePopUp = () => {
     let remainingTime = '';
     if (hours > 0) {
       remainingTime += `${hours.toString()}${t('hour')}`;
-    } else if (minutes > 0) {
-      remainingTime += `${minutes.toString()}${t('minute')}`;
+    } else if (minutes > 1) {
+      remainingTime += `${minutes.toString()} ${t('minutes')}`;
     } else {
       remainingTime += t('second');
     }
