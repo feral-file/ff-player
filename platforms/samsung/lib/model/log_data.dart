@@ -21,7 +21,9 @@ class LogData {
   factory LogData.fromJson(Map<String, dynamic> json) => LogData(
         userId: json['userId'] as String,
         logTitle: json['logTitle'] as String,
-        metadata: json['metadata'] as Map<String, String>,
-        tags: json['tags'] as List<String>,
+        metadata: (json['metadata'] as Map<String, dynamic>).map(
+          (key, value) => MapEntry(key, value as String),
+        ),
+        tags: (json['tags'] as List<dynamic>).map((e) => e as String).toList(),
       );
 }
