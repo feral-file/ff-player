@@ -52,9 +52,15 @@ class DailyService {
     return response.data.result as Daily[];
   }
 
-  public async callingDailies(newDailyHour: number): Promise<Daily[]> {
+  public async callingDailies(
+    newDailyHour: number,
+    nextNumberDay?: number
+  ): Promise<Daily[]> {
     try {
-      const date = this.getCurrentLocaleDateOnly(newDailyHour);
+      if (!nextNumberDay) {
+        nextNumberDay = -1;
+      }
+      const date = this.getCurrentLocaleDateOnly(newDailyHour, nextNumberDay);
       let dailies = await this.getDailiesByDate(date, [
         'includeSuccessfulSwap',
       ]);
@@ -62,6 +68,7 @@ class DailyService {
       if (dailies.length === 0) {
         console.log('[DAILY] No upcoming dailies, using default daily');
         dailies = [this.getDefaultDaily()];
+        return [];
       }
 
       const ids = dailies.map((d: Daily) => {
@@ -136,15 +143,23 @@ class DailyService {
     };
   }
 
-  private getCurrentLocaleDateOnly(newDailyHour: number): string {
+  private getCurrentLocaleDateOnly(
+    newDailyHour: number,
+    nextNumberDay: number
+  ): string {
     const now = new Date();
     let currentTimestamp: number;
-    // Previous day if the current time is before 6:00 AM
-    const newDailyAt = new Date().setHours(newDailyHour, 0, 0, 0); // 6:00 AM
-    if (now.getTime() < newDailyAt) {
-      currentTimestamp = now.setDate(now.getDate() - 1);
+    if (nextNumberDay >= 0) {
+      currentTimestamp = now.setDate(now.getDate() + nextNumberDay);
     } else {
-      currentTimestamp = now.getTime();
+      // Previous day if the current time is before 6:00 AM
+      const newDailyAt = new Date().setHours(newDailyHour, 0, 0, 0); // 6:00 AM
+      currentTimestamp = now.setDate(now.getDate() + nextNumberDay);
+      if (now.getTime() < newDailyAt) {
+        currentTimestamp = now.setDate(now.getDate() - 1);
+      } else {
+        currentTimestamp = now.getTime();
+      }
     }
 
     const date = new Date(currentTimestamp);
@@ -152,6 +167,7 @@ class DailyService {
     const year = date.getFullYear().toString();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
+    console.log('---Kien---', `${year}-${month}-${day}`);
     return `${year}-${month}-${day}`;
   }
 }

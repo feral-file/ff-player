@@ -28,6 +28,8 @@ export default function DailyClient() {
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
     useState<boolean>(false);
+  const [currentDailyNumber, setCurrentDailyNumber] = useState<number>(0);
+  const [currentDaily, setCurrentDaily] = useState<Daily | undefined>();
 
   const newDailyHour = context?.appRemoteConfig.new_daily_hour;
 
@@ -49,58 +51,45 @@ export default function DailyClient() {
     // Handle cast daily
     async function handleCastDaily() {
       try {
-        const isRefreshDaily = await DailyService.isRefreshDailies(
-          newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
-        );
-        if (isRefreshDaily) {
-          dailies = DailyService.getDailies();
-        }
+        dailies = await DailyService.callingDailies(0, currentDailyNumber);
 
         if (dailies.length > 0) {
           // Set metric metadata
-          if (dailyRef.current !== dailies[0]) {
-            dailyRef.current = dailies[0];
-            setArtworkID(
-              convertToTokenID(
-                dailyRef.current.blockchain,
-                dailyRef.current.contractAddress,
-                dailyRef.current.tokenID
-              )
-            );
-          }
+          // if (dailyRef.current !== dailies[0]) {
+          //   dailyRef.current = dailies[0];
+          //   setArtworkID(
+          //     convertToTokenID(
+          //       dailyRef.current.blockchain,
+          //       dailyRef.current.contractAddress,
+          //       dailyRef.current.tokenID
+          //     )
+          //   );
+          // }
 
-          const { delay } = getDelayTime(
-            dailies,
-            newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
-          );
           if (dailies[0].previewURL) {
+            setCurrentDaily(dailies[0]);
             setCastPreviewURL(dailies[0].previewURL);
             setIsLeeMucianExhibition(
               dailies[0].contractAddress === LeeMullican_EXHIBITION_CONTRACT
             );
           }
 
-          startTimeout(delay > 0 ? delay : DEFAULT_DELAY);
+          startTimeout(30000);
+        } else if (currentDailyNumber === 0) {
+          startTimeout(5000);
+          return;
+        } else {
+          setCurrentDailyNumber(0);
         }
       } catch (error) {
         console.error(error);
       }
-
-      dailyIntervalRef.current = setInterval(() => {
-        clearDailyInterval();
-        handleCastDaily().catch((error: unknown) => {
-          console.error(error);
-        });
-      }, TIME_PER_HOUR); // Check refresh daily every hour
     }
 
     const startTimeout = (duration: number) => {
       clearTimer();
       timeoutRef.current = setTimeout(() => {
-        // Cast next daily
-        handleCastDaily().catch((error: unknown) => {
-          console.error(error);
-        });
+        setCurrentDailyNumber(prev => prev + 1);
       }, duration);
     };
 
@@ -125,7 +114,7 @@ export default function DailyClient() {
     return () => {
       clearDailyInterval();
     };
-  }, []);
+  }, [currentDailyNumber]);
 
   return (
     <>
@@ -136,6 +125,20 @@ export default function DailyClient() {
           castingType={CastingArtworkType.Daily}
           isCustomView={isLeeMucianExhibition}
         />
+        {currentDaily && (
+          <div
+            style={{
+              position: 'fixed',
+              bottom: 0,
+              right: 0,
+              backgroundColor: '#ffffff',
+              color: '#000',
+              zIndex: 9999,
+              padding: '10px',
+            }}>
+            <p>{currentDaily.displayTime}</p>
+          </div>
+        )}
       </div>
     </>
   );
