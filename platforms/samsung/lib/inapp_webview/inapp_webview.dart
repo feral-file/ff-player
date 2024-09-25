@@ -58,6 +58,12 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
   }
 
   @override
+  void dispose() {
+    unawaited(WakelockPlus.disable());
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: Colors.transparent,
         body: Focus(
