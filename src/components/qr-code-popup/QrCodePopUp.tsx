@@ -8,7 +8,12 @@ import QRCode from 'qrcode.react';
 import { useEffect, useRef, useState } from 'react';
 import styles from './styles.module.scss';
 import { QrCodeSkeleton } from '../skeleton/skeleton';
-import { AppSettings, KeyDown, TIME_PER_HOUR } from '@/constants';
+import {
+  AppSettings,
+  KeyDown,
+  TIMESTAMP_PER_HOUR,
+  TIMESTAMP_PER_MINUTE,
+} from '@/constants';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import DailyService from '@/services/DailyService';
 import { CastCommand } from '@/utils/types';
@@ -18,7 +23,7 @@ const QrCodePopUp = () => {
   const { context } = useAppContext();
   const [branchLink, setBranchLink] = useState('');
   const [currentDaily, setCurrentDaily] = useState<Daily>();
-  const [nextArtwork, setNextArtwork] = useState<number>(0);
+  const [nextDailyRemind, setNextDailyRemind] = useState<string>('');
   const [isShowComponent, setIsShowComponent] = useState<boolean>(false);
   const [countdownPercentage, setCountdownPercentage] = useState<number>(0);
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
@@ -33,6 +38,47 @@ const QrCodePopUp = () => {
   const newDailyHour = context?.appRemoteConfig?.new_daily_hour;
 
   const t = useTranslations('QrCodePopUp');
+
+  const calculateTimer = () => {
+    const { delay, duration } = getDelayTime(
+      dailies,
+      newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
+    );
+
+    getNextDailyRemainingTime(delay);
+    let percentage = ((duration - delay) / duration) * 100;
+    if (percentage < 0) {
+      percentage = 0;
+    }
+    if (percentage > 100) {
+      percentage = 100;
+    }
+    setCountdownPercentage(percentage);
+
+    // If the delay reach to 0, fetch new dailies
+    if (delay <= 0) {
+      fetchDailies().catch((error: unknown) => {
+        console.log(error);
+      });
+    }
+  };
+
+  const getNextDailyRemainingTime = (delayTimestamp: number) => {
+    const timestamp = delayTimestamp < 0 ? 0 : delayTimestamp;
+    const minutes = Math.floor(timestamp / TIMESTAMP_PER_MINUTE);
+    const hours = Math.floor(timestamp / TIMESTAMP_PER_HOUR);
+
+    let remainingTime = '';
+    if (hours > 0) {
+      remainingTime += `${hours}${t('hour')}`;
+    } else if (minutes > 0) {
+      remainingTime += `${minutes}${t('minute')}`;
+    } else {
+      remainingTime += `${t('second')}`;
+    }
+
+    setNextDailyRemind(remainingTime);
+  };
 
   useEffect(() => {
     fetchDailies().catch((error: unknown) => {
@@ -61,23 +107,6 @@ const QrCodePopUp = () => {
   }, [locationID, topicID]);
 
   useEffect(() => {
-    const calculateTimer = () => {
-      const { delay, duration } = getDelayTime(
-        dailies,
-        newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
-      );
-
-      setNextArtwork((delay > 0 ? delay : 0) / TIME_PER_HOUR);
-      let percentage = ((duration - delay) / duration) * 100;
-      if (percentage < 0) {
-        percentage = 0;
-      }
-      if (percentage > 100) {
-        percentage = 100;
-      }
-      setCountdownPercentage(percentage);
-    };
-
     if (dailies.length > 0) {
       setCurrentDaily(dailies[0]);
       setIsShowComponent(true);
@@ -228,8 +257,7 @@ const QrCodePopUp = () => {
             style={{
               color: '#A0A0A0',
             }}>
-            {t('next_work')}: {Math.floor(nextArtwork)}
-            {t('hour')}
+            {t('next_work')}: {nextDailyRemind}
           </p>
         </div>
         <div
