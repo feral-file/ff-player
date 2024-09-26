@@ -10,7 +10,7 @@ import {
 } from '@/utils/constants';
 import { Daily } from '@/models';
 import { convertToTokenID } from '@/utils/indexer';
-import { AppSettings, TIME_PER_HOUR } from '@/constants';
+import { AppSettings, TIMESTAMP_PER_HOUR } from '@/constants';
 import { CastingArtworkType } from '@/models/metric.model';
 import { useAppContext } from '@/context/AppContext';
 
@@ -91,7 +91,7 @@ export default function DailyClient() {
         handleCastDaily().catch((error: unknown) => {
           console.error(error);
         });
-      }, TIME_PER_HOUR); // Check refresh daily every hour
+      }, TIMESTAMP_PER_HOUR); // Check refresh daily every hour
     }
 
     const startTimeout = (duration: number) => {

@@ -6,15 +6,18 @@ export const getDelayTime = (
 ): { delay: number; duration: number } => {
   const now = Date.now();
 
-  // Set display time to 6:00 AM
-  const currentDisplayTime = new Date(dailies[0].displayTime);
-  currentDisplayTime.setHours(newDailyHour, 0, 0, 0);
+  // Current display time is the date of daily and 6:00 AM
+  const currentDisplayTime = new Date(); // Initial Date object
+  currentDisplayTime.setDate(new Date(dailies[0].displayTime).getUTCDate()); // Set Date is the display date of daily
+  currentDisplayTime.setHours(newDailyHour, 0, 0, 0); // Set time as configured new daily hour
 
-  let nextDisplayTime = currentDisplayTime.setDate(
+  const nextDisplayTime = currentDisplayTime.setDate(
     currentDisplayTime.getDate() + 1
   );
 
-  const previousDisplayTime = new Date(dailies[0].displayTime).getTime();
+  const previousDisplayTime = currentDisplayTime.setDate(
+    currentDisplayTime.getDate() - 1
+  );
 
   return {
     delay: nextDisplayTime - now,

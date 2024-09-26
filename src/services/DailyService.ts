@@ -140,7 +140,7 @@ class DailyService {
     const now = new Date();
     let currentTimestamp: number;
     // Previous day if the current time is before 6:00 AM
-    const newDailyAt = new Date().setHours(newDailyHour, 0, 0, 0); // 6:00 AM
+    const newDailyAt = new Date().setHours(newDailyHour, 0, -1, 0); // 5:59:59 AM buffer 1s
     if (now.getTime() < newDailyAt) {
       currentTimestamp = now.setDate(now.getDate() - 1);
     } else {
