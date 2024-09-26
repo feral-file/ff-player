@@ -40,10 +40,7 @@ const QrCodePopUp = () => {
   const t = useTranslations('QrCodePopUp');
 
   const calculateTimer = () => {
-    const { delay, duration } = getDelayTime(
-      dailies,
-      newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
-    );
+    const { delay, duration } = getDelayTime(dailies, newDailyHour);
 
     getNextDailyRemainingTime(delay);
     let percentage = ((duration - delay) / duration) * 100;
@@ -70,11 +67,11 @@ const QrCodePopUp = () => {
 
     let remainingTime = '';
     if (hours > 0) {
-      remainingTime += `${hours}${t('hour')}`;
+      remainingTime += `${hours.toString()}${t('hour')}`;
     } else if (minutes > 0) {
-      remainingTime += `${minutes}${t('minute')}`;
+      remainingTime += `${minutes.toString()}${t('minute')}`;
     } else {
-      remainingTime += `${t('second')}`;
+      remainingTime += t('second');
     }
 
     setNextDailyRemind(remainingTime);
