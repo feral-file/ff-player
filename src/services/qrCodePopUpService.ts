@@ -7,14 +7,17 @@ export const getDelayTime = (
   const now = Date.now();
 
   // Set display time to 6:00 AM
-  const currentDisplayTime = new Date(dailies[0].displayTime);
+  const currentDisplayTime = new Date();
+  currentDisplayTime.setDate(new Date(dailies[0].displayTime).getUTCDate());
   currentDisplayTime.setHours(newDailyHour, 0, 0, 0);
 
-  let nextDisplayTime = currentDisplayTime.setDate(
+  const nextDisplayTime = currentDisplayTime.setDate(
     currentDisplayTime.getDate() + 1
   );
 
-  const previousDisplayTime = new Date(dailies[0].displayTime).getTime();
+  const previousDisplayTime = currentDisplayTime.setDate(
+    currentDisplayTime.getDate() - 1
+  );
 
   return {
     delay: nextDisplayTime - now,
