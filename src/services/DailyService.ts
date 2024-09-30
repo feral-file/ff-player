@@ -129,7 +129,7 @@ class DailyService {
     return {
       blockchain: 'ethereum',
       contractAddress: '0x1D9787369B1DCf709f92Da1d8743c2A4b6028a83',
-      displayTime: new Date().setHours(0, 0, 0, 0).toString(),
+      displayTime: new Date().toString(),
       id: '',
       tokenName: '#1',
       tokenID: '339348595130070749814751437599411258966098496',
