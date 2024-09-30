@@ -13,12 +13,12 @@ import {
   SeriesPreviewHTMLTag,
 } from '@/utils/types';
 import Hls from 'hls.js';
-import Image from 'next/image';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Loading from '../loading/loading';
-import { AppContext } from '@/context/AppContext';
+import { useAppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
-import { CastingArtworkType, uploadNewMetric } from '@/services/metric.service';
+import { appendMetricEventToLocalStorage } from '@/services/metric.service';
+import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -32,15 +32,14 @@ const ArtworkPlayer = ({
   isCustomView?: boolean;
   keyboardCode?: number;
 }) => {
-  const context = useContext(AppContext);
-  if (!context) {
-    return <p>There is no context.</p>;
-  }
-
+  const { context } = useAppContext();
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
+  const newDayCheckTimeOutID = useRef<
+    NodeJS.Timeout | string | number | undefined
+  >(undefined);
 
   function compareToGetFileType(type: string) {
     setIsStreaming(false);
@@ -72,9 +71,45 @@ const ArtworkPlayer = ({
   // Metric
   useEffect(() => {
     if (castingType && artworkID) {
-      uploadNewMetric(castingType, artworkID).catch((error: unknown) => {
-        console.error('Error upload metric', error);
-      });
+      const handleMetric = () => {
+        if (newDayCheckTimeOutID.current) {
+          clearTimeout(newDayCheckTimeOutID.current as number);
+        }
+
+        const event: MetricEvent = {
+          event: castingType,
+          timestamp: new Date().toISOString(),
+          parameters: {
+            tokenID: artworkID,
+          },
+        };
+
+        const checkNewDay = () => {
+          const now = new Date();
+          const newDay = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate() + 1
+          );
+          newDay.setHours(0, 0, 0, 0);
+          const delay = newDay.getTime() - now.getTime();
+          newDayCheckTimeOutID.current = setTimeout(() => {
+            console.log('[METRIC]: New day');
+            handleMetric();
+          }, delay);
+        };
+
+        appendMetricEventToLocalStorage(event);
+        checkNewDay();
+      };
+
+      handleMetric();
+
+      return () => {
+        if (newDayCheckTimeOutID.current) {
+          clearTimeout(newDayCheckTimeOutID.current as number);
+        }
+      };
     }
   }, [castingType, artworkID]);
 
@@ -93,9 +128,9 @@ const ArtworkPlayer = ({
         });
         const contentType = response.headers.get('Content-Type');
         compareToGetFileType(contentType ?? '');
-        console.log('Content-Type:', contentType);
+        console.log('[CAST] Content-Type:', contentType);
       } catch (error) {
-        console.log('Error get content-type', error);
+        console.log('[CAST] Error get content-type', JSON.stringify(error));
         setPreviewType(SeriesPreviewHTMLTag.iframe);
       }
     };
@@ -110,7 +145,7 @@ const ArtworkPlayer = ({
   }, [previewURL]);
 
   const loadedSource = () => {
-    console.log('loaded source');
+    console.log('[CAST] loaded source', previewURL);
     // When an iframe is present in a page, the parent window might not receive keydown events because the iframe itself captures these events when it is focused.
     // This is work around to focus the parent window.
     window.focus();
@@ -137,7 +172,7 @@ const ArtworkPlayer = ({
         // Play video when it reaches the end (play in loop)
         hls.on(Hls.Events.BUFFER_EOS, () => {
           videoRef.current?.play().catch((error: unknown) => {
-            console.log('Error play video', error);
+            console.log('[CAST] Error play video', JSON.stringify(error));
           });
         });
       } else {
@@ -146,7 +181,7 @@ const ArtworkPlayer = ({
           videoRef.current
             ?.play()
             .catch((error: unknown) => {
-              console.log('Error play video', error);
+              console.log('[CAST] Error play video', JSON.stringify(error));
             })
             .finally(() => {
               setLoading(false);
@@ -160,7 +195,7 @@ const ArtworkPlayer = ({
     if (context.isOnline && !context.websocketData.isDisconnected) {
       if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
         videoRef.current.play().catch((error: unknown) => {
-          console.log('Error play video', error);
+          console.log('[CAST] Error play video', JSON.stringify(error));
         });
       }
     } else {
@@ -185,11 +220,11 @@ const ArtworkPlayer = ({
         <div
           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
           className={isCustomView ? styles.customRendering : ''}>
-          <Image
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            className={styles.image}
             src={previewURL}
             alt="Preview"
-            layout="fill"
-            objectFit="contain"
             onLoad={loadedSource}
           />
         </div>

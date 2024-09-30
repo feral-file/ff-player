@@ -24,7 +24,7 @@ class DeviceManager {
     const platform = localStorage.getItem(LocalStorageItem.platform);
 
     console.log(
-      `creating PlatformConfigService instance for platform: ${platform ?? ''}`
+      `[DEVICE] creating PlatformConfigService instance for platform: ${platform ?? 'Web'}`
     );
     switch (platform) {
       case Platform.google:
@@ -38,21 +38,16 @@ class DeviceManager {
     }
   }
 
-  private readonly deviceIdKey = 'deviceId';
-  private readonly locationIdKey = 'locationId';
-  private readonly topicIdKey = 'topicId';
-  private readonly nameKey = 'device_name';
-  private readonly branchLinkKey = 'branchLink';
-  private readonly previouslyConnectedDeviceIdsKey =
-    'previouslyConnectedDeviceIds';
-
   private async getFromLocalStorage(key: string): Promise<string | null> {
     return await this.configService.getString(key);
   }
 
   private setToLocalStorage(key: string, value: string): void {
     this.configService.setString(key, value).catch((error: unknown) => {
-      console.error('Error setting value to local storage', error);
+      console.error(
+        '[DEVICE] Error setting value to local storage',
+        JSON.stringify(error)
+      );
     });
   }
 
@@ -69,7 +64,7 @@ class DeviceManager {
       }
       return deviceId;
     } catch (error) {
-      console.error('Error getting device ID', error);
+      console.error('[DEVICE] Error getting device ID', JSON.stringify(error));
       return '';
     }
   }
@@ -103,7 +98,10 @@ class DeviceManager {
       const name = await this.getFromLocalStorage(LocalStorageItem.name);
       return this.getDeviceName(name);
     } catch (error) {
-      console.error('Error getting device name', error);
+      console.error(
+        '[DEVICE] Error getting device name',
+        JSON.stringify(error)
+      );
       return 'Unknown';
     }
   }
@@ -132,36 +130,20 @@ class DeviceManager {
     }
   }
 
-  public setPreviouslyConnectedDeviceIds(deviceIds: string[]): void {
-    this.setToLocalStorage(
-      LocalStorageItem.previouslyConnectedDeviceIds,
-      JSON.stringify(deviceIds)
-    );
+  public setPrimaryAddress(primaryAddress: string): void {
+    this.setToLocalStorage(LocalStorageItem.primaryAddress, primaryAddress);
   }
 
-  public async getPreviouslyConnectedDeviceIds(): Promise<string[]> {
-    const deviceIdsJson = await this.getFromLocalStorage(
-      LocalStorageItem.previouslyConnectedDeviceIds
-    );
-    if (!deviceIdsJson) {
-      return [];
-    }
-    return JSON.parse(deviceIdsJson) as string[];
+  public async getPrimaryAddress(): Promise<string | null> {
+    return await this.getFromLocalStorage(LocalStorageItem.primaryAddress);
   }
 
-  public async addPreviouslyConnectedDeviceId(deviceId: string): Promise<void> {
-    const deviceIds = await this.getPreviouslyConnectedDeviceIds();
-    deviceIds.push(deviceId);
-    this.setPreviouslyConnectedDeviceIds(deviceIds);
+  public setOrientation(orientation: string): void {
+    this.setToLocalStorage(LocalStorageItem.orientation, orientation);
   }
 
-  public clearPreviouslyConnectedDeviceIds(): void {
-    this.setPreviouslyConnectedDeviceIds([]);
-  }
-
-  public async isPreviouslyConnectedDevice(deviceId: string): Promise<boolean> {
-    const deviceIds = await this.getPreviouslyConnectedDeviceIds();
-    return deviceIds.includes(deviceId);
+  public async getOrientation(): Promise<string | null> {
+    return await this.getFromLocalStorage(LocalStorageItem.orientation);
   }
 
   public async getDeviceInfo() {
@@ -179,7 +161,10 @@ class DeviceManager {
         platform: 'web',
       };
     } catch (error) {
-      console.error('Error getting device info', error);
+      console.error(
+        '[DEVICE] Error getting device info',
+        JSON.stringify(error)
+      );
       return null;
     }
   }
@@ -216,13 +201,18 @@ class DeviceManager {
       if (!deviceInfo) {
         return null;
       }
+      console.log(
+        '[DEVICE] Generating branch link with device info: ',
+        JSON.stringify(deviceInfo)
+      );
+
       const data = {
         source: 'feralfile_display',
         device: deviceInfo,
       };
       return await createBranchLink(data);
     } catch (e) {
-      console.error(e);
+      console.error('[DEVICE] Error generate branch link: ', JSON.stringify(e));
       return null;
     }
   }

@@ -13,7 +13,6 @@
 .loadingContainer {
   display: flex;
   flex-direction: column;
-  gap: 5px;
   align-items: center;
   justify-content: center;
 }
@@ -21,8 +20,10 @@
 .loader {
   height: 4px;
   width: 100%;
-  --c: no-repeat linear-gradient(#a0a0a0 0 0);
-  background: var(--c), var(--c), #2e2e2e;
+  background:
+    no-repeat linear-gradient(#a0a0a0, #a0a0a0),
+    no-repeat linear-gradient(#a0a0a0, #a0a0a0),
+    #2e2e2e;
   background-size: 60% 100%;
   animation: l16 3s infinite;
 }

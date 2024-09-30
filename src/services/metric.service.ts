@@ -1,15 +1,7 @@
 import { LocalStorageItem } from '@/constants';
+import { MetricEvent } from '@/models/metric.model';
+import DeviceManager from '@/utils/DeviceManager';
 import axios, { AxiosInstance } from 'axios';
-
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 3000;
-
-export enum CastingArtworkType {
-  Unknown = 'UNKNOWN',
-  Daily = 'DAILY_DISPLAY',
-  Playlist = 'PLAYLIST_DISPLAY',
-  Exhibition = 'EXHIBITION_DISPLAY',
-}
 
 const accountsRequester: AxiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_ACCOUNTS_URL,
@@ -18,47 +10,68 @@ const accountsRequester: AxiosInstance = axios.create({
   },
 });
 
-export async function uploadNewMetric(
-  event: CastingArtworkType,
-  tokenID: string,
-  retriedTimes = 0
-): Promise<void> {
-  console.log('METRIC TRACKING', event, tokenID, retriedTimes);
-
-  const deviceID = localStorage.getItem(LocalStorageItem.deviceId);
-  if (retriedTimes >= MAX_RETRIES) {
-    return;
-  }
+export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
+  console.log('[METRIC]: sending API', JSON.stringify(events));
+  const deviceID = await DeviceManager.getDeviceId();
 
   if (!deviceID) {
-    console.warn('Device ID not found. Retrying...');
-    setTimeout(() => {
-      uploadNewMetric(event, tokenID, retriedTimes + 1).catch(
-        (error: unknown) => {
-          console.error(error);
-        }
-      );
-    }, RETRY_DELAY_MS);
-    return;
+    throw new Error('Device ID not found');
   }
 
   accountsRequester.defaults.headers['x-device-id'] = deviceID;
-  try {
-    await accountsRequester.post('/apis/metrics', {
-      event,
-      timestamp: new Date().toISOString(),
-      parameters: {
-        tokenID,
-      },
-    });
-  } catch (error) {
-    console.error('Error uploading metric', error);
-    setTimeout(() => {
-      uploadNewMetric(event, tokenID, retriedTimes + 1).catch(
-        (error: unknown) => {
-          console.error(error);
-        }
+  if (events.length > 0) {
+    await accountsRequester.post('/apis/metrics', { metrics: events });
+  }
+}
+
+export function appendMetricEventToLocalStorage(event: MetricEvent) {
+  console.log('[METRIC]: append event to localStorage', JSON.stringify(event));
+  const metricEvents = localStorage.getItem(LocalStorageItem.metricEvents);
+  let events: MetricEvent[] = [];
+  if (metricEvents) {
+    try {
+      events = JSON.parse(metricEvents) as MetricEvent[];
+    } catch (error) {
+      console.error(
+        '[METRIC] Error parsing metric events from local storage',
+        JSON.stringify(error)
       );
-    }, RETRY_DELAY_MS);
+      events = [];
+    }
+  }
+
+  events.push(event);
+  localStorage.setItem(LocalStorageItem.metricEvents, JSON.stringify(events));
+  uploadMetricEventsFromLocalStorage();
+}
+
+export function uploadMetricEventsFromLocalStorage() {
+  console.log('[METRIC]: start uploading events from localStorage');
+  const metricEvents = localStorage.getItem(LocalStorageItem.metricEvents);
+  let events: MetricEvent[] = [];
+  if (metricEvents) {
+    try {
+      events = JSON.parse(metricEvents) as MetricEvent[];
+    } catch (error) {
+      localStorage.removeItem(LocalStorageItem.metricEvents);
+      console.error(
+        '[METRIC] Error parsing metric events from local storage',
+        JSON.stringify(error)
+      );
+      events = [];
+    }
+  }
+
+  if (events.length > 0) {
+    uploadNewMetric(events)
+      .then(() => {
+        localStorage.removeItem(LocalStorageItem.metricEvents);
+      })
+      .catch((error: unknown) => {
+        console.error(
+          '[METRIC] Error uploading metric events',
+          JSON.stringify(error)
+        );
+      });
   }
 }

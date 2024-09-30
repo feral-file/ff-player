@@ -17,19 +17,23 @@ export class ExhibitionService {
       const exhibition = response.data.result as Exhibition;
 
       // Format artist/ curator alias remove suffix
-      if (exhibition.curator)
-        exhibition.curator.alias = removeArtistAliasSuffixes(
-          exhibition.curator.alias ?? ''
+      if (exhibition.curator?.alumniAccount)
+        exhibition.curator.alumniAccount.alias = removeArtistAliasSuffixes(
+          exhibition.curator.alumniAccount.alias ?? ''
         );
       if (exhibition.artists) {
         exhibition.artists.map(artist => {
-          artist.alias = removeArtistAliasSuffixes(artist.alias ?? '');
+          if (artist.alumniAccount) {
+            artist.alumniAccount.alias = removeArtistAliasSuffixes(
+              artist.alumniAccount.alias ?? ''
+            );
+          }
         });
       }
 
       return exhibition;
     } catch (error) {
-      console.log('Failed to load exhibition:', error);
+      console.log('[API] Failed to load exhibition:', JSON.stringify(error));
     }
   }
 
@@ -46,7 +50,10 @@ export class ExhibitionService {
       exhibition.series = series;
       return exhibition;
     } catch (error) {
-      console.log('Failed to load Source exhibition:', error);
+      console.log(
+        '[API] Failed to load Source exhibition:',
+        JSON.stringify(error)
+      );
     }
   }
 
@@ -61,7 +68,7 @@ export class ExhibitionService {
       const series = response.data as Series[];
       return series;
     } catch (error) {
-      console.log('Failed to load Source series:', error);
+      console.log('[API] Failed to load Source series:', JSON.stringify(error));
     }
   }
 }

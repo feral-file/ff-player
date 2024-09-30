@@ -38,6 +38,10 @@ export class KeyEvent extends PlatformEventReceiver {
     ) {
       EventEmitter.emit(Event.escape);
     }
+
+    if ([KeyCodes.arrowUp.toString()].includes(keyId)) {
+      EventEmitter.emit(Event.sendLog);
+    }
   }
 }
 
@@ -188,10 +192,8 @@ export class GoogleConfigService extends TizenConfigService {}
 export class WebConfigService implements PlatformConfigService {
   // eslint-disable-next-line @typescript-eslint/require-await
   async init() {
-    const deviceId = this.getOrCreateDeviceId();
-    // Use the device ID as the name for web
-    localStorage.setItem(LocalStorageItem.deviceId, deviceId);
-    localStorage.setItem(LocalStorageItem.name, deviceId);
+    const deviceName = this.getOrCreateDeviceName();
+    localStorage.setItem(LocalStorageItem.name, deviceName);
   }
 
   generateRandomString(length: number): string {
@@ -205,16 +207,16 @@ export class WebConfigService implements PlatformConfigService {
     return result;
   }
 
-  getOrCreateDeviceId() {
-    let deviceId = localStorage.getItem(LocalStorageItem.deviceId);
-    if (!deviceId) {
+  getOrCreateDeviceName() {
+    let deviceName = localStorage.getItem(LocalStorageItem.name);
+    if (!deviceName) {
       const platform = navigator.platform;
       const browser = detect() as BrowserInfo;
       const randomString = this.generateRandomString(4);
 
-      deviceId = `${platform}-${browser.name}-${randomString}`;
+      deviceName = `${platform}-${browser.name}-${randomString}`;
     }
-    return deviceId;
+    return deviceName;
   }
   // eslint-disable-next-line @typescript-eslint/require-await
   async getString(key: string): Promise<string | null> {
@@ -233,7 +235,7 @@ export class LgConfigService implements PlatformConfigService {
     await this.setDeviceInfo();
   }
 
-  async registerDB() {
+  async clearRegisterDB() {
     // Clear the existing database kind (if it exists)
     try {
       await new Promise<void>((resolve, reject) => {
@@ -261,6 +263,9 @@ export class LgConfigService implements PlatformConfigService {
     } catch (error) {
       console.error('Error deleting kind:', error);
     }
+  }
+
+  async registerDB() {
     try {
       // Register the kind first
       await new Promise<void>((resolve, reject) => {

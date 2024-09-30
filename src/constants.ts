@@ -6,6 +6,7 @@ export enum KeyCodes {
   audioVolumeMute = 0x00100000a11,
   enter = 0x0010000000d,
   select = 4294968588,
+  arrowUp = 0x00100000304,
 }
 
 export const IgnoreKeyCodes = [
@@ -49,7 +50,9 @@ export enum LocalStorageItem {
   castInfo = 'castInfo',
   name = 'device_name',
   branchLink = 'branchLink',
-  previouslyConnectedDeviceIds = 'previouslyConnectedDeviceIds',
+  metricEvents = 'metricEvents',
+  primaryAddress = 'primaryAddress',
+  orientation = 'orientation',
 }
 
 export enum Platform {
@@ -66,8 +69,16 @@ export enum DeviceNamePrefix {
 
 export const AppSettings = {
   VERSION_CHECK_INTERVAL_DURATION: 1000 * 60 * 60, // 1 minutes
+  DEFAULT_NEW_DAILY_HOUR: 6, // 6:00 AM
   JG_043_EXHIBITION_ID: '46a0f68b-a657-4364-92a0-32a88b65fbd9',
   STANDARD_HEIGHT: 1080,
 };
 
-export const TIME_PER_HOUR = 60 * 60 * 1000;
+export const TIMESTAMP_PER_MINUTE = 60 * 1000;
+export const TIMESTAMP_PER_HOUR = 60 * 60 * 1000;
+
+export const PUSH_METRIC_INTERVAL = 60 * 1000;
+
+export const SEND_LOG_INTERVAL = 10 * 1000;
+
+export const SEND_LOG_EVENT_NUMBER = 4;

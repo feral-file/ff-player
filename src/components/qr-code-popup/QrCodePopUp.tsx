@@ -1,24 +1,29 @@
 'use client';
 
-import { AppContext } from '@/context/AppContext';
+import { useAppContext } from '@/context/AppContext';
 import { Daily } from '@/models';
 import { getDelayTime } from '@/services/qrCodePopUpService';
 import DeviceManager from '@/utils/DeviceManager';
-import Image from 'next/image';
 import QRCode from 'qrcode.react';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import styles from './styles.module.scss';
 import { QrCodeSkeleton } from '../skeleton/skeleton';
-import { KeyDown, TIME_PER_HOUR } from '@/constants';
+import {
+  AppSettings,
+  KeyDown,
+  TIMESTAMP_PER_HOUR,
+  TIMESTAMP_PER_MINUTE,
+} from '@/constants';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import DailyService from '@/services/DailyService';
 import { CastCommand } from '@/utils/types';
+import { useTranslations } from 'next-intl';
 
 const QrCodePopUp = () => {
-  const context = useContext(AppContext);
+  const { context } = useAppContext();
   const [branchLink, setBranchLink] = useState('');
   const [currentDaily, setCurrentDaily] = useState<Daily>();
-  const [nextArtwork, setNextArtwork] = useState<number>(0);
+  const [nextDailyRemind, setNextDailyRemind] = useState<string>('');
   const [isShowComponent, setIsShowComponent] = useState<boolean>(false);
   const [countdownPercentage, setCountdownPercentage] = useState<number>(0);
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
@@ -30,6 +35,47 @@ const QrCodePopUp = () => {
   const { locationID, topicID } = context?.websocketData ?? {};
   const lastEventTime = useRef(0);
   const { castInfo } = context?.websocketData ?? {};
+  const newDailyHour = context?.appRemoteConfig?.new_daily_hour;
+
+  const t = useTranslations('QrCodePopUp');
+
+  const calculateTimer = () => {
+    const { delay, duration } = getDelayTime(dailies, newDailyHour);
+
+    getNextDailyRemainingTime(delay);
+    let percentage = ((duration - delay) / duration) * 100;
+    if (percentage < 0) {
+      percentage = 0;
+    }
+    if (percentage > 100) {
+      percentage = 100;
+    }
+    setCountdownPercentage(percentage);
+
+    // If the delay reach to 0, fetch new dailies
+    if (delay < 0) {
+      fetchDailies().catch((error: unknown) => {
+        console.log(error);
+      });
+    }
+  };
+
+  const getNextDailyRemainingTime = (delayTimestamp: number) => {
+    const timestamp = delayTimestamp < 0 ? 0 : delayTimestamp;
+    const minutes = Math.floor(timestamp / TIMESTAMP_PER_MINUTE);
+    const hours = Math.floor(timestamp / TIMESTAMP_PER_HOUR);
+
+    let remainingTime = '';
+    if (hours > 0) {
+      remainingTime += `${hours.toString()}${t('hour')}`;
+    } else if (minutes > 1) {
+      remainingTime += `${minutes.toString()} ${t('minutes')}`;
+    } else {
+      remainingTime += t('second');
+    }
+
+    setNextDailyRemind(remainingTime);
+  };
 
   useEffect(() => {
     fetchDailies().catch((error: unknown) => {
@@ -58,20 +104,6 @@ const QrCodePopUp = () => {
   }, [locationID, topicID]);
 
   useEffect(() => {
-    const calculateTimer = () => {
-      const { delay, duration } = getDelayTime(dailies);
-
-      setNextArtwork((delay > 0 ? delay : 0) / TIME_PER_HOUR);
-      let percentage = ((duration - delay) / duration) * 100;
-      if (percentage < 0) {
-        percentage = 0;
-      }
-      if (percentage > 100) {
-        percentage = 100;
-      }
-      setCountdownPercentage(percentage);
-    };
-
     if (dailies.length > 0) {
       setCurrentDaily(dailies[0]);
       setIsShowComponent(true);
@@ -107,7 +139,9 @@ const QrCodePopUp = () => {
     let dailies = DailyService.getDailies();
 
     if (dailies.length === 0) {
-      dailies = await DailyService.callingDailies();
+      dailies = await DailyService.callingDailies(
+        newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
+      );
     }
     setDailies(dailies);
   };
@@ -185,7 +219,7 @@ const QrCodePopUp = () => {
         display: isShowComponent ? 'grid' : 'none',
         flexDirection: 'column',
         padding: screenRatio * 40,
-        gap: screenRatio * 40,
+        gridGap: screenRatio * 40,
         zIndex: 3,
         fontSize: screenRatio * 14,
         lineHeight: 1.4,
@@ -195,14 +229,13 @@ const QrCodePopUp = () => {
         style={{
           display: 'flex',
           justifyContent: 'space-between',
-          gap: screenRatio * 100,
           width: '100%',
         }}>
-        <Image
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          className={styles.image}
           src={'/feralfile-logo.svg'}
-          alt="FF logo"
-          width={screenRatio * 224}
-          height={screenRatio * 23}></Image>
+          alt="FF logo"></img>
       </div>
       <div
         style={{
@@ -216,12 +249,12 @@ const QrCodePopUp = () => {
             width: '100%',
             paddingBottom: screenRatio * 10,
           }}>
-          <p>Today’s daily</p>
+          <p>{t('today_daily')}</p>
           <p
             style={{
               color: '#A0A0A0',
             }}>
-            Next work: {Math.floor(nextArtwork)}hr
+            {t('next_work')}: {nextDailyRemind}
           </p>
         </div>
         <div
@@ -258,7 +291,7 @@ const QrCodePopUp = () => {
       <div
         style={{
           display: 'grid',
-          gap: screenRatio * 20,
+          gridGap: screenRatio * 20,
           gridTemplateColumns: 'auto 1fr',
           alignItems: 'flex-end',
           fontSize: screenRatio * 20,
@@ -275,16 +308,13 @@ const QrCodePopUp = () => {
           </div>
         )}
         <div style={{ width: screenRatio * 500 }}>
-          <p style={{ width: '60%' }}>
-            Get the Feral File mobile app to browse 15,000+ original artworks,
-            and choose what to display on your TV.
-          </p>
+          <p style={{ width: '60%' }}>{t('get_the_Feral_File')}</p>
         </div>
       </div>
       <div
         style={{ fontSize: screenRatio * 20 }}
         className={styles['bottom-groups']}>
-        <p>Press Enter to hide/show this window.</p>
+        <p>{t('press_enter_to_hide_show')}</p>
       </div>
     </div>
   );

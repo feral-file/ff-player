@@ -4,17 +4,18 @@ import ArtworkPlayer from '../../components/artwork-player/ArtworkPlayer';
 import DailyService from '@/services/DailyService';
 import { getDelayTime } from '@/services/qrCodePopUpService';
 import { useEffect, useRef, useState } from 'react';
-import Loading from '@/components/loading/loading';
 import {
   DEFAULT_DELAY,
   LeeMullican_EXHIBITION_CONTRACT,
 } from '@/utils/constants';
-import { CastingArtworkType } from '@/services/metric.service';
 import { Daily } from '@/models';
 import { convertToTokenID } from '@/utils/indexer';
-import { TIME_PER_HOUR } from '@/constants';
+import { AppSettings, TIMESTAMP_PER_HOUR } from '@/constants';
+import { CastingArtworkType } from '@/models/metric.model';
+import { useAppContext } from '@/context/AppContext';
 
 export default function DailyClient() {
+  const { context } = useAppContext();
   const dailyRef = useRef<Daily>();
   const timeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
@@ -27,6 +28,8 @@ export default function DailyClient() {
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
     useState<boolean>(false);
+
+  const newDailyHour = context?.appRemoteConfig.new_daily_hour;
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -46,7 +49,9 @@ export default function DailyClient() {
     // Handle cast daily
     async function handleCastDaily() {
       try {
-        const isRefreshDaily = await DailyService.isRefreshDailies();
+        const isRefreshDaily = await DailyService.isRefreshDailies(
+          newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
+        );
         if (isRefreshDaily) {
           dailies = DailyService.getDailies();
         }
@@ -64,7 +69,10 @@ export default function DailyClient() {
             );
           }
 
-          const { delay } = getDelayTime(dailies);
+          const { delay } = getDelayTime(
+            dailies,
+            newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
+          );
           if (dailies[0].previewURL) {
             setCastPreviewURL(dailies[0].previewURL);
             setIsLeeMucianExhibition(
@@ -83,7 +91,7 @@ export default function DailyClient() {
         handleCastDaily().catch((error: unknown) => {
           console.error(error);
         });
-      }, TIME_PER_HOUR); // Check refresh daily every hour
+      }, TIMESTAMP_PER_HOUR); // Check refresh daily every hour
     }
 
     const startTimeout = (duration: number) => {
@@ -119,20 +127,16 @@ export default function DailyClient() {
     };
   }, []);
 
-  if (!castPreviewURL) {
-    return <Loading />;
-  }
-
   return (
-    <div style={{ width: '100%', height: '100%' }}>
-      {castPreviewURL && (
+    <>
+      <div style={{ width: '100%', height: '100%' }}>
         <ArtworkPlayer
-          previewURL={castPreviewURL}
+          previewURL={castPreviewURL ?? ''}
           artworkID={artworkID}
           castingType={CastingArtworkType.Daily}
           isCustomView={isLeeMucianExhibition}
         />
-      )}
-    </div>
+      </div>
+    </>
   );
 }

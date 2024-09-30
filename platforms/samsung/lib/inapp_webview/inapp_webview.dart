@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:feralfile_display_tizen/model/app_state_message.dart';
 import 'package:feralfile_display_tizen/model/js_message.dart';
+import 'package:feralfile_display_tizen/model/log_data.dart';
 import 'package:feralfile_display_tizen/service/configuration_service.dart';
 import 'package:feralfile_display_tizen/utils/config_manager.dart';
 import 'package:feralfile_display_tizen/utils/injector.dart';
@@ -54,6 +55,12 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
     super.initState();
     unawaited(WakelockPlus.enable());
     _initWebview();
+  }
+
+  @override
+  void dispose() {
+    unawaited(WakelockPlus.disable());
+    super.dispose();
   }
 
   @override
@@ -165,6 +172,18 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
       final rotate = message.message;
       ConfigManager.instance.quarterTurns.value +=
           rotate == 'clockwise' ? 1 : -1;
+    });
+
+    _webViewController.addJavaScriptChannel('Log',
+        onMessageReceived: (message) async {
+      try {
+        log.info('Log: ${message.message}');
+        final json = jsonDecode(message.message);
+        final logData = LogData.fromJson(json['data']);
+        await FileLogger.sendLog(logData: logData);
+      } catch (e) {
+        log.info('Error: $e');
+      }
     });
   }
 

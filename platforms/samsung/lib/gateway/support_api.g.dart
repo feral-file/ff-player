@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'pubdoc_api.dart';
+part of 'support_api.dart';
 
 // **************************************************************************
 // RetrofitGenerator
@@ -8,8 +8,8 @@ part of 'pubdoc_api.dart';
 
 // ignore_for_file: unnecessary_brace_in_string_interps,no_leading_underscores_for_local_identifiers
 
-class _PubdocAPI implements PubdocAPI {
-  _PubdocAPI(
+class _SupportApi implements SupportApi {
+  _SupportApi(
     this._dio, {
     this.baseUrl,
   });
@@ -19,19 +19,22 @@ class _PubdocAPI implements PubdocAPI {
   String? baseUrl;
 
   @override
-  Future<String> getConfigs() async {
+  Future<dynamic> createIssue(Map<String, Object> body, String deviceId) async {
     const _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
-    final _headers = <String, dynamic>{};
-    final Map<String, dynamic>? _data = null;
-    final _result = await _dio.fetch<String>(_setStreamType<String>(Options(
-      method: 'GET',
+    final _headers = <String, dynamic>{
+      'x-device-id': deviceId,
+    };
+    final _data = <String, dynamic>{};
+    _data.addAll(body);
+    final _result = await _dio.fetch(_setStreamType<dynamic>(Options(
+      method: 'POST',
       headers: _headers,
       extra: _extra,
     )
         .compose(
           _dio.options,
-          '/configs/display.json',
+          '/v1/issues/',
           queryParameters: queryParameters,
           data: _data,
         )
@@ -40,7 +43,7 @@ class _PubdocAPI implements PubdocAPI {
           _dio.options.baseUrl,
           baseUrl,
         ))));
-    final value = _result.data!;
+    final value = _result.data;
     return value;
   }
 

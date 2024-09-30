@@ -1,5 +1,5 @@
-import Image from 'next/image';
 import React, { useState, useEffect } from 'react';
+import styles from './queuingImages.module.scss';
 
 const youtubeFailedThumbnailHeight = 90;
 
@@ -36,13 +36,12 @@ const QueuingImages: React.FC<QueuingImagesProps> = ({ urls, alt }) => {
     <>
       {currentUrl && (
         <div style={{ width: '100%', height: '100%', objectFit: 'contain' }}>
-          <Image
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             src={currentUrl}
             alt={alt}
-            objectFit="contain"
             onLoad={handleImageLoading}
-            width={500}
-            height={500}
+            className={styles.image}
           />
         </div>
       )}

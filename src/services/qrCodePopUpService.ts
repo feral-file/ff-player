@@ -1,18 +1,23 @@
 import { Daily } from '@/models';
 
 export const getDelayTime = (
-  dailies: Daily[]
+  dailies: Daily[],
+  newDailyHour: number
 ): { delay: number; duration: number } => {
   const now = Date.now();
-  const currentDisplayTime = new Date(dailies[0].displayTime);
-  let nextDisplayTime = currentDisplayTime.setDate(
+
+  // Current display time is the date of daily and 6:00 AM
+  const currentDisplayTime = new Date(); // Initial Date object
+  currentDisplayTime.setDate(new Date(dailies[0].displayTime).getUTCDate()); // Set Date is the display date of daily
+  currentDisplayTime.setHours(newDailyHour, 0, 0, 0); // Set time as configured new daily hour
+
+  const nextDisplayTime = currentDisplayTime.setDate(
     currentDisplayTime.getDate() + 1
   );
-  if (dailies.length > 1 && dailies[1].displayTime) {
-    nextDisplayTime = new Date(dailies[1].displayTime).getTime();
-  }
 
-  const previousDisplayTime = new Date(dailies[0].displayTime).getTime();
+  const previousDisplayTime = currentDisplayTime.setDate(
+    currentDisplayTime.getDate() - 1
+  );
 
   return {
     delay: nextDisplayTime - now,

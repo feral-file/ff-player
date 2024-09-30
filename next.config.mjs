@@ -1,4 +1,8 @@
 /** @type {import('next').NextConfig} */
+import createNextIntlPlugin from 'next-intl/plugin';
+
+const withNextIntl = createNextIntlPlugin();
+
 const nextConfig = {
   output: 'export',
   env: {
@@ -24,6 +28,39 @@ const nextConfig = {
   },
   images: { unoptimized: true },
   reactStrictMode: false,
+  webpack: config => {
+    const originalEntry = config.entry;
+
+    config.entry = async () => {
+      const entries = await originalEntry();
+
+      // Ensure the core-js global-this polyfill is loaded first
+      if (
+        entries['main-app'] &&
+        !entries['main-app'].includes('core-js/features/global-this')
+      ) {
+        entries['main-app'].unshift('core-js/features/global-this');
+      }
+
+      if (
+        entries['main-app'] &&
+        !entries['main-app'].includes('core-js/stable/queue-microtask')
+      ) {
+        entries['main-app'].unshift('core-js/stable/queue-microtask');
+      }
+
+      if (
+        entries['main-app'] &&
+        !entries['main-app'].includes('core-js/proposals/object-from-entries')
+      ) {
+        entries['main-app'].unshift('core-js/proposals/object-from-entries');
+      }
+
+      return entries;
+    };
+
+    return config;
+  },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);
