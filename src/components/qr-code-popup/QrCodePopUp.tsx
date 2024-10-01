@@ -28,7 +28,6 @@ const QrCodePopUp = () => {
   const [countdownPercentage, setCountdownPercentage] = useState<number>(0);
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
   const [dailies, setDailies] = useState<Daily[]>([]);
-  const [dailyDisplayTime, setDailyDisplayTime] = useState<string>('');
 
   const { screenRatio } = context?.deviceRotation ?? {
     screenRatio: 1,
@@ -41,7 +40,7 @@ const QrCodePopUp = () => {
   const t = useTranslations('QrCodePopUp');
 
   const calculateTimer = () => {
-    const { delay, duration } = getDelayTime(dailyDisplayTime, newDailyHour);
+    const { delay, duration } = getDelayTime(newDailyHour);
 
     getNextDailyRemainingTime(delay);
     let percentage = ((duration - delay) / duration) * 100;
@@ -110,7 +109,7 @@ const QrCodePopUp = () => {
       setIsShowComponent(true);
       calculateTimer();
 
-      intervalIdRef.current = setInterval(calculateTimer, 60 * 1000);
+      intervalIdRef.current = setInterval(calculateTimer, 10 * 1000);
     } else {
       setIsShowComponent(false);
     }
@@ -145,7 +144,6 @@ const QrCodePopUp = () => {
       );
     }
     setDailies(dailies);
-    setDailyDisplayTime(dailies[0].displayTime);
   };
 
   useEffect(() => {

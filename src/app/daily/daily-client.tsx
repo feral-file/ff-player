@@ -70,7 +70,6 @@ export default function DailyClient() {
           }
 
           const { delay } = getDelayTime(
-            dailies[0].displayTime,
             newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
           );
           if (dailies[0].previewURL) {
