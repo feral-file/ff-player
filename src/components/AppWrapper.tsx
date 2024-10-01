@@ -18,6 +18,7 @@ import DeviceManager from '@/utils/DeviceManager';
 
 import { AbstractIntlMessages, NextIntlClientProvider } from 'next-intl';
 import { getUserLocale } from '@/utils/locale';
+import SpatialNav from './spatial-nav/SpatialNav';
 
 const enum CastState {
   None, // Not casting
@@ -303,6 +304,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         }}>
         {children}
         <QrCodePopUp></QrCodePopUp>
+        <SpatialNav></SpatialNav>
       </div>
       <div
         style={{
