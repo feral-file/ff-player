@@ -10,12 +10,14 @@ import {
 } from '@/utils/constants';
 import { Daily } from '@/models';
 import { convertToTokenID } from '@/utils/indexer';
-import { AppSettings, TIMESTAMP_PER_HOUR } from '@/constants';
+import { TIMESTAMP_PER_HOUR } from '@/constants';
 import { CastingArtworkType } from '@/models/metric.model';
 import { useAppContext } from '@/context/AppContext';
+import { usePopUpContext } from '@/context/PopUpContext';
 
 export default function DailyClient() {
   const { context } = useAppContext();
+  const { setDisplayInfo } = usePopUpContext();
   const dailyRef = useRef<Daily>();
   const timeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
@@ -29,29 +31,14 @@ export default function DailyClient() {
   const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
     useState<boolean>(false);
 
-  const newDailyHour = context?.appRemoteConfig.new_daily_hour;
+  const newDailyHour = context.appRemoteConfig.new_daily_hour;
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-        (window as any).AppState?.postMessage(
-          JSON.stringify({
-            handler: 'backAbleChanged',
-            data: false,
-          })
-        );
-      } catch (error) {
-        console.error(error);
-      }
-    }
-
     // Handle cast daily
     async function handleCastDaily() {
       try {
-        const isRefreshDaily = await DailyService.isRefreshDailies(
-          newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
-        );
+        const isRefreshDaily =
+          await DailyService.isRefreshDailies(newDailyHour);
         if (isRefreshDaily) {
           dailies = DailyService.getDailies();
         }
@@ -67,11 +54,16 @@ export default function DailyClient() {
                 dailyRef.current.tokenID
               )
             );
+
+            // Set display info into PopUpContext
+            setDisplayInfo({
+              token: dailyRef.current.token,
+              ffArtworkID: dailyRef.current.artwork?.id, // Assume that daily should be FF artwork
+              dailyNote: dailyRef.current.note,
+            });
           }
 
-          const { delay } = getDelayTime(
-            newDailyHour ?? AppSettings.DEFAULT_NEW_DAILY_HOUR
-          );
+          const { delay } = getDelayTime(newDailyHour);
           if (dailies[0].previewURL) {
             setCastPreviewURL(dailies[0].previewURL);
             setIsLeeMucianExhibition(
@@ -131,7 +123,7 @@ export default function DailyClient() {
       <div style={{ width: '100%', height: '100%' }}>
         <ArtworkPlayer
           previewURL={castPreviewURL ?? ''}
-          artworkID={artworkID}
+          artworkID={artworkID ?? ''}
           castingType={CastingArtworkType.Daily}
           isCustomView={isLeeMucianExhibition}
         />

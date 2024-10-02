@@ -1,46 +1,24 @@
-export enum KeyCodes {
+export enum FlutterKeyEventID {
   escape = 0x0010000001b,
   goBack = 4294971397,
-  audioVolumeUp = 0x00100000a10,
-  audioVolumeDown = 0x00100000a0f,
-  audioVolumeMute = 0x00100000a11,
   enter = 0x0010000000d,
   select = 4294968588,
+  arrowDown = 0x00100000301,
+  arrowLeft = 0x00100000302,
+  arrowRight = 0x00100000303,
   arrowUp = 0x00100000304,
 }
 
-export const IgnoreKeyCodes = [
-  KeyCodes.escape,
-  KeyCodes.audioVolumeUp,
-  KeyCodes.audioVolumeDown,
-  KeyCodes.audioVolumeMute,
-];
-
-export enum KeyDown {
-  audioVolumeDown = 'AudioVolumeDown',
-  audioVolumeUp = 'AudioVolumeUp',
-  audioVolumeMute = 'AudioVolumeMute',
-  back = 'Back',
-  arrowUp = 'ArrowUp',
-  arrowLeft = 'ArrowLeft',
-  arrowRight = 'ArrowRight',
-  arrowDown = 'ArrowDown',
-  enter = 'Enter',
-  unidentified = 'Unidentified',
+export enum KeyboardEventKey {
+  Escape = 'Escape',
+  ArrowUp = 'ArrowUp',
+  ArrowLeft = 'ArrowLeft',
+  ArrowRight = 'ArrowRight',
+  ArrowDown = 'ArrowDown',
+  Enter = 'Enter',
+  Backspace = 'Backspace',
+  Unidentified = 'Unidentified',
 }
-
-export const IgnoreKeyDown = [
-  KeyDown.audioVolumeDown,
-  KeyDown.audioVolumeUp,
-  KeyDown.audioVolumeMute,
-  KeyDown.back,
-  KeyDown.arrowUp,
-  KeyDown.arrowLeft,
-  KeyDown.arrowRight,
-  KeyDown.arrowDown,
-  KeyDown.enter,
-  KeyDown.unidentified,
-];
 
 export enum LocalStorageItem {
   deviceId = 'device_id',
@@ -53,6 +31,7 @@ export enum LocalStorageItem {
   metricEvents = 'metricEvents',
   primaryAddress = 'primaryAddress',
   orientation = 'orientation',
+  artFraming = 'artFraming',
 }
 
 export enum Platform {
@@ -81,4 +60,13 @@ export const PUSH_METRIC_INTERVAL = 60 * 1000;
 
 export const SEND_LOG_INTERVAL = 10 * 1000;
 
-export const SEND_LOG_EVENT_NUMBER = 4;
+export const SEND_LOG_EVENT_NUMBER = 8;
+
+export const NO_YEAR_IN_TITLE_SERIES_IDS = [
+  // test
+  'd0167047-8c50-4f24-b889-58e60258f50b',
+  '76e78573-2703-497b-bd3b-0e7737efa697',
+  // live
+  '4e7c1eba-7c17-4c38-9454-36c72ae98249',
+  '0b95013a-599b-4af2-a0a4-fe13eff98e89',
+];

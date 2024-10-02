@@ -26,6 +26,10 @@ import { useSearchParams } from 'next/navigation';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import DeviceManager from '@/utils/DeviceManager';
 import useLoadScript from '@/services/LoadScripts';
+import useAppControls, {
+  AppControls,
+  ArtFraming,
+} from '@/services/AppControls';
 
 interface AppContextProps {
   children: ReactNode;
@@ -37,6 +41,7 @@ interface AppContextValue {
 
 interface AppConfigContext {
   websocketData: WebSocketMessage;
+  appControl: AppControls;
   isOnline: boolean;
   deviceRotation: DeviceRotation | null;
   appRemoteConfig: AppRemoteConfig;
@@ -80,11 +85,18 @@ export const AppProvider = ({ children }: AppContextProps) => {
     process.env.NEXT_PUBLIC_API_KEY ?? ''
   );
   const isOnline = useNetworkManger();
-  const deviceRotation = useDeviceRotation(websocketData.castInfo, rotation);
+  const appControl = useAppControls(); // Received setting changes from Popup
+
+  const deviceRotation = useDeviceRotation(
+    websocketData.castInfo,
+    rotation,
+    appControl.rotated
+  );
   const searchParams = useSearchParams();
 
   const contextConfig = {
     websocketData,
+    appControl,
     isOnline,
     deviceRotation,
     appRemoteConfig,
@@ -99,19 +111,28 @@ export const AppProvider = ({ children }: AppContextProps) => {
       if (platform === Platform.lg) {
         // If LG platform, wait for both webOS TV and webOS TV dev to be loaded
         if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
-          await DeviceManager.init();
-          initialOrientation().catch((error: unknown) => {
-            console.log('Error initial orientation', error);
-          });
+          await initDeviceConfigService();
         }
       } else {
-        await DeviceManager.init();
-        initialOrientation().catch((error: unknown) => {
-          console.log('Error initial orientation', error);
-        });
+        await initDeviceConfigService();
       }
     } catch (error) {
       console.log('Error init context', error);
+    }
+  };
+
+  const initDeviceConfigService = async () => {
+    try {
+      await DeviceManager.init();
+      initialOrientation().catch((error: unknown) => {
+        console.log('Error initial orientation', error);
+      });
+
+      initialArtFrameConfig().catch((error: unknown) => {
+        console.log('Error initial art frame config', error);
+      });
+    } catch (error) {
+      console.log('Error init device manager', error);
     }
   };
 
@@ -128,6 +149,21 @@ export const AppProvider = ({ children }: AppContextProps) => {
     } catch (error) {
       console.log('Error initial orientation', error);
       setRotation(defaultRotation());
+    }
+  };
+
+  const initialArtFrameConfig = async () => {
+    try {
+      const data = await DeviceManager.getArtFrameConfig();
+      if (data === undefined) {
+        appControl.setFrameConfig(ArtFraming.FitToScreen);
+        return;
+      }
+
+      appControl.setFrameConfig(data);
+    } catch (error) {
+      console.log('Error initial art frame config', error);
+      appControl.setFrameConfig(ArtFraming.FitToScreen);
     }
   };
 
@@ -150,7 +186,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
         handlePlatformEvent: Config.handlePlatformEvent,
       };
 
-      const pl = searchParams.get('platform') ?? '';
+      const pl = searchParams?.get('platform') ?? '';
       if (pl) {
         localStorage.setItem('platform', pl);
         setPlatform(pl as Platform);
@@ -202,6 +238,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
       value={{
         context: {
           websocketData,
+          appControl,
           isOnline,
           deviceRotation,
           appRemoteConfig,

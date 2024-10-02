@@ -14,6 +14,7 @@ export interface Artwork {
   name?: string;
   previewURI?: string;
   thumbnailURI?: string;
+  mintedAt?: string;
   series?: Series;
   metadata?: ArtworkMetadata;
   artistAlias?: string;

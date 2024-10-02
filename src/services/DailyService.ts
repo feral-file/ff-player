@@ -138,6 +138,7 @@ class DailyService {
       id: '',
       tokenName: '#1',
       tokenID: '339348595130070749814751437599411258966098496',
+      note: '',
     };
   }
 
