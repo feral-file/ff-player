@@ -1,4 +1,3 @@
-import { AppSettings } from '@/constants';
 import axios from 'axios';
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class

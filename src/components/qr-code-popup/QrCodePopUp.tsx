@@ -10,7 +10,7 @@ import styles from './styles.module.scss';
 import { QrCodeSkeleton } from '../skeleton/skeleton';
 import {
   AppSettings,
-  KeyDown,
+  KeyboardEventKey,
   TIMESTAMP_PER_HOUR,
   TIMESTAMP_PER_MINUTE,
 } from '@/constants';
@@ -170,7 +170,7 @@ const QrCodePopUp = () => {
       if (now - lastEventTime.current > minInterval) {
         lastEventTime.current = now;
         // Toggle QR code when user press Enter
-        if ((event.key as KeyDown) === KeyDown.enter) {
+        if ((event.key as KeyboardEventKey) === KeyboardEventKey.Enter) {
           console.log('Toggle QR Code');
           setIsShowComponent(!isShowComponent);
         }
