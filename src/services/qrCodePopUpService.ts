@@ -1,25 +1,21 @@
 export const getDelayTime = (
-  dailyDisplayTime: string,
   newDailyHour: number
 ): { delay: number; duration: number } => {
   const now = Date.now();
-  const displayDateInUTC = new Date(dailyDisplayTime).toISOString();
-  const expectedDateOnly = displayDateInUTC.split('T')[0];
+  let nextDisplayTime: number;
 
-  // Set hours to 6:00 AM for the expected date only
-  const currentDisplayTime = new Date(expectedDateOnly); // Expected date only in local timezone
-  currentDisplayTime.setHours(newDailyHour, 0, 0, 0); // Set time as configured new daily hour
+  const dailyRenewAt = new Date();
+  dailyRenewAt.setHours(newDailyHour, 0, 0, 0); // Reset daily time every day
 
-  const nextDisplayTime = currentDisplayTime.setDate(
-    currentDisplayTime.getDate() + 1
-  );
-
-  const previousDisplayTime = currentDisplayTime.setDate(
-    currentDisplayTime.getDate() - 1
-  );
+  // If after 6AM
+  if (now > dailyRenewAt.getTime()) {
+    nextDisplayTime = dailyRenewAt.setDate(dailyRenewAt.getDate() + 1);
+  } else {
+    nextDisplayTime = dailyRenewAt.getTime();
+  }
 
   return {
     delay: nextDisplayTime - now,
-    duration: nextDisplayTime - previousDisplayTime,
+    duration: 86400000, // 24 hours
   };
 };
