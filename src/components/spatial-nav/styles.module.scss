@@ -1,3 +1,14 @@
+.wrapper {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2em;
+  border: 1px solid #ccc;
+}
+
 .buttonStyle {
   padding: 20px;
   font-size: 18px;
@@ -10,5 +21,20 @@
 
 .focusedButton {
   @extend .buttonStyle;
-  background: '#ccc';
+  background: #ccc;
+}
+
+.blink {
+  animation: blink 1s infinite;
+}
+@keyframes blink {
+  0% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }

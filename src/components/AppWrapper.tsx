@@ -303,7 +303,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        <QrCodePopUp></QrCodePopUp>
+        {/* <QrCodePopUp></QrCodePopUp> */}
         <SpatialNav></SpatialNav>
       </div>
       <div
