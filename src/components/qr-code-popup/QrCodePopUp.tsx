@@ -110,7 +110,7 @@ const QrCodePopUp = () => {
       setIsShowComponent(true);
       calculateTimer();
 
-      intervalIdRef.current = setInterval(calculateTimer, 1000);
+      intervalIdRef.current = setInterval(calculateTimer, 60 * 1000);
     } else {
       setIsShowComponent(false);
     }
