@@ -39,8 +39,15 @@ export class KeyEvent extends PlatformEventReceiver {
       EventEmitter.emit(Event.escape);
     }
 
-    if ([KeyCodes.arrowUp.toString()].includes(keyId)) {
-      EventEmitter.emit(Event.sendLog);
+    if (
+      [
+        KeyCodes.arrowUp.toString(),
+        KeyCodes.arrowDown.toString(),
+        KeyCodes.arrowLeft.toString(),
+        KeyCodes.arrowRight.toString(),
+      ].includes(keyId)
+    ) {
+      // EventEmitter.emit(Event.sendLog);
     }
   }
 }

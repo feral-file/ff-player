@@ -4,8 +4,9 @@ import {
   init,
   useFocusable,
   FocusContext,
+  setKeyMap,
 } from '@noriginmedia/norigin-spatial-navigation';
-import { KeyDown } from '@/constants';
+import { KeyCodes, KeyDown } from '@/constants';
 
 const SpatialNav = () => {
   const { ref, focusKey, focusSelf } = useFocusable({ forceFocus: true });
@@ -14,12 +15,32 @@ const SpatialNav = () => {
     return init({
       debug: true,
       visualDebug: false,
+      shouldUseNativeEvents: true,
     });
   }, []);
 
   // Set default focus
   useEffect(() => {
+    setKeyMap({
+      left: 37, // ArrowLeft
+      up: 38, // ArrowUp
+      right: 39, // ArrowRight
+      down: 40, // ArrowDown
+    });
+
     focusSelf();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      console.log('keydown', event.key, event.keyCode);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [focusSelf]);
 
   return (
@@ -65,6 +86,7 @@ const FocusableButton: React.FC<{
     if (focused) {
       // Handle click/press OK event
       const handleKeyDown = (event: KeyboardEvent) => {
+        console.log('keydown', event.key);
         const now = Date.now();
         const minInterval = 200; // Minimum interval between events in milliseconds
 

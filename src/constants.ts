@@ -6,6 +6,9 @@ export enum KeyCodes {
   audioVolumeMute = 0x00100000a11,
   enter = 0x0010000000d,
   select = 4294968588,
+  arrowDown = 0x00100000301,
+  arrowLeft = 0x00100000302,
+  arrowRight = 0x00100000303,
   arrowUp = 0x00100000304,
 }
 
