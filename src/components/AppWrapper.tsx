@@ -18,6 +18,7 @@ import DeviceManager from '@/utils/DeviceManager';
 
 import { AbstractIntlMessages, NextIntlClientProvider } from 'next-intl';
 import { getUserLocale } from '@/utils/locale';
+import DisplayInfo from './display-info/DisplayInfo';
 
 const enum CastState {
   None, // Not casting
@@ -302,9 +303,10 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        <QrCodePopUp></QrCodePopUp>
+        {/* <QrCodePopUp></QrCodePopUp> */}
+        <DisplayInfo></DisplayInfo>
       </div>
-      <div
+      {/* <div
         style={{
           position: 'fixed',
           width: '100%',
@@ -313,7 +315,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           background: 'transparent',
           top: 0,
           left: 0,
-        }}></div>
+        }}></div> */}
     </NextIntlClientProvider>
   ) : (
     <></>
