@@ -12,12 +12,12 @@ import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { CastCommand, Orientation } from '@/utils/types';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useRef, useState } from 'react';
-import QrCodePopUp from './qr-code-popup/QrCodePopUp';
 import { uploadMetricEventsFromLocalStorage } from '@/services/metric.service';
 import DeviceManager from '@/utils/DeviceManager';
 
 import { AbstractIntlMessages, NextIntlClientProvider } from 'next-intl';
 import { getUserLocale } from '@/utils/locale';
+import ArtDiscovery from './art-discovery/ArtDiscovery';
 
 const enum CastState {
   None, // Not casting
@@ -184,19 +184,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   useEffect(() => {
     console.log('[CAST] process cast info:', JSON.stringify(castInfo));
     if (castInfo) {
-      const disableBackChanged = () => {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-          (window as any).AppState?.postMessage(
-            JSON.stringify({
-              handler: 'backAbleChanged',
-              data: true,
-            })
-          );
-        } catch (error) {
-          console.error(error);
-        }
-      };
       const handleCastCommand = () => {
         switch (castInfo.castCommand) {
           case CastCommand.castListArtwork: {
@@ -210,7 +197,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             } else {
               router.replace('/playlist');
             }
-            disableBackChanged();
             break;
           }
 
@@ -225,7 +211,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             } else {
               router.replace('/exhibitions');
             }
-            disableBackChanged();
 
             break;
           }
@@ -241,7 +226,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             } else {
               router.replace('/daily');
             }
-            disableBackChanged();
             break;
           }
 
@@ -311,18 +295,18 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        {hasLocalStorage && <QrCodePopUp></QrCodePopUp>}
+        {hasLocalStorage && <ArtDiscovery></ArtDiscovery>}
+        <div
+          style={{
+            position: 'absolute',
+            width: '100%',
+            height: '100%',
+            zIndex: 8,
+            background: 'transparent',
+            top: 0,
+            left: 0,
+          }}></div>
       </div>
-      <div
-        style={{
-          position: 'fixed',
-          width: '100%',
-          height: '100%',
-          zIndex: 9999,
-          background: 'transparent',
-          top: 0,
-          left: 0,
-        }}></div>
     </NextIntlClientProvider>
   ) : (
     <></>

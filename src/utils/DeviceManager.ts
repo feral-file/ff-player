@@ -8,6 +8,7 @@ import {
   WebConfigService,
 } from './platform';
 import { DeviceNamePrefix, LocalStorageItem, Platform } from '@/constants';
+import { ArtFraming } from '@/services/AppControls';
 
 class DeviceManager {
   static instance = new DeviceManager();
@@ -146,6 +147,18 @@ class DeviceManager {
 
   public async getOrientation(): Promise<string | null> {
     return await this.getFromLocalStorage(LocalStorageItem.orientation);
+  }
+
+  public setArtFrameConfig(artFrameConfig: ArtFraming): void {
+    this.setToLocalStorage(
+      LocalStorageItem.artFraming,
+      artFrameConfig.toString()
+    );
+  }
+
+  public async getArtFrameConfig(): Promise<ArtFraming | undefined> {
+    const config = await this.getFromLocalStorage(LocalStorageItem.artFraming);
+    return config ? (parseInt(config) as ArtFraming) : undefined;
   }
 
   public async getDeviceInfo() {

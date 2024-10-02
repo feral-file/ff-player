@@ -3,7 +3,6 @@
 import { Exhibition, ExhibitionType, Post, Artwork } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import styles from './exhibition.module.scss';
-import './exhibition.module.scss';
 import { CastCommand, ExhibitionCatalog, ViewMode } from '@/utils/types';
 import Carousel from './components/carousel/carousel';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
@@ -12,6 +11,7 @@ import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
 import { formatArtworkIndexID } from '@/utils/indexer';
 import { CastingArtworkType } from '@/models/metric.model';
+import { usePopUpContext } from '@/context/PopUpContext';
 
 const ExhibitionHall = () => {
   const { context } = useAppContext();
@@ -20,6 +20,8 @@ const ExhibitionHall = () => {
     screenRatio: 1,
     viewMode: ViewMode.landscape,
   };
+
+  const { setDisplayInfo } = usePopUpContext();
 
   const [exhibitionID, setExhibitionID] = useState<string | undefined>();
   const [catalogID, setCatalogID] = useState<string | undefined>();
@@ -59,6 +61,11 @@ const ExhibitionHall = () => {
 
     artwork.previewURI = seriesService.current.getArtworkPreview(artwork);
     setArtwork(artwork);
+
+    setDisplayInfo({
+      token: undefined,
+      ffArtworkID: artwork.id,
+    });
 
     // Set mixpanel metadata
     if (artwork !== artworkRef.current) {
@@ -136,12 +143,15 @@ const ExhibitionHall = () => {
       switch (screen) {
         case ExhibitionCatalog.home:
           setArtwork(undefined);
+          setDisplayInfo(undefined);
           break;
         case ExhibitionCatalog.curatorNote:
           setPostIndex(0);
+          setDisplayInfo(undefined);
           break;
         case ExhibitionCatalog.resource:
           if (catalogID) getPostIndexByID(catalogID);
+          setDisplayInfo(undefined);
           break;
         case ExhibitionCatalog.artwork:
           if (catalogID && exhibitionDetail) {
@@ -243,7 +253,7 @@ const ExhibitionHall = () => {
             <ArtworkPlayer
               key={artwork.id}
               previewURL={artwork.previewURI}
-              artworkID={artworkID}
+              artworkID={artworkID ?? ''}
               castingType={CastingArtworkType.Exhibition}
               isCustomView={
                 exhibitionDetail.contracts &&

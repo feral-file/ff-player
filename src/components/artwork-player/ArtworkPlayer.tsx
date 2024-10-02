@@ -19,6 +19,8 @@ import { useAppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
 import { appendMetricEventToLocalStorage } from '@/services/metric.service';
 import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
+import { ArtFraming } from '@/services/AppControls';
+import useArtDisplaySetting from '@/services/ArtworkDisplaySetting';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -27,13 +29,16 @@ const ArtworkPlayer = ({
   isCustomView,
 }: {
   previewURL: string;
-  artworkID?: string;
+  artworkID: string;
   castingType?: CastingArtworkType;
   isCustomView?: boolean;
   keyboardCode?: number;
 }) => {
   const { context } = useAppContext();
+  const { artDisplaySetting } = useArtDisplaySetting();
   const [previewType, setPreviewType] = useState<string | null>(null);
+  const [displaySoftwareURL, setDisplaySoftwareURL] =
+    useState<string>(previewURL);
   const [loading, setLoading] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
@@ -205,6 +210,25 @@ const ArtworkPlayer = ({
     }
   }, [context, previewType]);
 
+  useEffect(() => {
+    if (!artDisplaySetting || !previewURL) {
+      return;
+    }
+
+    if (previewType === SeriesPreviewHTMLTag.iframe) {
+      const displayMode =
+        artDisplaySetting.frameConfig === ArtFraming.CropToFill
+          ? 'crop'
+          : 'fit';
+      const queryParam = `&display_mode=${displayMode}`;
+      const url = new URL(previewURL);
+      url.search += queryParam;
+      setDisplaySoftwareURL(url.toString());
+    } else {
+      setDisplaySoftwareURL(previewURL);
+    }
+  }, [artDisplaySetting, previewType, previewURL]);
+
   return (
     <div
       style={{
@@ -214,6 +238,7 @@ const ArtworkPlayer = ({
         backgroundColor: '#000000',
         justifyContent: 'center',
         position: 'relative',
+        transform: `rotate(${(artDisplaySetting?.rotateRadius ?? 0).toString()}deg)`,
       }}>
       {(previewType === null || loading) && <Loading />}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (
@@ -222,6 +247,14 @@ const ArtworkPlayer = ({
           className={isCustomView ? styles.customRendering : ''}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit:
+                artDisplaySetting?.frameConfig === ArtFraming.FitToScreen
+                  ? 'contain'
+                  : 'cover',
+            }}
             className={styles.image}
             src={previewURL}
             alt="Preview"
@@ -241,7 +274,14 @@ const ArtworkPlayer = ({
       {previewURL && previewType === SeriesPreviewHTMLTag.video && (
         <video
           ref={videoRef}
-          style={{ width: '100%', height: '100%' }}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit:
+              artDisplaySetting?.frameConfig === ArtFraming.FitToScreen
+                ? 'contain'
+                : 'cover',
+          }}
           autoPlay
           loop
           playsInline
@@ -252,12 +292,12 @@ const ArtworkPlayer = ({
           <source src={previewURL} onLoadedData={loadedSource}></source>
         </audio>
       )}
-      {previewURL &&
+      {displaySoftwareURL &&
         (previewType === SeriesPreviewHTMLTag.iframe ||
           previewType === SeriesPreviewHTMLTag.iframePDF) && (
           <iframe
             style={{ width: '100%', height: '100%' }}
-            src={previewURL}
+            src={displaySoftwareURL}
             onLoad={loadedSource}
             sandbox="allow-same-origin allow-scripts"></iframe>
         )}

@@ -84,13 +84,10 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
             }
 
             if (_isBackAble &&
-                event.logicalKey.keyId == LogicalKeyboardKey.escape.keyId) {
-              if (event is KeyDownEvent) {
-                unawaited(_webViewController.runJavaScriptReturningResult(
-                    'KeyEvent.handlePlatformEvent("${event.logicalKey.keyId}_'
-                    '${event.logicalKey.keyLabel}");'));
-              }
-
+                [
+                  LogicalKeyboardKey.escape.keyId,
+                  LogicalKeyboardKey.goBack.keyId
+                ].contains(event.logicalKey.keyId)) {
               log.info('KeyEventResult.handled');
               return KeyEventResult.handled;
             }

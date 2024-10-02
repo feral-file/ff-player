@@ -1,0 +1,162 @@
+#optionsButton {
+  background-color: red;
+}
+
+.main-content {
+  --lh: 1.4em;
+  line-height: var(--lh);
+  display: flex;
+  flex-direction: column;
+  row-gap: 1em;
+  max-height: 85vh;
+  cursor: default;
+  font-size: 1em;
+  position: relative;
+  margin: 2em;
+  margin-bottom: 0.5em;
+  max-width: 50em;
+  border-radius: 1em;
+  scrollbar-color: #d9d9d9 transparent;
+
+  .active {
+    border: 0.15em solid #ffffff;
+    min-height: 20em;
+  }
+
+  .item {
+    width: 100%;
+    border-radius: 1em;
+    background-color: #2e2e2e;
+    color: #ffffff;
+    padding: 2em;
+
+    .optionsDrawerContainer {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 45%;
+      z-index: 1;
+    }
+
+    .optionsButtonLeaf {
+      position: absolute;
+      right: 1em;
+      top: 1em;
+    }
+  }
+
+  .full-artwork-info {
+    display: flex;
+    flex-direction: column;
+    row-gap: 1em;
+
+    .scrollableSection {
+      outline: none !important;
+      max-height: 60vh;
+      overflow-y: auto;
+      .dailyNote {
+        background-color: #000000;
+        border-radius: 0.5em;
+        margin-top: 2em;
+        padding: 1.6em;
+      }
+
+      .artistSection {
+        padding-top: 2em;
+        padding-bottom: 2em;
+        display: flex;
+        flex-direction: column;
+        row-gap: 1em;
+        .subTitle {
+          color: var(--Au-Grey, #a0a0a0);
+          font-size: 0.8em;
+        }
+        .avatar {
+          width: 20em;
+          height: 20em;
+          margin-bottom: 1em;
+          img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+          }
+        }
+        .artistName {
+          font-size: 1.8em;
+          font-weight: bold;
+          padding-bottom: 1em;
+        }
+        .subContent {
+          color: #a0a0a0;
+          font-size: 0.8em;
+          font-style: italic;
+          padding-bottom: 1em;
+        }
+      }
+
+      .exhibitionSection {
+        border-top: 1px solid var(--Au-Grey, #a0a0a0);
+        padding-top: 2em;
+        padding-bottom: 2em;
+        display: flex;
+        flex-direction: column;
+        row-gap: 1em;
+        .subTitle {
+          color: var(--Au-Grey, #a0a0a0);
+          font-size: 0.8em;
+        }
+        .exhThumbnail {
+          width: 100%;
+          height: 25em;
+          margin-bottom: 1em;
+          img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+          }
+        }
+        .exhTopInfo {
+          display: flex;
+          width: 100%;
+          padding-bottom: 1em;
+          .exhibitionName {
+            font-size: 1.8em;
+            font-weight: bold;
+            padding-bottom: 0.5em;
+            padding-right: 0.5em;
+            width: 50%;
+            line-height: 120%;
+          }
+          .exhInfo {
+            width: 50%;
+            color: var(--Au-Grey, #a0a0a0);
+            font-size: 0.8em;
+          }
+        }
+      }
+    }
+
+    .collapse {
+      --max-lines: 16.25;
+      max-height: calc(
+        (var(--lh) * var(--max-lines)) - 0.28em
+      ); // 4px gap of the subtext
+      overflow-y: hidden;
+      position: relative;
+    }
+
+    .control-container {
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      column-gap: 0.5em;
+      color: #8f8d8c;
+      width: fit-content;
+    }
+  }
+
+  .short-artwork-info {
+    width: 100%;
+  }
+}

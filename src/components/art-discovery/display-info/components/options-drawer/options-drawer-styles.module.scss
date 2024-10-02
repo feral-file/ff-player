@@ -1,0 +1,64 @@
+.optionsDrawer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  background-color: white;
+  color: black;
+  height: 100%;
+  padding: 1em 1em 2em 2em;
+  border-radius: 1em;
+  gap: 2.25em;
+  box-shadow: 0px 0.2em 0.2em 0px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(0.35em);
+
+  .listOptions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    width: 100%;
+    .optionItemOutline {
+      border-radius: 2.35em;
+      border: 0.05em solid transparent;
+      height: 3.2em;
+      width: 12.5em;
+      display: flex;
+      align-items: center;
+    }
+    .optionItemOutline.focused {
+      border-color: #000000;
+      padding: 0.3em;
+    }
+    .optionItem {
+      border: none;
+      display: flex;
+      align-items: center;
+      column-gap: 1em;
+      height: 2.7em;
+      width: 100%;
+      border-radius: 2.35em;
+      .iconWrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4.5em;
+        background: #4a4a4a;
+        width: 2.45em;
+        height: 2.45em;
+        img {
+          width: 1.15em;
+          height: 1.15em;
+        }
+      }
+      p {
+        font-size: 1em;
+        font-weight: 700;
+      }
+    }
+    .optionItem.selected {
+      background-color: #b9e5ff;
+      padding: 0;
+      padding-left: 0.3em;
+      padding-right: 1em;
+    }
+  }
+}
