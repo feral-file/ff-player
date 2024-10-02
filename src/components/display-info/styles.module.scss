@@ -8,6 +8,9 @@
     flex-direction: column;
     row-gap: 20px;
     padding: 40px;
+    .active {
+      border: 1px solid #ffffff;
+    }
     .item {
       width: 100%;
       border-radius: 10px;
@@ -15,6 +18,26 @@
       opacity: 0.8;
       color: #ffffff;
       padding: 20px;
+    }
+    .full-artwork-info {
+      display: flex;
+      flex-direction: column;
+      row-gap: 10px;
+      .read-more-container {
+        display: flex;
+        justify-content: flex-start;
+        align-items: center;
+        column-gap: 10px;
+      }
+    }
+    .short-display-control {
+      display: flex;
+      justify-content: space-between;
+      .left-content {
+        display: flex;
+        align-items: center;
+        column-gap: 10px;
+      }
     }
   }
 }

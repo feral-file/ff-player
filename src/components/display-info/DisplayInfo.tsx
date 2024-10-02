@@ -11,7 +11,12 @@ const DisplayInfo = () => {
           <p>Shunsuke Takawo</p>
           <p>Flows of Pattern 2024</p>
         </div>
-        <div className={clsx(styles.item, styles['full-artwork-info'])}>
+        <div
+          className={clsx(
+            styles.item,
+            styles['full-artwork-info'],
+            styles.active
+          )}>
           <h1>Daily</h1>
           <hr />
           <div>
@@ -37,15 +42,42 @@ const DisplayInfo = () => {
             of social transformation through aesthetics as well as his 1969
             work, Simulated Color Mosaic.
           </p>
-          <div>
+          <div className={styles['read-more-container']}>
+            <img src={'/images/read-more.svg'} alt="read more" />
             <p>Press OK to Read More</p>
           </div>
         </div>
         <div className={clsx(styles.item, styles['short-display-control'])}>
-          <p>cccc</p>
+          <div className={styles['left-content']}>
+            <img src={'/images/ff-icon.svg'} alt="icon" />
+            <img src="" alt="" />
+            <p>Next Artwork: 10min</p>
+          </div>
+          <div>
+            <p>Press [back] to Hide</p>
+          </div>
         </div>
         <div className={clsx(styles.item, styles['full-display-control'])}>
-          <p>dddd</p>
+          <div>
+            <img src={'/images/ff-logo.svg'} alt="logo" />
+          </div>
+          <div>
+            <div>
+              <div>
+                <img src={'/images/display-preferences-white.svg'} alt="" />
+                <p>Display Preferences</p>
+              </div>
+              <div>
+                <img src={'/images/display-rotation-white.svg'} alt="" />
+                <p>Display Rotation</p>
+              </div>
+              <div>
+                <img src={'/images/pair-mobil-app-white.svg'} alt="" />
+                <p>Pair Mobile App</p>
+              </div>
+            </div>
+            <div></div>
+          </div>
         </div>
       </div>
     </div>
