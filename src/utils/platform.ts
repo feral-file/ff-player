@@ -1,8 +1,8 @@
-import { KeyCodes, LocalStorageItem } from '@/constants';
+import { LocalStorageItem } from '@/constants';
 import DeviceManager from './DeviceManager';
 import { v4 as uuidv4 } from 'uuid';
-import { Event, EventEmitter } from './EventEmitter';
 import { BrowserInfo, detect } from 'detect-browser';
+import { keyEventHandler } from '@/services/keyEventHandler';
 
 interface DeviceInfo {
   modelName: string;
@@ -26,22 +26,7 @@ class PlatformEventReceiver {
 export class KeyEvent extends PlatformEventReceiver {
   static override handlePlatformEvent(event: string) {
     super.handlePlatformEvent(event);
-    const [keyId, keyLabel] = event.split('_');
-    console.log(`Handling key event: ${keyId} - ${keyLabel}`);
-    if (
-      [KeyCodes.enter.toString(), KeyCodes.select.toString()].includes(keyId)
-    ) {
-      EventEmitter.emit(Event.toggleQrCode);
-    }
-    if (
-      [KeyCodes.escape.toString(), KeyCodes.goBack.toString()].includes(keyId)
-    ) {
-      EventEmitter.emit(Event.escape);
-    }
-
-    if ([KeyCodes.arrowUp.toString()].includes(keyId)) {
-      EventEmitter.emit(Event.sendLog);
-    }
+    keyEventHandler(event);
   }
 }
 

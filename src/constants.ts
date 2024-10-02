@@ -1,46 +1,20 @@
-export enum KeyCodes {
+export enum FlutterKeyEventID {
   escape = 0x0010000001b,
   goBack = 4294971397,
-  audioVolumeUp = 0x00100000a10,
-  audioVolumeDown = 0x00100000a0f,
-  audioVolumeMute = 0x00100000a11,
   enter = 0x0010000000d,
   select = 4294968588,
   arrowUp = 0x00100000304,
 }
 
-export const IgnoreKeyCodes = [
-  KeyCodes.escape,
-  KeyCodes.audioVolumeUp,
-  KeyCodes.audioVolumeDown,
-  KeyCodes.audioVolumeMute,
-];
-
-export enum KeyDown {
-  audioVolumeDown = 'AudioVolumeDown',
-  audioVolumeUp = 'AudioVolumeUp',
-  audioVolumeMute = 'AudioVolumeMute',
-  back = 'Back',
-  arrowUp = 'ArrowUp',
-  arrowLeft = 'ArrowLeft',
-  arrowRight = 'ArrowRight',
-  arrowDown = 'ArrowDown',
-  enter = 'Enter',
-  unidentified = 'Unidentified',
+export enum KeyboardEventKey {
+  Escape = 'Escape',
+  ArrowUp = 'ArrowUp',
+  ArrowLeft = 'ArrowLeft',
+  ArrowRight = 'ArrowRight',
+  ArrowDown = 'ArrowDown',
+  Enter = 'Enter',
+  Unidentified = 'Unidentified',
 }
-
-export const IgnoreKeyDown = [
-  KeyDown.audioVolumeDown,
-  KeyDown.audioVolumeUp,
-  KeyDown.audioVolumeMute,
-  KeyDown.back,
-  KeyDown.arrowUp,
-  KeyDown.arrowLeft,
-  KeyDown.arrowRight,
-  KeyDown.arrowDown,
-  KeyDown.enter,
-  KeyDown.unidentified,
-];
 
 export enum LocalStorageItem {
   deviceId = 'device_id',
