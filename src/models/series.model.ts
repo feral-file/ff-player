@@ -1,5 +1,5 @@
-import { Metadata } from "next";
-import { Artwork, ArtworkModel } from "./artwork.model";
+import { Artwork, ArtworkModel } from './artwork.model';
+import { User } from './user.model';
 
 export interface Series {
   id: string;
@@ -17,7 +17,8 @@ export interface Series {
   thumbnailURI?: string;
   previewFile?: FileInfo;
   artworks?: Artwork[];
-  metadata?: Metadata;
+  metadata?: SeriesMetadata;
+  artist: User;
 
   // Custom fields
   firstArtwork?: Artwork;
@@ -32,4 +33,8 @@ export interface FileInfo {
   uri?: string;
   status?: string;
   version?: string;
+}
+
+interface SeriesMetadata {
+  mediumDescription: string[];
 }

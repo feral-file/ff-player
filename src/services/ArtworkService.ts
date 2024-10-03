@@ -7,6 +7,21 @@ import { removeArtistAliasSuffixes } from '@/utils/ui/formatAlias';
 const LIMIT_PER_PAGE = 50;
 
 class ArtworkService {
+  public async getArtworkDetail(artworkID: string): Promise<Artwork | null> {
+    try {
+      const response = await axiosInstance.get(
+        `/api/artworks/${artworkID}?includeArtist=true`
+      );
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const artwork = response.data.result as Artwork;
+      return artwork;
+    } catch (error) {
+      console.log('[API] Error getting artwork detail:', JSON.stringify(error));
+    }
+
+    return null;
+  }
+
   public async getFeaturedArtworks(): Promise<Artwork[]> {
     const response = await axiosInstance.get(`/api/artworks/featured`);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access

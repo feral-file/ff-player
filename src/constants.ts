@@ -82,3 +82,12 @@ export const PUSH_METRIC_INTERVAL = 60 * 1000;
 export const SEND_LOG_INTERVAL = 10 * 1000;
 
 export const SEND_LOG_EVENT_NUMBER = 4;
+
+export const NO_YEAR_IN_TITLE_SERIES_IDS = [
+  // test
+  'd0167047-8c50-4f24-b889-58e60258f50b',
+  '76e78573-2703-497b-bd3b-0e7737efa697',
+  // live
+  '4e7c1eba-7c17-4c38-9454-36c72ae98249',
+  '0b95013a-599b-4af2-a0a4-fe13eff98e89',
+];

@@ -3,7 +3,6 @@
 import { Exhibition, ExhibitionType, Post, Artwork } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import styles from './exhibition.module.scss';
-import './exhibition.module.scss';
 import { CastCommand, ExhibitionCatalog, ViewMode } from '@/utils/types';
 import Carousel from './components/carousel/carousel';
 import { ExhibitionService, SeriesService, PostService } from '@/services';

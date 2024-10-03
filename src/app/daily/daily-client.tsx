@@ -139,7 +139,9 @@ export default function DailyClient() {
         <ArtDiscovery
           castingType={CastingArtworkType.Daily}
           isCastingSingleArt={true}
-          artwork={dailyRef.current?.artwork}></ArtDiscovery>
+          token={dailyRef.current?.token}
+          ffArtworkID={dailyRef.current?.artwork?.id}
+          dailyNote={dailyRef.current?.note}></ArtDiscovery>
       </div>
     </>
   );

@@ -2,52 +2,104 @@
 
 import { clsx } from 'clsx';
 import styles from './info-styles.module.scss';
-import { Artwork } from '@/models';
+import { Artwork, IndexerToken } from '@/models';
+import { useEffect, useRef, useState } from 'react';
+import ArtworkService from '@/services/ArtworkService';
 
 // Display information overlay, detail for daily artwork casting only
-const DisplayInfo: React.FC<{ artwork: Artwork }> = ({ artwork }) => {
+const DisplayInfo: React.FC<{
+  token: IndexerToken;
+  isDaily: boolean;
+  ffArtworkID?: string;
+  dailyNote?: string;
+}> = ({ token, isDaily, ffArtworkID, dailyNote }) => {
+  const [onFocused, setOnFocused] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [mediumDescription, setMediumDescription] = useState<string[]>([]);
+  const [artwork, setArtwork] = useState<Artwork | undefined>();
+  const artworkService = useRef(new ArtworkService());
+
+  const toggleExpand = () => {
+    setIsExpanded(!isExpanded);
+  };
+
+  useEffect(() => {
+    if (!isDaily) {
+      setOnFocused(false); // For non-daily artwork, always collapsed
+    }
+  }, [isDaily]);
+
+  useEffect(() => {
+    if (ffArtworkID) {
+      const fetchArtwork = async () => {
+        try {
+          const artwork =
+            await artworkService.current.getArtworkDetail(ffArtworkID);
+          if (artwork) {
+            setArtwork(artwork);
+            setMediumDescription(
+              artwork.series?.metadata?.mediumDescription || []
+            );
+          }
+        } catch (error) {
+          console.log('Error fetching artwork detail', JSON.stringify(error));
+        }
+      };
+
+      fetchArtwork();
+    }
+  }, [ffArtworkID]);
+
   return (
     <div className={styles['main-content']}>
-      <div className={clsx(styles.item, styles['short-artwork-info'])}>
-        <p>Shunsuke Takawo</p>
-        <p>Flows of Pattern 2024</p>
-      </div>
-      <div
-        className={clsx(
-          styles.item,
-          styles['full-artwork-info'],
-          styles.active
-        )}>
-        <h1>Daily</h1>
-        <hr />
-        <div>
+      {onFocused ? (
+        // Expanded
+        <div
+          className={clsx(
+            styles.item,
+            styles['full-artwork-info'],
+            styles.active
+          )}>
+          <h1>Daily</h1>
+          <hr />
           <div>
-            <p>Shunsuke Takawo</p>
-            <p>Flows of Pattern</p>
+            <div>
+              <p>{token.asset.metadata.project.latest.artistName}</p>
+              <p>{token.asset.metadata.project.latest.title}</p>
+            </div>
           </div>
-          <div></div>
+          <div className={clsx(styles.scrollableSection, styles.collapse)}>
+            <div>
+              {mediumDescription.map((desc, index) => (
+                <p key={index}>{desc}</p>
+              ))}
+            </div>
+            <div>
+              <p
+                dangerouslySetInnerHTML={{
+                  __html: artwork?.series?.description || '',
+                }}></p>
+            </div>
+            <div className={styles.dailyNote}>
+              <p dangerouslySetInnerHTML={{ __html: dailyNote || '' }}></p>
+            </div>
+          </div>
+
+          <div className={styles['read-more-container']}>
+            <img src={'/images/read-more.svg'} alt="read more" />
+            <p>
+              Press <span style={{ fontStyle: 'italic' }}>[OK]</span> to Read
+              More
+            </p>
+          </div>
         </div>
-        <div>
-          <p>
-            Custom software (color, silent) Dimensions variable, vertical
-            Generative, non-interactive JavaScript (p5.js), HTML, CSS
-          </p>
+      ) : (
+        // Collapsed
+        <div className={clsx(styles.item, styles['short-artwork-info'])}>
+          <p>{token.asset.metadata.project.latest.artistName}</p>
+          <p>{token.asset.metadata.project.latest.title}</p>
         </div>
-        <p>
-          Shunsuke Takawo regards geometrical motifs as well-suited to
-          reflecting daily life and expressing his inner world through
-          programming. For many years, he has explored static elements such as
-          color, shape, harmony, shadow, density, layering, and texture, while
-          his explorations of composition are rooted in his mothers quilting.
-          His work, Flows of Pattern, is influenced by Hiroshi Kawanos vision of
-          social transformation through aesthetics as well as his 1969 work,
-          Simulated Color Mosaic.
-        </p>
-        <div className={styles['read-more-container']}>
-          <img src={'/images/read-more.svg'} alt="read more" />
-          <p>Press OK to Read More</p>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
