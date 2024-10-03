@@ -13,6 +13,7 @@ import { convertToTokenID } from '@/utils/indexer';
 import { AppSettings, TIMESTAMP_PER_HOUR } from '@/constants';
 import { CastingArtworkType } from '@/models/metric.model';
 import { useAppContext } from '@/context/AppContext';
+import ArtDiscovery from '@/components/art-discovery/ArtDiscovery';
 
 export default function DailyClient() {
   const { context } = useAppContext();
@@ -135,6 +136,10 @@ export default function DailyClient() {
           castingType={CastingArtworkType.Daily}
           isCustomView={isLeeMucianExhibition}
         />
+        <ArtDiscovery
+          castingType={CastingArtworkType.Daily}
+          isCastingSingleArt={true}
+          artwork={dailyRef.current?.artwork}></ArtDiscovery>
       </div>
     </>
   );
