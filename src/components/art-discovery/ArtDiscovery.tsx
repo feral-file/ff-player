@@ -23,15 +23,17 @@ const ArtDiscovery: React.FC<ArtDiscoveryProps> = ({
 }) => {
   return (
     <div className={styles.container}>
-      {isCastingSingleArt && token && (
+      {/* {isCastingSingleArt && token && (
         <DisplayInfo
           ffArtworkID={ffArtworkID}
           token={token}
           isDaily={castingType === CastingArtworkType.Daily}
           dailyNote={dailyNote}
         />
-      )}
-      {/* <Controls /> */}
+      )} */}
+      <div className={styles.focused}>
+        <Controls />
+      </div>
     </div>
   );
 };

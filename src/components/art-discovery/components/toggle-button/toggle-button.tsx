@@ -3,10 +3,9 @@
 import { clsx } from 'clsx';
 import styles from './controls-styles.module.scss';
 
-// Controls overlay, appears on all the art casting screens
-const Controls = () => {
+const ToggleButton = (values: string[], selectedIndex: number) => {
   return (
-    <div className={styles.mainContent}>
+    <div className={styles.toggle}>
       <div className={styles.header}>
         <img src={'/images/ff-logo.svg'} alt="logo" />
       </div>
@@ -49,4 +48,4 @@ const Controls = () => {
     </div>
   );
 };
-export default Controls;
+export default ToggleButton;
