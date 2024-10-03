@@ -5,6 +5,7 @@ import styles from './info-styles.module.scss';
 import { Artwork, IndexerToken } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import ArtworkService from '@/services/ArtworkService';
+import { KeyboardEventKey } from '@/constants';
 
 // Display information overlay, detail for daily artwork casting only
 const DisplayInfo: React.FC<{
@@ -18,10 +19,60 @@ const DisplayInfo: React.FC<{
   const [mediumDescription, setMediumDescription] = useState<string[]>([]);
   const [artwork, setArtwork] = useState<Artwork | undefined>();
   const artworkService = useRef(new ArtworkService());
+  const lastEventTime = useRef(0);
+  const okBtnRef = useRef<HTMLDivElement>(null);
+  const backBtnRef = useRef<HTMLDivElement>(null);
 
-  const toggleExpand = () => {
-    setIsExpanded(!isExpanded);
-  };
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const now = Date.now();
+      const minInterval = 200; // Minimum interval between events in milliseconds
+
+      if (now - lastEventTime.current > minInterval) {
+        lastEventTime.current = now;
+        // Press Enter to expand
+
+        switch (event.key as KeyboardEventKey) {
+          case KeyboardEventKey.Enter:
+            setIsExpanded(true);
+            break;
+
+          case KeyboardEventKey.Backspace:
+            setIsExpanded(false);
+            break;
+
+          default:
+            break;
+        }
+      }
+    };
+
+    const handleClick = (event: MouseEvent) => {
+      if (
+        event.target instanceof HTMLElement &&
+        okBtnRef.current &&
+        okBtnRef.current.contains(event.target)
+      ) {
+        setIsExpanded(true);
+      } else if (
+        event.target instanceof HTMLElement &&
+        backBtnRef.current &&
+        backBtnRef.current.contains(event.target)
+      ) {
+        setIsExpanded(false);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('click', handleClick);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('click', handleClick);
+    };
+  }, []); // Initial render
 
   useEffect(() => {
     if (!isDaily) {
@@ -53,26 +104,32 @@ const DisplayInfo: React.FC<{
   return (
     <div className={styles['main-content']}>
       {onFocused ? (
-        // Expanded
+        // On focus
         <div
           className={clsx(
             styles.item,
             styles['full-artwork-info'],
-            styles.active
+            onFocused ? styles.active : ''
           )}>
-          <h1>Daily</h1>
-          <hr />
           <div>
             <div>
               <p>{token.asset.metadata.project.latest.artistName}</p>
-              <p>{token.asset.metadata.project.latest.title}</p>
+              <p style={{ fontWeight: 'bold' }}>
+                {token.asset.metadata.project.latest.title}
+              </p>
+              <br />
             </div>
           </div>
-          <div className={clsx(styles.scrollableSection, styles.collapse)}>
+          <div
+            className={clsx(
+              styles.scrollableSection,
+              isExpanded ? '' : styles.collapse
+            )}>
             <div>
               {mediumDescription.map((desc, index) => (
                 <p key={index}>{desc}</p>
               ))}
+              <br />
             </div>
             <div>
               <p
@@ -85,16 +142,26 @@ const DisplayInfo: React.FC<{
             </div>
           </div>
 
-          <div className={styles['read-more-container']}>
-            <img src={'/images/read-more.svg'} alt="read more" />
-            <p>
-              Press <span style={{ fontStyle: 'italic' }}>[OK]</span> to Read
-              More
-            </p>
-          </div>
+          {isExpanded ? (
+            <div ref={backBtnRef} className={styles['control-container']}>
+              <img src={'/images/back-arrow.svg'} alt="back" />
+              <p>
+                Press <span style={{ fontStyle: 'italic' }}>[back]</span> to
+                Exit
+              </p>
+            </div>
+          ) : (
+            <div ref={okBtnRef} className={styles['control-container']}>
+              <img src={'/images/read-more.svg'} alt="read more" />
+              <p>
+                Press <span style={{ fontStyle: 'italic' }}>[OK]</span> to Read
+                More
+              </p>
+            </div>
+          )}
         </div>
       ) : (
-        // Collapsed
+        // Lose focus
         <div className={clsx(styles.item, styles['short-artwork-info'])}>
           <p>{token.asset.metadata.project.latest.artistName}</p>
           <p>{token.asset.metadata.project.latest.title}</p>

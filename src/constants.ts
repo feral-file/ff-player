@@ -13,6 +13,7 @@ export enum KeyboardEventKey {
   ArrowRight = 'ArrowRight',
   ArrowDown = 'ArrowDown',
   Enter = 'Enter',
+  Backspace = 'Backspace',
   Unidentified = 'Unidentified',
 }
 
