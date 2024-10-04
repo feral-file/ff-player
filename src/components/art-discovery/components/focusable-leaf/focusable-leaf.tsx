@@ -1,14 +1,21 @@
 'use client';
 import { useFocusable } from '@noriginmedia/norigin-spatial-navigation';
 import { clsx } from 'clsx';
-import React, { ReactElement } from 'react';
+import React, { ReactElement, useEffect } from 'react';
 
 const FocusableLeaf: React.FC<{
   children: React.ReactNode;
   id: string;
   focusKey: string;
-}> = ({ children, id, focusKey }) => {
+  onFocus?: () => void;
+}> = ({ children, id, focusKey, onFocus }) => {
   const { ref, focused } = useFocusable();
+
+  useEffect(() => {
+    if (focused) {
+      onFocus?.();
+    }
+  }, [focused, onFocus]);
 
   // Clone children and pass focused as a prop
   const childrenWithProps = React.Children.map(children, child => {

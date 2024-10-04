@@ -1,4 +1,5 @@
 .toggle {
+  width: fit-content;
   display: flex;
   flex-direction: row;
   border: solid 1.5px white;
@@ -7,12 +8,14 @@
   gap: 10px;
 
   .selection {
+    height: 54px;
     background-color: transparent;
     color: white;
     font-size: 20px;
     font-weight: 700;
     display: flex;
-    padding: 12px 28px;
+    align-items: center;
+    padding: 0px 28px;
     border-radius: 90px;
     gap: 10px;
   }

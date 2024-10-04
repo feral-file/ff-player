@@ -12,7 +12,7 @@ import { useEffect } from 'react';
 const FocusableContainer: React.FC<{
   children: React.ReactNode;
 }> = ({ children }) => {
-  const { ref, focusKey, focusSelf } = useFocusable({ forceFocus: true });
+  const { ref, focusKey, focusSelf } = useFocusable();
 
   useEffect(() => {
     init({

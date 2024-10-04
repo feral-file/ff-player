@@ -1,0 +1,23 @@
+.rotate {
+  width: fit-content;
+  border: solid 1.5px white;
+  border-radius: 90px;
+  padding: 6px;
+  div {
+    height: 54px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0px 28px;
+    background-color: transparent;
+    color: white;
+    font-size: 20px;
+    font-weight: 700;
+    border-radius: 90px;
+  }
+}
+
+.rotate.active {
+  background-color: #b9e5ff;
+  color: black;
+}

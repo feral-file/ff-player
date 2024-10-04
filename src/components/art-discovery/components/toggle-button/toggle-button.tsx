@@ -7,6 +7,7 @@ import { useEffect, useRef } from 'react';
 import { KeyboardEventKey } from '@/constants';
 
 export interface Option {
+  id: number;
   icon: string;
   label: string;
 }
@@ -14,15 +15,15 @@ export interface Option {
 interface ToggleButtonProps {
   options: Option[];
   selectedIndex: number;
-  setSelectedIndex: (index: number) => void;
   focused?: boolean;
+  setSelectedIndex: (index: number) => void;
 }
 
 const ToggleButton: React.FC<ToggleButtonProps> = ({
   options,
   selectedIndex,
-  setSelectedIndex,
   focused,
+  setSelectedIndex,
 }) => {
   const selectedIndexRef = useRef(selectedIndex);
   useEffect(() => {
