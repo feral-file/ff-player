@@ -5,19 +5,21 @@ import {
   useFocusable,
   init,
   setKeyMap,
+  setFocus,
   FocusContext,
 } from '@noriginmedia/norigin-spatial-navigation';
 import { useEffect } from 'react';
 
 const FocusableContainer: React.FC<{
   children: React.ReactNode;
-}> = ({ children }) => {
+  initialFocusKey?: string;
+}> = ({ children, initialFocusKey }) => {
   const { ref, focusKey, focusSelf } = useFocusable();
 
   useEffect(() => {
     init({
       debug: true,
-      // visualDebug: true,
+      visualDebug: true,
       shouldUseNativeEvents: true,
     });
     setKeyMap({
@@ -36,8 +38,10 @@ const FocusableContainer: React.FC<{
 
   // Set default focus
   useEffect(() => {
-    focusSelf();
-  }, [focusSelf]);
+    if (initialFocusKey) {
+      setFocus(initialFocusKey);
+    }
+  }, [focusSelf, initialFocusKey]);
   return (
     <FocusContext.Provider value={focusKey}>
       <div ref={ref}>{children}</div>

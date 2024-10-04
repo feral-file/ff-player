@@ -24,6 +24,14 @@ enum SettingOption {
   PairMobileApp = 'Pair Mobile App',
 }
 
+enum ControlFocusableLeafKey {
+  FramingToggle = 'framing-toggle',
+  RotateButton = 'rotate-button',
+  ArtworkFraming = 'Artwork Framing',
+  DisplayRotation = 'Display Rotation',
+  PairMobileApp = 'Pair Mobile App',
+}
+
 // Controls overlay, appears on all the art casting screens
 const Controls = () => {
   const [selectedFramingOptionId, setSelectedFramingOptionId] =
@@ -39,7 +47,9 @@ const Controls = () => {
           <SettingDetail
             title="Artwork Framing"
             description="Choose how artworks are displayed by default with options like Crop to Fill for a full-screen effect or Fit to Screen to preserve the original aspect ratio. You can override these settings for individual artworks in their artwork details.">
-            <FocusableLeaf id="framing-toggle" focusKey="framing-toggle">
+            <FocusableLeaf
+              id="framing-toggle"
+              focusKey={ControlFocusableLeafKey.FramingToggle}>
               <ToggleButton
                 options={artworkFramingOptions}
                 selectedIndex={selectedFramingOptionId}
@@ -54,7 +64,9 @@ const Controls = () => {
           <SettingDetail
             title="Display Rotation"
             description="Easily adjust the orientation of the entire screen. \nWith each tap, the display rotates by 90°, allowing you to find the perfect viewing angle for your setup.">
-            <FocusableLeaf id="framing-toggle" focusKey="framing-toggle">
+            <FocusableLeaf
+              id="rotate-button"
+              focusKey={ControlFocusableLeafKey.RotateButton}>
               <RotateButton></RotateButton>
             </FocusableLeaf>
           </SettingDetail>
@@ -84,19 +96,20 @@ const Controls = () => {
       </div>
       <div className={styles.content}>
         <div className={styles.listSettingItems}>
-          <FocusableContainer>
+          <FocusableContainer
+            initialFocusKey={ControlFocusableLeafKey.ArtworkFraming}>
             {Object.values(SettingOption).map((option, index) => (
               <FocusableLeaf
                 key={index}
-                id={option.toString()}
-                focusKey={option.toString()}
+                id={option}
+                focusKey={option}
                 onFocus={() => {
-                  console.log('focused', option);
                   setSettingOption(option);
                 }}>
                 <SettingItem
-                  title={option.toString()}
-                  iconPath={getSettingOptionIconPath(option)}></SettingItem>
+                  title={option}
+                  iconPath={getSettingOptionIconPath(option)}
+                  selected={settingOption === option}></SettingItem>
               </FocusableLeaf>
             ))}
           </FocusableContainer>
@@ -112,24 +125,30 @@ const Controls = () => {
 export default Controls;
 
 function getSettingOptionIconPath(option: SettingOption) {
-  return option.toString().toLowerCase().replaceAll(' ', '-');
+  return option.toLowerCase().replaceAll(' ', '-');
 }
 
 interface SettingItemProps {
   title: string;
   iconPath: string;
   focused?: boolean;
+  selected?: boolean;
 }
 
 const SettingItem: React.FC<SettingItemProps> = ({
   title,
   iconPath,
   focused,
+  selected,
 }) => {
   return (
-    <div className={clsx(styles.settingItem, focused && styles.active)}>
+    <div
+      className={clsx(
+        styles.settingItem,
+        ((focused ?? false) || (selected ?? false)) && styles.active
+      )}>
       <Image
-        src={`/images/${iconPath}${focused ? '-active.svg' : '-inactive.svg'}`}
+        src={`/images/${iconPath}${(focused ?? false) || (selected ?? false) ? '-active.svg' : '-inactive.svg'}`}
         alt={iconPath}
         width={47}
         height={45}

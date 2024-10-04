@@ -8,16 +8,23 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 0px 28px;
+    padding-left: 24px;
+    padding-right: 28px;
     background-color: transparent;
     color: white;
     font-size: 20px;
     font-weight: 700;
     border-radius: 90px;
+    img {
+      height: 32px;
+      width: auto;
+    }
   }
 }
 
 .rotate.active {
-  background-color: #b9e5ff;
-  color: black;
+  div {
+    background-color: #b9e5ff;
+    color: black;
+  }
 }
