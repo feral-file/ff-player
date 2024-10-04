@@ -26,7 +26,8 @@ const App: React.FC = () => {
     }
 
     router.replace('/daily');
-    localStorage.setItem(LocalStorageItem.castInfo, '');
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    localStorage?.setItem(LocalStorageItem.castInfo, '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

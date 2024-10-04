@@ -25,6 +25,11 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
 }
 
 export function appendMetricEventToLocalStorage(event: MetricEvent) {
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (!localStorage) {
+    return;
+  }
+
   console.log('[METRIC]: append event to localStorage', JSON.stringify(event));
   const metricEvents = localStorage.getItem(LocalStorageItem.metricEvents);
   let events: MetricEvent[] = [];
@@ -46,6 +51,11 @@ export function appendMetricEventToLocalStorage(event: MetricEvent) {
 }
 
 export function uploadMetricEventsFromLocalStorage() {
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (!localStorage) {
+    return;
+  }
+
   console.log('[METRIC]: start uploading events from localStorage');
   const metricEvents = localStorage.getItem(LocalStorageItem.metricEvents);
   let events: MetricEvent[] = [];

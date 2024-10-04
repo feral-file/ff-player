@@ -52,7 +52,8 @@ class CanvasService {
 
   public setCastInfo(castInfo: CastInfo | null) {
     this.castInfo = castInfo;
-    localStorage.setItem(
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    localStorage?.setItem(
       LocalStorageItem.castInfo,
       JSON.stringify(this.castInfo)
     );
