@@ -1,98 +1,28 @@
-.mainContent {
+.toggle {
   display: flex;
-  flex-direction: column;
-  row-gap: 20px;
-  background-color: #000000;
-  opacity: 0.8;
-  padding: 40px;
-  padding-top: 20px;
-  border-radius: 20px;
+  flex-direction: row;
+  border: solid 1.5px white;
+  border-radius: 90px;
+  padding: 6px;
+  gap: 10px;
 
-  .header {
-    padding-top: 10px;
-    padding-bottom: 15px;
-    border-bottom: solid 1px white;
-    img {
-      height: 28px;
-    }
-  }
-
-  .content {
+  .selection {
+    background-color: transparent;
+    color: white;
+    font-size: 20px;
+    font-weight: 700;
     display: flex;
-    column-gap: 40px;
-
-    .listSettingItems {
-      display: flex;
-      flex-direction: column;
-      row-gap: 10px;
-      width: 38.4%;
-      .settingItem {
-        display: flex;
-        align-items: center;
-        column-gap: 20px;
-        color: white;
-        height: 64px;
-        width: fit-content;
-        img {
-          width: 47px;
-          height: 45px;
-        }
-        p {
-          font-size: 20px;
-          font-weight: 700;
-          color: white;
-        }
-      }
-
-      .settingItem.active {
-        background-color: white;
-        border-radius: 47px;
-        padding-left: 6px;
-        padding-right: 28px;
-        p {
-          color: black;
-        }
-      }
-    }
-
-    .settingDetail {
-      width: 61.6%;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      .title {
-        font-size: 16px;
-        color: #a0a0a0;
-        margin-bottom: 10px;
-      }
-      .description {
-        font-size: 20px;
-        color: white;
-        margin-bottom: 40px;
-      }
-    }
+    padding: 12px 28px;
+    border-radius: 90px;
+    gap: 10px;
   }
 
-  // .active {
-  //   border: 1px solid #ffffff;
-  // }
-  // .item {
-  //   width: 100%;
-  //   border-radius: 20px;
-  //   background-color: #000000;
-  //   opacity: 0.8;
-  //   color: #ffffff;
-  //   padding: 20px;
-  // }
-  // .full-artwork-info {
-  //   display: flex;
-  //   flex-direction: column;
-  //   row-gap: 10px;
-  //   .read-more-container {
-  //     display: flex;
-  //     justify-content: flex-start;
-  //     align-items: center;
-  //     column-gap: 10px;
-  //   }
-  // }
+  .selection.selected {
+    background-color: #b9e5ff;
+    color: black;
+  }
+}
+
+.toggle.active {
+  border-width: 3px;
 }

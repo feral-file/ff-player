@@ -9,7 +9,7 @@ import {
 } from '@noriginmedia/norigin-spatial-navigation';
 import { useEffect } from 'react';
 
-const FocusContainer: React.FC<{
+const FocusableContainer: React.FC<{
   children: React.ReactNode;
 }> = ({ children }) => {
   const { ref, focusKey, focusSelf } = useFocusable({ forceFocus: true });
@@ -44,4 +44,4 @@ const FocusContainer: React.FC<{
     </FocusContext.Provider>
   );
 };
-export default FocusContainer;
+export default FocusableContainer;

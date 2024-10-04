@@ -1,50 +1,73 @@
 'use client';
 
 import { clsx } from 'clsx';
-import styles from './controls-styles.module.scss';
+import styles from './toggle-styles.module.scss';
+import Image from 'next/image';
+import { useEffect, useRef } from 'react';
+import { KeyboardEventKey } from '@/constants';
 
-const ToggleButton = (values: string[], selectedIndex: number) => {
+export interface Option {
+  icon: string;
+  label: string;
+}
+
+interface ToggleButtonProps {
+  options: Option[];
+  selectedIndex: number;
+  setSelectedIndex: (index: number) => void;
+  focused?: boolean;
+}
+
+const ToggleButton: React.FC<ToggleButtonProps> = ({
+  options,
+  selectedIndex,
+  setSelectedIndex,
+  focused,
+}) => {
+  const selectedIndexRef = useRef(selectedIndex);
+  useEffect(() => {
+    selectedIndexRef.current = selectedIndex;
+  }, [selectedIndex]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.key as KeyboardEventKey) === KeyboardEventKey.Enter) {
+        if (selectedIndexRef.current === options.length - 1) {
+          setSelectedIndex(0);
+        } else {
+          setSelectedIndex(selectedIndexRef.current + 1);
+        }
+      }
+    };
+
+    if (focused && typeof window !== 'undefined') {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [focused, options.length, setSelectedIndex]);
+
   return (
-    <div className={styles.toggle}>
-      <div className={styles.header}>
-        <img src={'/images/ff-logo.svg'} alt="logo" />
-      </div>
-      <div className={styles.content}>
-        <div className={styles.listSettingItems}>
-          <div className={clsx(styles.settingItem, styles.active)}>
-            <img
-              src={'/images/display-preferences-active.svg'}
-              alt="display-preferences"
+    <div className={clsx(styles.toggle, focused && styles.active)}>
+      {options.map((option, index) => (
+        <div
+          key={index}
+          className={clsx(styles.selection, {
+            [styles.selected]: index === selectedIndex,
+          })}>
+          {index === selectedIndex && (
+            <Image
+              src={`/images/${option.icon}.svg`}
+              alt={option.icon}
+              width={24}
+              height={24}
             />
-            <p>Display Preferences</p>
-          </div>
-          <div className={styles.settingItem}>
-            <img
-              src={'/images/display-rotation-inactive.svg'}
-              alt="display-rotation"
-            />
-            <p>Display Rotation</p>
-          </div>
-          <div className={styles.settingItem}>
-            <img
-              src={'/images/pair-mobile-app-inactive copy.svg'}
-              alt="pair-mobile-app"
-            />
-            <p>Pair Mobile App</p>
-          </div>
+          )}
+          {option.label}
         </div>
-        <div className={styles.settingDetail}>
-          <p className={styles.title}>Display Preferences</p>
-          <p className={styles.description}>
-            Choose how artworks are displayed by default with options like Crop
-            to Fill for a full-screen effect or Fit to Screen to preserve the
-            original aspect ratio.
-            <br></br>You can override these settings for individual artworks in
-            their artwork details.
-          </p>
-          <div className={styles.action}></div>
-        </div>
-      </div>
+      ))}
     </div>
   );
 };

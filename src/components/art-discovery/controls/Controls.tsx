@@ -3,38 +3,54 @@
 import { clsx } from 'clsx';
 import styles from './controls-styles.module.scss';
 
-import { useFocusable } from '@noriginmedia/norigin-spatial-navigation';
-import FocusContainer from '../components/focus-container/focus-container';
+import FocusableContainer from '../components/focusable-container/focusable-container';
+import ToggleButton, {
+  Option,
+} from '../components/toggle-button/toggle-button';
+import FocusableLeaf from '../components/focusable-leaf/focusable-leaf';
+import Image from 'next/image';
+import { useState } from 'react';
+
+const artworkFramingOptions: Option[] = [
+  { icon: 'fit-to-screen', label: 'Fit to Screen' },
+  { icon: 'crop-to-fill', label: 'Crop to Fill' },
+];
 
 // Controls overlay, appears on all the art casting screens
 const Controls = () => {
+  const [selectedIndex, setSelectedIndex] = useState<number>(0);
+
   return (
     <div className={styles.mainContent}>
       <div className={styles.header}>
-        <img src={'/images/ff-logo.svg'} alt="logo" />
+        <Image src="/images/ff-logo.svg" alt="logo" height={28} width={100} />
       </div>
       <div className={styles.content}>
-        <FocusContainer>
-          <div className={styles.listSettingItems}>
-            <SettingItem
-              title="Display Preferences"
-              iconPath="display-preferences"
+        <div className={styles.listSettingItems}>
+          <FocusableContainer>
+            <FocusableLeaf
               id="display-preferences"
-              focusKey="display-preferences"></SettingItem>
-            <SettingItem
-              title="Display Rotation"
-              iconPath="display-rotation"
-              id="display-rotation"
-              focusKey="display-rotation"></SettingItem>
-            <SettingItem
-              title="Pair Mobile App"
-              iconPath="pair-mobile-app"
-              id="pair-mobile-app"
-              focusKey="pair-mobile-app"></SettingItem>
-          </div>
-        </FocusContainer>
+              focusKey="display-preferences">
+              <SettingItem
+                title="Display Preferences"
+                iconPath="display-preferences"></SettingItem>
+            </FocusableLeaf>
 
-        <FocusContainer>
+            <FocusableLeaf id="display-rotation" focusKey="display-rotation">
+              <SettingItem
+                title="Display Rotation"
+                iconPath="display-rotation"></SettingItem>
+            </FocusableLeaf>
+
+            <FocusableLeaf id="pair-mobile-app" focusKey="pair-mobile-app">
+              <SettingItem
+                title="Pair Mobile App"
+                iconPath="pair-mobile-app"></SettingItem>
+            </FocusableLeaf>
+          </FocusableContainer>
+        </div>
+
+        <FocusableContainer>
           <div className={styles.settingDetail}>
             <p className={styles.title}>Display Preferences</p>
             <p className={styles.description}>
@@ -45,13 +61,14 @@ const Controls = () => {
               in their artwork details.
             </p>
             <div className={styles.action}></div>
-            <SettingItem
-              title="Pair Mobile App"
-              iconPath="pair-mobile-app"
-              id="pair-mobile-app"
-              focusKey="pair-mobile-app"></SettingItem>
+            <FocusableLeaf id="framing-toggle" focusKey="framing-toggle">
+              <ToggleButton
+                options={artworkFramingOptions}
+                selectedIndex={selectedIndex}
+                setSelectedIndex={setSelectedIndex}></ToggleButton>
+            </FocusableLeaf>
           </div>
-        </FocusContainer>
+        </FocusableContainer>
       </div>
     </div>
   );
@@ -61,20 +78,15 @@ export default Controls;
 const SettingItem: React.FC<{
   title: string;
   iconPath: string;
-  id: string;
-  focusKey: string;
-}> = ({ title, iconPath, id, focusKey }) => {
-  const { ref, focused } = useFocusable();
+  focused?: boolean;
+}> = ({ title, iconPath, focused }) => {
   return (
-    <div
-      ref={ref}
-      id={id}
-      className={clsx(styles.settingItem, focused && styles.active)}>
-      <img
-        src={
-          '/images/' + iconPath + (focused ? '-active.svg' : '-inactive.svg')
-        }
+    <div className={clsx(styles.settingItem, focused && styles.active)}>
+      <Image
+        src={`/images/${iconPath}${focused ? '-active.svg' : '-inactive.svg'}`}
         alt={iconPath}
+        width={47}
+        height={45}
       />
       <p>{title}</p>
     </div>
