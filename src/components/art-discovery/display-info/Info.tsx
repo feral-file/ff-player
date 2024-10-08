@@ -7,6 +7,7 @@ import {
   Exhibition,
   ExhibitionType,
   IndexerToken,
+  SaleModel,
   User,
 } from '@/models';
 import { useEffect, useRef, useState } from 'react';
@@ -129,9 +130,12 @@ const DisplayInfo: React.FC<{
       }
     };
 
-    fetchExhibition().catch((error: unknown) => {
-      console.log(error);
-    });
+    // Do not render exhibition info if the artwork is airdrop
+    if (artwork && artwork.series?.settings?.saleModel !== SaleModel.Airdrop) {
+      fetchExhibition().catch((error: unknown) => {
+        console.log(error);
+      });
+    }
   }, [artwork]);
 
   useEffect(() => {
@@ -309,7 +313,7 @@ const DisplayInfo: React.FC<{
                     <div className={styles.exhInfo}>
                       {exhibition.curator && (
                         <p>
-                          Curated by {exhibition.curator?.alumniAccount?.alias}
+                          Curated by {exhibition.curator.alumniAccount?.alias}
                         </p>
                       )}
                       <p>
@@ -357,7 +361,7 @@ const DisplayInfo: React.FC<{
             key={InfoFocusableLeafKey.InfoLoseFocus}
             focusKey={InfoFocusableLeafKey.InfoLoseFocus}
             style={{ width: '100%' }}>
-            {!!(token || artwork) && (
+            {!!(token ?? artwork) && (
               <div className={clsx(styles.item, styles['short-artwork-info'])}>
                 <p>
                   {token?.asset.metadata.project.latest.artistName ??
