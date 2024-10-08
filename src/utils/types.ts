@@ -1,4 +1,4 @@
-import { Artwork } from '@/models';
+import { Artwork, IndexerToken } from '@/models';
 
 export interface WebSocketMessage {
   messageID: string;
@@ -187,6 +187,7 @@ export interface PlaylistToken {
     id: string;
     name: string;
   };
+  indexerToken?: IndexerToken;
 }
 
 export interface CastInfo {
