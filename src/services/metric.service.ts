@@ -1,8 +1,9 @@
 import { LocalStorageItem, Platform } from '@/constants';
-import { MetricEvent } from '@/models/metric.model';
+import { ExhibitionDisplaySection, MetricEvent } from '@/models/metric.model';
 import DeviceManager from '@/utils/DeviceManager';
 import axios, { AxiosInstance } from 'axios';
 import * as Sentry from '@sentry/nextjs';
+import { ExhibitionCatalog } from '@/models';
 
 const accountsRequester: AxiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_ACCOUNTS_URL,
@@ -128,4 +129,19 @@ function getDeviceInfoBaseOnPlatform(): { vendor: string; platform: string } {
   }
 
   return { vendor: 'web', platform: 'web' };
+}
+
+export function mappingExhibitionCatalogToExhibitionDisplaySection(
+  castingSection: ExhibitionCatalog
+): ExhibitionDisplaySection {
+  switch (castingSection) {
+    case ExhibitionCatalog.home:
+      return ExhibitionDisplaySection.Home;
+    case ExhibitionCatalog.curatorNote:
+    case ExhibitionCatalog.resource:
+    case ExhibitionCatalog.resourceDetail:
+      return ExhibitionDisplaySection.CuratorNote;
+    case ExhibitionCatalog.artwork:
+      return ExhibitionDisplaySection.Artworks;
+  }
 }

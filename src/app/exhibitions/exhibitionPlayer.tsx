@@ -16,9 +16,17 @@ import { useAppContext } from '@/context/AppContext';
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { LEE_MULLICAN_EXHIBITION_CONTRACT } from '@/constants';
 import { formatArtworkIndexID } from '@/utils/indexer';
-import { CastingArtworkType } from '@/models/metric.model';
 import ArtworkService from '@/services/ArtworkService';
 import clsx from 'clsx';
+import {
+  CastingArtworkType,
+  ExhibitionDisplaySection,
+  MetricEvent,
+} from '@/models/metric.model';
+import {
+  appendMetricEventToLocalStorage,
+  mappingExhibitionCatalogToExhibitionDisplaySection,
+} from '@/services/metric.service';
 
 const ExhibitionHall = () => {
   const { context } = useAppContext();
@@ -35,6 +43,9 @@ const ExhibitionHall = () => {
   const [artworkPreviewMIMEType, setArtworkPreviewMIMEType] = useState<
     string | undefined
   >();
+  const [metricSection, setMetricSection] = useState<ExhibitionDisplaySection>(
+    ExhibitionDisplaySection.Home
+  );
 
   const [pageSection, setSection] = useState<ExhibitionCatalog>(
     ExhibitionCatalog.home
@@ -46,6 +57,9 @@ const ExhibitionHall = () => {
   const [postIndex, setPostIndex] = useState<number>(0);
   const [artwork, setArtwork] = useState<Artwork>();
   const artworkRef = useRef<Artwork>();
+  const newDayCheckTimeOutID = useRef<
+    NodeJS.Timeout | string | number | undefined
+  >(undefined);
 
   // Services
   const exhibitionService = useRef(new ExhibitionService());
@@ -172,6 +186,64 @@ const ExhibitionHall = () => {
     }
   }, [screen, catalogID, exhibitionDetail, posts]);
 
+  // Metric handling BEGIN:
+  useEffect(() => {
+    setMetricSection(
+      mappingExhibitionCatalogToExhibitionDisplaySection(pageSection)
+    );
+  }, [pageSection]);
+
+  useEffect(() => {
+    if (metricSection !== ExhibitionDisplaySection.Artworks && exhibitionID) {
+      const handleMetric = () => {
+        if (newDayCheckTimeOutID.current) {
+          clearTimeout(newDayCheckTimeOutID.current as number);
+        }
+
+        const event: MetricEvent = {
+          event: CastingArtworkType.Exhibition,
+          timestamp: new Date().toISOString(),
+          parameters: {
+            section: metricSection,
+            exhibitionID,
+          },
+        };
+
+        const checkNewDay = () => {
+          const now = new Date();
+          const newDay = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate() + 1
+          );
+          newDay.setHours(0, 0, 0, 0);
+          const delay = newDay.getTime() - now.getTime();
+          newDayCheckTimeOutID.current = setTimeout(() => {
+            console.log('[METRIC]: New day');
+            handleMetric();
+          }, delay);
+        };
+
+        appendMetricEventToLocalStorage(event);
+        checkNewDay();
+      };
+
+      handleMetric();
+    } else if (
+      metricSection === ExhibitionDisplaySection.Artworks &&
+      newDayCheckTimeOutID.current
+    ) {
+      clearTimeout(newDayCheckTimeOutID.current as number);
+    }
+
+    return () => {
+      if (newDayCheckTimeOutID.current) {
+        clearTimeout(newDayCheckTimeOutID.current as number);
+      }
+    };
+  }, [metricSection, exhibitionID]);
+  // Metric handling END.
+
   return (
     <div
       className={
@@ -259,6 +331,8 @@ const ExhibitionHall = () => {
               previewURL={artwork.previewURI}
               artworkID={artworkID ?? ''}
               artworkPreviewMIMEType={artworkPreviewMIMEType}
+              section={metricSection}
+              exhibitionID={exhibitionID}
               castingType={CastingArtworkType.Exhibition}
               isCustomView={
                 exhibitionDetail.contracts &&
