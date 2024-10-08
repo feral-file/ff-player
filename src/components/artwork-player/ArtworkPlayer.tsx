@@ -140,8 +140,14 @@ const ArtworkPlayer = ({
         const contentType = response.headers.get('Content-Type');
         compareToGetFileType(contentType ?? '');
         console.log('[CAST] Content-Type:', contentType);
+        Sentry.addBreadcrumb({
+          category: 'ArtworkPlayer',
+          message: 'play artwork',
+          data: { previewURL, contentType },
+        });
       } catch (error) {
         console.log('[CAST] Error get content-type', JSON.stringify(error));
+        Sentry.captureException(error);
         setPreviewType(SeriesPreviewHTMLTag.iframe);
       }
     };
@@ -184,6 +190,7 @@ const ArtworkPlayer = ({
         hls.on(Hls.Events.BUFFER_EOS, () => {
           videoRef.current?.play().catch((error: unknown) => {
             console.log('[CAST] Error play video', JSON.stringify(error));
+            Sentry.captureMessage('[CAST] Error play video');
           });
         });
       } else {
@@ -193,6 +200,7 @@ const ArtworkPlayer = ({
             ?.play()
             .catch((error: unknown) => {
               console.log('[CAST] Error play video', JSON.stringify(error));
+              Sentry.captureMessage('[CAST] Error play video');
             })
             .finally(() => {
               setLoading(false);
@@ -207,6 +215,7 @@ const ArtworkPlayer = ({
       if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
         videoRef.current.play().catch((error: unknown) => {
           console.log('[CAST] Error play video', JSON.stringify(error));
+          Sentry.captureMessage('[CAST] Error play video');
         });
       }
     } else {

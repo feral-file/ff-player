@@ -8,6 +8,7 @@ import {
 } from '@/models';
 import { Jg043CustomPosts } from '@/models/jg043.model';
 import axios from 'axios';
+import * as Sentry from '@sentry/nextjs';
 
 const YOUTUBE_VIDEO_QUERY_PARAM_KEY = 'v';
 const YOUTUBE_URL = 'https://www.youtube.com';
@@ -38,7 +39,11 @@ export class PostService {
       }
       return posts;
     } catch (error) {
-      console.log('[API] Failed to load exhibition:', JSON.stringify(error));
+      console.log(
+        '[API] Failed to load post exhibition:',
+        JSON.stringify(error)
+      );
+      Sentry.captureException(error);
       return [];
     }
   }
@@ -68,9 +73,10 @@ export class PostService {
       return [];
     } catch (error) {
       console.log(
-        '[API] Failed to load SOURCE exhibition',
+        '[API] Failed to load post of jg43 exhibition',
         JSON.stringify(error)
       );
+      Sentry.captureException(error);
       return [];
     }
   }
@@ -103,6 +109,7 @@ export class PostService {
       }
     } catch (error) {
       console.log('[API] Failed to format post:', JSON.stringify(error));
+      Sentry.captureException(error);
     }
   }
 }

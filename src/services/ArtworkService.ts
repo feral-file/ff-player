@@ -3,6 +3,7 @@ import createApolloClient from '@/utils/ApolloClient';
 import { Artwork, IndexerToken } from '@/models';
 import axiosInstance from './axiosService';
 import { removeArtistAliasSuffixes } from '@/utils/ui/formatAlias';
+import * as Sentry from '@sentry/nextjs';
 
 const LIMIT_PER_PAGE = 50;
 
@@ -40,6 +41,7 @@ class ArtworkService {
       return tokens;
     } catch (error) {
       console.log('[API] Error querying tokens:', JSON.stringify(error));
+      Sentry.captureException(error);
     }
 
     return [];

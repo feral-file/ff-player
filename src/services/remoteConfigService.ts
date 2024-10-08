@@ -1,5 +1,6 @@
 import { AppSettings } from '@/constants';
 import axios from 'axios';
+import * as Sentry from '@sentry/nextjs';
 
 export interface AppRemoteConfig {
   duration: number;
@@ -28,6 +29,7 @@ class RemoteConfigService {
       return response.data;
     } catch (error) {
       console.log('[API] Failed to load config:', error);
+      Sentry.captureException(error);
       // Return default value if failed to load config
       return {
         duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,

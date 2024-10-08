@@ -107,11 +107,13 @@ const useWebSocket = (url: string, apiKey: string) => {
 
       ws.current.onerror = error => {
         console.error('[WS] WebSocket error:', JSON.stringify(error));
+        Sentry.captureMessage('[WS] WebSocket error');
         setIsDisconnected(true);
       };
 
       ws.current.onclose = () => {
         console.log('[WS] WebSocket disconnected, attempting to reconnect...');
+        Sentry.captureMessage('[WS] WebSocket disconnected');
         setIsDisconnected(true);
         if (pingIntervalRef.current) {
           clearInterval(pingIntervalRef.current);
