@@ -12,7 +12,10 @@ export class SeriesService {
       );
       return response.data.result;
     } catch (error) {
-      console.log('Failed to load artworks of series:', error);
+      console.log(
+        '[API] Failed to load artworks of series:',
+        JSON.stringify(error)
+      );
       return [];
     }
   }
@@ -27,11 +30,11 @@ export class SeriesService {
       }
 
       const response = await axiosInstance.get<{ result: Artwork }>(
-        `/api/artworks/${id}?includeSeries=true`
+        `/api/artworks/${id}?includeSeries=true&includeActiveSwap=true`
       );
       return response.data.result;
     } catch (error) {
-      console.log('Failed to load artwork:', error);
+      console.log('[API] Failed to load artwork:', JSON.stringify(error));
       return {};
     }
   }

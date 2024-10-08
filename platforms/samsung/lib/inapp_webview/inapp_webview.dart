@@ -5,11 +5,11 @@ import 'dart:convert';
 
 import 'package:feralfile_display_tizen/model/app_state_message.dart';
 import 'package:feralfile_display_tizen/model/js_message.dart';
+import 'package:feralfile_display_tizen/model/log_data.dart';
 import 'package:feralfile_display_tizen/service/configuration_service.dart';
 import 'package:feralfile_display_tizen/utils/config_manager.dart';
 import 'package:feralfile_display_tizen/utils/injector.dart';
 import 'package:feralfile_display_tizen/utils/log.dart';
-import 'package:feralfile_display_tizen/view/common_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -58,6 +58,12 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
   }
 
   @override
+  void dispose() {
+    unawaited(WakelockPlus.disable());
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: Colors.transparent,
         body: Focus(
@@ -92,14 +98,9 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
             log.info('KeyEventResult.ignored');
             return KeyEventResult.ignored;
           },
-          child: Stack(
-            children: [
-              WebViewWidget(
-                controller: _webViewController,
-                key: Key(widget.payload.key),
-              ),
-              if (_isLoading) loadingWidget(context),
-            ],
+          child: WebViewWidget(
+            controller: _webViewController,
+            key: Key(widget.payload.key),
           ),
         ),
       );
@@ -171,6 +172,18 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
       final rotate = message.message;
       ConfigManager.instance.quarterTurns.value +=
           rotate == 'clockwise' ? 1 : -1;
+    });
+
+    _webViewController.addJavaScriptChannel('Log',
+        onMessageReceived: (message) async {
+      try {
+        log.info('Log: ${message.message}');
+        final json = jsonDecode(message.message);
+        final logData = LogData.fromJson(json['data']);
+        await FileLogger.sendLog(logData: logData);
+      } catch (e) {
+        log.info('Error: $e');
+      }
     });
   }
 

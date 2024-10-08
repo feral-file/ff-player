@@ -1,3 +1,4 @@
+import { AppSettings } from '@/constants';
 import axios from 'axios';
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
@@ -24,7 +25,7 @@ class AppService {
 
   public static async getVersion() {
     const response = await axios.get(
-      `https://display.feralfile.com/version.json?t=${Date.now().toString()}`
+      `/version.json?t=${Date.now().toString()}`
     );
     // eslint-disable-next-line @typescript-eslint/dot-notation, @typescript-eslint/no-unsafe-member-access
     this.currentVersion = response.data['version'] as string;

@@ -1,0 +1,18 @@
+{
+  "QrCodePopUp": {
+    "today_daily": "Today's Daily",
+    "next_work": "Next Work",
+    "hour": "hr",
+    "minutes": "mins",
+    "second": "in a minute",
+    "get_the_Feral_File": "Get the Feral File mobile app to browse 15,000+ original artworks, and choose what to display on your TV.",
+    "press_enter_to_hide_show": "Press Enter to hide/show this window."
+  },
+  "LostConnectionModal": {
+    "internet_connection_lost": "Internet connection lost. Reconnecting...",
+    "connection_lost": "Connection lost. Please wait while attempting to reconnect."
+  },
+  "Loading": {
+    "loading": "Loading..."
+  }
+}

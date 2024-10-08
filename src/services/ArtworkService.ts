@@ -1,7 +1,6 @@
-import { Artwork } from '../utils/types';
 import { ApolloClient, gql, NormalizedCacheObject } from '@apollo/client';
 import createApolloClient from '@/utils/ApolloClient';
-import { IndexerToken } from '@/models';
+import { Artwork, IndexerToken } from '@/models';
 import axiosInstance from './axiosService';
 import { removeArtistAliasSuffixes } from '@/utils/ui/formatAlias';
 
@@ -21,7 +20,8 @@ class ArtworkService {
   private fetchArtist = async (artistID?: string): Promise<string> => {
     const response = await axiosInstance.get(`/api/accounts/${artistID ?? ''}`);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const artistAlias = (response.data.result.alias ?? '') as string;
+    const artistAlias = (response.data.result.alumniAccount?.alias ??
+      '') as string;
 
     return removeArtistAliasSuffixes(artistAlias);
   };
@@ -39,7 +39,7 @@ class ArtworkService {
 
       return tokens;
     } catch (error) {
-      console.log('Error querying tokens:', JSON.stringify(error));
+      console.log('[API] Error querying tokens:', JSON.stringify(error));
     }
 
     return [];
@@ -164,7 +164,7 @@ class ArtworkService {
           resolve(result.data.tokens);
         })
         .catch((error: unknown) => {
-          console.log('Error querying tokens:', JSON.stringify(error));
+          console.log('[API] Error querying tokens:', JSON.stringify(error));
           // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
           reject(error);
         });

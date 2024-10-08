@@ -1,23 +1,20 @@
 'use client';
 
 import { Exhibition, ExhibitionType, Post, Artwork } from '@/models';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import styles from './exhibition.module.scss';
 import './exhibition.module.scss';
 import { CastCommand, ExhibitionCatalog, ViewMode } from '@/utils/types';
 import Carousel from './components/carousel/carousel';
-import ArtworkPlayer from '@/components/ArtworkPlayer';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
-import Image from 'next/image';
-import { AppContext } from '@/context/AppContext';
-import { CastingArtworkType } from '@/utils/mixpanel';
+import { useAppContext } from '@/context/AppContext';
+import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
+import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
+import { formatArtworkIndexID } from '@/utils/indexer';
+import { CastingArtworkType } from '@/models/metric.model';
 
 const ExhibitionHall = () => {
-  const context = useContext(AppContext);
-  if (!context) {
-    return <p>There is no App context.</p>;
-  }
-
+  const { context } = useAppContext();
   const { castInfo } = context.websocketData;
   const { screenRatio, viewMode } = context.deviceRotation ?? {
     screenRatio: 1,
@@ -28,7 +25,6 @@ const ExhibitionHall = () => {
   const [catalogID, setCatalogID] = useState<string | undefined>();
   const [screen, setScreen] = useState<ExhibitionCatalog | undefined>();
   const [artworkID, setArtworkID] = useState<string | undefined>();
-  const [artworkName, setArtworkName] = useState<string | undefined>();
 
   const [pageSection, setSection] = useState<ExhibitionCatalog>(
     ExhibitionCatalog.home
@@ -67,12 +63,12 @@ const ExhibitionHall = () => {
     // Set mixpanel metadata
     if (artwork !== artworkRef.current) {
       artworkRef.current = artwork;
-      setArtworkName(
-        (artworkRef.current.series?.title ?? '') +
-          ' ' +
-          (artworkRef.current.name ?? '')
-      );
-      setArtworkID(artworkRef.current.id);
+      if (exhibition) {
+        const artworkID = formatArtworkIndexID(artworkRef.current, exhibition);
+        setArtworkID(artworkID);
+      } else {
+        setArtworkID(artworkRef.current.id);
+      }
     }
   };
 
@@ -94,6 +90,7 @@ const ExhibitionHall = () => {
   useEffect(() => {
     // fetch exhibition detail
     const fetchExhibitionDetail = async () => {
+      setExhibitionDetail(undefined);
       if (!exhibitionID) {
         return;
       }
@@ -173,7 +170,7 @@ const ExhibitionHall = () => {
           <div
             className={styles.leftSection}
             style={{ padding: 60 * screenRatio }}>
-            <div className={styles.info} style={{ gap: 40 * screenRatio }}>
+            <div className={styles.info} style={{ gridGap: 40 * screenRatio }}>
               <p
                 className={styles.title}
                 style={{ fontSize: 48 * screenRatio }}>
@@ -186,7 +183,7 @@ const ExhibitionHall = () => {
                     style={{ fontSize: 18 * screenRatio }}>
                     Curator
                   </p>
-                  <p>{exhibitionDetail.curator.alias}</p>
+                  <p>{exhibitionDetail.curator.alumniAccount?.alias}</p>
                 </div>
               )}
               <div>
@@ -207,7 +204,7 @@ const ExhibitionHall = () => {
                 {exhibitionDetail.artists?.length && (
                   <p>
                     {exhibitionDetail.artists
-                      .map(artist => artist.alias)
+                      .map(artist => artist.alumniAccount?.alias)
                       .join(', ')}
                   </p>
                 )}
@@ -217,12 +214,10 @@ const ExhibitionHall = () => {
           <div className={styles.rightSection}>
             <div
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}>
-              <Image
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
                 src={FERAL_FILE_ASSET_URL + (exhibitionDetail.coverURI ?? '')}
                 alt={exhibitionDetail.title ?? ''}
-                objectFit="contain"
-                width={1080}
-                height={1080}
               />
             </div>
           </div>
@@ -249,8 +244,12 @@ const ExhibitionHall = () => {
               key={artwork.id}
               previewURL={artwork.previewURI}
               artworkID={artworkID}
-              artworkName={artworkName}
               castingType={CastingArtworkType.Exhibition}
+              isCustomView={
+                exhibitionDetail.contracts &&
+                exhibitionDetail.contracts[0]?.address ===
+                  LeeMullican_EXHIBITION_CONTRACT
+              }
             />
           )}
         </div>

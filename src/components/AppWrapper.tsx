@@ -1,132 +1,78 @@
 'use client';
 
-import { AppSettings, KeyDown, LocalStorageItem } from '@/constants';
-import { AppContext } from '@/context/AppContext';
+import {
+  AppSettings,
+  PUSH_METRIC_INTERVAL,
+  SEND_LOG_EVENT_NUMBER,
+  SEND_LOG_INTERVAL,
+} from '@/constants';
+import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
-import DeviceManager from '@/utils/DeviceManager';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
-import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import { CastCommand, Orientation } from '@/utils/types';
 import { useRouter } from 'next/navigation';
-import React, { useContext, useEffect, useRef, useState } from 'react';
-import OnboardingModal from './onboarding-modal/OnboardingModal';
+import React, { useEffect, useRef, useState } from 'react';
 import QrCodePopUp from './qr-code-popup/QrCodePopUp';
-import Script from 'next/script';
-import { initMixpanel } from '@/utils/mixpanel';
+import { uploadMetricEventsFromLocalStorage } from '@/services/metric.service';
+import DeviceManager from '@/utils/DeviceManager';
+
+import { AbstractIntlMessages, NextIntlClientProvider } from 'next-intl';
+import { getUserLocale } from '@/utils/locale';
 
 const enum CastState {
   None, // Not casting
   Artwork, // Displaying artwork, playlist, dallies
   Exhibition, // Displaying exhibition
+  Daily, // Displaying exhibition
 }
 
 const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const context = useContext(AppContext);
-  if (!context) {
-    return <div></div>;
-  }
-
+  const { context } = useAppContext();
   const router = useRouter();
 
-  const { castInfo } = context.websocketData;
+  const { castInfo, canvasService } = context.websocketData;
   const { screenOrientation, rotateRadius } = context.deviceRotation ?? {
     screenOrientation: Orientation.horizontal,
     rotateRadius: 0,
   };
   const [castState, setCastState] = useState<CastState>(CastState.None);
-  const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
-  const [showQrCode, setShowQrCode] = useState<boolean>(false);
-  const lastEventTime = useRef(0);
+  // const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
+  const isWebOSTVLoaded = context.isWebOSTVLoaded;
+  const isWebOSTVDevLoaded = context.isWebOSTVDevLoaded;
+  const pushMetricIntervalID = useRef<
+    NodeJS.Timeout | string | number | undefined
+  >(undefined);
+  const sendLogEventInterval = useRef<NodeJS.Timeout | null>(null);
+  const [messages, setMessages] = useState<AbstractIntlMessages>();
+  const locale = getUserLocale();
 
-  // Initialize mixpanel
+  const [hasLocalStorage, setHasLocalStorage] = useState<boolean>(false);
+
   useEffect(() => {
-    initMixpanel();
+    setHasLocalStorage(
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      typeof window !== 'undefined' && window.localStorage ? true : false
+    );
   }, []);
 
   // Initialize platform events
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).KeyEvent = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: KeyEvent.handlePlatformEvent,
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).DeviceName = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: DeviceName.handlePlatformEvent,
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).Config = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: Config.handlePlatformEvent,
-      };
-    }
-  });
-
-  // Handle keydown event
-  useEffect(() => {
-    const handleKeyDown = () => {
-      setShowQrCode(!showQrCode);
-    };
-
-    EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
-    EventEmitter.subscribe(Event.toggleQrCode, handleKeyDown);
-
-    return () => {
-      EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
-    };
-  }, [showQrCode]);
-
-  // Add event listener for press button 0 to toggle QR code
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const now = Date.now();
-      const minInterval = 200; // Minimum interval between events in milliseconds
-
-      if (now - lastEventTime.current > minInterval) {
-        lastEventTime.current = now;
-        // Toggle QR code when user press Enter
-        if ((event.key as KeyDown) === KeyDown.enter) {
-          console.log('Toggle QR Code');
-          setShowQrCode(!showQrCode);
-        }
-      }
-    };
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', handleKeyDown);
-    }
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showQrCode]);
-
-  // Handle keydown event
-
-  // useEffect(() => {
-  //   const handleKeyDown = () => {
-  //     setShowQrCode(!showQrCode);
-  //   };
-
-  //   EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
-  //   EventEmitter.subscribe(Event.toggleQrCode, handleKeyDown);
-
-  //   return () => {
-  //     EventEmitter.unSubscribe(Event.toggleQrCode, handleKeyDown);
-  //   };
-  // }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Check version update
   useEffect(() => {
     const validateVersion = async () => {
+      const duration =
+        context.appRemoteConfig?.duration ||
+        AppSettings.VERSION_CHECK_INTERVAL_DURATION;
       await checkVersion();
 
       const intervalID = setInterval(() => {
         checkVersion().catch((error: unknown) => {
           console.error(error);
         });
-      }, AppSettings.VERSION_CHECK_INTERVAL_DURATION);
+      }, duration);
 
       return () => {
         clearInterval(intervalID);
@@ -141,38 +87,119 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const checkVersion = async () => {
     const currentVersion = await AppService.getCurrentVersion();
     const newVersion = await AppService.getVersion();
-    console.log('Current Version:', currentVersion);
-    console.log('New Version:', newVersion);
+    console.log('[INFO] Current Version:', currentVersion);
+    console.log('[INFO] New Version:', newVersion);
     if (newVersion !== currentVersion) {
       window.location.reload();
     }
   };
 
   useEffect(() => {
-    console.log('Cast Info:', castInfo);
-    if (castInfo) {
-      const handleCastCommand = async () => {
-        switch (castInfo.castCommand) {
-          case CastCommand.connect: {
-            setShowQrCode(false);
-            if (
-              !(await DeviceManager.isPreviouslyConnectedDevice(
-                castInfo.deviceInfo?.device_id ?? ''
-              ))
-            ) {
-              setDisplayOnboarding(true);
-              await DeviceManager.addPreviouslyConnectedDeviceId(
-                castInfo.deviceInfo?.device_id ?? ''
-              );
-            } else {
-              setDisplayOnboarding(false);
-            }
-            break;
-          }
+    const handleEscapeKey = () => {
+      router.back();
+      canvasService.current.disconnect({}).catch((error: unknown) => {
+        console.log(error);
+      });
+    };
 
+    EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+    EventEmitter.subscribe(Event.escape, handleEscapeKey);
+
+    // Cleanup the event listener on component unmount
+    return () => {
+      EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
+    };
+  });
+
+  useEffect(() => {
+    const fetchMessages = async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const localeJson = await import(`../../locales/${locale}.json`);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      setMessages(localeJson.default as AbstractIntlMessages);
+    };
+    fetchMessages().catch((error: unknown) => {
+      console.error(error);
+    });
+  }, [locale]);
+
+  useEffect(() => {
+    const sendLog = async () => {
+      const primaryAddress = await DeviceManager.getPrimaryAddress();
+      const deviceId = await DeviceManager.getDeviceId();
+      const deviceName = await DeviceManager.getName();
+      const logTitle = `${deviceName}_${deviceId}_${primaryAddress ?? ''}_${new Date().toISOString()}.log`;
+      const tags: string[] = [];
+
+      const data = {
+        userId: primaryAddress ? primaryAddress : deviceId,
+        logTitle,
+        metadata: {
+          primaryAddress,
+          deviceName,
+          deviceId,
+        },
+        tags,
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      (window as any).Log?.postMessage(
+        JSON.stringify({
+          data: data,
+        })
+      );
+    };
+
+    const handleSendLogEvent = () => {
+      countEvent++;
+      // Send log after reach event number
+      if (countEvent >= SEND_LOG_EVENT_NUMBER) {
+        sendLog().catch((error: unknown) => {
+          console.log('Error when send log', error);
+        });
+      }
+
+      if (sendLogEventInterval.current) {
+        clearInterval(sendLogEventInterval.current);
+      }
+
+      // Reset counter after 10 seconds if not receive another event
+      sendLogEventInterval.current = setInterval(() => {
+        countEvent = 0;
+      }, SEND_LOG_INTERVAL);
+    };
+
+    let countEvent = 0;
+    EventEmitter.unSubscribe(Event.sendLog, handleSendLogEvent);
+    EventEmitter.subscribe(Event.sendLog, handleSendLogEvent);
+
+    return () => {
+      EventEmitter.unSubscribe(Event.sendLog, handleSendLogEvent);
+      if (sendLogEventInterval.current) {
+        clearInterval(sendLogEventInterval.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    console.log('[CAST] process cast info:', JSON.stringify(castInfo));
+    if (castInfo) {
+      const disableBackChanged = () => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+          (window as any).AppState?.postMessage(
+            JSON.stringify({
+              handler: 'backAbleChanged',
+              data: true,
+            })
+          );
+        } catch (error) {
+          console.error(error);
+        }
+      };
+      const handleCastCommand = () => {
+        switch (castInfo.castCommand) {
           case CastCommand.castListArtwork: {
-            setShowQrCode(false);
-            setDisplayOnboarding(false);
             if (castState === CastState.Artwork) {
               return;
             }
@@ -183,13 +210,11 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             } else {
               router.replace('/playlist');
             }
-
+            disableBackChanged();
             break;
           }
 
           case CastCommand.castExhibition: {
-            setShowQrCode(false);
-            setDisplayOnboarding(false);
             if (castState === CastState.Exhibition) {
               return;
             }
@@ -200,27 +225,34 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             } else {
               router.replace('/exhibitions');
             }
+            disableBackChanged();
 
+            break;
+          }
+
+          case CastCommand.castDaily: {
+            if (castState === CastState.Daily) {
+              return;
+            }
+
+            setCastState(CastState.Daily);
+            if (castState === CastState.None) {
+              router.push('/daily');
+            } else {
+              router.replace('/daily');
+            }
+            disableBackChanged();
             break;
           }
 
           default: {
-            if (castInfo.dataChecked) {
-              setShowQrCode(true);
-            }
             break;
           }
         }
       };
-      handleCastCommand().catch((error: unknown) => {
-        console.error(error);
-      });
+      handleCastCommand();
     } else {
-      if (castState !== CastState.None) {
-        localStorage.setItem(
-          LocalStorageItem.doResetMixpanelAfterTracking,
-          'true'
-        );
+      if (castState !== CastState.None && castState !== CastState.Daily) {
         // Disconnect
         setCastState(CastState.None);
         router.back();
@@ -230,29 +262,25 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, [castInfo]);
 
   useEffect(() => {
-    if (showQrCode) {
-      const timeoutID = setTimeout(() => {
-        setShowQrCode(false);
-      }, 30000);
+    if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
+      if (pushMetricIntervalID.current) {
+        clearInterval(pushMetricIntervalID.current);
+      }
 
-      return () => {
-        clearTimeout(timeoutID);
-      };
+      pushMetricIntervalID.current = setInterval(() => {
+        uploadMetricEventsFromLocalStorage();
+      }, PUSH_METRIC_INTERVAL);
     }
-  }, [showQrCode]);
 
-  const handleCloseQRCode = () => {
-    setShowQrCode(false);
-  };
+    return () => {
+      if (pushMetricIntervalID.current) {
+        clearInterval(pushMetricIntervalID.current);
+      }
+    };
+  }, [isWebOSTVLoaded, isWebOSTVDevLoaded]);
 
-  return (
-    <>
-      <Script
-        src="/webOSTVjs-1.2.11/webOSTV.js"
-        onLoad={() => {
-          console.log('loaded');
-        }}></Script>
-      {displayOnboarding && <OnboardingModal />}
+  return messages != undefined ? (
+    <NextIntlClientProvider locale={locale} messages={messages}>
       <div
         style={{
           width:
@@ -269,12 +297,12 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               (rotateRadius || 0) % 180 === 0)
               ? '100vh'
               : '100vw',
-          transform: `rotate(${(-rotateRadius || 0).toString()}deg) `,
+          transform: `rotate(${(rotateRadius || 0).toString()}deg) `,
           transformOrigin:
             (screenOrientation === Orientation.vertical &&
-              (rotateRadius || 0) % 360 !== 90) ||
+              (rotateRadius || 0) % 360 === 90) ||
             (screenOrientation === Orientation.horizontal &&
-              (rotateRadius || 0) % 360 !== 90)
+              (rotateRadius || 0) % 360 === 90)
               ? '50vw center'
               : 'center 50vh',
           transition: 'transform 0.2s',
@@ -283,9 +311,21 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        {showQrCode && <QrCodePopUp onClick={handleCloseQRCode}></QrCodePopUp>}
+        {hasLocalStorage && <QrCodePopUp></QrCodePopUp>}
       </div>
-    </>
+      <div
+        style={{
+          position: 'fixed',
+          width: '100%',
+          height: '100%',
+          zIndex: 9999,
+          background: 'transparent',
+          top: 0,
+          left: 0,
+        }}></div>
+    </NextIntlClientProvider>
+  ) : (
+    <></>
   );
 };
 

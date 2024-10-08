@@ -1,4 +1,4 @@
-import { IndexerToken } from '@/models';
+import { Artwork } from '@/models';
 
 export interface WebSocketMessage {
   messageID: string;
@@ -126,18 +126,6 @@ export interface KeyboardEventRequest {
 }
 export type KeyboardEventReply = Reply;
 
-export interface Artwork {
-  id: string;
-  seriesID: string;
-  index: number;
-  previewURI: string;
-  thumbnailURI: string;
-  series?: Series;
-  artistAlias?: string;
-  blockchain?: string;
-  contractAddress?: string;
-}
-
 export interface Series {
   id: string;
   previewFile?: FileInfo;
@@ -194,6 +182,7 @@ export interface PlaylistToken {
   artwork?: Artwork;
   duration: number;
   previewURL: string;
+  contractAddress?: string;
   token: {
     id: string;
     name: string;
@@ -227,17 +216,6 @@ export enum ExhibitionCatalog {
 export enum ViewMode {
   landscape = 'landscape',
   portrait = 'portrait',
-}
-
-export interface Daily {
-  id: string;
-  blockchain: string;
-  contractAddress: string;
-  displayTime: string;
-  tokenID: string;
-  tokenName: string;
-  previewURL?: string;
-  token?: IndexerToken;
 }
 
 export enum Orientation {

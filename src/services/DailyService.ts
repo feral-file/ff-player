@@ -1,23 +1,80 @@
-import { IndexerToken } from '@/models';
-import { Daily } from '../utils/types';
+import { Daily, IndexerToken } from '@/models';
 import ArtworkService from './ArtworkService';
 import axiosInstance from './axiosService';
-import { getIndexerTokenName } from '@/utils/indexer';
+import { convertToTokenID, getIndexerTokenName } from '@/utils/indexer';
+import { convertToQueryParams } from '@/utils/queryParams';
 
 class DailyService {
   private artworkService = new ArtworkService();
+  static instance = new DailyService();
+  private dailies: Daily[] = [];
 
-  public async getUpcomingDaily(): Promise<Daily[]> {
-    const response = await axiosInstance.get('/api/dailies/upcoming');
+  public getDailies(): Daily[] {
+    return this.dailies;
+  }
+
+  public async isRefreshDailies(newDailyHour: number): Promise<boolean> {
+    const newDailies = await this.callingDailies(newDailyHour);
+    if (newDailies !== this.dailies) {
+      this.dailies = newDailies;
+      return true;
+    }
+
+    return false;
+  }
+
+  public async getUpcomingDaily(
+    expand: string[],
+    pagingParams?: string
+  ): Promise<Daily[]> {
+    const expandParams = convertToQueryParams(expand);
+    const response = await axiosInstance.get(
+      `/api/dailies/upcoming?${expandParams}&${pagingParams ?? ''}`
+    );
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     return response.data.result as Daily[];
   }
 
-  public async callingDailies(): Promise<Daily[]> {
+  public async getDailiesByDate(
+    date: string,
+    expand?: string[]
+  ): Promise<Daily[]> {
+    let expandParams = '';
+    if (expand) {
+      expandParams = convertToQueryParams(expand);
+    }
+
+    const response = await axiosInstance.get(
+      `/api/dailies/date/${date}?${expandParams}`
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    return response.data.result as Daily[];
+  }
+
+  public async callingDailies(newDailyHour: number): Promise<Daily[]> {
     try {
-      const dailies = await this.getUpcomingDaily();
+      const date = this.getCurrentLocaleDateOnly(newDailyHour);
+      let dailies = await this.getDailiesByDate(date, [
+        'includeSuccessfulSwap',
+      ]);
+
+      if (dailies.length === 0) {
+        console.log('[DAILY] No upcoming dailies, using default daily');
+        dailies = [this.getDefaultDaily()];
+      }
+
       const ids = dailies.map((d: Daily) => {
-        return this.getTokenID(d);
+        if (d.artwork?.swap) {
+          const swap = d.artwork.swap;
+          return convertToTokenID(
+            swap.blockchainType,
+            swap.contractAddress,
+            swap.token
+          );
+        }
+
+        return convertToTokenID(d.blockchain, d.contractAddress, d.tokenID);
       });
 
       if (ids.length === 0) {
@@ -40,13 +97,18 @@ class DailyService {
 
       const convertDailies = dailies.map((d: Daily) => {
         let tokenName = '';
-        const token = indexerData.get(d.tokenID);
+        let tokenID = d.tokenID;
+        if (d.artwork?.swap) {
+          tokenID = d.artwork.swap.token;
+        }
+        const token = indexerData.get(tokenID);
         if (token) {
           tokenName = getIndexerTokenName(token);
         }
+
         return {
           ...d,
-          previewURL: previewData.get(d.tokenID),
+          previewURL: previewData.get(tokenID),
           token,
           tokenName,
         };
@@ -54,52 +116,44 @@ class DailyService {
 
       return convertDailies;
     } catch (error) {
-      console.error(error);
-      return [];
+      console.error(
+        '[DAILY] Error when convert dailies',
+        JSON.stringify(error)
+      );
+      return [this.getDefaultDaily()];
     }
   }
 
-  private getTokenID(d: Daily): string {
-    switch (d.blockchain) {
-      case 'ethereum': {
-        return `eth-${d.contractAddress}-${d.tokenID}`;
-      }
+  private getDefaultDaily(): Daily {
+    // Payphone Token
+    return {
+      blockchain: 'ethereum',
+      contractAddress: '0x1D9787369B1DCf709f92Da1d8743c2A4b6028a83',
+      displayTime: new Date().toString(),
+      id: '',
+      tokenName: '#1',
+      tokenID: '339348595130070749814751437599411258966098496',
+    };
+  }
 
-      case 'bitmark': {
-        return `bmk--${d.tokenID}`;
-      }
-
-      case 'tezos': {
-        return `tez-${d.contractAddress}-${d.tokenID}`;
-      }
-
-      default: {
-        return '';
-      }
+  private getCurrentLocaleDateOnly(newDailyHour: number): string {
+    const now = new Date();
+    let currentTimestamp: number;
+    // Previous day if the current time is before 6:00 AM
+    const newDailyAt = new Date().setHours(newDailyHour, 0, -1, 0); // 5:59:59 AM buffer 1s
+    if (now.getTime() < newDailyAt) {
+      currentTimestamp = now.setDate(now.getDate() - 1);
+    } else {
+      currentTimestamp = now.getTime();
     }
+
+    const date = new Date(currentTimestamp);
+    // Format date to yyyy-mm-dd
+    const year = date.getFullYear().toString();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 }
 
-export default DailyService;
-
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
-export class DailyInstanceService {
-  private static instance: DailyInstanceService | null = null;
-  private static dailies: Daily[] = [];
-
-  public static getInstance(): DailyInstanceService {
-    if (!DailyInstanceService.instance) {
-      DailyInstanceService.instance = new DailyInstanceService();
-    }
-
-    return DailyInstanceService.instance;
-  }
-
-  public static getDailies() {
-    return this.dailies;
-  }
-
-  public static setDailies(dailies: Daily[]) {
-    this.dailies = dailies;
-  }
-}
+export default DailyService.instance;

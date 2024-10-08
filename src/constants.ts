@@ -1,9 +1,12 @@
 export enum KeyCodes {
   escape = 0x0010000001b,
+  goBack = 4294971397,
   audioVolumeUp = 0x00100000a10,
   audioVolumeDown = 0x00100000a0f,
   audioVolumeMute = 0x00100000a11,
   enter = 0x0010000000d,
+  select = 4294968588,
+  arrowUp = 0x00100000304,
 }
 
 export const IgnoreKeyCodes = [
@@ -40,28 +43,42 @@ export const IgnoreKeyDown = [
 ];
 
 export enum LocalStorageItem {
-  deviceId = 'deviceId',
+  deviceId = 'device_id',
   locationID = 'locationID',
   topicID = 'topicID',
   platform = 'platform',
   castInfo = 'castInfo',
   name = 'device_name',
   branchLink = 'branchLink',
-  previouslyConnectedDeviceIds = 'previouslyConnectedDeviceIds',
-  doResetMixpanelAfterTracking = 'doResetMixpanelAfterTracking',
-  newMixpanelUserID = 'newMixpanelUserID',
+  metricEvents = 'metricEvents',
+  primaryAddress = 'primaryAddress',
+  orientation = 'orientation',
 }
 
 export enum Platform {
-  android = 'android',
+  google = 'google',
   tizen = 'tizen',
   lg = 'lg',
 }
 
+export enum DeviceNamePrefix {
+  google = 'Google-',
+  samsung = 'Samsung-',
+  lg = 'LG-',
+}
+
 export const AppSettings = {
   VERSION_CHECK_INTERVAL_DURATION: 1000 * 60 * 60, // 1 minutes
+  DEFAULT_NEW_DAILY_HOUR: 6, // 6:00 AM
   JG_043_EXHIBITION_ID: '46a0f68b-a657-4364-92a0-32a88b65fbd9',
   STANDARD_HEIGHT: 1080,
 };
 
-export const MixpanelAnonymousIDPrefix = '$device:';
+export const TIMESTAMP_PER_MINUTE = 60 * 1000;
+export const TIMESTAMP_PER_HOUR = 60 * 60 * 1000;
+
+export const PUSH_METRIC_INTERVAL = 60 * 1000;
+
+export const SEND_LOG_INTERVAL = 10 * 1000;
+
+export const SEND_LOG_EVENT_NUMBER = 4;

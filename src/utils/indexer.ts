@@ -1,4 +1,4 @@
-import { IndexerToken } from '@/models';
+import { Artwork, Blockchain, Exhibition, IndexerToken } from '@/models';
 
 enum IndexerSource {
   feral_file = 'feralfile',
@@ -35,3 +35,41 @@ export const getIndexerTokenName = (token: IndexerToken): string => {
     return '';
   }
 };
+
+export function convertToTokenID(
+  blockchain: string,
+  contractAddress: string,
+  tokenID: string
+): string {
+  switch (blockchain) {
+    case 'ethereum': {
+      return `eth-${contractAddress}-${tokenID}`;
+    }
+
+    case 'bitmark': {
+      return `bmk--${tokenID}`;
+    }
+
+    case 'tezos': {
+      return `tez-${contractAddress}-${tokenID}`;
+    }
+
+    default: {
+      return '';
+    }
+  }
+}
+
+export function formatArtworkIndexID(artwork: Artwork, exhibition: Exhibition) {
+  let contractAddress: string;
+  let blockchain: string;
+  if (exhibition.mintBlockchain === Blockchain.Bitmark && artwork.swap) {
+    contractAddress = artwork.swap.contractAddress;
+    blockchain = artwork.swap.blockchainType;
+  } else {
+    contractAddress = exhibition.contracts?.[0]?.address ?? '';
+    blockchain = exhibition.mintBlockchain ?? '';
+  }
+
+  return convertToTokenID(blockchain, contractAddress, artwork.id ?? '');
+}

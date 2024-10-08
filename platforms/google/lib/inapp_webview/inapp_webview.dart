@@ -3,16 +3,18 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:feralfile_display/model/app_state_message.dart';
 import 'package:feralfile_display/model/js_message.dart';
+import 'package:feralfile_display/model/log_data.dart';
 import 'package:feralfile_display/service/configuration_service.dart';
 import 'package:feralfile_display/utils/config_manager.dart';
 import 'package:feralfile_display/utils/injector.dart';
 import 'package:feralfile_display/utils/log.dart';
-import 'package:feralfile_display/view/common_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 class InAppWebViewPage extends StatefulWidget {
   final InAppWebViewPayload payload;
@@ -55,51 +57,70 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Focus(
-          autofocus: true,
-          focusNode: _focusNode,
-          onKeyEvent: (node, event) {
-            log.info(event.toString());
+  Widget build(BuildContext context) {
+    if (_webViewController.platform is AndroidWebViewController) {
+      AndroidWebViewController.enableDebugging(true);
+      (_webViewController.platform as AndroidWebViewController)
+          .setMediaPlaybackRequiresUserGesture(false);
+    }
 
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Focus(
+        autofocus: true,
+        focusNode: _focusNode,
+        onKeyEvent: (node, event) {
+          log.info(event.toString());
+
+          if (event is KeyDownEvent) {
+            unawaited(_webViewController.runJavaScriptReturningResult(
+                'KeyEvent.handlePlatformEvent("${event.logicalKey.keyId}_'
+                '${event.logicalKey.keyLabel}");'));
+          }
+
+          if (_listAlwaysHandledKeys.contains(event.logicalKey)) {
+            log.info('KeyEventResult.handled');
+            return KeyEventResult.handled;
+          }
+
+          if (_isBackAble &&
+              event.logicalKey.keyId == LogicalKeyboardKey.escape.keyId) {
             if (event is KeyDownEvent) {
               unawaited(_webViewController.runJavaScriptReturningResult(
                   'KeyEvent.handlePlatformEvent("${event.logicalKey.keyId}_'
                   '${event.logicalKey.keyLabel}");'));
             }
 
-            if (_listAlwaysHandledKeys.contains(event.logicalKey)) {
-              log.info('KeyEventResult.handled');
-              return KeyEventResult.handled;
-            }
+            log.info('KeyEventResult.handled');
+            return KeyEventResult.handled;
+          }
 
-            if (_isBackAble &&
-                event.logicalKey.keyId == LogicalKeyboardKey.escape.keyId) {
-              if (event is KeyDownEvent) {
-                unawaited(_webViewController.runJavaScriptReturningResult(
-                    'KeyEvent.handlePlatformEvent("${event.logicalKey.keyId}_'
-                    '${event.logicalKey.keyLabel}");'));
-              }
-
-              log.info('KeyEventResult.handled');
-              return KeyEventResult.handled;
-            }
-
-            log.info('KeyEventResult.ignored');
-            return KeyEventResult.ignored;
-          },
-          child: Stack(
-            children: [
-              WebViewWidget(
-                controller: _webViewController,
-                key: Key(widget.payload.key),
-              ),
-              if (_isLoading) loadingWidget(context),
-            ],
-          ),
+          log.info('KeyEventResult.ignored');
+          return KeyEventResult.ignored;
+        },
+        child: WebViewWidget(
+          controller: _webViewController,
+          key: Key(widget.payload.key),
         ),
-      );
+      ),
+    );
+  }
+
+  void _reloadWhenNoInternet() {
+    Connectivity().checkConnectivity().then((result) {
+      log.info('Connectivity: $result');
+      if (result == ConnectivityResult.none) {
+        Connectivity()
+            .onConnectivityChanged
+            .listen((ConnectivityResult result) {
+          log.info('Connectivity changed: $result');
+          if (result != ConnectivityResult.none && _isLoading) {
+            _webViewController.reload();
+          }
+        });
+      }
+    });
+  }
 
   void _initWebview() {
     final url = widget.payload.url;
@@ -120,6 +141,13 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
         setState(() {
           _isLoading = false;
         });
+      },
+      onPageStarted: (url) {
+        log.info('page started: $url');
+        setState(() {
+          _isLoading = true;
+        });
+        _reloadWhenNoInternet();
       },
     ));
   }
@@ -167,6 +195,18 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
       final rotate = message.message;
       ConfigManager.instance.quarterTurns.value +=
           rotate == 'clockwise' ? 1 : -1;
+    });
+
+    _webViewController.addJavaScriptChannel('Log',
+        onMessageReceived: (message) async {
+      try {
+        log.info('Log: ${message.message}');
+        final json = jsonDecode(message.message);
+        final logData = LogData.fromJson(json['data']);
+        await FileLogger.sendLog(logData: logData);
+      } catch (e) {
+        log.info('Error: $e');
+      }
     });
   }
 

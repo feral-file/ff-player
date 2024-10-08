@@ -4,6 +4,7 @@ import './globals.css';
 import { AppProvider } from '../context/AppContext';
 import AppWrapper from '@/components/AppWrapper';
 import LostConnectionModal from '@/components/LostConnectionModal';
+import { Suspense } from 'react';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -22,10 +23,12 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <AppProvider>
-          <AppWrapper>
-            <LostConnectionModal></LostConnectionModal>
-            {children}
-          </AppWrapper>
+          <Suspense>
+            <AppWrapper>
+              <LostConnectionModal></LostConnectionModal>
+              {children}
+            </AppWrapper>
+          </Suspense>
         </AppProvider>
       </body>
     </html>

@@ -1,25 +1,23 @@
 'use client';
 
-import ArtworkPlayer from '@/components/ArtworkPlayer';
-import { AppContext } from '@/context/AppContext';
+import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
+import { useAppContext } from '@/context/AppContext';
 import { IndexerToken } from '@/models';
+import { CastingArtworkType } from '@/models/metric.model';
 import ArtworkService from '@/services/ArtworkService';
+import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
 import { getIndexerTokenName } from '@/utils/indexer';
-import { CastingArtworkType } from '@/utils/mixpanel';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
 import { CastCommand, PlayArtworkV2, PlaylistToken } from '@/utils/types';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export default function PlaylistClient() {
-  const context = useContext(AppContext);
-  if (!context) {
-    return <p>There is no context.</p>;
-  }
-
+  const { context } = useAppContext();
   const { castInfo } = context.websocketData;
 
   const [artworkID, setArtworkID] = useState<string | undefined>();
-  const [artworkName, setArtworkName] = useState<string | undefined>();
+  const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
+    useState<boolean>(false);
 
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const indexRef = useRef<number>(-1);
@@ -58,9 +56,11 @@ export default function PlaylistClient() {
     if (currentPlaylist !== currentPlaylistRef.current) {
       currentPlaylistRef.current = currentPlaylist;
       setArtworkID(currentPlaylist.token.id);
-      setArtworkName(currentPlaylist.token.name);
     }
     setCastPreviewURL(currentPlaylist.previewURL);
+    setIsLeeMucianExhibition(
+      currentPlaylist.contractAddress === LeeMullican_EXHIBITION_CONTRACT
+    );
 
     const currentTime = Date.now();
     startPlayArtworkTime.current = currentTime;
@@ -72,8 +72,15 @@ export default function PlaylistClient() {
   const handleUpdateDuration = (artworks: PlayArtworkV2[]) => {
     const durationMap = new Map<string, number>();
     artworks.forEach((a: PlayArtworkV2) => {
-      durationMap.set(a.id, a.duration);
+      if (a.token) {
+        durationMap.set(a.token.id, a.duration);
+      }
     });
+    let index = currentIndex % playlist.length;
+    const currentPlaylistItem = playlist[currentIndex];
+    const currentArtwork = artworks.find(
+      a => a.token?.id === currentPlaylistItem.token.id
+    );
 
     const updatedPlaylist = playlist.map((p: PlaylistToken, i: number) => {
       return {
@@ -82,14 +89,37 @@ export default function PlaylistClient() {
       };
     });
 
-    const i = currentIndex % playlist.length;
-    const remainTime = Date.now() - startPlayArtworkTime.current;
-    const st = calculateStartTime(updatedPlaylist, i, remainTime + 100);
-    setStartTime(st);
+    let startTime = calculateStartTime(updatedPlaylist, index);
+    if (currentArtwork) {
+      const playTime = Date.now() - startPlayArtworkTime.current;
+      if (currentPlaylistItem.duration < currentArtwork.duration) {
+        const remainTime = new Date(
+          currentPlaylistItem.duration -
+            playTime +
+            (currentArtwork.duration - currentPlaylistItem.duration)
+        ).setMilliseconds(0);
+        startTime = calculateStartTime(updatedPlaylist, index, remainTime);
+        startInterval(remainTime);
+      } else if (currentPlaylistItem.duration > currentArtwork.duration) {
+        if (playTime >= currentArtwork.duration) {
+          index = (index + 1) % playlist.length;
+          startTime = calculateStartTime(updatedPlaylist, index);
+        } else {
+          const remainTime = new Date(
+            currentArtwork.duration - playTime
+          ).setMilliseconds(0);
+          startTime = calculateStartTime(updatedPlaylist, index, remainTime);
+          startInterval(remainTime);
+        }
+      }
+    }
+
+    setStartTime(startTime);
     setPlaylist(updatedPlaylist);
   };
 
   const handlePauseCasting = () => {
+    console.log('handlePauseCasting');
     clearTimer();
     const now = Date.now();
     elapsedTimeRef.current = now - startPlayArtworkTime.current;
@@ -97,10 +127,11 @@ export default function PlaylistClient() {
   };
 
   const handleResumeCasting = () => {
+    console.log('handleResumeCasting');
     const st = calculateStartTime(
       playlist,
       currentIndex,
-      elapsedTimeRef.current
+      new Date(elapsedTimeRef.current).setMilliseconds(0)
     );
     setStartTime(st);
     startInterval(remainTimeRef.current);
@@ -137,12 +168,17 @@ export default function PlaylistClient() {
     }
 
     const st = calculateStartTime(playlist, index);
+
     setStartTime(st);
     clearTimer();
     setCurrentIndex(index);
   };
 
   const startInterval = (duration: number) => {
+    if (duration === 0) {
+      return;
+    }
+
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
@@ -180,12 +216,14 @@ export default function PlaylistClient() {
                 }
                 const previewData = new Map<string, string>();
                 const tokensName = new Map<string, string>();
+                const contractAddress = new Map<string, string>();
                 tokens.forEach((token: IndexerToken) => {
                   previewData.set(
                     token.indexID,
                     token.asset.metadata.project.latest.previewURL
                   );
                   tokensName.set(token.indexID, getIndexerTokenName(token));
+                  contractAddress.set(token.indexID, token.contractAddress);
                 });
                 const updatedArtworks = artworks.map(
                   (artwork: PlayArtworkV2) => {
@@ -199,6 +237,9 @@ export default function PlaylistClient() {
                       previewURL:
                         previewData.get(artwork.token?.id ?? '') ?? '',
                       token: artwork.token ?? { id: '', name: '' },
+                      contractAddress: contractAddress.get(
+                        artwork.token?.id ?? ''
+                      ),
                     };
                     return aw;
                   }
@@ -259,14 +300,23 @@ export default function PlaylistClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [castInfo]);
 
+  useEffect(() => {
+    if (context.isOnline && !context.websocketData.isDisconnected) {
+      handleResumeCasting();
+    } else {
+      handlePauseCasting();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context.isOnline, context.websocketData.isDisconnected]);
+
   return (
     <>
       <div style={{ width: '100%', height: '100%' }}>
         <ArtworkPlayer
           previewURL={castPreviewURL ?? ''}
           artworkID={artworkID}
-          artworkName={artworkName}
           castingType={CastingArtworkType.Playlist}
+          isCustomView={isLeeMucianExhibition}
         />
       </div>
     </>
