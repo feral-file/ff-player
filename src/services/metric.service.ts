@@ -57,12 +57,10 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
   await accountsRequester.post('/apis/metrics', { metrics: events });
 }
 
-export function appendMetricEventToLocalStorage(event: MetricEvent) {
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  if (!localStorage) {
-    return;
-  }
-
+export function appendMetricEventToLocalStorage(
+  event: MetricEvent[],
+  uploadAfterAppend = false
+) {
   console.log('[METRIC]: append event to localStorage', JSON.stringify(event));
   const metricEvents = localStorage.getItem(LocalStorageItem.metricEvents);
   let events: MetricEvent[] = [];
@@ -79,9 +77,11 @@ export function appendMetricEventToLocalStorage(event: MetricEvent) {
     }
   }
 
-  events.push(event);
+  events.push(...event);
   localStorage.setItem(LocalStorageItem.metricEvents, JSON.stringify(events));
-  uploadMetricEventsFromLocalStorage();
+  if (uploadAfterAppend) {
+    uploadMetricEventsFromLocalStorage();
+  }
 }
 
 export function uploadMetricEventsFromLocalStorage() {
@@ -108,17 +108,15 @@ export function uploadMetricEventsFromLocalStorage() {
   }
 
   if (events.length > 0) {
-    uploadNewMetric(events)
-      .then(() => {
-        localStorage.removeItem(LocalStorageItem.metricEvents);
-      })
-      .catch((error: unknown) => {
-        console.error(
-          '[METRIC] Error uploading metric events',
-          JSON.stringify(error)
-        );
-        Sentry.captureException(error);
-      });
+    localStorage.removeItem(LocalStorageItem.metricEvents);
+    uploadNewMetric(events).catch((error: unknown) => {
+      appendMetricEventToLocalStorage(events);
+
+      console.error(
+        '[METRIC] Error uploading metric events',
+        JSON.stringify(error)
+      );
+    });
   }
 }
 

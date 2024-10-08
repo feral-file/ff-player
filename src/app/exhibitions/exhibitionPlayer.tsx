@@ -224,7 +224,7 @@ const ExhibitionHall = () => {
           }, delay);
         };
 
-        appendMetricEventToLocalStorage(event);
+        appendMetricEventToLocalStorage([event], true);
         checkNewDay();
       };
 
