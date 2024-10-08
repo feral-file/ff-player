@@ -26,7 +26,7 @@ const SettingItem: React.FC<SettingItemProps> = ({
     <div
       className={clsx(
         styles.settingItem,
-        ((focused ?? false) || (selected ?? false)) && styles.active,
+        ((focused ?? false) || (selected ?? false)) && styles.selected,
         focused && styles.focused
       )}>
       <div

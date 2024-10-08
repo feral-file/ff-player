@@ -13,6 +13,8 @@ export enum Direction {
   Right = 'right',
 }
 
+const ACTIVE_DELAY_DURATION = 100;
+
 const FocusableLeaf: React.FC<{
   children: React.ReactNode;
   key: string;
@@ -24,6 +26,7 @@ const FocusableLeaf: React.FC<{
   onFocus?: () => void;
   onBlur?: () => void;
   onEnterPress?: () => void;
+  onClick?: () => void;
 }> = ({
   children,
   key,
@@ -35,6 +38,7 @@ const FocusableLeaf: React.FC<{
   onFocus,
   onBlur,
   onEnterPress,
+  onClick,
 }) => {
   const { ref, focused } = useFocusable({
     focusKey: focusKey,
@@ -46,7 +50,20 @@ const FocusableLeaf: React.FC<{
       onBlur?.();
     },
     onEnterPress: () => {
-      onEnterPress?.();
+      // Simulate a click event on the element
+      if (ref.current && ref.current instanceof HTMLElement) {
+        const firstChild = ref.current.firstChild as HTMLElement | null;
+        if (firstChild) {
+          firstChild.classList.add('active');
+          setTimeout(() => {
+            firstChild.classList.remove('active');
+          }, ACTIVE_DELAY_DURATION);
+        }
+      }
+
+      setTimeout(() => {
+        onEnterPress?.();
+      }, ACTIVE_DELAY_DURATION);
     },
     onArrowPress: direction => {
       if (blockDirections?.includes(direction as Direction) ?? false) {
@@ -68,6 +85,11 @@ const FocusableLeaf: React.FC<{
 
   const handleMouseClick = () => {
     setFocus(focusKey);
+    if (onClick) {
+      onClick();
+    } else {
+      onEnterPress?.();
+    }
   };
 
   return (

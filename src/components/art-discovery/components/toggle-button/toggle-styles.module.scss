@@ -36,6 +36,7 @@
   }
 }
 
-.outline.active {
+.outline.focused,
+.outline:hover {
   border-color: #ffffff;
 }

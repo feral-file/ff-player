@@ -7,8 +7,17 @@ const RotateButton: React.FC<{
   rotateAngle?: number;
 }> = ({ focused, rotateAngle }) => {
   return (
-    <div className={clsx(styles.outline, focused && styles.active)}>
-      <div className={clsx(styles.rotate, focused && styles.active)}>
+    <div className={clsx(styles.outline, focused && styles.focused)}>
+      <style jsx>{`
+        .active {
+          > div {
+            background-color: #b9e5ff;
+            opacity: 0.3;
+            color: black;
+          }
+        }
+      `}</style>
+      <div className={clsx(styles.rotate, focused && styles.focused)}>
         <div>
           <img
             src={`/images/rotate${focused ? '-active.svg' : '-inactive.svg'}`}

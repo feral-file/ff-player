@@ -37,6 +37,7 @@ export enum ControlFocusableLeafKey {
   DisplayRotation = 'display-rotation',
   PairMobileApp = 'pair-mobile-app',
   ControlsLoseFocus = 'control-lose-focus',
+  BackToHideButton = 'back-to-hide-button',
 }
 
 function getLeafKey(option: SettingOption): ControlFocusableLeafKey | string {
@@ -53,9 +54,10 @@ function getLeafKey(option: SettingOption): ControlFocusableLeafKey | string {
 }
 
 // Controls overlay, appears on all the art casting screens
-const Controls: React.FC<{ hasFocusedChild?: boolean }> = ({
-  hasFocusedChild,
-}) => {
+const Controls: React.FC<{
+  hasFocusedChild?: boolean;
+  onHidePopup: () => void;
+}> = ({ hasFocusedChild, onHidePopup }) => {
   const [settingOption, setSettingOption] = useState<SettingOption>(
     SettingOption.ArtworkFraming
   );
@@ -152,7 +154,7 @@ const Controls: React.FC<{ hasFocusedChild?: boolean }> = ({
   return (
     <>
       {hasFocusedChild ? (
-        <div className={clsx(styles.mainContent, styles.active)}>
+        <div className={clsx(styles.mainContent, styles.focused)}>
           <div className={styles.header}>
             <div className={styles.logo}>
               <img
@@ -192,12 +194,12 @@ const Controls: React.FC<{ hasFocusedChild?: boolean }> = ({
           </div>
         </div>
       ) : (
-        <FocusableLeaf
-          key={ControlFocusableLeafKey.ControlsLoseFocus}
-          focusKey={ControlFocusableLeafKey.ControlsLoseFocus}
-          style={{ width: '100%' }}>
-          <div className={styles.mainContent}>
-            <div className={styles.collapseSetting}>
+        <div className={styles.mainContent}>
+          <div className={styles.collapseSetting}>
+            <FocusableLeaf
+              key={'ControlsLoseFocus'}
+              focusKey={'ControlsLoseFocus'}
+              style={{ flex: '1' }}>
               <div className={styles.brief}>
                 <img
                   src="/images/ff-logo.svg"
@@ -222,13 +224,18 @@ const Controls: React.FC<{ hasFocusedChild?: boolean }> = ({
                 </svg>
                 Next Daily: <NextDailyTimer />
               </div>
-              <p>
+            </FocusableLeaf>
+            <FocusableLeaf
+              key={ControlFocusableLeafKey.BackToHideButton}
+              focusKey={ControlFocusableLeafKey.BackToHideButton}
+              onClick={onHidePopup}>
+              <p className={styles.clickable}>
                 Press <span style={{ fontStyle: 'italic' }}>[back]</span> to
                 Hide
               </p>
-            </div>
+            </FocusableLeaf>
           </div>
-        </FocusableLeaf>
+        </div>
       )}
     </>
   );
