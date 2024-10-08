@@ -3,6 +3,7 @@ import ArtworkService from './ArtworkService';
 import axiosInstance from './axiosService';
 import { convertToTokenID, getIndexerTokenName } from '@/utils/indexer';
 import { convertToQueryParams } from '@/utils/queryParams';
+import * as Sentry from '@sentry/nextjs';
 
 class DailyService {
   private artworkService = new ArtworkService();
@@ -61,6 +62,9 @@ class DailyService {
 
       if (dailies.length === 0) {
         console.log('[DAILY] No upcoming dailies, using default daily');
+        Sentry.captureMessage(
+          '[DAILY] No upcoming dailies, using default daily'
+        );
         dailies = [this.getDefaultDaily()];
       }
 
@@ -120,6 +124,7 @@ class DailyService {
         '[DAILY] Error when convert dailies',
         JSON.stringify(error)
       );
+      Sentry.captureException(error);
       return [this.getDefaultDaily()];
     }
   }

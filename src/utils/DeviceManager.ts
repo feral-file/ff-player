@@ -9,6 +9,7 @@ import {
 } from './platform';
 import * as Sentry from '@sentry/nextjs';
 import { DeviceNamePrefix, LocalStorageItem, Platform } from '@/constants';
+import { BrowserInfo, detect } from 'detect-browser';
 
 class DeviceManager {
   static instance = new DeviceManager();
@@ -24,8 +25,13 @@ class DeviceManager {
   private createConfigService(): PlatformConfigService {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     const platform = localStorage?.getItem(LocalStorageItem.platform);
+    const browser = detect() as BrowserInfo;
+
     Sentry.addBreadcrumb({
-      data: { platform },
+      data: {
+        platform,
+        ...browser,
+      },
       category: 'DeviceManager',
       message: 'Creating PlatformConfigService instance',
     });
@@ -224,6 +230,11 @@ class DeviceManager {
         '[DEVICE] Generating branch link with device info: ',
         JSON.stringify(deviceInfo)
       );
+      Sentry.addBreadcrumb({
+        data: deviceInfo,
+        category: 'DeviceManager',
+        message: 'Generating branch link',
+      });
 
       const data = {
         source: 'feralfile_display',

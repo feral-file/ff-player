@@ -186,6 +186,7 @@ class CanvasService {
     const deviceInfo = await DeviceManager.getDeviceInfo();
     if (!deviceInfo) {
       console.error('[CAST] Device info is not available on connect');
+      Sentry.captureMessage('Device info is not available on connect');
       return { ok: false };
     }
 
