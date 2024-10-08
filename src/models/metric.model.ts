@@ -5,10 +5,18 @@ export enum CastingArtworkType {
   Exhibition = 'EXHIBITION_DISPLAY',
 }
 
+export enum ExhibitionDisplaySection {
+  Home = 'home',
+  CuratorNote = 'curator_note',
+  Artworks = 'artworks',
+}
+
 export interface MetricEvent {
   event: CastingArtworkType;
   timestamp: string;
   parameters: {
-    tokenID: string;
+    section?: ExhibitionDisplaySection;
+    tokenID?: string;
+    exhibitionID?: string;
   };
 }

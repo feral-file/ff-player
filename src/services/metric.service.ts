@@ -1,6 +1,7 @@
 import { LocalStorageItem } from '@/constants';
-import { MetricEvent } from '@/models/metric.model';
+import { ExhibitionDisplaySection, MetricEvent } from '@/models/metric.model';
 import DeviceManager from '@/utils/DeviceManager';
+import { ExhibitionCatalog } from '@/utils/types';
 import axios, { AxiosInstance } from 'axios';
 
 const accountsRequester: AxiosInstance = axios.create({
@@ -73,5 +74,20 @@ export function uploadMetricEventsFromLocalStorage() {
           JSON.stringify(error)
         );
       });
+  }
+}
+
+export function mappingExhibitionCatalogToExhibitionDisplaySection(
+  castingSection: ExhibitionCatalog
+): ExhibitionDisplaySection {
+  switch (castingSection) {
+    case ExhibitionCatalog.home:
+      return ExhibitionDisplaySection.Home;
+    case ExhibitionCatalog.curatorNote:
+    case ExhibitionCatalog.resource:
+    case ExhibitionCatalog.resourceDetail:
+      return ExhibitionDisplaySection.CuratorNote;
+    case ExhibitionCatalog.artwork:
+      return ExhibitionDisplaySection.Artworks;
   }
 }
