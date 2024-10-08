@@ -357,25 +357,27 @@ const DisplayInfo: React.FC<{
             key={InfoFocusableLeafKey.InfoLoseFocus}
             focusKey={InfoFocusableLeafKey.InfoLoseFocus}
             style={{ width: '100%' }}>
-            <div className={clsx(styles.item, styles['short-artwork-info'])}>
-              <p>
-                {token?.asset.metadata.project.latest.artistName ??
-                  artist?.alumniAccount?.alias}
-                ,
-              </p>
-              <p style={{ fontWeight: 'bold' }}>
-                <span style={{ fontStyle: 'italic' }}>
-                  {token?.asset.metadata.project.latest.title ??
-                    artwork?.series?.title ??
-                    ''}
-                </span>{' '}
-                (
-                {new Date(
-                  token?.mintedAt ?? artwork?.mintedAt ?? ''
-                ).getFullYear()}
-                )
-              </p>
-            </div>
+            {!!(token || artwork) && (
+              <div className={clsx(styles.item, styles['short-artwork-info'])}>
+                <p>
+                  {token?.asset.metadata.project.latest.artistName ??
+                    artist?.alumniAccount?.alias}
+                  ,
+                </p>
+                <p style={{ fontWeight: 'bold' }}>
+                  <span style={{ fontStyle: 'italic' }}>
+                    {token?.asset.metadata.project.latest.title ??
+                      artwork?.series?.title ??
+                      ''}
+                  </span>{' '}
+                  (
+                  {new Date(
+                    token?.mintedAt ?? artwork?.mintedAt ?? ''
+                  ).getFullYear()}
+                  )
+                </p>
+              </div>
+            )}
           </FocusableLeaf>
         )}
       </div>
