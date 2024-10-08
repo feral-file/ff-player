@@ -27,6 +27,8 @@ enum InfoFocusableLeafKey {
   OptionsButton = 'options-button',
   DrawOptionsButton = 'draw-options-button',
   InfoLoseFocus = 'info-lose-focus',
+  OkButton = 'ok-button',
+  BackToExitButton = 'back-to-exit-button',
 }
 
 const SCROLL_AMOUNT = 150;
@@ -62,30 +64,6 @@ const DisplayInfo: React.FC<{
   const scrollableSectionRef = useRef<HTMLDivElement>(null);
   const FERAL_FILE_ASSET_URL =
     (process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? '') + '/';
-
-  useEffect(() => {
-    const handleClick = (event: MouseEvent) => {
-      if (
-        event.target instanceof HTMLElement &&
-        okBtnRef.current?.contains(event.target)
-      ) {
-        onInfoExpandedChanged(true);
-      } else if (
-        event.target instanceof HTMLElement &&
-        backBtnRef.current?.contains(event.target)
-      ) {
-        onInfoExpandedChanged(false);
-      }
-    };
-
-    if (hasFocusedChild && typeof window !== 'undefined') {
-      window.addEventListener('click', handleClick);
-    }
-
-    return () => {
-      window.removeEventListener('click', handleClick);
-    };
-  }, [hasFocusedChild, onInfoExpandedChanged]); // Initial render
 
   useEffect(() => {
     if (ffArtworkID) {
@@ -189,7 +167,7 @@ const DisplayInfo: React.FC<{
             className={clsx(
               styles.item,
               styles['full-artwork-info'],
-              styles.active
+              styles.focused
             )}>
             <div>
               <div>
@@ -332,28 +310,36 @@ const DisplayInfo: React.FC<{
                 </div>
               )}
             </div>
-            <FocusableLeaf
-              key={InfoFocusableLeafKey.ReadMoreButton}
-              focusKey={InfoFocusableLeafKey.ReadMoreButton}
-              onEnterPress={() => {
-                onInfoExpandedChanged(true);
-              }}>
-              {isInfoExpanded ? (
+            {isInfoExpanded ? (
+              <FocusableLeaf
+                key={InfoFocusableLeafKey.BackToExitButton}
+                focusKey={InfoFocusableLeafKey.BackToExitButton}
+                onClick={() => {
+                  onInfoExpandedChanged(false);
+                }}>
                 <div ref={backBtnRef} className={styles['control-container']}>
                   <p style={{ cursor: 'pointer' }}>
                     Press <span style={{ fontStyle: 'italic' }}>[back]</span> to
                     exit
                   </p>
                 </div>
-              ) : (
+              </FocusableLeaf>
+            ) : (
+              <FocusableLeaf
+                key={InfoFocusableLeafKey.OkButton}
+                focusKey={InfoFocusableLeafKey.OkButton}
+                onEnterPress={() => {
+                  onOptionsExpandedChanged(false);
+                  onInfoExpandedChanged(true);
+                }}>
                 <div ref={okBtnRef} className={styles['control-container']}>
                   <p style={{ cursor: 'pointer' }}>
                     Press <span style={{ fontStyle: 'italic' }}>[OK]</span> to
                     Read More
                   </p>
                 </div>
-              )}
-            </FocusableLeaf>
+              </FocusableLeaf>
+            )}
           </div>
         ) : (
           // Lose focus
@@ -361,18 +347,19 @@ const DisplayInfo: React.FC<{
             key={InfoFocusableLeafKey.InfoLoseFocus}
             focusKey={InfoFocusableLeafKey.InfoLoseFocus}
             style={{ width: '100%' }}>
-            {!!(token ?? artwork) && (
+            {(!!token || !!artwork) && (
               <div className={clsx(styles.item, styles['short-artwork-info'])}>
                 <p>
                   {token?.asset.metadata.project.latest.artistName ??
-                    artist?.alumniAccount?.alias}
+                    artist?.alumniAccount?.alias ??
+                    ''}
                   ,
                 </p>
                 <p style={{ fontWeight: 'bold' }}>
                   <span style={{ fontStyle: 'italic' }}>
-                    {token?.asset.metadata.project.latest.title ??
-                      artwork?.series?.title ??
-                      ''}
+                    {token
+                      ? token.asset.metadata.project.latest.title
+                      : (artwork?.series?.title ?? '')}
                   </span>{' '}
                   (
                   {new Date(

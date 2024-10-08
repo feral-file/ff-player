@@ -20,7 +20,7 @@ import styles from './styles.module.scss';
 import { appendMetricEventToLocalStorage } from '@/services/metric.service';
 import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
 import { ArtFraming } from '@/services/AppControls';
-import useArtDisplaySetting from '@/services/ArtworkDisplaySetting';
+import { usePopUpContext } from '@/context/PopUpContext';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -35,7 +35,7 @@ const ArtworkPlayer = ({
   keyboardCode?: number;
 }) => {
   const { context } = useAppContext();
-  const { artDisplaySetting } = useArtDisplaySetting();
+  const { artDisplaySetting, resetArtDisplaySetting } = usePopUpContext();
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [displaySoftwareURL, setDisplaySoftwareURL] =
     useState<string>(previewURL);
@@ -146,6 +146,9 @@ const ArtworkPlayer = ({
       detectPreviewType(previewURL).catch((err: unknown) => {
         console.error(err);
       });
+
+      // Reset artDisplaySetting when new artwork is loaded
+      resetArtDisplaySetting();
     }
   }, [previewURL]);
 

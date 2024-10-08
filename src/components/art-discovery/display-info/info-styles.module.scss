@@ -18,8 +18,7 @@
   border-radius: 1em;
   scrollbar-color: #d9d9d9 transparent;
 
-  .active {
-    border: 0.15em solid #ffffff;
+  .focused {
     min-height: 20em;
   }
 
@@ -29,6 +28,7 @@
     background-color: #2e2e2e;
     color: #ffffff;
     padding: 2em;
+    border: 0.15em solid transparent;
 
     .optionsDrawerContainer {
       position: absolute;
@@ -44,6 +44,11 @@
       right: 1em;
       top: 1em;
     }
+  }
+
+  .item.focused,
+  .item:hover {
+    border-color: #ffffff;
   }
 
   .full-artwork-info {

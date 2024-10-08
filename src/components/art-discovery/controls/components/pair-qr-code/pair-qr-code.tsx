@@ -42,7 +42,7 @@ const PairQRCode: React.FC = () => {
       bgColor={'transparent'}
       fgColor={'#ffffff'}></QRCode>
   ) : (
-    <div style={{ width: screenRatio * 194, height: screenRatio * 194 }}>
+    <div style={{ width: screenRatio * 256, height: screenRatio * 256 }}>
       <QrCodeSkeleton />
     </div>
   );

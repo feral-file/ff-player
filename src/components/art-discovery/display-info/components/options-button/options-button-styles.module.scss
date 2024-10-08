@@ -17,11 +17,13 @@
 }
 
 .optionsButton.focused,
-.optionsButton.selected {
+.optionsButton.selected,
+.optionsButton:hover {
   background-color: white;
   color: black;
 }
 
-.optionsButton.focused.selected {
+.optionsButton.focused.selected,
+.optionsButton.selected:hover {
   border-color: #000000;
 }

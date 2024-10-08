@@ -12,6 +12,8 @@ import { CastCommand, ViewMode } from '@/utils/types';
 import { usePathname } from 'next/navigation';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 
+const AUTO_HIDE_TIMEOUT = 30000;
+
 const ArtDiscovery = () => {
   const { displayInfo } = usePopUpContext();
   const { token, ffArtworkID, dailyNote } = displayInfo ?? {};
@@ -28,6 +30,8 @@ const ArtDiscovery = () => {
   };
   const [isInDaily, setIsInDaily] = useState(false);
   const pathname = usePathname();
+  const inactivityTimeout = useRef<NodeJS.Timeout | null>(null);
+  const clickEventToHidePopup = useRef(false);
 
   useEffect(() => {
     setIsInDaily(pathname === '/daily');
@@ -61,11 +65,12 @@ const ArtDiscovery = () => {
         // Press Enter to expand
 
         switch (event.key as KeyboardEventKey) {
-          case KeyboardEventKey.Enter:
+          case KeyboardEventKey.Enter: {
             setShowPopup(true);
             break;
+          }
 
-          case KeyboardEventKey.Backspace:
+          case KeyboardEventKey.Backspace: {
             if (showPopup) {
               if (isOptionsExpanded) {
                 setOptionsExpanded(false);
@@ -81,27 +86,65 @@ const ArtDiscovery = () => {
             }
 
             break;
+          }
 
-          default:
+          default: {
             break;
+          }
         }
       }
     };
 
     const handleClick = (event: MouseEvent) => {
-      if (event.target instanceof HTMLElement) {
+      if (clickEventToHidePopup.current) {
+        clickEventToHidePopup.current = false;
+        return;
+      }
+
+      if (event.target instanceof HTMLElement && !showPopup) {
         setShowPopup(true);
+      }
+    };
+
+    const handleUserActivity = (event?: MouseEvent | KeyboardEvent) => {
+      const shouldHandleUserActivity =
+        !event ||
+        event instanceof MouseEvent ||
+        (event instanceof KeyboardEvent &&
+          (showPopup ||
+            (event.key as KeyboardEventKey) === KeyboardEventKey.Enter));
+
+      if (shouldHandleUserActivity) {
+        if (inactivityTimeout.current) {
+          clearTimeout(inactivityTimeout.current);
+        }
+
+        inactivityTimeout.current = setTimeout(() => {
+          setShowPopup(false);
+          setInfoExpanded(false);
+          setOptionsExpanded(false);
+        }, AUTO_HIDE_TIMEOUT);
       }
     };
 
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', handleKeyDown);
       window.addEventListener('click', handleClick);
+      window.addEventListener('keydown', handleUserActivity);
+      window.addEventListener('click', handleUserActivity);
+      if (showPopup) {
+        handleUserActivity();
+      }
     }
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('click', handleClick);
+      window.removeEventListener('keydown', handleUserActivity);
+      window.removeEventListener('click', handleUserActivity);
+      if (inactivityTimeout.current) {
+        clearTimeout(inactivityTimeout.current);
+      }
     };
   }, [isInDaily, isInfoExpanded, isOptionsExpanded, showPopup]);
 
@@ -109,7 +152,7 @@ const ArtDiscovery = () => {
     updatePlatformBackKeyHandling(showPopup || !isInDaily);
   }, [showPopup, isInDaily]);
 
-  function updatePlatformBackKeyHandling(value: boolean) {
+  const updatePlatformBackKeyHandling = (value: boolean) => {
     try {
       console.log('backAbleChanged', value);
 
@@ -123,7 +166,7 @@ const ArtDiscovery = () => {
     } catch (error) {
       console.error(error);
     }
-  }
+  };
 
   return (
     <>
@@ -147,7 +190,14 @@ const ArtDiscovery = () => {
             </FocusableContainer>
           )}
           <FocusableContainer>
-            <Controls />
+            <Controls
+              onHidePopup={() => {
+                clickEventToHidePopup.current = true;
+                setShowPopup(false);
+                setInfoExpanded(false);
+                setOptionsExpanded(false);
+              }}
+            />
           </FocusableContainer>
         </div>
       )}
