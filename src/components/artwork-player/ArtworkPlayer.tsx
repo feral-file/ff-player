@@ -109,7 +109,7 @@ const ArtworkPlayer = ({
           }, delay);
         };
 
-        appendMetricEventToLocalStorage(event);
+        appendMetricEventToLocalStorage([event], true);
         checkNewDay();
       };
 
