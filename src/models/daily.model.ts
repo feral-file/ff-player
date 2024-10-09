@@ -6,6 +6,7 @@ export interface Daily {
   blockchain: string;
   contractAddress: string;
   displayTime: string;
+  note: string;
   tokenID: string;
   tokenName: string;
   previewURL?: string;

@@ -1,31 +1,31 @@
 import { ApolloClient, gql, NormalizedCacheObject } from '@apollo/client';
 import createApolloClient from '@/utils/ApolloClient';
-import { Artwork, IndexerToken } from '@/models';
+import { Artwork, IndexerToken, User } from '@/models';
 import axiosInstance from './axiosService';
-import { removeArtistAliasSuffixes } from '@/utils/ui/formatAlias';
 import * as Sentry from '@sentry/nextjs';
 
 const LIMIT_PER_PAGE = 50;
 
 class ArtworkService {
-  public async getFeaturedArtworks(): Promise<Artwork[]> {
-    const response = await axiosInstance.get(`/api/artworks/featured`);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const artworks = response.data.result as Artwork[];
-    for (const artwork of artworks) {
-      artwork.artistAlias = await this.fetchArtist(artwork.series?.artistID);
+  public async getArtworkDetail(artworkID: string): Promise<Artwork | null> {
+    try {
+      const response = await axiosInstance.get(
+        `/api/artworks/${artworkID}?includeSeries=true`
+      );
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const artwork = response.data.result as Artwork;
+
+      // FIXME: Remove this after the backend support full artist info on artwork detail
+      if (artwork.series) {
+        artwork.series.artist = await this.fetchArtist(artwork.series.artistID);
+      }
+      return artwork;
+    } catch (error) {
+      console.log('[API] Error getting artwork detail:', JSON.stringify(error));
     }
-    return artworks;
+
+    return null;
   }
-
-  private fetchArtist = async (artistID?: string): Promise<string> => {
-    const response = await axiosInstance.get(`/api/accounts/${artistID ?? ''}`);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const artistAlias = (response.data.result.alumniAccount?.alias ??
-      '') as string;
-
-    return removeArtistAliasSuffixes(artistAlias);
-  };
 
   public async queryTokens(ids: string[]): Promise<IndexerToken[]> {
     try {
@@ -172,6 +172,12 @@ class ArtworkService {
         });
     });
   }
+
+  private fetchArtist = async (artistID?: string): Promise<User> => {
+    const response = await axiosInstance.get(`/api/accounts/${artistID ?? ''}`);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    return response.data.result as User;
+  };
 }
 
 export default ArtworkService;
