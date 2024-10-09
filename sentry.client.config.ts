@@ -28,7 +28,15 @@ Sentry.init({
     }),
   ],
 
-  environment: process.env.NEXT_PUBLIC_ENVIRONMENT || 'Local',
+  ignoreErrors: [
+    'ChunkLoadError: Loading chunk',
+    'Loading chunk',
+    'TypeError',
+    'TypeError: Failed to fetch',
+    'ReferenceError',
+  ],
+
+  environment: process.env.NEXT_PUBLIC_ENVIRONMENT ?? 'Local',
 
   transport: Sentry.makeBrowserOfflineTransport(Sentry.makeFetchTransport),
 });
