@@ -1,4 +1,5 @@
 .outline {
+  width: 100%;
   border: solid 0.15em transparent;
   border-radius: 4.5em;
 }
@@ -8,8 +9,13 @@
   border-color: #ffffff;
 }
 
+.lightMode.outline.focused,
+.lightMode.outline:hover {
+  border-color: #000000;
+}
+
 .rotate {
-  width: fit-content;
+  width: 100%;
   border: solid 0.075em white;
   border-radius: 4.5em;
   padding: 0.3em;
@@ -17,6 +23,7 @@
     height: 2.7em;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.5em;
     padding-left: 1.2em;
     padding-right: 1.4em;
@@ -40,26 +47,39 @@
   }
 }
 
-.rotate.focused:hover {
-  div {
-    img {
-      filter: invert(0);
-    }
+.rotateIcon.focused {
+  path {
+    fill: black;
   }
 }
 
 .rotate:hover {
   div {
-    img {
-      filter: invert(1);
+    .rotateIcon {
+      path {
+        fill: black;
+      }
     }
   }
 }
 
 .rotate:active {
   div {
-    background-color: #b9e5ff;
-    opacity: 0.3;
+    background-color: #819fb2;
     color: black;
+  }
+}
+
+.lightMode {
+  .rotate {
+    border-color: #000000;
+    div {
+      color: black;
+      .rotateIcon {
+        path {
+          fill: black;
+        }
+      }
+    }
   }
 }

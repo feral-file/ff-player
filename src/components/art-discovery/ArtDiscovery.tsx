@@ -12,7 +12,7 @@ import { CastCommand, ViewMode } from '@/utils/types';
 import { usePathname } from 'next/navigation';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 
-const AUTO_HIDE_TIMEOUT = 30000;
+const AUTO_HIDE_TIMEOUT = 100 * 30000;
 
 const ArtDiscovery = () => {
   const { displayInfo } = usePopUpContext();

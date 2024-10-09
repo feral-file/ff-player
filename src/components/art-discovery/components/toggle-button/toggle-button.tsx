@@ -2,32 +2,39 @@
 
 import { clsx } from 'clsx';
 import styles from './toggle-styles.module.scss';
-export interface Option {
-  id: number;
-  icon: string;
-  label: string;
-}
+import { ToggleOption } from '../../art-discovery.model';
 
 interface ToggleButtonProps {
-  options: Option[];
+  options: ToggleOption[];
   selectedIndex: number;
   focused?: boolean;
+  lightMode?: boolean;
 }
 
 const ToggleButton: React.FC<ToggleButtonProps> = ({
   options,
   selectedIndex,
   focused,
+  lightMode,
 }) => {
   return (
-    <div className={clsx(styles.outline, focused && styles.focused)}>
+    <div
+      className={clsx(
+        styles.outline,
+        focused && styles.focused,
+        lightMode && styles.lightMode
+      )}>
       <div className={clsx(styles.toggle)}>
         {options.map((option, index) => (
           <div
             key={index}
-            className={clsx(styles.selection, {
-              [styles.selected]: index === selectedIndex,
-            })}>
+            className={clsx(
+              styles.selection,
+              {
+                [styles.selected]: index === selectedIndex,
+              },
+              focused && styles.focused
+            )}>
             {index === selectedIndex && (
               <img
                 src={`/images/${option.icon}.svg`}
