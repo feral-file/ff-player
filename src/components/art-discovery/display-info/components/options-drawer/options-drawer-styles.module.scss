@@ -24,7 +24,8 @@
       display: flex;
       align-items: center;
     }
-    .optionItemOutline.focused {
+    .optionItemOutline.focused,
+    .optionItemOutline:hover {
       border-color: #000000;
       padding: 0.3em;
     }
@@ -54,7 +55,7 @@
         font-weight: 700;
       }
     }
-    .optionItem.selected {
+    .optionItem:active {
       background-color: #b9e5ff;
       padding: 0;
       padding-left: 0.3em;

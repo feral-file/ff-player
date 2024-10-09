@@ -20,7 +20,7 @@ const ToggleButton: React.FC<ToggleButtonProps> = ({
   focused,
 }) => {
   return (
-    <div className={clsx(styles.outline, focused && styles.active)}>
+    <div className={clsx(styles.outline, focused && styles.focused)}>
       <div className={clsx(styles.toggle)}>
         {options.map((option, index) => (
           <div

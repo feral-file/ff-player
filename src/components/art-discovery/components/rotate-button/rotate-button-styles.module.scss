@@ -3,7 +3,8 @@
   border-radius: 4.5em;
 }
 
-.outline.active {
+.outline.focused,
+.outline:hover {
   border-color: #ffffff;
 }
 
@@ -31,9 +32,34 @@
   }
 }
 
-.rotate.active {
+.rotate.focused,
+.rotate:hover {
   div {
     background-color: #b9e5ff;
+    color: black;
+  }
+}
+
+.rotate.focused:hover {
+  div {
+    img {
+      filter: invert(0);
+    }
+  }
+}
+
+.rotate:hover {
+  div {
+    img {
+      filter: invert(1);
+    }
+  }
+}
+
+.rotate:active {
+  div {
+    background-color: #b9e5ff;
+    opacity: 0.3;
     color: black;
   }
 }

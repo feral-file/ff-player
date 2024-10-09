@@ -1,10 +1,9 @@
 import FocusableLeaf from '@/components/art-discovery/components/focusable-leaf/focusable-leaf';
 import clsx from 'clsx';
-import { useState } from 'react';
 import styles from './options-drawer-styles.module.scss';
 import OptionsButton from '../options-button/options-button';
-import useArtDisplaySetting from '@/services/ArtworkDisplaySetting';
 import { ArtFraming } from '@/services/AppControls';
+import { usePopUpContext } from '@/context/PopUpContext';
 
 enum ArtworkSettingOption {
   FitToScreen = 'Fit to Screen',
@@ -19,8 +18,7 @@ export enum OptionsDrawerLeafKey {
 const OptionsDrawer: React.FC<{
   onClosed?: () => void;
 }> = ({ onClosed }) => {
-  const [selectedOption, setSelectedOption] = useState<ArtworkSettingOption>();
-  const { artDisplaySetting, updateArtSetting } = useArtDisplaySetting();
+  const { artDisplaySetting, setArtDisplaySetting } = usePopUpContext();
 
   const updateArtDisplaySetting = (option: ArtworkSettingOption) => {
     if (!artDisplaySetting) {
@@ -34,7 +32,7 @@ const OptionsDrawer: React.FC<{
           ...artDisplaySetting,
           rotateRadius: (artDisplaySetting.rotateRadius || 0) + 90,
         };
-        updateArtSetting(newSetting);
+        setArtDisplaySetting(newSetting);
         break;
 
       case ArtworkSettingOption.CropToFill:
@@ -42,14 +40,14 @@ const OptionsDrawer: React.FC<{
           ...artDisplaySetting,
           frameConfig: ArtFraming.CropToFill,
         };
-        updateArtSetting(newSetting);
+        setArtDisplaySetting(newSetting);
         break;
       case ArtworkSettingOption.FitToScreen:
         newSetting = {
           ...artDisplaySetting,
           frameConfig: ArtFraming.FitToScreen,
         };
-        updateArtSetting(newSetting);
+        setArtDisplaySetting(newSetting);
         break;
       default:
         break;
@@ -71,15 +69,10 @@ const OptionsDrawer: React.FC<{
             key={index.toString()}
             focusKey={'artwork-' + option}
             onEnterPress={() => {
-              setSelectedOption(option);
               updateArtDisplaySetting(option);
-            }}
-            onBlur={() => {
-              setSelectedOption(undefined);
             }}>
             <OptionItem
               option={option}
-              selected={option === selectedOption}
               isRotated={option === ArtworkSettingOption.Rotate}
               rotateRadius={artDisplaySetting?.rotateRadius}></OptionItem>
           </FocusableLeaf>
@@ -94,7 +87,6 @@ export default OptionsDrawer;
 interface ArtworkOptionItemProps {
   option: ArtworkSettingOption;
   focused?: boolean;
-  selected?: boolean;
   isRotated?: boolean;
   rotateRadius?: number;
 }
@@ -102,18 +94,23 @@ interface ArtworkOptionItemProps {
 const OptionItem: React.FC<ArtworkOptionItemProps> = ({
   option,
   focused,
-  selected,
   isRotated,
   rotateRadius,
 }) => {
   const label = getArtworkSettingOptionLabel(option);
   return (
     <div className={clsx(styles.optionItemOutline, focused && styles.focused)}>
-      <div
-        className={clsx(
-          styles.optionItem,
-          selected && focused && styles.selected
-        )}>
+      <style jsx>{`
+        .active {
+          > div {
+            background-color: #b9e5ff;
+            padding: 0;
+            padding-left: 0.3em;
+            padding-right: 1em;
+          }
+        }
+      `}</style>
+      <div className={clsx(styles.optionItem)}>
         <div
           className={styles.iconWrapper}
           style={{
