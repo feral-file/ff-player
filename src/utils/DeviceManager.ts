@@ -7,7 +7,9 @@ import {
   TizenConfigService,
   WebConfigService,
 } from './platform';
+import * as Sentry from '@sentry/nextjs';
 import { DeviceNamePrefix, LocalStorageItem, Platform } from '@/constants';
+import { BrowserInfo, detect } from 'detect-browser';
 import { ArtFraming } from '@/services/AppControls';
 
 class DeviceManager {
@@ -24,6 +26,16 @@ class DeviceManager {
   private createConfigService(): PlatformConfigService {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     const platform = localStorage?.getItem(LocalStorageItem.platform);
+    const browser = detect() as BrowserInfo;
+
+    Sentry.addBreadcrumb({
+      data: {
+        platform,
+        ...browser,
+      },
+      category: 'DeviceManager',
+      message: 'Creating PlatformConfigService instance',
+    });
 
     console.log(
       `[DEVICE] creating PlatformConfigService instance for platform: ${platform ?? 'Web'}`
@@ -41,11 +53,17 @@ class DeviceManager {
   }
 
   private async getFromLocalStorage(key: string): Promise<string | null> {
-    return await this.configService.getString(key);
+    try {
+      return await this.configService.getString(key);
+    } catch (error) {
+      Sentry.captureException(error);
+      return null;
+    }
   }
 
   private setToLocalStorage(key: string, value: string): void {
     this.configService.setString(key, value).catch((error: unknown) => {
+      Sentry.captureException(error);
       console.error(
         '[DEVICE] Error setting value to local storage',
         JSON.stringify(error)
@@ -207,6 +225,11 @@ class DeviceManager {
         await this.setBranchLink(branchLink);
       }
     }
+    Sentry.addBreadcrumb({
+      data: { branchLink },
+      category: 'DeviceManager',
+      message: 'Generated branch link',
+    });
     return branchLink;
   }
 
@@ -220,6 +243,11 @@ class DeviceManager {
         '[DEVICE] Generating branch link with device info: ',
         JSON.stringify(deviceInfo)
       );
+      Sentry.addBreadcrumb({
+        data: deviceInfo,
+        category: 'DeviceManager',
+        message: 'Generating branch link',
+      });
 
       const data = {
         source: 'feralfile_display',
@@ -227,6 +255,7 @@ class DeviceManager {
       };
       return await createBranchLink(data);
     } catch (e) {
+      Sentry.captureException(e);
       console.error('[DEVICE] Error generate branch link: ', JSON.stringify(e));
       return null;
     }

@@ -2,6 +2,7 @@ import { LocalStorageItem } from '@/constants';
 import { MetricEvent } from '@/models/metric.model';
 import DeviceManager from '@/utils/DeviceManager';
 import axios, { AxiosInstance } from 'axios';
+import * as Sentry from '@sentry/nextjs';
 
 const accountsRequester: AxiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_ACCOUNTS_URL,
@@ -41,6 +42,7 @@ export function appendMetricEventToLocalStorage(event: MetricEvent) {
         '[METRIC] Error parsing metric events from local storage',
         JSON.stringify(error)
       );
+      Sentry.captureException(error);
       events = [];
     }
   }
@@ -68,6 +70,7 @@ export function uploadMetricEventsFromLocalStorage() {
         '[METRIC] Error parsing metric events from local storage',
         JSON.stringify(error)
       );
+      Sentry.captureException(error);
       events = [];
     }
   }
@@ -82,6 +85,7 @@ export function uploadMetricEventsFromLocalStorage() {
           '[METRIC] Error uploading metric events',
           JSON.stringify(error)
         );
+        Sentry.captureException(error);
       });
   }
 }

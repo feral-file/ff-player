@@ -42,8 +42,12 @@ jobs:
           echo "NEXT_PUBLIC_ACCOUNTS_API_KEY=${{ secrets.ACCOUNTS_API_KEY }}" >> .env.local
           echo "NEXT_PUBLIC_API_KEY=${{ secrets.WEBSOCKET_API_KEY }}" >> .env.local
           echo "NEXT_PUBLIC_BRANCH_KEY=${{ secrets.BRANCH_KEY }}" >> .env.local
+          echo "NEXT_PUBLIC_ENVIRONMENT=${{ vars.ENVIRONMENT }}" >> .env.local
+          echo "NEXT_PUBLIC_SENTRY_DSN=${{ vars.SENTRY_DSN }}" >> .env.local
 
       - name: Build Next.js app
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: npm run build
 
       - name: Write the current version hash

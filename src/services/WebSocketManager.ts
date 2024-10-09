@@ -3,6 +3,7 @@ import ReconnectingWebSocket from 'reconnecting-websocket';
 import CanvasService from './CanvasService';
 import { LocalStorageItem } from '@/constants';
 import { CastInfo } from '@/utils/types';
+import * as Sentry from '@sentry/nextjs';
 
 const pingIntervalTime = 5 * 60 * 1000; // 5 minutes
 const pongWaitTime = 10 * 1000;
@@ -29,6 +30,11 @@ const useWebSocket = (url: string, apiKey: string) => {
       }
 
       let wsUrl = `${url}?apiKey=${apiKey}`;
+      Sentry.addBreadcrumb({
+        data: { url: wsUrl },
+        category: 'Websocket',
+        message: 'Websocket connection',
+      });
       const storedLocationID = localStorage.getItem(
         LocalStorageItem.locationID
       );
@@ -84,6 +90,12 @@ const useWebSocket = (url: string, apiKey: string) => {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             data.message.topicID as string
           );
+          Sentry.addBreadcrumb({
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+            data: data.message,
+            category: 'Websocket',
+            message: 'Websocket system message',
+          });
         }
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         else if (data.messageID === 'ping') {
@@ -107,11 +119,13 @@ const useWebSocket = (url: string, apiKey: string) => {
 
       ws.current.onerror = error => {
         console.error('[WS] WebSocket error:', JSON.stringify(error));
+        Sentry.captureMessage('[WS] WebSocket error');
         setIsDisconnected(true);
       };
 
       ws.current.onclose = () => {
         console.log('[WS] WebSocket disconnected, attempting to reconnect...');
+        Sentry.captureMessage('[WS] WebSocket disconnected');
         setIsDisconnected(true);
         if (pingIntervalRef.current) {
           clearInterval(pingIntervalRef.current);

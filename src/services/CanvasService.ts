@@ -40,6 +40,7 @@ import {
 } from '../utils/types';
 
 import { LocalStorageItem } from '@/constants';
+import * as Sentry from '@sentry/nextjs';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -96,6 +97,11 @@ class CanvasService {
     }
 
     const command = CastCommand[commandStr as keyof typeof CastCommand];
+    Sentry.addBreadcrumb({
+      data: { command },
+      category: 'CanvasService',
+      message: 'Received command',
+    });
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const requestJson = messageData.request;
@@ -180,6 +186,7 @@ class CanvasService {
     const deviceInfo = await DeviceManager.getDeviceInfo();
     if (!deviceInfo) {
       console.error('[CAST] Device info is not available on connect');
+      Sentry.captureMessage('Device info is not available on connect');
       return { ok: false };
     }
 

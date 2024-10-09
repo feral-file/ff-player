@@ -3,6 +3,7 @@ import { Exhibition, Series } from '@/models';
 import axiosInstance from './axiosService';
 import axios from 'axios';
 import { removeArtistAliasSuffixes } from '@/utils/ui/formatAlias';
+import * as Sentry from '@sentry/nextjs';
 
 export class ExhibitionService {
   public async getExhibition(id: string) {
@@ -34,6 +35,7 @@ export class ExhibitionService {
       return exhibition;
     } catch (error) {
       console.log('[API] Failed to load exhibition:', JSON.stringify(error));
+      Sentry.captureException(error);
     }
   }
 
@@ -54,6 +56,7 @@ export class ExhibitionService {
         '[API] Failed to load Source exhibition:',
         JSON.stringify(error)
       );
+      Sentry.captureException(error);
     }
   }
 
@@ -69,6 +72,7 @@ export class ExhibitionService {
       return series;
     } catch (error) {
       console.log('[API] Failed to load Source series:', JSON.stringify(error));
+      Sentry.captureException(error);
     }
   }
 }
