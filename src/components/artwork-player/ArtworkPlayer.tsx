@@ -242,6 +242,7 @@ const ArtworkPlayer = ({
         justifyContent: 'center',
         position: 'relative',
         transform: `rotate(${(artDisplaySetting?.rotateRadius ?? 0).toString()}deg)`,
+        transition: 'transform 0.2s',
       }}>
       {(previewType === null || loading) && <Loading />}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (
