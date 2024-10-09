@@ -13,7 +13,7 @@ const OptionsButton: React.FC<{
         focused && styles.focused,
         selected && styles.selected
       )}>
-      <p>Options</p>
+      <p style={{ fontWeight: selected ? 'bold' : 'normal' }}>Options</p>
       {selected ? (
         <img
           src={'/images/option-icon-selected.svg'}
