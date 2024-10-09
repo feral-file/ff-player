@@ -68,6 +68,7 @@ const FocusableLeaf: React.FC<{
 
   const handleMouseClick = () => {
     setFocus(focusKey);
+    onEnterPress?.();
   };
 
   return (

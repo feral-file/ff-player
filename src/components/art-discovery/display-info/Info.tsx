@@ -55,6 +55,7 @@ const DisplayInfo: React.FC<{
   const [mediumDescription, setMediumDescription] = useState<string[]>([]);
   const [artist, setArtist] = useState<User | undefined>();
   const [exhibition, setExhibition] = useState<Exhibition>();
+  const [isExpanded, setExpanded] = useState(false);
   const artworkService = useRef(new ArtworkService());
   const exhibitionService = useRef(new ExhibitionService());
   const okBtnRef = useRef<HTMLDivElement>(null);
@@ -64,28 +65,14 @@ const DisplayInfo: React.FC<{
     (process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? '') + '/';
 
   useEffect(() => {
-    const handleClick = (event: MouseEvent) => {
-      if (
-        event.target instanceof HTMLElement &&
-        okBtnRef.current?.contains(event.target)
-      ) {
-        onInfoExpandedChanged(true);
-      } else if (
-        event.target instanceof HTMLElement &&
-        backBtnRef.current?.contains(event.target)
-      ) {
+    if (hasFocusedChild) {
+      if (isExpanded) {
         onInfoExpandedChanged(false);
+      } else {
+        onInfoExpandedChanged(true);
       }
-    };
-
-    if (hasFocusedChild && typeof window !== 'undefined') {
-      window.addEventListener('click', handleClick);
     }
-
-    return () => {
-      window.removeEventListener('click', handleClick);
-    };
-  }, [hasFocusedChild, onInfoExpandedChanged]); // Initial render
+  }, [hasFocusedChild, isExpanded]);
 
   useEffect(() => {
     if (ffArtworkID) {
@@ -336,7 +323,7 @@ const DisplayInfo: React.FC<{
               key={InfoFocusableLeafKey.ReadMoreButton}
               focusKey={InfoFocusableLeafKey.ReadMoreButton}
               onEnterPress={() => {
-                onInfoExpandedChanged(true);
+                setExpanded(!isExpanded);
               }}>
               {isInfoExpanded ? (
                 <div ref={backBtnRef} className={styles['control-container']}>
