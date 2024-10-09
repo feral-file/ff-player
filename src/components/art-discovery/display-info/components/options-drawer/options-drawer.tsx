@@ -4,6 +4,10 @@ import styles from './options-drawer-styles.module.scss';
 import OptionsButton from '../options-button/options-button';
 import { ArtFraming } from '@/services/AppControls';
 import { usePopUpContext } from '@/context/PopUpContext';
+import { useEffect, useState } from 'react';
+import { artworkFramingOptions } from '@/components/art-discovery/art-discovery.model';
+import ToggleButton from '@/components/art-discovery/components/toggle-button/toggle-button';
+import RotateButton from '@/components/art-discovery/components/rotate-button/rotate-button';
 
 enum ArtworkSettingOption {
   FitToScreen = 'Fit to Screen',
@@ -19,6 +23,7 @@ const OptionsDrawer: React.FC<{
   onClosed?: () => void;
 }> = ({ onClosed }) => {
   const { artDisplaySetting, setArtDisplaySetting } = usePopUpContext();
+  const [selectedArtFraming, setSelectedArtFraming] = useState<ArtFraming>();
 
   const updateArtDisplaySetting = (option: ArtworkSettingOption) => {
     if (!artDisplaySetting) {
@@ -54,6 +59,19 @@ const OptionsDrawer: React.FC<{
     }
   };
 
+  useEffect(() => {
+    if (selectedArtFraming == undefined) {
+      setSelectedArtFraming(artDisplaySetting?.frameConfig);
+    } else {
+      // Update the artDisplaySetting
+      const updateOption =
+        selectedArtFraming === ArtFraming.FitToScreen
+          ? ArtworkSettingOption.FitToScreen
+          : ArtworkSettingOption.CropToFill;
+      updateArtDisplaySetting(updateOption);
+    }
+  }, [selectedArtFraming]);
+
   return (
     <div className={clsx(styles.optionsDrawer)}>
       <FocusableLeaf
@@ -64,86 +82,34 @@ const OptionsDrawer: React.FC<{
         <OptionsButton selected={true}></OptionsButton>
       </FocusableLeaf>
       <div className={styles.listOptions}>
-        {Object.values(ArtworkSettingOption).map((option, index) => (
-          <FocusableLeaf
-            key={index.toString()}
-            focusKey={'artwork-' + option}
-            onEnterPress={() => {
-              updateArtDisplaySetting(option);
-            }}>
-            <OptionItem
-              option={option}
-              isRotated={option === ArtworkSettingOption.Rotate}
-              rotateRadius={artDisplaySetting?.rotateRadius}></OptionItem>
-          </FocusableLeaf>
-        ))}
+        <FocusableLeaf
+          key={'Framing'}
+          focusKey={'artwork-framing'}
+          onEnterPress={() => {
+            const newIndex =
+              ((selectedArtFraming ?? 0) + 1) % artworkFramingOptions.length;
+            setSelectedArtFraming(newIndex);
+          }}
+          style={{ width: '100%' }}>
+          <ToggleButton
+            options={artworkFramingOptions}
+            selectedIndex={selectedArtFraming as number}
+            lightMode={true}></ToggleButton>
+        </FocusableLeaf>
+        <FocusableLeaf
+          key={ArtworkSettingOption.Rotate}
+          focusKey={'artwork-' + ArtworkSettingOption.Rotate}
+          onEnterPress={() => {
+            updateArtDisplaySetting(ArtworkSettingOption.Rotate);
+          }}
+          style={{ width: '100%' }}>
+          <RotateButton
+            rotateAngle={artDisplaySetting?.rotateRadius}
+            lightMode={true}></RotateButton>
+        </FocusableLeaf>
       </div>
     </div>
   );
 };
 
 export default OptionsDrawer;
-
-interface ArtworkOptionItemProps {
-  option: ArtworkSettingOption;
-  focused?: boolean;
-  isRotated?: boolean;
-  rotateRadius?: number;
-}
-
-const OptionItem: React.FC<ArtworkOptionItemProps> = ({
-  option,
-  focused,
-  isRotated,
-  rotateRadius,
-}) => {
-  const label = getArtworkSettingOptionLabel(option);
-  return (
-    <div className={clsx(styles.optionItemOutline, focused && styles.focused)}>
-      <style jsx>{`
-        .active {
-          > div {
-            background-color: #b9e5ff;
-            padding: 0;
-            padding-left: 0.3em;
-            padding-right: 1em;
-          }
-        }
-      `}</style>
-      <div className={clsx(styles.optionItem)}>
-        <div
-          className={styles.iconWrapper}
-          style={{
-            background: (focused ?? false) ? 'transparent' : '#4A4A4A',
-          }}>
-          <img
-            src={`/images/${getArtworkSettingOptionIconPath(option)}${(focused ?? false) ? '-active.svg' : '-inactive.svg'}`}
-            alt={label}
-            width={47}
-            height={45}
-            style={
-              isRotated
-                ? {
-                    transform: `rotate(${(rotateRadius ?? 0).toString()}deg) `,
-                    transformOrigin: 'center center',
-                    transition: 'transform 0.2s',
-                    width: '1.95em',
-                    height: '1.25em',
-                  }
-                : { width: '1.95em', height: '1.25em' }
-            }
-          />
-        </div>
-        <p>{label}</p>
-      </div>
-    </div>
-  );
-};
-
-function getArtworkSettingOptionIconPath(option: ArtworkSettingOption) {
-  return 'artwork-' + option.toLowerCase().replaceAll(' ', '-');
-}
-
-function getArtworkSettingOptionLabel(option: ArtworkSettingOption) {
-  return option.toString();
-}

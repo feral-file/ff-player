@@ -14,8 +14,9 @@
   .listOptions {
     display: flex;
     flex-direction: column;
-    gap: 0.5em;
+    gap: 1em;
     width: 100%;
+    padding-right: 1em;
     .optionItemOutline {
       border-radius: 2.35em;
       border: 0.05em solid transparent;

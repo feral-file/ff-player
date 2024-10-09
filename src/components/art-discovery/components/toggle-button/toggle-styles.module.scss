@@ -4,13 +4,14 @@
 }
 
 .toggle {
-  width: fit-content;
+  width: 100%;
   display: flex;
   flex-direction: row;
   border: solid 0.075em white;
   border-radius: 4.5em;
   padding: 0.3em;
   gap: 0.5em;
+  justify-content: space-between;
 
   .selection {
     height: 2.7em;
@@ -31,12 +32,30 @@
   }
 
   .selection.selected {
-    background-color: #b9e5ff;
+    background-color: rgba(185, 229, 255, 0.3);
     color: black;
+  }
+
+  .selection.selected.focused {
+    background-color: #b9e5ff;
   }
 }
 
 .outline.focused,
 .outline:hover {
   border-color: #ffffff;
+}
+
+.lightMode.outline.focused,
+.lightMode.outline:hover {
+  border-color: #000000;
+}
+
+.lightMode {
+  .toggle {
+    border-color: #000000;
+    .selection {
+      color: black;
+    }
+  }
 }
