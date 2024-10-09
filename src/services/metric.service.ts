@@ -1,6 +1,7 @@
 import { LocalStorageItem } from '@/constants';
-import { MetricEvent } from '@/models/metric.model';
+import { ExhibitionDisplaySection, MetricEvent } from '@/models/metric.model';
 import DeviceManager from '@/utils/DeviceManager';
+import { ExhibitionCatalog } from '@/utils/types';
 import axios, { AxiosInstance } from 'axios';
 
 const accountsRequester: AxiosInstance = axios.create({
@@ -24,7 +25,10 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
   }
 }
 
-export function appendMetricEventToLocalStorage(event: MetricEvent) {
+export function appendMetricEventToLocalStorage(
+  event: MetricEvent[],
+  uploadAfterAppend = false
+) {
   console.log('[METRIC]: append event to localStorage', JSON.stringify(event));
   const metricEvents = localStorage.getItem(LocalStorageItem.metricEvents);
   let events: MetricEvent[] = [];
@@ -40,9 +44,11 @@ export function appendMetricEventToLocalStorage(event: MetricEvent) {
     }
   }
 
-  events.push(event);
+  events.push(...event);
   localStorage.setItem(LocalStorageItem.metricEvents, JSON.stringify(events));
-  uploadMetricEventsFromLocalStorage();
+  if (uploadAfterAppend) {
+    uploadMetricEventsFromLocalStorage();
+  }
 }
 
 export function uploadMetricEventsFromLocalStorage() {
@@ -63,15 +69,29 @@ export function uploadMetricEventsFromLocalStorage() {
   }
 
   if (events.length > 0) {
-    uploadNewMetric(events)
-      .then(() => {
-        localStorage.removeItem(LocalStorageItem.metricEvents);
-      })
-      .catch((error: unknown) => {
-        console.error(
-          '[METRIC] Error uploading metric events',
-          JSON.stringify(error)
-        );
-      });
+    localStorage.removeItem(LocalStorageItem.metricEvents);
+    uploadNewMetric(events).catch((error: unknown) => {
+      appendMetricEventToLocalStorage(events);
+
+      console.error(
+        '[METRIC] Error uploading metric events',
+        JSON.stringify(error)
+      );
+    });
+  }
+}
+
+export function mappingExhibitionCatalogToExhibitionDisplaySection(
+  castingSection: ExhibitionCatalog
+): ExhibitionDisplaySection {
+  switch (castingSection) {
+    case ExhibitionCatalog.home:
+      return ExhibitionDisplaySection.Home;
+    case ExhibitionCatalog.curatorNote:
+    case ExhibitionCatalog.resource:
+    case ExhibitionCatalog.resourceDetail:
+      return ExhibitionDisplaySection.CuratorNote;
+    case ExhibitionCatalog.artwork:
+      return ExhibitionDisplaySection.Artworks;
   }
 }

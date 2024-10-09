@@ -18,16 +18,24 @@ import Loading from '../loading/loading';
 import { useAppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
 import { appendMetricEventToLocalStorage } from '@/services/metric.service';
-import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
+import {
+  CastingArtworkType,
+  ExhibitionDisplaySection,
+  MetricEvent,
+} from '@/models/metric.model';
 
 const ArtworkPlayer = ({
   previewURL,
   artworkID,
+  section,
+  exhibitionID,
   castingType,
   isCustomView,
 }: {
   previewURL: string;
   artworkID?: string;
+  section?: ExhibitionDisplaySection; // For exhibition casting only
+  exhibitionID?: string; // For exhibition casting only
   castingType?: CastingArtworkType;
   isCustomView?: boolean;
   keyboardCode?: number;
@@ -68,7 +76,7 @@ const ArtworkPlayer = ({
     }
   }
 
-  // Metric
+  // Metric handling BEGIN:
   useEffect(() => {
     if (castingType && artworkID) {
       const handleMetric = () => {
@@ -80,7 +88,9 @@ const ArtworkPlayer = ({
           event: castingType,
           timestamp: new Date().toISOString(),
           parameters: {
+            section,
             tokenID: artworkID,
+            exhibitionID,
           },
         };
 
@@ -99,7 +109,7 @@ const ArtworkPlayer = ({
           }, delay);
         };
 
-        appendMetricEventToLocalStorage(event);
+        appendMetricEventToLocalStorage([event], true);
         checkNewDay();
       };
 
@@ -111,7 +121,8 @@ const ArtworkPlayer = ({
         }
       };
     }
-  }, [castingType, artworkID]);
+  }, [castingType, artworkID, exhibitionID, section]);
+  // Metric handling END.
 
   useEffect(() => {
     const detectPreviewType = async (previewURL: string) => {
