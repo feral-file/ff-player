@@ -15,4 +15,11 @@ Sentry.init({
 
   // Uncomment the line below to enable Spotlight (https://spotlightjs.com)
   // spotlight: process.env.NODE_ENV === 'development',
+  ignoreErrors: [
+    'ChunkLoadError: Loading chunk',
+    'Loading chunk',
+    'TypeError',
+    'TypeError: Failed to fetch',
+    'ReferenceError',
+  ],
 });
