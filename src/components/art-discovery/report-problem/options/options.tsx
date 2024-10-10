@@ -29,7 +29,6 @@ const ReasonOptions: React.FC<{
         displayInfo?.token?.indexID ?? '',
         [selectedOption]
       );
-      console.log('submitReport data:', data);
       setIsSubmitting(false);
       onSubmitted && onSubmitted(data?.reportID ?? '');
     } catch (error) {
@@ -113,7 +112,7 @@ const SubmitButton: React.FC<{ focused?: boolean; isSubmitting?: boolean }> = ({
       )}>
       <style jsx>{`
         .active {
-          background-color: rgb(181, 191, 67);
+          background-color: #a5b305;
         }
       `}</style>
       <div className={styles.sendLogIcon}>

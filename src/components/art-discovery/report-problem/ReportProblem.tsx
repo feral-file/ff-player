@@ -24,13 +24,11 @@ const ReportProblem: React.FC = () => {
       return;
     }
 
-    console.log('Report ID:', reportID);
     setIsSubmitted(true);
     try {
       supportService.current
         .generateSupportConnectionLink(reportID)
         .then(link => {
-          console.log('Branch link:', link);
           setBranchLink(link ?? '');
         });
     } catch (error) {
@@ -48,13 +46,21 @@ const ReportProblem: React.FC = () => {
             </div>
             {isSubmitted ? (
               <div className={styles.submitState}>
-                <p className={styles.title}>Report Submitted</p>
-                <p className={styles.subTitle}>Stay Updated</p>
-                <p className={styles.description}>
-                  Scan the QR code below to link this report to your mobile app.
-                  You can track its status, and we’ll notify you when the issue
-                  is resolved.
+                <p className={styles.title}>
+                  <span style={{ fontSize: '4em', lineHeight: '120%' }}>
+                    Report Submitted
+                  </span>
                 </p>
+                <p className={styles.subTitle}>
+                  <span className={styles.subText}>Stay Updated</span>
+                </p>
+                <div className={styles.description}>
+                  <p className={styles.subText}>
+                    Scan the QR code below to link this report to your mobile
+                    app. You can track its status, and we’ll notify you when the
+                    issue is resolved.
+                  </p>
+                </div>
                 <div className={styles.qrCode}>
                   {branchLink && (
                     <QRCode
@@ -67,16 +73,22 @@ const ReportProblem: React.FC = () => {
               </div>
             ) : (
               <div className={styles.submitState}>
-                <p className={styles.title}>Submit Report</p>
+                <p className={styles.title}>
+                  <span style={{ fontSize: '4em' }}>Submit Report</span>
+                </p>
                 <p className={styles.subTitle}>
-                  Help Us Understand the Problem
+                  <span className={styles.subText}>
+                    Help Us Understand the Problem
+                  </span>
                 </p>
-                <p className={styles.description}>
-                  We will investigate, but providing more details will help us
-                  resolve it faster.
-                  <br />
-                  What issue did you encounter?
-                </p>
+                <div className={styles.description}>
+                  <p className={styles.subText}>
+                    We will investigate, but providing more details will help us
+                    resolve it faster.
+                    <br />
+                    What issue did you encounter?
+                  </p>
+                </div>
                 <div className={styles.issueList}>
                   <FocusableContainer
                     className={styles.optionsDrawerContainer}
