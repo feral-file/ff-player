@@ -3,7 +3,7 @@
   gap: 1.5em;
   justify-content: center;
   align-items: center;
-  padding: 4em 0;
+  padding-bottom: 4em;
 
   .outline {
     border-radius: 4.5em;
@@ -22,10 +22,9 @@
 
     .optValue {
       font-weight: bold;
-      padding: 0.9rem 1.8rem;
-      border-radius: 6.75rem;
-      margin: 0.35rem;
-      font-size: 1.5em;
+      padding: 0.9em 1.8em;
+      border-radius: 6.75em;
+      margin: 0.35em;
     }
   }
 
@@ -60,6 +59,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 3em;
+    border: solid 0.225em transparent;
     background: var(--FF-Highlight, #ecff0c);
     color: black;
     font-weight: bold;
@@ -69,5 +69,13 @@
       height: 1.6em;
       margin-right: 0.5em;
     }
+  }
+  .submit.focused,
+  .submit:hover {
+    border-color: black;
+  }
+
+  .submit:active {
+    background-color: rgb(181, 191, 67);
   }
 }
