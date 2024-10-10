@@ -252,6 +252,7 @@ class DeviceManager {
       const data = {
         source: 'feralfile_display',
         device: deviceInfo,
+        reportId: '707ac31c-d548-4b44-820a-defb48a7546a',
       };
       return await createBranchLink(data);
     } catch (e) {
