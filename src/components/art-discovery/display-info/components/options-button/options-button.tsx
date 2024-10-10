@@ -1,6 +1,5 @@
 import clsx from 'clsx';
 import styles from './options-button-styles.module.scss';
-import { se } from 'date-fns/locale';
 
 const OptionsButton: React.FC<{
   focused?: boolean;
