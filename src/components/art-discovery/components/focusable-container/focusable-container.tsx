@@ -15,7 +15,7 @@ const FocusableContainer: React.FC<{
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
-  initialFocusKey?: string;
+  initialFocusKey?: string; // Key of FocusableLeaf inside this container to focus on mount
   isFocusBoundary?: boolean;
   autoFocus?: boolean;
 }> = ({
