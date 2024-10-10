@@ -62,11 +62,6 @@ const ExhibitionHall = () => {
     artwork.previewURI = seriesService.current.getArtworkPreview(artwork);
     setArtwork(artwork);
 
-    setDisplayInfo({
-      token: undefined,
-      ffArtworkID: artwork.id,
-    });
-
     // Set mixpanel metadata
     if (artwork !== artworkRef.current) {
       artworkRef.current = artwork;
@@ -77,6 +72,13 @@ const ExhibitionHall = () => {
         setArtworkID(artworkRef.current.id);
       }
     }
+
+    const indexID = formatArtworkIndexID(artworkRef.current, exhibition ?? {});
+    setDisplayInfo({
+      token: undefined,
+      indexID,
+      ffArtworkID: artwork.id,
+    });
   };
 
   useEffect(() => {

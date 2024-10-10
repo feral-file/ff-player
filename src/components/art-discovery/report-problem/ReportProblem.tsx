@@ -1,12 +1,10 @@
 'use client';
 
-import { clsx } from 'clsx';
 import styles from './report-styles.module.scss';
 import { useRef, useState } from 'react';
 import FocusableContainer from '../components/focusable-container/focusable-container';
 import ReasonOptions from './options/options';
 import { SupportService } from '@/services/support.service';
-import { QrCodeSkeleton } from '@/components/skeleton/skeleton';
 import QRCode from 'qrcode.react';
 import { useAppContext } from '@/context/AppContext';
 
@@ -19,18 +17,16 @@ const ReportProblem: React.FC = () => {
     screenRatio: 1,
   };
 
-  const submittedHandler = (reportID: string) => {
+  const submittedHandler = async (reportID: string) => {
     if (!reportID) {
       return;
     }
 
     setIsSubmitted(true);
     try {
-      supportService.current
-        .generateSupportConnectionLink(reportID)
-        .then(link => {
-          setBranchLink(link ?? '');
-        });
+      const link =
+        await supportService.current.generateSupportConnectionLink(reportID);
+      setBranchLink(link ?? '');
     } catch (error) {
       console.error('Error getting branch link', error);
     }
