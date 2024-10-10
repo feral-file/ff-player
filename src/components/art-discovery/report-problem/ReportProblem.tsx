@@ -2,12 +2,41 @@
 
 import { clsx } from 'clsx';
 import styles from './report-styles.module.scss';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import FocusableContainer from '../components/focusable-container/focusable-container';
 import ReasonOptions from './options/options';
+import { SupportService } from '@/services/support.service';
+import { QrCodeSkeleton } from '@/components/skeleton/skeleton';
+import QRCode from 'qrcode.react';
+import { useAppContext } from '@/context/AppContext';
 
 const ReportProblem: React.FC = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [branchLink, setBranchLink] = useState('');
+  const supportService = useRef(new SupportService());
+  const { context } = useAppContext();
+  const { screenRatio } = context.deviceRotation ?? {
+    screenRatio: 1,
+  };
+
+  const submittedHandler = (reportID: string) => {
+    if (!reportID) {
+      return;
+    }
+
+    console.log('Report ID:', reportID);
+    setIsSubmitted(true);
+    try {
+      supportService.current
+        .generateSupportConnectionLink(reportID)
+        .then(link => {
+          console.log('Branch link:', link);
+          setBranchLink(link ?? '');
+        });
+    } catch (error) {
+      console.error('Error getting branch link', error);
+    }
+  };
 
   return (
     <div className={styles.modal}>
@@ -27,7 +56,13 @@ const ReportProblem: React.FC = () => {
                   is resolved.
                 </p>
                 <div className={styles.qrCode}>
-                  <img src="" alt="qr code" />
+                  {branchLink && (
+                    <QRCode
+                      value={branchLink}
+                      size={screenRatio * 250}
+                      bgColor={'transparent'}
+                      fgColor={'#000000'}></QRCode>
+                  )}
                 </div>
               </div>
             ) : (
@@ -46,7 +81,8 @@ const ReportProblem: React.FC = () => {
                   <FocusableContainer
                     className={styles.optionsDrawerContainer}
                     initialFocusKey={'issueOptions'}>
-                    <ReasonOptions></ReasonOptions>
+                    <ReasonOptions
+                      onSubmitted={submittedHandler}></ReasonOptions>
                   </FocusableContainer>
                 </div>
               </div>
