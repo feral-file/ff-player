@@ -63,7 +63,7 @@ const Controls: React.FC<{
 
   useEffect(() => {
     // Initialize selectedConfig
-    if (selectedArtFraming == undefined) {
+    if (selectedArtFraming === undefined) {
       setSelectedArtFraming(appControl.frameConfig);
     }
   }, [appControl.frameConfig, selectedArtFraming]);

@@ -60,7 +60,7 @@ const OptionsDrawer: React.FC<{
   };
 
   useEffect(() => {
-    if (selectedArtFraming == undefined) {
+    if (selectedArtFraming === undefined) {
       setSelectedArtFraming(artDisplaySetting?.frameConfig);
     } else {
       // Update the artDisplaySetting
