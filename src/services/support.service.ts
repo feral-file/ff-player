@@ -11,7 +11,7 @@ export enum SupportRequestReason {
 export class SupportService {
   public async submitSupportRequest(
     tokenID: string,
-    reason: SupportRequestReason[]
+    reasons: SupportRequestReason[]
   ) {
     try {
       const deviceInfo = await DeviceManager.getDeviceInfo(true);
@@ -23,7 +23,7 @@ export class SupportService {
         '/artwork-reports',
         {
           tokenID,
-          reason,
+          reasons,
           deviceInfo,
         }
       );
