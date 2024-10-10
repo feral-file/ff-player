@@ -40,21 +40,20 @@
 
         .submitState {
           .title {
-            font-size: 4rem;
-            line-height: 120%;
-            padding-top: 2.5rem;
-            padding-bottom: 5rem;
+            padding-top: 2em;
+            padding-bottom: 4em;
           }
           .subTitle {
-            font-size: 1.8em;
-            line-height: 110%;
             font-weight: bold;
             padding-bottom: 2em;
           }
           .description {
-            font-size: 1.8em;
+            padding-bottom: 4em;
+            max-width: 54em;
+          }
+          .subText {
             line-height: 110%;
-            padding-bottom: 3em;
+            font-size: 1.8em;
           }
         }
 

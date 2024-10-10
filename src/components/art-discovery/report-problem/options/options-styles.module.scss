@@ -55,7 +55,7 @@
   justify-content: center;
   .submit {
     display: flex;
-    padding: 1.35em 1.25em;
+    padding: 1.2em 2em;
     align-items: center;
     justify-content: center;
     border-radius: 3em;
@@ -76,6 +76,6 @@
   }
 
   .submit:active {
-    background-color: rgb(181, 191, 67);
+    background-color: #a5b305;
   }
 }
