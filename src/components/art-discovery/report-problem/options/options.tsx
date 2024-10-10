@@ -9,7 +9,7 @@ import {
 import { usePopUpContext } from '@/context/PopUpContext';
 
 const ReasonOptions: React.FC<{
-  onSubmitted: (resp: string) => void;
+  onSubmitted: (resp: string) => Promise<void>;
 }> = ({ onSubmitted }) => {
   const { displayInfo } = usePopUpContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -26,11 +26,11 @@ const ReasonOptions: React.FC<{
 
       setIsSubmitting(true);
       const data = await supportService.current.submitSupportRequest(
-        displayInfo?.token?.indexID ?? '',
+        displayInfo?.token?.indexID ?? displayInfo?.indexID ?? '',
         [selectedOption]
       );
       setIsSubmitting(false);
-      onSubmitted && onSubmitted(data?.reportID ?? '');
+      await onSubmitted(data?.reportID ?? '');
     } catch (error) {
       setIsSubmitting(false);
       console.log('Error submitting report:', error);
@@ -58,8 +58,8 @@ const ReasonOptions: React.FC<{
           key={'submit-btn'}
           focusKey={'submit-btn'}
           onEnterPress={() => {
-            submitReport().catch(error => {
-              console.error(error);
+            submitReport().catch((err: unknown) => {
+              console.error('Error submitting report:', err);
             });
           }}>
           <SubmitButton isSubmitting={isSubmitting}></SubmitButton>

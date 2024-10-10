@@ -84,6 +84,13 @@ const ExhibitionHall = () => {
         setArtworkID(artworkRef.current.id);
       }
     }
+
+    const indexID = formatArtworkIndexID(artworkRef.current, exhibition ?? {});
+    setDisplayInfo({
+      token: undefined,
+      indexID,
+      ffArtworkID: artwork.id,
+    });
   };
 
   useEffect(() => {

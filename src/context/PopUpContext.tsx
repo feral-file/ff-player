@@ -18,6 +18,7 @@ interface PopUpContextProps {
 
 interface DisplayInfoProps {
   token: IndexerToken | undefined; // Required if "isCastingSingleArt" is true
+  indexID?: string; // Required if token is undefined
   ffArtworkID?: string; // Required if "isCastingSingleArt" is true and for FF art only
   dailyNote?: string; // Required if "isCastingSingleArt" is true and for Daily art only
 }
