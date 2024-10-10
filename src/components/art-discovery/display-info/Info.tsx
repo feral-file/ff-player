@@ -20,6 +20,7 @@ import OptionsDrawer, {
 } from './components/options-drawer/options-drawer';
 import { ExhibitionService } from '@/services';
 import { KeyboardEventKey } from '@/constants';
+import ReportProblem from '../report-problem/ReportProblem';
 
 enum InfoFocusableLeafKey {
   DisplayInfo = 'display-info',
@@ -57,6 +58,7 @@ const DisplayInfo: React.FC<{
   const [mediumDescription, setMediumDescription] = useState<string[]>([]);
   const [artist, setArtist] = useState<User | undefined>();
   const [exhibition, setExhibition] = useState<Exhibition>();
+  const [isReportProblemExpanded, setIsReportProblemExpanded] = useState(false);
   const artworkService = useRef(new ArtworkService());
   const exhibitionService = useRef(new ExhibitionService());
   const okBtnRef = useRef<HTMLDivElement>(null);
@@ -197,10 +199,23 @@ const DisplayInfo: React.FC<{
                       className={styles.optionsDrawerContainer}
                       initialFocusKey={OptionsDrawerLeafKey.OptionsButton}
                       isFocusBoundary={true}>
-                      <OptionsDrawer
-                        onClosed={() => {
-                          onOptionsExpandedChanged(false);
-                        }}></OptionsDrawer>
+                      <>
+                        <OptionsDrawer
+                          onClosed={() => {
+                            onOptionsExpandedChanged(false);
+                          }}
+                          onReportProblem={() => {
+                            setIsReportProblemExpanded(true);
+                          }}></OptionsDrawer>
+
+                        {isReportProblemExpanded && (
+                          <FocusableContainer
+                            key={'reportModal'}
+                            autoFocus={true}>
+                            <ReportProblem></ReportProblem>
+                          </FocusableContainer>
+                        )}
+                      </>
                     </FocusableContainer>
                   ) : (
                     <FocusableLeaf

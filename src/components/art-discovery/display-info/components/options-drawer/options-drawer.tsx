@@ -21,7 +21,8 @@ export enum OptionsDrawerLeafKey {
 
 const OptionsDrawer: React.FC<{
   onClosed?: () => void;
-}> = ({ onClosed }) => {
+  onReportProblem?: () => void;
+}> = ({ onClosed, onReportProblem }) => {
   const { artDisplaySetting, setArtDisplaySetting } = usePopUpContext();
   const [selectedArtFraming, setSelectedArtFraming] = useState<ArtFraming>();
 
@@ -108,8 +109,31 @@ const OptionsDrawer: React.FC<{
             lightMode={true}></RotateButton>
         </FocusableLeaf>
       </div>
+      <div className={styles.report}>
+        <FocusableLeaf
+          key={'report'}
+          focusKey={'report-problem'}
+          onEnterPress={onReportProblem}>
+          <ReportButton></ReportButton>
+        </FocusableLeaf>
+      </div>
     </div>
   );
 };
 
 export default OptionsDrawer;
+
+const ReportButton: React.FC<{ focused?: boolean }> = ({ focused }) => {
+  return (
+    <>
+      <style jsx>{`
+        .active {
+          color: #a70000;
+        }
+      `}</style>
+      <p className={clsx(styles.linkBtn, focused && styles.focused)}>
+        Report Problem
+      </p>
+    </>
+  );
+};
