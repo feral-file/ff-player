@@ -44,6 +44,8 @@ const DisplayInfo: React.FC<{
   onInfoExpandedChanged: (value: boolean) => void;
   isOptionsExpanded?: boolean;
   onOptionsExpandedChanged: (value: boolean) => void;
+  isReportProblemExpanded?: boolean;
+  onReportProblemExpanded: (value: boolean) => void;
 }> = ({
   token,
   ffArtworkID,
@@ -53,12 +55,13 @@ const DisplayInfo: React.FC<{
   onInfoExpandedChanged,
   isOptionsExpanded,
   onOptionsExpandedChanged,
+  isReportProblemExpanded,
+  onReportProblemExpanded,
 }) => {
   const [artwork, setArtwork] = useState<Artwork | undefined>();
   const [mediumDescription, setMediumDescription] = useState<string[]>([]);
   const [artist, setArtist] = useState<User | undefined>();
   const [exhibition, setExhibition] = useState<Exhibition>();
-  const [isReportProblemExpanded, setIsReportProblemExpanded] = useState(false);
   const artworkService = useRef(new ArtworkService());
   const exhibitionService = useRef(new ExhibitionService());
   const okBtnRef = useRef<HTMLDivElement>(null);
@@ -197,7 +200,11 @@ const DisplayInfo: React.FC<{
                   (isOptionsExpanded ? (
                     <FocusableContainer
                       className={styles.optionsDrawerContainer}
-                      initialFocusKey={OptionsDrawerLeafKey.OptionsButton}
+                      initialFocusKey={
+                        isReportProblemExpanded === false
+                          ? OptionsDrawerLeafKey.ReportProblem
+                          : OptionsDrawerLeafKey.OptionsButton
+                      }
                       isFocusBoundary={true}>
                       <>
                         <OptionsDrawer
@@ -205,7 +212,7 @@ const DisplayInfo: React.FC<{
                             onOptionsExpandedChanged(false);
                           }}
                           onReportProblem={() => {
-                            setIsReportProblemExpanded(true);
+                            onReportProblemExpanded(true);
                           }}></OptionsDrawer>
 
                         {isReportProblemExpanded && (

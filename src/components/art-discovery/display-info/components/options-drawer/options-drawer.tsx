@@ -17,6 +17,7 @@ enum ArtworkSettingOption {
 
 export enum OptionsDrawerLeafKey {
   OptionsButton = 'draw-options-button',
+  ReportProblem = 'report-problem',
 }
 
 const OptionsDrawer: React.FC<{
@@ -111,8 +112,8 @@ const OptionsDrawer: React.FC<{
       </div>
       <div className={styles.report}>
         <FocusableLeaf
-          key={'report'}
-          focusKey={'report-problem'}
+          key={OptionsDrawerLeafKey.ReportProblem}
+          focusKey={OptionsDrawerLeafKey.ReportProblem}
           onEnterPress={onReportProblem}>
           <ReportButton></ReportButton>
         </FocusableLeaf>
