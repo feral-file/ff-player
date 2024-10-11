@@ -169,146 +169,152 @@ const DisplayInfo: React.FC<{
               styles['full-artwork-info'],
               styles.focused
             )}>
-            <div>
+            <div // Div to group the artwork detail into 1 section of flex row
+            >
               <div>
-                <p>
-                  {token?.asset.metadata.project.latest.artistName ??
-                    artist?.alumniAccount?.alias}
-                  ,
-                </p>
-                <p style={{ fontWeight: 'bold' }}>
-                  <span style={{ fontStyle: 'italic' }}>
-                    {token?.asset.metadata.project.latest.title ??
-                      artwork?.series?.title}
-                  </span>{' '}
-                  (
-                  {new Date(
-                    token?.mintedAt ?? artwork?.mintedAt ?? ''
-                  ).getFullYear()}
-                  )
-                </p>
-                <br />
-              </div>
-              {!isInfoExpanded &&
-                (isOptionsExpanded ? (
-                  <FocusableContainer
-                    className={styles.optionsDrawerContainer}
-                    initialFocusKey={OptionsDrawerLeafKey.OptionsButton}
-                    isFocusBoundary={true}>
-                    <OptionsDrawer
-                      onClosed={() => {
-                        onOptionsExpandedChanged(false);
-                      }}></OptionsDrawer>
-                  </FocusableContainer>
-                ) : (
-                  <FocusableLeaf
-                    key={InfoFocusableLeafKey.OptionsButton}
-                    focusKey={InfoFocusableLeafKey.OptionsButton}
-                    className={styles.optionsButtonLeaf}
-                    onEnterPress={() => {
-                      onOptionsExpandedChanged(true);
-                    }}>
-                    <OptionsButton></OptionsButton>
-                  </FocusableLeaf>
-                ))}
-            </div>
-            <div // Scrollable section, put all the artwork detail here
-              className={clsx(
-                styles.scrollableSection,
-                isInfoExpanded ? '' : styles.collapse
-              )}
-              ref={scrollableSectionRef}
-              tabIndex={-1}>
-              {mediumDescription.length > 0 && (
                 <div>
-                  {mediumDescription.map((desc, index) => (
-                    <p key={index}>{desc}</p>
-                  ))}
+                  <p>
+                    {token?.asset.metadata.project.latest.artistName ??
+                      artist?.alumniAccount?.alias}
+                    ,
+                  </p>
+                  <p style={{ fontWeight: 'bold' }}>
+                    <span style={{ fontStyle: 'italic' }}>
+                      {token?.asset.metadata.project.latest.title ??
+                        artwork?.series?.title}
+                    </span>{' '}
+                    (
+                    {new Date(
+                      token?.mintedAt ?? artwork?.mintedAt ?? ''
+                    ).getFullYear()}
+                    )
+                  </p>
                   <br />
                 </div>
-              )}
-              <div>
-                <p
-                  dangerouslySetInnerHTML={{
-                    __html:
-                      token?.asset.metadata.project.latest.description ??
-                      artwork?.series?.description ??
-                      '',
-                  }}></p>
+                {!isInfoExpanded &&
+                  (isOptionsExpanded ? (
+                    <FocusableContainer
+                      className={styles.optionsDrawerContainer}
+                      initialFocusKey={OptionsDrawerLeafKey.OptionsButton}
+                      isFocusBoundary={true}>
+                      <OptionsDrawer
+                        onClosed={() => {
+                          onOptionsExpandedChanged(false);
+                        }}></OptionsDrawer>
+                    </FocusableContainer>
+                  ) : (
+                    <FocusableLeaf
+                      key={InfoFocusableLeafKey.OptionsButton}
+                      focusKey={InfoFocusableLeafKey.OptionsButton}
+                      className={styles.optionsButtonLeaf}
+                      onEnterPress={() => {
+                        onOptionsExpandedChanged(true);
+                      }}>
+                      <OptionsButton></OptionsButton>
+                    </FocusableLeaf>
+                  ))}
               </div>
-              {!!dailyNote && (
-                <div className={styles.dailyNote}>
-                  <p style={{ paddingBottom: '0.8em' }}>Daily Note:</p>
-                  <p dangerouslySetInnerHTML={{ __html: dailyNote || '' }}></p>
-                </div>
-              )}
-              {!!ffArtworkID && !!artist && (
-                // Show artist info if this is FF artwork
-                <div className={styles.artistSection}>
-                  <p className={styles.subTitle}>Artist Profile</p>
-                  <div className={styles.avatar}>
-                    <img
-                      src={
-                        FERAL_FILE_ASSET_URL +
-                        (artist.alumniAccount?.avatarURI ?? '')
-                      }
-                      alt="avatar"
-                    />
-                  </div>
+              <div // Scrollable section, put all the artwork detail here
+                className={clsx(
+                  styles.scrollableSection,
+                  isInfoExpanded ? '' : styles.collapse
+                )}
+                ref={scrollableSectionRef}
+                tabIndex={-1}>
+                {mediumDescription.length > 0 && (
                   <div>
-                    <p className={styles.artistName}>
-                      {token?.asset.metadata.project.latest.artistName ??
-                        artist.alumniAccount?.alias}
-                    </p>
-                    {artist.alumniAccount?.location && (
-                      <p className={styles.subContent}>
-                        {artist.alumniAccount.location}
-                      </p>
-                    )}
+                    {mediumDescription.map((desc, index) => (
+                      <p key={index}>{desc}</p>
+                    ))}
+                    <br />
                   </div>
-                  {artist.alumniAccount?.bio && (
-                    <p
-                      dangerouslySetInnerHTML={{
-                        __html: artist.alumniAccount.bio,
-                      }}></p>
-                  )}
+                )}
+                <div>
+                  <p
+                    dangerouslySetInnerHTML={{
+                      __html:
+                        token?.asset.metadata.project.latest.description ??
+                        artwork?.series?.description ??
+                        '',
+                    }}></p>
                 </div>
-              )}
-              {!!ffArtworkID && !!exhibition && (
-                // Show the exhibition info if this is FF artwork
-                <div className={styles.exhibitionSection}>
-                  <p className={styles.subTitle}>Exhibited in</p>
-                  {exhibition.coverURI && (
-                    <div className={styles.exhThumbnail}>
+                {!!dailyNote && (
+                  <div className={styles.dailyNote}>
+                    <p style={{ paddingBottom: '0.8em' }}>Daily Note:</p>
+                    <p
+                      dangerouslySetInnerHTML={{ __html: dailyNote || '' }}></p>
+                  </div>
+                )}
+                {!!ffArtworkID && !!artist && (
+                  // Show artist info if this is FF artwork
+                  <div className={styles.artistSection}>
+                    <p className={styles.subTitle}>Artist Profile</p>
+                    <div className={styles.avatar}>
                       <img
-                        src={FERAL_FILE_ASSET_URL + exhibition.coverURI}
-                        alt="exhibition"
+                        src={
+                          FERAL_FILE_ASSET_URL +
+                          (artist.alumniAccount?.avatarURI ?? '')
+                        }
+                        alt="avatar"
                       />
                     </div>
-                  )}
-                  <div className={styles.exhTopInfo}>
-                    <p className={styles.exhibitionName}>{exhibition.title}</p>
-                    <div className={styles.exhInfo}>
-                      {exhibition.curator && (
-                        <p>
-                          Curated by {exhibition.curator.alumniAccount?.alias}
+                    <div>
+                      <p className={styles.artistName}>
+                        {token?.asset.metadata.project.latest.artistName ??
+                          artist.alumniAccount?.alias}
+                      </p>
+                      {artist.alumniAccount?.location && (
+                        <p className={styles.subContent}>
+                          {artist.alumniAccount.location}
                         </p>
                       )}
-                      <p>
-                        {exhibition.type === ExhibitionType.group
-                          ? 'Group Exhibition'
-                          : 'Solo Exhibition'}
-                      </p>
                     </div>
+                    {artist.alumniAccount?.bio && (
+                      <p
+                        dangerouslySetInnerHTML={{
+                          __html: artist.alumniAccount.bio,
+                        }}></p>
+                    )}
                   </div>
-                  {exhibition.noteBrief && (
-                    <p
-                      dangerouslySetInnerHTML={{
-                        __html: exhibition.noteBrief,
-                      }}></p>
-                  )}
-                </div>
-              )}
+                )}
+                {!!ffArtworkID && !!exhibition && (
+                  // Show the exhibition info if this is FF artwork
+                  <div className={styles.exhibitionSection}>
+                    <p className={styles.subTitle}>Exhibited in</p>
+                    {exhibition.coverURI && (
+                      <div className={styles.exhThumbnail}>
+                        <img
+                          src={FERAL_FILE_ASSET_URL + exhibition.coverURI}
+                          alt="exhibition"
+                        />
+                      </div>
+                    )}
+                    <div className={styles.exhTopInfo}>
+                      <p className={styles.exhibitionName}>
+                        {exhibition.title}
+                      </p>
+                      <div className={styles.exhInfo}>
+                        {exhibition.curator && (
+                          <p>
+                            Curated by {exhibition.curator.alumniAccount?.alias}
+                          </p>
+                        )}
+                        <p>
+                          {exhibition.type === ExhibitionType.group
+                            ? 'Group Exhibition'
+                            : 'Solo Exhibition'}
+                        </p>
+                      </div>
+                    </div>
+                    {exhibition.noteBrief && (
+                      <p
+                        dangerouslySetInnerHTML={{
+                          __html: exhibition.noteBrief,
+                        }}></p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             {isInfoExpanded ? (
               <FocusableLeaf
