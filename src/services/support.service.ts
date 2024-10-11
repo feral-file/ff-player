@@ -1,7 +1,5 @@
-import DeviceManager from '@/utils/DeviceManager';
 import { supportAxiosInstance } from './axiosService';
 import createBranchLink from '@/utils/createBranchLink';
-import { useAppContext } from '@/context/AppContext';
 
 export enum SupportRequestReason {
   Lagging = 'Lagging',
