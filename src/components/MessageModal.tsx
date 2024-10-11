@@ -57,7 +57,7 @@ const MessageModal = ({
           justifyContent: 'center',
         }}>
         {messageModalType === MessageModalType.error && (
-          <img src="/images/close-white.svg"></img>
+          <img src="/images/close-white.svg" alt="close"></img>
         )}
         <p style={{ fontSize: screenRatio * 36, color: '#ffffff' }}>
           {message}
