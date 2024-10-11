@@ -7,11 +7,18 @@ import {
   SupportService,
 } from '@/services/support.service';
 import { usePopUpContext } from '@/context/PopUpContext';
+import { useAppContext } from '@/context/AppContext';
+import { ArtFraming } from '@/services/AppControls';
+import { Orientation } from '@/utils/types';
+import DeviceManager from '@/utils/DeviceManager';
 
 const ReasonOptions: React.FC<{
   onSubmitted: (resp: string) => Promise<void>;
 }> = ({ onSubmitted }) => {
-  const { displayInfo } = usePopUpContext();
+  const { displayInfo, artDisplaySetting } = usePopUpContext();
+  const { context } = useAppContext();
+  const { locationID, topicID } = context.websocketData;
+  const deviceRotation = context.deviceRotation;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedOption, setSelectedOption] = useState<SupportRequestReason>(
     SupportRequestReason.Lagging
@@ -25,16 +32,47 @@ const ReasonOptions: React.FC<{
       }
 
       setIsSubmitting(true);
+      const deviceInfo = await getDeviceInfo();
       const data = await supportService.current.submitSupportRequest(
         displayInfo?.token?.indexID ?? displayInfo?.indexID ?? '',
-        [selectedOption]
+        [selectedOption],
+        deviceInfo
       );
+
       setIsSubmitting(false);
       await onSubmitted(data?.reportID ?? '');
     } catch (error) {
       setIsSubmitting(false);
       console.log('Error submitting report:', error);
     }
+  };
+
+  const getDeviceInfo = async () => {
+    const currentArtDisplaySetting = {
+      'art framing':
+        Object.values(ArtFraming)[artDisplaySetting?.frameConfig ?? 0],
+      'art rotation angle': `${artDisplaySetting?.rotateRadius ?? 0} degrees`,
+      'app rotation angle': `${deviceRotation?.rotateRadius ?? 0} degrees`,
+      'screen orientation':
+        deviceRotation?.screenOrientation === Orientation.horizontal
+          ? 'landscape'
+          : 'portrait',
+    };
+
+    const deviceInfo = await DeviceManager.getDeviceInfo(true);
+    if (!deviceInfo) {
+      return currentArtDisplaySetting;
+    }
+
+    if (!deviceInfo?.locationId) {
+      deviceInfo.locationId = locationID;
+    }
+
+    if (!deviceInfo?.topicId) {
+      deviceInfo.topicId = topicID;
+    }
+
+    return { ...deviceInfo, ...currentArtDisplaySetting };
   };
 
   return (

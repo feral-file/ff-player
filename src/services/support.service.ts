@@ -1,6 +1,7 @@
 import DeviceManager from '@/utils/DeviceManager';
 import { supportAxiosInstance } from './axiosService';
 import createBranchLink from '@/utils/createBranchLink';
+import { useAppContext } from '@/context/AppContext';
 
 export enum SupportRequestReason {
   Lagging = 'Lagging',
@@ -11,14 +12,10 @@ export enum SupportRequestReason {
 export class SupportService {
   public async submitSupportRequest(
     tokenID: string,
-    reasons: SupportRequestReason[]
+    reasons: SupportRequestReason[],
+    deviceInfo: Record<string, string | number | null>
   ) {
     try {
-      const deviceInfo = await DeviceManager.getDeviceInfo(true);
-      if (!deviceInfo) {
-        return null;
-      }
-
       const response = await supportAxiosInstance.post<{ reportID: string }>(
         '/artwork-reports',
         {
