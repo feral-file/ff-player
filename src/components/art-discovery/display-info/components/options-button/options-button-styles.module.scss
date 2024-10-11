@@ -14,6 +14,10 @@
     width: 2.35em;
     height: 2.25em;
   }
+  .arrowDown {
+    width: 2.35em;
+    height: 2.25em;
+  }
 }
 
 .optionsButton.focused,
@@ -21,9 +25,12 @@
 .optionsButton:hover {
   background-color: white;
   color: black;
-}
-
-.optionsButton.focused.selected,
-.optionsButton.selected:hover {
-  border-color: #000000;
+  .arrowDown {
+    .arrowBackground {
+      fill: none;
+    }
+    path {
+      stroke: black;
+    }
+  }
 }

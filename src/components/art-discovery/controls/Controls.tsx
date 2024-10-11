@@ -4,9 +4,7 @@ import { clsx } from 'clsx';
 import styles from './controls-styles.module.scss';
 
 import FocusableContainer from '../components/focusable-container/focusable-container';
-import ToggleButton, {
-  Option,
-} from '../components/toggle-button/toggle-button';
+import ToggleButton from '../components/toggle-button/toggle-button';
 import FocusableLeaf, {
   Direction,
 } from '../components/focusable-leaf/focusable-leaf';
@@ -18,11 +16,7 @@ import NextDailyTimer from './components/next-daily-timer/next-daily-timer';
 import SettingItem from './components/setting-item/setting-item';
 import SettingDetail from './components/setting-detail/setting-detail';
 import { useAppContext } from '@/context/AppContext';
-
-const artworkFramingOptions: Option[] = [
-  { id: ArtFraming.FitToScreen, icon: 'fit-to-screen', label: 'Fit to Screen' },
-  { id: ArtFraming.CropToFill, icon: 'crop-to-fill', label: 'Crop to Fill' },
-];
+import { artworkFramingOptions } from '../art-discovery.model';
 
 export enum SettingOption {
   ArtworkFraming = 'Artwork Framing',
@@ -69,7 +63,7 @@ const Controls: React.FC<{
 
   useEffect(() => {
     // Initialize selectedConfig
-    if (selectedArtFraming == undefined) {
+    if (selectedArtFraming === undefined) {
       setSelectedArtFraming(appControl.frameConfig);
     }
   }, [appControl.frameConfig, selectedArtFraming]);
@@ -209,6 +203,7 @@ const Controls: React.FC<{
                   className={styles.logo}
                 />
                 <svg
+                  style={{ width: '2em', height: '1.75em' }}
                   xmlns="http://www.w3.org/2000/svg"
                   width="25"
                   height="25"
