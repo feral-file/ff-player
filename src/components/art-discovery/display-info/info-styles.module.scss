@@ -36,7 +36,7 @@
       top: 0;
       bottom: 0;
       width: 50%;
-      min-width: 24em;
+      min-width: 25em;
       z-index: 1;
     }
 
@@ -55,7 +55,7 @@
   .full-artwork-info {
     display: flex;
     flex-direction: column;
-    row-gap: 1em;
+    justify-content: space-between;
 
     .scrollableSection {
       outline: none !important;
