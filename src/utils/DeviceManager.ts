@@ -171,7 +171,7 @@ class DeviceManager {
       let platform = 'web';
       if (appPlatform) {
         platform = (
-          localStorage?.getItem(LocalStorageItem.platform) ?? 'web'
+          localStorage.getItem(LocalStorageItem.platform) ?? 'web'
         ).toLocaleUpperCase();
       }
 
