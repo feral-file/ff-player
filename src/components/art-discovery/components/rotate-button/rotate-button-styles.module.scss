@@ -32,11 +32,12 @@
     font-size: 1em;
     font-weight: 700;
     border-radius: 4.5em;
-    img {
-      height: 1.6em;
-      width: auto;
-    }
   }
+}
+
+.rotateIcon {
+  width: 2em;
+  height: 2em;
 }
 
 .rotate.focused,
