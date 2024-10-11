@@ -51,8 +51,8 @@ const ReasonOptions: React.FC<{
     const currentArtDisplaySetting = {
       'art framing':
         Object.values(ArtFraming)[artDisplaySetting?.frameConfig ?? 0],
-      'art rotation angle': `${artDisplaySetting?.rotateRadius ?? 0} degrees`,
-      'app rotation angle': `${deviceRotation?.rotateRadius ?? 0} degrees`,
+      'art rotation angle': `${(artDisplaySetting?.rotateRadius ?? 0).toString()} degrees`,
+      'app rotation angle': `${(deviceRotation?.rotateRadius ?? 0).toString()} degrees`,
       'screen orientation':
         deviceRotation?.screenOrientation === Orientation.horizontal
           ? 'landscape'
@@ -64,11 +64,11 @@ const ReasonOptions: React.FC<{
       return currentArtDisplaySetting;
     }
 
-    if (!deviceInfo?.locationId) {
+    if (!deviceInfo.locationId) {
       deviceInfo.locationId = locationID;
     }
 
-    if (!deviceInfo?.topicId) {
+    if (!deviceInfo.topicId) {
       deviceInfo.topicId = topicID;
     }
 
