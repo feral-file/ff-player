@@ -5,6 +5,7 @@ import {
   FileUseImage,
   FileUseObject,
   FileUseVideo,
+  MessageModalType,
   MIMETypeAudio,
   MIMETypeImage,
   MIMETypeObject,
@@ -22,6 +23,8 @@ import { appendMetricEventToLocalStorage } from '@/services/metric.service';
 import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
 import { ArtFraming } from '@/services/AppControls';
 import { usePopUpContext } from '@/context/PopUpContext';
+import MessageModal from '../MessageModal';
+import { useTranslations } from 'next-intl';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -46,6 +49,8 @@ const ArtworkPlayer = ({
   const newDayCheckTimeOutID = useRef<
     NodeJS.Timeout | string | number | undefined
   >(undefined);
+  const [showMessageModal, setShowMessageModal] = useState<boolean>(false);
+  const t = useTranslations('ArtworkPlayer');
 
   function compareToGetFileType(type: string) {
     setIsStreaming(false);
@@ -242,6 +247,10 @@ const ArtworkPlayer = ({
     }
   }, [artDisplaySetting, previewType, previewURL]);
 
+  const handleLoadIframeError = () => {
+    setShowMessageModal(true);
+  };
+
   return (
     <div
       style={{
@@ -313,8 +322,16 @@ const ArtworkPlayer = ({
             style={{ width: '100%', height: '100%' }}
             src={displaySoftwareURL}
             onLoad={loadedSource}
+            onError={handleLoadIframeError}
             sandbox="allow-same-origin allow-scripts"></iframe>
         )}
+      {showMessageModal && (
+        <MessageModal
+          screenRatio={1}
+          message={t('wrong_artwork')}
+          messageModalType={MessageModalType.error}
+        />
+      )}
     </div>
   );
 };
