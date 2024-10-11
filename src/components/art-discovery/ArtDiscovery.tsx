@@ -124,11 +124,13 @@ const ArtDiscovery = () => {
           clearTimeout(inactivityTimeout.current);
         }
 
-        inactivityTimeout.current = setTimeout(() => {
-          setShowPopup(false);
-          setInfoExpanded(false);
-          setOptionsExpanded(false);
-        }, AUTO_HIDE_TIMEOUT);
+        if (!isReportProblemExpanded) {
+          inactivityTimeout.current = setTimeout(() => {
+            setShowPopup(false);
+            setInfoExpanded(false);
+            setOptionsExpanded(false);
+          }, AUTO_HIDE_TIMEOUT);
+        }
       }
     };
 
