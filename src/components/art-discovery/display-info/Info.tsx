@@ -30,6 +30,7 @@ enum InfoFocusableLeafKey {
   InfoLoseFocus = 'info-lose-focus',
   OkButton = 'ok-button',
   BackToExitButton = 'back-to-exit-button',
+  ReportModal = 'report-modal',
 }
 
 const SCROLL_AMOUNT = 150;
@@ -217,7 +218,7 @@ const DisplayInfo: React.FC<{
 
                         {isReportProblemExpanded && (
                           <FocusableContainer
-                            key={'reportModal'}
+                            key={InfoFocusableLeafKey.ReportModal}
                             autoFocus={true}>
                             <ReportProblem></ReportProblem>
                           </FocusableContainer>
