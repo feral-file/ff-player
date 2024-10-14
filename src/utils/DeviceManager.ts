@@ -179,19 +179,26 @@ class DeviceManager {
     return config ? (parseInt(config) as ArtFraming) : undefined;
   }
 
-  public async getDeviceInfo() {
+  public async getDeviceInfo(appPlatform?: boolean) {
     try {
       const deviceId = await this.getDeviceId();
       const locationId = await this.getLocationId();
       const topicId = await this.getTopicId();
       const name = await this.getName();
 
+      let platform = 'web';
+      if (appPlatform) {
+        platform = (
+          localStorage.getItem(LocalStorageItem.platform) ?? 'web'
+        ).toLocaleUpperCase();
+      }
+
       return {
         deviceId,
         locationId,
         topicId,
         name: name,
-        platform: 'web',
+        platform,
       };
     } catch (error) {
       console.error(

@@ -21,6 +21,8 @@ const nextConfig = {
     NEXT_PUBLIC_WEBSOCKET_API_KEY: process.env.NEXT_PUBLIC_WEBSOCKET_API_KEY,
     NEXT_PUBLIC_BRANCH_KEY: process.env.NEXT_PUBLIC_BRANCH_KEY,
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
+    NEXT_PUBLIC_SUPPORT_API_URL: process.env.NEXT_PUBLIC_SUPPORT_API_URL,
+    NEXT_PUBLIC_SUPPORT_API_KEY: process.env.NEXT_PUBLIC_SUPPORT_API_KEY,
   },
   experimental: {
     missingSuspenseWithCSRBailout: false,

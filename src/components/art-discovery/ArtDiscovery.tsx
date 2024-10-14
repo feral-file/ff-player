@@ -21,6 +21,8 @@ const ArtDiscovery = () => {
   const [showPopup, setShowPopup] = useState(true);
   const [isInfoExpanded, setInfoExpanded] = useState(false);
   const [isOptionsExpanded, setOptionsExpanded] = useState(false);
+  const [isReportProblemExpanded, setIsReportProblemExpanded] =
+    useState<boolean>();
   const lastEventTime = useRef(0);
   const { context } = useAppContext();
   const { castInfo } = context.websocketData;
@@ -72,8 +74,11 @@ const ArtDiscovery = () => {
 
           case KeyboardEventKey.Backspace: {
             if (showPopup) {
-              if (isOptionsExpanded) {
+              if (isReportProblemExpanded) {
+                setIsReportProblemExpanded(false);
+              } else if (isOptionsExpanded) {
                 setOptionsExpanded(false);
+                setIsReportProblemExpanded(undefined);
               } else {
                 if (isInfoExpanded) {
                   setInfoExpanded(false);
@@ -119,11 +124,13 @@ const ArtDiscovery = () => {
           clearTimeout(inactivityTimeout.current);
         }
 
-        inactivityTimeout.current = setTimeout(() => {
-          setShowPopup(false);
-          setInfoExpanded(false);
-          setOptionsExpanded(false);
-        }, AUTO_HIDE_TIMEOUT);
+        if (!isReportProblemExpanded) {
+          inactivityTimeout.current = setTimeout(() => {
+            setShowPopup(false);
+            setInfoExpanded(false);
+            setOptionsExpanded(false);
+          }, AUTO_HIDE_TIMEOUT);
+        }
       }
     };
 
@@ -146,7 +153,13 @@ const ArtDiscovery = () => {
         clearTimeout(inactivityTimeout.current);
       }
     };
-  }, [isInDaily, isInfoExpanded, isOptionsExpanded, showPopup]);
+  }, [
+    isInDaily,
+    isInfoExpanded,
+    isOptionsExpanded,
+    showPopup,
+    isReportProblemExpanded,
+  ]);
 
   useEffect(() => {
     updatePlatformBackKeyHandling(showPopup || !isInDaily);
@@ -186,6 +199,8 @@ const ArtDiscovery = () => {
                 onInfoExpandedChanged={setInfoExpanded}
                 isOptionsExpanded={isOptionsExpanded}
                 onOptionsExpandedChanged={setOptionsExpanded}
+                isReportProblemExpanded={isReportProblemExpanded}
+                onReportProblemExpanded={setIsReportProblemExpanded}
               />
             </FocusableContainer>
           )}

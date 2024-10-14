@@ -20,6 +20,7 @@ import OptionsDrawer, {
 } from './components/options-drawer/options-drawer';
 import { ExhibitionService } from '@/services';
 import { KeyboardEventKey } from '@/constants';
+import ReportProblem from '../report-problem/ReportProblem';
 
 enum InfoFocusableLeafKey {
   DisplayInfo = 'display-info',
@@ -29,6 +30,7 @@ enum InfoFocusableLeafKey {
   InfoLoseFocus = 'info-lose-focus',
   OkButton = 'ok-button',
   BackToExitButton = 'back-to-exit-button',
+  ReportModal = 'report-modal',
 }
 
 const SCROLL_AMOUNT = 150;
@@ -43,6 +45,8 @@ const DisplayInfo: React.FC<{
   onInfoExpandedChanged: (value: boolean) => void;
   isOptionsExpanded?: boolean;
   onOptionsExpandedChanged: (value: boolean) => void;
+  isReportProblemExpanded?: boolean;
+  onReportProblemExpanded: (value: boolean) => void;
 }> = ({
   token,
   ffArtworkID,
@@ -52,6 +56,8 @@ const DisplayInfo: React.FC<{
   onInfoExpandedChanged,
   isOptionsExpanded,
   onOptionsExpandedChanged,
+  isReportProblemExpanded,
+  onReportProblemExpanded,
 }) => {
   const [artwork, setArtwork] = useState<Artwork | undefined>();
   const [mediumDescription, setMediumDescription] = useState<string[]>([]);
@@ -195,12 +201,29 @@ const DisplayInfo: React.FC<{
                   (isOptionsExpanded ? (
                     <FocusableContainer
                       className={styles.optionsDrawerContainer}
-                      initialFocusKey={OptionsDrawerLeafKey.OptionsButton}
+                      initialFocusKey={
+                        isReportProblemExpanded === false
+                          ? OptionsDrawerLeafKey.ReportProblem
+                          : OptionsDrawerLeafKey.OptionsButton
+                      }
                       isFocusBoundary={true}>
-                      <OptionsDrawer
-                        onClosed={() => {
-                          onOptionsExpandedChanged(false);
-                        }}></OptionsDrawer>
+                      <>
+                        <OptionsDrawer
+                          onClosed={() => {
+                            onOptionsExpandedChanged(false);
+                          }}
+                          onReportProblem={() => {
+                            onReportProblemExpanded(true);
+                          }}></OptionsDrawer>
+
+                        {isReportProblemExpanded && (
+                          <FocusableContainer
+                            key={InfoFocusableLeafKey.ReportModal}
+                            autoFocus={true}>
+                            <ReportProblem></ReportProblem>
+                          </FocusableContainer>
+                        )}
+                      </>
                     </FocusableContainer>
                   ) : (
                     <FocusableLeaf

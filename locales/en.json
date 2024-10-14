@@ -14,5 +14,8 @@
   },
   "Loading": {
     "loading": "Loading..."
+  },
+  "ArtworkPlayer": {
+    "wrong_artwork": "The artwork cannot be displayed correctly on this device."
   }
 }

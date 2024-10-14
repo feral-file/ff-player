@@ -20,85 +20,87 @@ jobs:
     environment: ${{ matrix.environment }}
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-        cache-dependency-path: ./package-lock.json
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ./package-lock.json
 
-    - name: Install dependencies
-      run: npm install
+      - name: Install dependencies
+        run: npm install
 
-    - name: Set environment variables for ${{ matrix.environment }}
-      run: |
-        echo "NEXT_PUBLIC_INDEXER_MAINNET_URL=${{ vars.INDEXER_MAINNET_URL }}" >> .env.local
-        echo "NEXT_PUBLIC_ACCOUNTS_URL=${{ vars.ACCOUNTS_URL }}" >> .env.local
-        echo "NEXT_PUBLIC_AUTONOMY_IPFS_PREFIX=${{ vars.AUTONOMY_IPFS_PREFIX }}" >> .env.local
-        echo "NEXT_PUBLIC_FERAL_FILE_ASSET_URL=${{ vars.FERAL_FILE_ASSET_URL }}" >> .env.local
-        echo "NEXT_PUBLIC_API_URL=${{ vars.API_URL }}" >> .env.local
-        echo "NEXT_PUBLIC_PUB_DOC_URL=${{ vars.PUB_DOC_URL }}" >> .env.local
-        echo "NEXT_PUBLIC_WEBSOCKET_URL=${{ vars.WEBSOCKET_URL }}" >> .env.local
-        echo "NEXT_PUBLIC_ACCOUNTS_API_KEY=${{ secrets.ACCOUNTS_API_KEY }}" >> .env.local
-        echo "NEXT_PUBLIC_API_KEY=${{ secrets.WEBSOCKET_API_KEY }}" >> .env.local
-        echo "NEXT_PUBLIC_BRANCH_KEY=${{ secrets.BRANCH_KEY }}" >> .env.local
+      - name: Set environment variables for ${{ matrix.environment }}
+        run: |
+          echo "NEXT_PUBLIC_INDEXER_MAINNET_URL=${{ vars.INDEXER_MAINNET_URL }}" >> .env.local
+          echo "NEXT_PUBLIC_ACCOUNTS_URL=${{ vars.ACCOUNTS_URL }}" >> .env.local
+          echo "NEXT_PUBLIC_AUTONOMY_IPFS_PREFIX=${{ vars.AUTONOMY_IPFS_PREFIX }}" >> .env.local
+          echo "NEXT_PUBLIC_FERAL_FILE_ASSET_URL=${{ vars.FERAL_FILE_ASSET_URL }}" >> .env.local
+          echo "NEXT_PUBLIC_API_URL=${{ vars.API_URL }}" >> .env.local
+          echo "NEXT_PUBLIC_PUB_DOC_URL=${{ vars.PUB_DOC_URL }}" >> .env.local
+          echo "NEXT_PUBLIC_WEBSOCKET_URL=${{ vars.WEBSOCKET_URL }}" >> .env.local
+          echo "NEXT_PUBLIC_ACCOUNTS_API_KEY=${{ secrets.ACCOUNTS_API_KEY }}" >> .env.local
+          echo "NEXT_PUBLIC_API_KEY=${{ secrets.WEBSOCKET_API_KEY }}" >> .env.local
+          echo "NEXT_PUBLIC_BRANCH_KEY=${{ secrets.BRANCH_KEY }}" >> .env.local
+          echo "NEXT_PUBLIC_SUPPORT_API_URL=${{ vars.SUPPORT_API_URL }}" >> .env.local
+          echo "NEXT_PUBLIC_SUPPORT_API_KEY=${{ secrets.SUPPORT_API_KEY }}" >> .env.local
 
-    - name: Check for missing environment variables
-      id: check_env_vars
-      run: |
-        missing=false
-        warnings=()
+      - name: Check for missing environment variables
+        id: check_env_vars
+        run: |
+          missing=false
+          warnings=()
 
-        # Check each key in .env.local.sample to see if it has a value in .env.local
-        while IFS= read -r line; do
-          key=$(echo $line | cut -d '=' -f 1)
+          # Check each key in .env.local.sample to see if it has a value in .env.local
+          while IFS= read -r line; do
+            key=$(echo $line | cut -d '=' -f 1)
 
-          # Extract the value of the corresponding key from .env.local
-          value=$(grep -m 1 "^$key=" .env.local | cut -d '=' -f 2-)
+            # Extract the value of the corresponding key from .env.local
+            value=$(grep -m 1 "^$key=" .env.local | cut -d '=' -f 2-)
 
-          # If the key is missing or has an empty value, log a warning
-          if [ -z "$value" ]; then
-            warnings+=("\"$key is missing or has an empty value in .env.local\"")
-            missing=true
+            # If the key is missing or has an empty value, log a warning
+            if [ -z "$value" ]; then
+              warnings+=("\"$key is missing or has an empty value in .env.local\"")
+              missing=true
+            fi
+          done < .env.local.sample
+
+          # Handle setting the output and state only if there are warnings
+          if [ "$missing" = true ]; then
+            warnings_json=$(printf "%s\n" "${warnings[@]}" | jq -R . | jq -s .)
+            echo "warnings=$warnings_json" >> $GITHUB_OUTPUT
+          else
+            echo "warnings=[]" >> $GITHUB_OUTPUT
           fi
-        done < .env.local.sample
 
-        # Handle setting the output and state only if there are warnings
-        if [ "$missing" = true ]; then
-          warnings_json=$(printf "%s\n" "${warnings[@]}" | jq -R . | jq -s .)
-          echo "warnings=$warnings_json" >> $GITHUB_OUTPUT
-        else
-          echo "warnings=[]" >> $GITHUB_OUTPUT
-        fi
+      - name: Add GitHub comment with warnings if any
+        if: steps.check_env_vars.outputs.warnings != '[]'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const warningsOutput = '${{ steps.check_env_vars.outputs.warnings }}';
+            if (warningsOutput && warningsOutput !== '[]') {
+              const warnings = JSON.parse(warningsOutput);
+              const body = warnings.map(warning => `- ${warning}`).join('\n');
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## :warning: Environment Variables and Secrets Warnings:\n${body}`
+              });
+            }
 
-    - name: Add GitHub comment with warnings if any
-      if: steps.check_env_vars.outputs.warnings != '[]'
-      uses: actions/github-script@v6
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        script: |
-          const warningsOutput = '${{ steps.check_env_vars.outputs.warnings }}';
-          if (warningsOutput && warningsOutput !== '[]') {
-            const warnings = JSON.parse(warningsOutput);
-            const body = warnings.map(warning => `- ${warning}`).join('\n');
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `## :warning: Environment Variables and Secrets Warnings:\n${body}`
-            });
-          }
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
 
-    - uses: actions/cache@v4
-      with:
-        path: |
-          ${{ github.workspace }}/.next/cache
-        key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
-        restore-keys: |
-          ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
-
-    - name: Build Next.js app
-      run: npm run build
+      - name: Build Next.js app
+        run: npm run build

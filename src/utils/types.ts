@@ -223,3 +223,9 @@ export enum Orientation {
   vertical = 'vertical',
   horizontal = 'horizontal',
 }
+
+export enum MessageModalType {
+  error = 'error',
+  warning = 'warning',
+  info = 'info',
+}
