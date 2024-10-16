@@ -8,35 +8,22 @@ import {
 import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
-import { Orientation } from '@/utils/types';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useRef, useState } from 'react';
 import DeviceManager from '@/utils/DeviceManager';
 
 import { AbstractIntlMessages, NextIntlClientProvider } from 'next-intl';
 import { getUserLocale } from '@/utils/locale';
+import ArtworkPlayer from './artwork-player/ArtworkPlayer';
 
 const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { context } = useAppContext();
   const router = useRouter();
 
-  const { castInfo, canvasService } = context.websocketData;
-  const { screenOrientation, rotateRadius } = context.deviceRotation ?? {
-    screenOrientation: Orientation.horizontal,
-    rotateRadius: 0,
-  };
-  const sendLogEventInterval = useRef<NodeJS.Timeout | null>(null);
+  const { canvasService } = context.websocketData;
   const [messages, setMessages] = useState<AbstractIntlMessages>();
   const locale = getUserLocale();
-
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const [result, setResult] = useState<string>(
-    'Here would go the result of WebGL feature detection'
-  );
-
-  const [result2, setResult2] = useState<string>(
-    'Here would go the result of WebGL2 feature detection'
-  );
+  const sendLogEventInterval = useRef<NodeJS.Timeout | null>(null);
 
   // Check version update
   useEffect(() => {
@@ -159,80 +146,24 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     };
   }, []);
 
-  const detectWebGLContext = () => {
-    // Create canvas element. The canvas is not added to the
-    // document itself, so it is never displayed in the
-    // browser window.
-    const canvas = document.createElement('canvas');
-
-    // Get WebGLRenderingContext from canvas element.
-    const gl =
-      canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-
-    // Report the result.
-    const isSupported = gl instanceof WebGLRenderingContext;
-    setResult(
-      isSupported
-        ? 'Congratulations! Your browser supports WebGL.'
-        : 'Failed. Your browser or device may not support WebGL.'
-    );
-
-    // ---------
-    const glContextAttributes = { preserveDrawingBuffer: true };
-    const canvas2 = document.getElementById('canvas') as HTMLCanvasElement;
-    if (canvas2) {
-      const gl2 = canvas2.getContext('webgl2', glContextAttributes);
-      setResult2(
-        gl2 instanceof WebGL2RenderingContext
-          ? 'Congratulations! Your browser supports WebGL2.'
-          : 'Failed. Your browser or device may not support WebGL2.'
-      );
-    }
-  };
-
   return messages != undefined ? (
     <NextIntlClientProvider locale={locale} messages={messages}>
       <div
         style={{
-          width:
-            (screenOrientation === Orientation.vertical &&
-              (rotateRadius || 0) % 180 !== 90) ||
-            (screenOrientation === Orientation.horizontal &&
-              (rotateRadius || 0) % 180 === 0)
-              ? '100vw'
-              : '100vh',
-          height:
-            (screenOrientation === Orientation.vertical &&
-              (rotateRadius || 0) % 180 !== 90) ||
-            (screenOrientation === Orientation.horizontal &&
-              (rotateRadius || 0) % 180 === 0)
-              ? '100vh'
-              : '100vw',
-          transform: `rotate(${(rotateRadius || 0).toString()}deg) `,
-          transformOrigin:
-            (screenOrientation === Orientation.vertical &&
-              (rotateRadius || 0) % 360 === 90) ||
-            (screenOrientation === Orientation.horizontal &&
-              (rotateRadius || 0) % 360 === 90)
-              ? '50vw center'
-              : 'center 50vh',
+          width: '100vw',
+          height: '100vh',
           transition: 'transform 0.2s',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
         }}>
-        {/* {children} */}
-
-        <div style={{ textAlign: 'center' }}>
-          <canvas id="canvas">Enable JavaScript in your browser</canvas>
-          <p>[ {result} ]</p>
-          <p>[ {result2} ]</p>
-          <button
-            ref={buttonRef}
-            onClick={detectWebGLContext}
-            style={{ padding: '1em', border: '1px solid', marginTop: '1em' }}>
-            Press here to detect WebGLRenderingContext
-          </button>
+        <div style={{ width: '100%', height: '100%' }}>
+          <ArtworkPlayer
+            previewURL={
+              'https://cdn.feralfileassets.com/previews/e9c74592-8483-4511-adb2-16ef4730ca1a/1644976484/?edition_number=0&blockchain=bitmark'
+            }
+            artworkID={''}
+          />
         </div>
       </div>
     </NextIntlClientProvider>
