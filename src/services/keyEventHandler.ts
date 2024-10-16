@@ -15,6 +15,15 @@ const listHandledKeys = [
 export const keyEventHandler = (keyEvent: string) => {
   const [keyId, keyLabel] = keyEvent.split('_');
   const deviceKeyID = getDeviceKeyID(keyId);
+
+  if (keyLabel === '3') {
+    EventEmitter.emit(Event.sendLog);
+  }
+
+  if (keyLabel === '4') {
+    location.reload();
+  }
+
   if (deviceKeyID && listHandledKeys.includes(deviceKeyID)) {
     console.log(`Handling key event: ${keyId} - ${keyLabel}`);
 

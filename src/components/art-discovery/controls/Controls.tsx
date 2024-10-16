@@ -217,7 +217,7 @@ const Controls: React.FC<{
                     stroke-linejoin="round"
                   />
                 </svg>
-                Next Daily: <NextDailyTimer />
+                {/* Next Daily: <NextDailyTimer /> */}
               </div>
             </FocusableLeaf>
             <FocusableLeaf

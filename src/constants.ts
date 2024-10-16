@@ -60,7 +60,7 @@ export const PUSH_METRIC_INTERVAL = 60 * 1000;
 
 export const SEND_LOG_INTERVAL = 10 * 1000;
 
-export const SEND_LOG_EVENT_NUMBER = 8;
+export const SEND_LOG_EVENT_NUMBER = 3;
 
 export const NO_YEAR_IN_TITLE_SERIES_IDS = [
   // test
