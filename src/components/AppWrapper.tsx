@@ -2,29 +2,19 @@
 
 import {
   AppSettings,
-  PUSH_METRIC_INTERVAL,
   SEND_LOG_EVENT_NUMBER,
   SEND_LOG_INTERVAL,
 } from '@/constants';
 import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
-import { CastCommand, Orientation } from '@/utils/types';
+import { Orientation } from '@/utils/types';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useRef, useState } from 'react';
-import { uploadMetricEventsFromLocalStorage } from '@/services/metric.service';
 import DeviceManager from '@/utils/DeviceManager';
 
 import { AbstractIntlMessages, NextIntlClientProvider } from 'next-intl';
 import { getUserLocale } from '@/utils/locale';
-import ArtDiscovery from './art-discovery/ArtDiscovery';
-
-const enum CastState {
-  None, // Not casting
-  Artwork, // Displaying artwork, playlist, dallies
-  Exhibition, // Displaying exhibition
-  Daily, // Displaying exhibition
-}
 
 const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { context } = useAppContext();
@@ -35,30 +25,18 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     screenOrientation: Orientation.horizontal,
     rotateRadius: 0,
   };
-  const [castState, setCastState] = useState<CastState>(CastState.None);
-  // const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
-  const isWebOSTVLoaded = context.isWebOSTVLoaded;
-  const isWebOSTVDevLoaded = context.isWebOSTVDevLoaded;
-  const pushMetricIntervalID = useRef<
-    NodeJS.Timeout | string | number | undefined
-  >(undefined);
   const sendLogEventInterval = useRef<NodeJS.Timeout | null>(null);
   const [messages, setMessages] = useState<AbstractIntlMessages>();
   const locale = getUserLocale();
 
-  const [hasLocalStorage, setHasLocalStorage] = useState<boolean>(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [result, setResult] = useState<string>(
+    'Here would go the result of WebGL feature detection'
+  );
 
-  useEffect(() => {
-    setHasLocalStorage(
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      typeof window !== 'undefined' && window.localStorage ? true : false
-    );
-  }, []);
-
-  // Initialize platform events
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [result2, setResult2] = useState<string>(
+    'Here would go the result of WebGL2 feature detection'
+  );
 
   // Check version update
   useEffect(() => {
@@ -181,87 +159,36 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     };
   }, []);
 
-  useEffect(() => {
-    console.log('[CAST] process cast info:', JSON.stringify(castInfo));
-    if (castInfo) {
-      const handleCastCommand = () => {
-        switch (castInfo.castCommand) {
-          case CastCommand.castListArtwork: {
-            if (castState === CastState.Artwork) {
-              return;
-            }
+  const detectWebGLContext = () => {
+    // Create canvas element. The canvas is not added to the
+    // document itself, so it is never displayed in the
+    // browser window.
+    const canvas = document.createElement('canvas');
 
-            setCastState(CastState.Artwork);
-            if (castState === CastState.None) {
-              router.push('/playlist');
-            } else {
-              router.replace('/playlist');
-            }
-            break;
-          }
+    // Get WebGLRenderingContext from canvas element.
+    const gl =
+      canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
 
-          case CastCommand.castExhibition: {
-            if (castState === CastState.Exhibition) {
-              return;
-            }
+    // Report the result.
+    const isSupported = gl instanceof WebGLRenderingContext;
+    setResult(
+      isSupported
+        ? 'Congratulations! Your browser supports WebGL.'
+        : 'Failed. Your browser or device may not support WebGL.'
+    );
 
-            setCastState(CastState.Exhibition);
-            if (castState === CastState.None) {
-              router.push('/exhibitions');
-            } else {
-              router.replace('/exhibitions');
-            }
-
-            break;
-          }
-
-          case CastCommand.castDaily: {
-            if (castState === CastState.Daily) {
-              return;
-            }
-
-            setCastState(CastState.Daily);
-            if (castState === CastState.None) {
-              router.push('/daily');
-            } else {
-              router.replace('/daily');
-            }
-            break;
-          }
-
-          default: {
-            break;
-          }
-        }
-      };
-      handleCastCommand();
-    } else {
-      if (castState !== CastState.None && castState !== CastState.Daily) {
-        // Disconnect
-        setCastState(CastState.None);
-        router.back();
-      }
+    // ---------
+    const glContextAttributes = { preserveDrawingBuffer: true };
+    const canvas2 = document.getElementById('canvas') as HTMLCanvasElement;
+    if (canvas2) {
+      const gl2 = canvas2.getContext('webgl2', glContextAttributes);
+      setResult2(
+        gl2 instanceof WebGL2RenderingContext
+          ? 'Congratulations! Your browser supports WebGL2.'
+          : 'Failed. Your browser or device may not support WebGL2.'
+      );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [castInfo]);
-
-  useEffect(() => {
-    if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
-      if (pushMetricIntervalID.current) {
-        clearInterval(pushMetricIntervalID.current);
-      }
-
-      pushMetricIntervalID.current = setInterval(() => {
-        uploadMetricEventsFromLocalStorage();
-      }, PUSH_METRIC_INTERVAL);
-    }
-
-    return () => {
-      if (pushMetricIntervalID.current) {
-        clearInterval(pushMetricIntervalID.current);
-      }
-    };
-  }, [isWebOSTVLoaded, isWebOSTVDevLoaded]);
+  };
 
   return messages != undefined ? (
     <NextIntlClientProvider locale={locale} messages={messages}>
@@ -294,18 +221,19 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           justifyContent: 'center',
           alignItems: 'center',
         }}>
-        {children}
-        {hasLocalStorage && <ArtDiscovery></ArtDiscovery>}
-        <div
-          style={{
-            position: 'absolute',
-            width: '100%',
-            height: '100%',
-            zIndex: 8,
-            background: 'transparent',
-            top: 0,
-            left: 0,
-          }}></div>
+        {/* {children} */}
+
+        <div style={{ textAlign: 'center' }}>
+          <canvas id="canvas">Enable JavaScript in your browser</canvas>
+          <p>[ {result} ]</p>
+          <p>[ {result2} ]</p>
+          <button
+            ref={buttonRef}
+            onClick={detectWebGLContext}
+            style={{ padding: '1em', border: '1px solid', marginTop: '1em' }}>
+            Press here to detect WebGLRenderingContext
+          </button>
+        </div>
       </div>
     </NextIntlClientProvider>
   ) : (
