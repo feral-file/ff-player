@@ -17,7 +17,7 @@ export interface Series {
   title: string;
   medium?: string;
   description?: string;
-  artistID?: string;
+  artistAlumniAccountID?: string;
   artistName?: string;
   displayIndex: number;
   settings?: Settings;
