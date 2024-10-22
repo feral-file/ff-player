@@ -44,7 +44,7 @@ export class ExhibitionService {
       const response = await axios.get(
         `${
           process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
-        }/source_exhibition/exhibition.json`
+        }/app/source_exhibition/exhibition.json`
       );
 
       const exhibition = response.data as Exhibition;
@@ -65,7 +65,7 @@ export class ExhibitionService {
       const response = await axios.get(
         `${
           process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
-        }/source_exhibition/series.json`
+        }/app/source_exhibition/series.json`
       );
 
       const series = response.data as Series[];
