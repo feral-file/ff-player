@@ -1,9 +1,5 @@
-export interface User {
+export interface Alumni {
   id?: string;
-  alumniAccount?: AlumniAccount;
-}
-
-interface AlumniAccount {
   alias?: string;
   fullName?: string;
   slug?: string;
@@ -20,6 +16,6 @@ interface SocialNetwork {
   instagramID: string;
 }
 
-export type Artist = User;
+export type Artist = Alumni;
 
-export type Curator = User;
+export type Curator = Alumni;

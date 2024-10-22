@@ -1,5 +1,5 @@
 import { Artwork, ArtworkModel } from './artwork.model';
-import { User } from './user.model';
+import { Alumni } from './user.model';
 
 export enum SaleModel {
   Shopping = 'shopping',
@@ -27,7 +27,7 @@ export interface Series {
   previewFile?: FileInfo;
   artworks?: Artwork[];
   metadata?: SeriesMetadata;
-  artist: User;
+  artist: Alumni;
 
   // Custom fields
   firstArtwork?: Artwork;
