@@ -21,9 +21,7 @@ class RemoteConfigService {
   private async fetchConfig(): Promise<AppRemoteConfig> {
     try {
       const response = await axios.get<AppRemoteConfig>(
-        `${
-          process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
-        }/configs/display_app/configs.json`
+        `${process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''}/configs/display.json`
       );
 
       return response.data;
