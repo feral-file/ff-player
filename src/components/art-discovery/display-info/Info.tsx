@@ -8,7 +8,7 @@ import {
   ExhibitionType,
   IndexerToken,
   SaleModel,
-  User,
+  Alumni,
 } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import ArtworkService from '@/services/ArtworkService';
@@ -61,7 +61,7 @@ const DisplayInfo: React.FC<{
 }) => {
   const [artwork, setArtwork] = useState<Artwork | undefined>();
   const [mediumDescription, setMediumDescription] = useState<string[]>([]);
-  const [artist, setArtist] = useState<User | undefined>();
+  const [artist, setArtist] = useState<Alumni | undefined>();
   const [exhibition, setExhibition] = useState<Exhibition>();
   const artworkService = useRef(new ArtworkService());
   const exhibitionService = useRef(new ExhibitionService());
@@ -181,7 +181,7 @@ const DisplayInfo: React.FC<{
                 <div>
                   <p>
                     {token?.asset.metadata.project.latest.artistName ??
-                      artist?.alumniAccount?.alias}
+                      artist?.alias}
                     ,
                   </p>
                   <p style={{ fontWeight: 'bold' }}>
@@ -274,28 +274,23 @@ const DisplayInfo: React.FC<{
                     <p className={styles.subTitle}>Artist Profile</p>
                     <div className={styles.avatar}>
                       <img
-                        src={
-                          FERAL_FILE_ASSET_URL +
-                          (artist.alumniAccount?.avatarURI ?? '')
-                        }
+                        src={FERAL_FILE_ASSET_URL + (artist.avatarURI ?? '')}
                         alt="avatar"
                       />
                     </div>
                     <div>
                       <p className={styles.artistName}>
                         {token?.asset.metadata.project.latest.artistName ??
-                          artist.alumniAccount?.alias}
+                          artist.alias}
                       </p>
-                      {artist.alumniAccount?.location && (
-                        <p className={styles.subContent}>
-                          {artist.alumniAccount.location}
-                        </p>
+                      {artist.location && (
+                        <p className={styles.subContent}>{artist.location}</p>
                       )}
                     </div>
-                    {artist.alumniAccount?.bio && (
+                    {artist.bio && (
                       <p
                         dangerouslySetInnerHTML={{
-                          __html: artist.alumniAccount.bio,
+                          __html: artist.bio,
                         }}></p>
                     )}
                   </div>
@@ -318,9 +313,7 @@ const DisplayInfo: React.FC<{
                       </p>
                       <div className={styles.exhInfo}>
                         {exhibition.curator && (
-                          <p>
-                            Curated by {exhibition.curator.alumniAccount?.alias}
-                          </p>
+                          <p>Curated by {exhibition.curator.alias}</p>
                         )}
                         <p>
                           {exhibition.type === ExhibitionType.group
@@ -380,7 +373,7 @@ const DisplayInfo: React.FC<{
               <div className={clsx(styles.item, styles['short-artwork-info'])}>
                 <p>
                   {token?.asset.metadata.project.latest.artistName ??
-                    artist?.alumniAccount?.alias ??
+                    artist?.alias ??
                     ''}
                   ,
                 </p>

@@ -1,6 +1,6 @@
 import { ApolloClient, gql, NormalizedCacheObject } from '@apollo/client';
 import createApolloClient from '@/utils/ApolloClient';
-import { Artwork, IndexerToken, User } from '@/models';
+import { Artwork, IndexerToken, Alumni } from '@/models';
 import axiosInstance from './axiosService';
 import * as Sentry from '@sentry/nextjs';
 
@@ -173,10 +173,10 @@ class ArtworkService {
     });
   }
 
-  private fetchArtist = async (artistID?: string): Promise<User> => {
+  private fetchArtist = async (artistID?: string): Promise<Alumni> => {
     const response = await axiosInstance.get(`/api/accounts/${artistID ?? ''}`);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    return response.data.result as User;
+    return response.data.result as Alumni;
   };
 }
 
