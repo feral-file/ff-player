@@ -174,7 +174,7 @@ class ArtworkService {
   }
 
   private fetchArtist = async (artistID?: string): Promise<Alumni> => {
-    const response = await axiosInstance.get(`/api/accounts/${artistID ?? ''}`);
+    const response = await axiosInstance.get(`/api/alumni/${artistID ?? ''}`);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     return response.data.result as Alumni;
   };
