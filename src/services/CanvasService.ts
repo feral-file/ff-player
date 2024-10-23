@@ -48,20 +48,23 @@ class CanvasService {
   private timer: unknown = null;
 
   public getCastInfo() {
+    console.log('[CAST] Retrieving castInfo:', JSON.stringify(this.castInfo));
     return this.castInfo;
   }
 
   public setCastInfo(castInfo: CastInfo | null) {
+    console.log('[CAST] Setting castInfo:', JSON.stringify(castInfo));
     this.castInfo = castInfo;
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     localStorage?.setItem(
       LocalStorageItem.castInfo,
       JSON.stringify(this.castInfo)
     );
+    console.log('[CAST] castInfo:', JSON.stringify(this.castInfo));
   }
 
   public async processMessage(event: MessageEvent) {
-    console.log('[CAST] processMessage: ', JSON.stringify(event));
+    console.log('[CAST] Processing message event: ', JSON.stringify(event));
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     const webSocketMessage = JSON.parse(event.data) as WebSocketMessage | null;
@@ -69,6 +72,8 @@ class CanvasService {
       console.error('[CAST] Invalid message:', JSON.stringify(event.data));
       return;
     }
+    console.log('[CAST] WebSocket message received:', JSON.stringify(webSocketMessage));
+
 
     if (!webSocketMessage.message) {
       console.error('[CAST] Invalid message:', JSON.stringify(event.data));
@@ -97,6 +102,7 @@ class CanvasService {
     }
 
     const command = CastCommand[commandStr as keyof typeof CastCommand];
+
     Sentry.addBreadcrumb({
       data: { command },
       category: 'CanvasService',
@@ -105,6 +111,7 @@ class CanvasService {
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const requestJson = messageData.request;
+    console.log('[CAST] Request data:', JSON.stringify(requestJson));
 
     const reply = await this.commandHandler(command, requestJson);
 
@@ -112,6 +119,7 @@ class CanvasService {
       messageID: webSocketMessage.messageID,
       message: reply,
     };
+    console.log('[CAST] Response message:', JSON.stringify(responseMessage));
 
     return responseMessage;
   }
@@ -120,6 +128,7 @@ class CanvasService {
     command: CastCommand,
     requestJson: unknown
   ): Promise<Reply> {
+    console.log('[CAST] commandHandler:', JSON.stringify(command), JSON.stringify(requestJson));
     if (command !== CastCommand.checkStatus) {
       if (this.castInfo) {
         this.castInfo = {

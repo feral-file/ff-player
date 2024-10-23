@@ -24,6 +24,7 @@ const useWebSocket = (url: string, apiKey: string) => {
     if (!url || !apiKey) return;
 
     const connect = () => {
+      console.log('[WS] start connecting...');
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!localStorage) {
         return;
@@ -41,6 +42,8 @@ const useWebSocket = (url: string, apiKey: string) => {
       const storedTopicID = localStorage.getItem(LocalStorageItem.topicID);
       if (storedLocationID) wsUrl += `&locationID=${storedLocationID}`;
       if (storedTopicID) wsUrl += `&topicID=${storedTopicID}`;
+
+      console.log('[WS] Connecting to:', wsUrl);
 
       setCastInfo({ dataChecked: true });
 
@@ -76,6 +79,7 @@ const useWebSocket = (url: string, apiKey: string) => {
         const data = JSON.parse(event.data as string);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         if (data.messageID === 'system') {
+          console.log('[WS] Received message:', data);
           // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
           setLocationID(data.message.locationID);
           // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
