@@ -126,13 +126,6 @@ export interface KeyboardEventRequest {
 }
 export type KeyboardEventReply = Reply;
 
-export interface Series {
-  id: string;
-  previewFile?: FileInfo;
-  artistID: string;
-  title: string;
-}
-
 export interface FileInfo {
   filename: string;
   uri: string;
