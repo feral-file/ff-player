@@ -18,12 +18,12 @@ export class ExhibitionService {
       const exhibition = response.data.result as Exhibition;
 
       // Format artist/ curator alias remove suffix
-      if (exhibition.curator)
-        exhibition.curator.alias = removeArtistAliasSuffixes(
-          exhibition.curator.alias ?? ''
+      if (exhibition.curatorAlumni)
+        exhibition.curatorAlumni.alias = removeArtistAliasSuffixes(
+          exhibition.curatorAlumni.alias ?? ''
         );
-      if (exhibition.artists) {
-        exhibition.artists.map(artist => {
+      if (exhibition.artistsAlumni) {
+        exhibition.artistsAlumni.map(artist => {
           artist.alias = removeArtistAliasSuffixes(artist.alias ?? '');
         });
       }

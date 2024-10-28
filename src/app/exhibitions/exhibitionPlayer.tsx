@@ -255,14 +255,14 @@ const ExhibitionHall = () => {
                 style={{ fontSize: 48 * screenRatio }}>
                 {exhibitionDetail.title}
               </p>
-              {exhibitionDetail.curator && (
+              {exhibitionDetail.curatorAlumni && (
                 <div>
                   <p
                     className={styles.subTitle}
                     style={{ fontSize: 18 * screenRatio }}>
                     Curator
                   </p>
-                  <p>{exhibitionDetail.curator.alias}</p>
+                  <p>{exhibitionDetail.curatorAlumni.alias}</p>
                 </div>
               )}
               <div>
@@ -280,9 +280,9 @@ const ExhibitionHall = () => {
                     Solo Exhibition
                   </p>
                 )}
-                {exhibitionDetail.artists?.length && (
+                {exhibitionDetail.artistsAlumni?.length && (
                   <p>
-                    {exhibitionDetail.artists
+                    {exhibitionDetail.artistsAlumni
                       .map(artist => artist.alias)
                       .join(', ')}
                   </p>
