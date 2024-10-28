@@ -23,8 +23,8 @@ export interface Exhibition {
   mintBlockchain?: Blockchain;
   status?: number;
   type?: ExhibitionType;
-  artists?: Artist[];
-  curator?: Curator;
+  artistsAlumni?: Artist[];
+  curatorAlumni?: Curator;
   posts?: Post[];
   series?: Series[];
   contracts?: ExhibitionContract[];

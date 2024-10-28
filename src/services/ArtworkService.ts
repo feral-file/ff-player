@@ -17,7 +17,7 @@ class ArtworkService {
 
       // FIXME: Remove this after the backend support full artist info on artwork detail
       if (artwork.series) {
-        artwork.series.artist = await this.fetchArtist(
+        artwork.series.artistAlumni = await this.fetchArtist(
           artwork.series.artistAlumniAccountID
         );
       }

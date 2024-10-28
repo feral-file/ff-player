@@ -27,7 +27,7 @@ export interface Series {
   previewFile?: FileInfo;
   artworks?: Artwork[];
   metadata?: SeriesMetadata;
-  artist: Alumni;
+  artistAlumni: Alumni;
 
   // Custom fields
   firstArtwork?: Artwork;
