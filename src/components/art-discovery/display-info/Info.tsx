@@ -79,7 +79,7 @@ const DisplayInfo: React.FC<{
             await artworkService.current.getArtworkDetail(ffArtworkID);
           if (artwork) {
             setArtwork(artwork);
-            setArtist(artwork.series?.artist);
+            setArtist(artwork.series?.artistAlumni);
             setMediumDescription(
               artwork.series?.metadata?.mediumDescription ?? []
             );
@@ -312,8 +312,8 @@ const DisplayInfo: React.FC<{
                         {exhibition.title}
                       </p>
                       <div className={styles.exhInfo}>
-                        {exhibition.curator && (
-                          <p>Curated by {exhibition.curator.alias}</p>
+                        {exhibition.curatorAlumni && (
+                          <p>Curated by {exhibition.curatorAlumni.alias}</p>
                         )}
                         <p>
                           {exhibition.type === ExhibitionType.group
