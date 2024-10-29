@@ -272,12 +272,14 @@ const DisplayInfo: React.FC<{
                   // Show artist info if this is FF artwork
                   <div className={styles.artistSection}>
                     <p className={styles.subTitle}>Artist Profile</p>
-                    <div className={styles.avatar}>
-                      <img
-                        src={FERAL_FILE_ASSET_URL + (artist.avatarURI ?? '')}
-                        alt="avatar"
-                      />
-                    </div>
+                    {artist.avatarURI && (
+                      <div className={styles.avatar}>
+                        <img
+                          src={FERAL_FILE_ASSET_URL + artist.avatarURI}
+                          alt="avatar"
+                        />
+                      </div>
+                    )}
                     <div>
                       <p className={styles.artistName}>
                         {token?.asset.metadata.project.latest.artistName ??
