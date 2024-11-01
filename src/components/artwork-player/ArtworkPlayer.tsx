@@ -79,6 +79,23 @@ const ArtworkPlayer = ({
     }
   }
 
+  const reTryToPlayVideo = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = true;
+      videoRef.current.play().catch((error: unknown) => {
+        console.log('[CAST] Error play video', JSON.stringify(error));
+        Sentry.captureMessage('[CAST] Error play video');
+      });
+    }
+  };
+
+  const unmuteVideo = () => {
+    if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+      videoRef.current.muted = false;
+      document.removeEventListener('click', unmuteVideo);
+    }
+  };
+
   // Metric
   useEffect(() => {
     if (castingType && artworkID) {
@@ -164,6 +181,19 @@ const ArtworkPlayer = ({
     }
   }, [previewURL]);
 
+  useEffect(() => {
+    // Unmute video when user click on the screen
+    if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+      document.addEventListener('click', unmuteVideo);
+    }
+
+    return () => {
+      if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+        document.removeEventListener('click', unmuteVideo);
+      }
+    };
+  }, [previewType, videoRef]);
+
   const loadedSource = () => {
     console.log('[CAST] loaded source', previewURL);
     // When an iframe is present in a page, the parent window might not receive keydown events because the iframe itself captures these events when it is focused.
@@ -201,9 +231,8 @@ const ArtworkPlayer = ({
         videoRef.current.addEventListener('loadeddata', () => {
           videoRef.current
             ?.play()
-            .catch((error: unknown) => {
-              console.log('[CAST] Error play video', JSON.stringify(error));
-              Sentry.captureMessage('[CAST] Error play video');
+            .catch(() => {
+              reTryToPlayVideo();
             })
             .finally(() => {
               setLoading(false);
@@ -268,7 +297,6 @@ const ArtworkPlayer = ({
         <div
           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
           className={isCustomView ? styles.customRendering : ''}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             style={{
               width: '100%',
