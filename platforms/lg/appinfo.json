@@ -18,5 +18,6 @@
   "screenSaverProperties": {
     "preferredType": 3
   },
-  "useGalleryMode": true
+  "useGalleryMode": true,
+  "disableBackHistoryAPI": true
 }
