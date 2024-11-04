@@ -164,6 +164,24 @@ const DisplayInfo: React.FC<{
     };
   }, [isInfoExpanded]);
 
+  const toggleInfoExpanded = () => {
+    // Ignore when the options drawer is expanded
+    if (isOptionsExpanded) {
+      return;
+    }
+
+    if (!isInfoExpanded) {
+      onOptionsExpandedChanged(false);
+    }
+
+    onInfoExpandedChanged(!isInfoExpanded);
+  };
+
+  const expandOptionsClicked = (event?: React.MouseEvent<HTMLDivElement>) => {
+    event?.stopPropagation();
+    onOptionsExpandedChanged(true);
+  };
+
   return (
     <>
       <div className={styles['main-content']}>
@@ -174,7 +192,8 @@ const DisplayInfo: React.FC<{
               styles.item,
               styles['full-artwork-info'],
               styles.focused
-            )}>
+            )}
+            onClick={toggleInfoExpanded}>
             <div // Div to group the artwork detail into 1 section of flex row
             >
               <div>
@@ -230,9 +249,7 @@ const DisplayInfo: React.FC<{
                       key={InfoFocusableLeafKey.OptionsButton}
                       focusKey={InfoFocusableLeafKey.OptionsButton}
                       className={styles.optionsButtonLeaf}
-                      onEnterPress={() => {
-                        onOptionsExpandedChanged(true);
-                      }}>
+                      onEnterPress={expandOptionsClicked}>
                       <OptionsButton></OptionsButton>
                     </FocusableLeaf>
                   ))}

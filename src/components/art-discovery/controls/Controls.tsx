@@ -188,12 +188,12 @@ const Controls: React.FC<{
           </div>
         </div>
       ) : (
-        <div className={styles.mainContent}>
+        <div className={styles.mainContent} style={{ padding: 0 }}>
           <div className={styles.collapseSetting}>
             <FocusableLeaf
               key={'ControlsLoseFocus'}
               focusKey={'ControlsLoseFocus'}
-              style={{ flex: '1' }}>
+              style={{ flex: '1', padding: '1em 1em 1em 2em' }}>
               <div className={styles.brief}>
                 <img
                   src="/images/ff-logo.svg"
@@ -223,7 +223,8 @@ const Controls: React.FC<{
             <FocusableLeaf
               key={ControlFocusableLeafKey.BackToHideButton}
               focusKey={ControlFocusableLeafKey.BackToHideButton}
-              onClick={onHidePopup}>
+              onClick={onHidePopup}
+              style={{ padding: '1em 2em 1em 0' }}>
               <p className={styles.clickable}>
                 Press <span style={{ fontStyle: 'italic' }}>[back]</span> to
                 Hide

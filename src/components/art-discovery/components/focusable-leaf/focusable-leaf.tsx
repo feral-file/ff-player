@@ -25,7 +25,7 @@ const FocusableLeaf: React.FC<{
   blockDirections?: Direction[];
   onFocus?: () => void;
   onBlur?: () => void;
-  onEnterPress?: () => void;
+  onEnterPress?: (event?: React.MouseEvent<HTMLDivElement>) => void;
   onClick?: () => void;
 }> = ({
   children,
@@ -83,8 +83,10 @@ const FocusableLeaf: React.FC<{
     return child;
   });
 
-  const handleMouseClick = () => {
+  const handleMouseClick = (event?: React.MouseEvent<HTMLDivElement>) => {
     setFocus(focusKey);
+    event?.stopPropagation();
+
     if (onClick) {
       onClick();
     } else {
