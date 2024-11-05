@@ -5,10 +5,16 @@ export enum CastingArtworkType {
   Exhibition = 'EXHIBITION_DISPLAY',
 }
 
+export interface DeviceHardware {
+  vendor: string;
+  model: string;
+}
+
 export interface MetricEvent {
   event: CastingArtworkType;
   timestamp: string;
   parameters: {
     tokenID: string;
+    device?: DeviceHardware;
   };
 }
