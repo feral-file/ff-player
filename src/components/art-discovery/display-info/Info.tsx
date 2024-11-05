@@ -165,16 +165,14 @@ const DisplayInfo: React.FC<{
   }, [isInfoExpanded]);
 
   const toggleInfoExpanded = () => {
-    // Ignore when the options drawer is expanded
-    if (isOptionsExpanded) {
+    // Do nothing when the options drawer is expanded
+    //   Or the report problem modal is expanded
+    //   Or the info is already expanded
+    if (isOptionsExpanded || isReportProblemExpanded || isInfoExpanded) {
       return;
     }
 
-    if (!isInfoExpanded) {
-      onOptionsExpandedChanged(false);
-    }
-
-    onInfoExpandedChanged(!isInfoExpanded);
+    onInfoExpandedChanged(true);
   };
 
   const expandOptionsClicked = (event?: React.MouseEvent<HTMLDivElement>) => {
