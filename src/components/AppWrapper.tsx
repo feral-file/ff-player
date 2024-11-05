@@ -2,6 +2,8 @@
 
 import {
   AppSettings,
+  LocalStorageItem,
+  Platform,
   PUSH_METRIC_INTERVAL,
   SEND_LOG_EVENT_NUMBER,
   SEND_LOG_INTERVAL,
@@ -25,6 +27,10 @@ const enum CastState {
   Exhibition, // Displaying exhibition
   Daily, // Displaying exhibition
 }
+
+// The webOS declaration for access the LG webOS functions
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const webOS: any;
 
 const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { context } = useAppContext();
@@ -100,6 +106,13 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       canvasService.current.disconnect({}).catch((error: unknown) => {
         console.log(error);
       });
+
+      const platform = (localStorage.getItem(LocalStorageItem.platform) ??
+        'web') as Platform;
+      if (platform === Platform.lg) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        webOS.platformBack();
+      }
     };
 
     EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
