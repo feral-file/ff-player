@@ -95,10 +95,17 @@ class DeviceManager {
     this.setToLocalStorage(LocalStorageItem.name, name);
   }
 
-  public async getName(): Promise<string> {
+  public async getDeviceModel(): Promise<string> {
     try {
       const name = await this.getFromLocalStorage(LocalStorageItem.name);
-      return this.getDeviceName(name);
+      if (!name) {
+        return 'Unknown';
+      }
+
+      return name
+        .replace(DeviceNamePrefix.google, '')
+        .replace(DeviceNamePrefix.samsung, '')
+        .replace(DeviceNamePrefix.lg, '');
     } catch (error) {
       console.error(
         '[DEVICE] Error getting device name',
@@ -108,28 +115,35 @@ class DeviceManager {
     }
   }
 
-  private getDeviceName(name: string | null): string {
+  public async getName(): Promise<string> {
+    try {
+      const model = await this.getDeviceModel();
+      return this.getDeviceName(model);
+    } catch (error) {
+      console.error(
+        '[DEVICE] Error getting device name',
+        JSON.stringify(error)
+      );
+      return 'Unknown';
+    }
+  }
+
+  private getDeviceName(model: string | null): string {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    if (!name || !localStorage) {
+    if (!model || !localStorage) {
       return 'Unknown';
     }
 
     const platform = localStorage.getItem(LocalStorageItem.platform);
-    // Replace name if already starts with prefix
-    name = name
-      .replace(DeviceNamePrefix.google, '')
-      .replace(DeviceNamePrefix.samsung, '')
-      .replace(DeviceNamePrefix.lg, '');
-
     switch (platform) {
       case Platform.google:
-        return `${DeviceNamePrefix.google}${name}`;
+        return `${DeviceNamePrefix.google}${model}`;
       case Platform.tizen:
-        return `${DeviceNamePrefix.samsung}${name}`;
+        return `${DeviceNamePrefix.samsung}${model}`;
       case Platform.lg:
-        return `${DeviceNamePrefix.lg}${name}`;
+        return `${DeviceNamePrefix.lg}${model}`;
       default:
-        return name;
+        return model;
     }
   }
 

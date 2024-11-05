@@ -21,7 +21,7 @@ import useDeviceRotation, {
 import RemoteConfigService, {
   AppRemoteConfig,
 } from '@/services/remoteConfigService';
-import { AppSettings, Platform } from '@/constants';
+import { AppSettings, LocalStorageItem, Platform } from '@/constants';
 import { useSearchParams } from 'next/navigation';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import DeviceManager from '@/utils/DeviceManager';
@@ -188,7 +188,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
       const pl = searchParams?.get('platform') ?? '';
       if (pl) {
-        localStorage.setItem('platform', pl);
+        localStorage.setItem(LocalStorageItem.platform, pl);
         setPlatform(pl as Platform);
       }
       setPlatformInitialized(true);
