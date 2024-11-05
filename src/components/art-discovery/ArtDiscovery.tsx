@@ -72,7 +72,8 @@ const ArtDiscovery = () => {
             break;
           }
 
-          case KeyboardEventKey.Backspace: {
+          case KeyboardEventKey.Backspace:
+          case KeyboardEventKey.GoBack: {
             if (showPopup) {
               if (isReportProblemExpanded) {
                 setIsReportProblemExpanded(false);
