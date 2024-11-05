@@ -2,6 +2,8 @@
 
 import {
   AppSettings,
+  LocalStorageItem,
+  Platform,
   PUSH_METRIC_INTERVAL,
   SEND_LOG_EVENT_NUMBER,
   SEND_LOG_INTERVAL,
@@ -10,7 +12,7 @@ import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { CastCommand, Orientation } from '@/utils/types';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import React, { useEffect, useRef, useState } from 'react';
 import { uploadMetricEventsFromLocalStorage } from '@/services/metric.service';
 import DeviceManager from '@/utils/DeviceManager';
@@ -26,9 +28,14 @@ const enum CastState {
   Daily, // Displaying exhibition
 }
 
+// The webOS declaration for access the LG webOS functions
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const webOS: any;
+
 const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { context } = useAppContext();
   const router = useRouter();
+  const pathname = usePathname();
 
   const { castInfo, canvasService } = context.websocketData;
   const { screenOrientation, rotateRadius } = context.deviceRotation ?? {
@@ -100,6 +107,15 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       canvasService.current.disconnect({}).catch((error: unknown) => {
         console.log(error);
       });
+
+      if (window.history.length <= 1 || pathname === '/daily') {
+        const platform = (localStorage.getItem(LocalStorageItem.platform) ??
+          'web') as Platform;
+        if (platform === Platform.lg) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+          webOS.platformBack();
+        }
+      }
     };
 
     EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
