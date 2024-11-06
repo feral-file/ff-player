@@ -128,7 +128,7 @@ export default function DailyClient() {
           artworkID={artworkID ?? ''}
           castingType={CastingArtworkType.Daily}
           isCustomView={isLeeMucianExhibition}
-          backgroundColor={dailyBackgroundColor}
+          backgroundColor={dailyBackgroundColor ?? '#000000'}
         />
       </div>
     </>

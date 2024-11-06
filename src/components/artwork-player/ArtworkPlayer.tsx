@@ -53,7 +53,6 @@ const ArtworkPlayer = ({
   >(undefined);
   const [showMessageModal, setShowMessageModal] = useState<boolean>(false);
   const t = useTranslations('ArtworkPlayer');
-  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   function compareToGetFileType(type: string) {
     setIsStreaming(false);
@@ -203,10 +202,6 @@ const ArtworkPlayer = ({
     // This is work around to focus the parent window.
     window.focus();
     setLoading(false);
-    if (iframeRef.current) {
-        iframeRef.current.style.backgroundColor = backgroundColor;
-        console.log('Iframe background color:', iframeBackgroundColor);
-      }
   };
 
   useEffect(() => {
@@ -354,8 +349,11 @@ const ArtworkPlayer = ({
         (previewType === SeriesPreviewHTMLTag.iframe ||
           previewType === SeriesPreviewHTMLTag.iframePDF) && (
           <iframe
-            ref={iframeRef}
-            style={{ width: '100%', height: '100%', backgroundColor: backgroundColor }}
+            style={{
+              width: '100%',
+              height: '100%',
+              backgroundColor: backgroundColor,
+            }}
             src={displaySoftwareURL}
             onLoad={loadedSource}
             onError={handleLoadIframeError}
