@@ -118,6 +118,8 @@ export default function DailyClient() {
     };
   }, []);
 
+  const dailyBackgroundColor = context.appRemoteConfig.daily_background_color;
+
   return (
     <>
       <div style={{ width: '100%', height: '100%' }}>
@@ -126,6 +128,7 @@ export default function DailyClient() {
           artworkID={artworkID ?? ''}
           castingType={CastingArtworkType.Daily}
           isCustomView={isLeeMucianExhibition}
+          backgroundColor={dailyBackgroundColor}
         />
       </div>
     </>

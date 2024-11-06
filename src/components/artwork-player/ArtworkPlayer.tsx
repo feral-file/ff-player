@@ -31,12 +31,14 @@ const ArtworkPlayer = ({
   artworkID,
   castingType,
   isCustomView,
+  backgroundColor = '#000000', // default background color is black
 }: {
   previewURL: string;
   artworkID: string;
   castingType?: CastingArtworkType;
   isCustomView?: boolean;
   keyboardCode?: number;
+  backgroundColor?: string;
 }) => {
   const { context } = useAppContext();
   const { artDisplaySetting, resetArtDisplaySetting } = usePopUpContext();
@@ -51,6 +53,7 @@ const ArtworkPlayer = ({
   >(undefined);
   const [showMessageModal, setShowMessageModal] = useState<boolean>(false);
   const t = useTranslations('ArtworkPlayer');
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   function compareToGetFileType(type: string) {
     setIsStreaming(false);
@@ -200,6 +203,10 @@ const ArtworkPlayer = ({
     // This is work around to focus the parent window.
     window.focus();
     setLoading(false);
+    if (iframeRef.current) {
+        iframeRef.current.style.backgroundColor = backgroundColor;
+        console.log('Iframe background color:', iframeBackgroundColor);
+      }
   };
 
   useEffect(() => {
@@ -286,7 +293,7 @@ const ArtworkPlayer = ({
         display: 'flex',
         width: '100%',
         height: '100%',
-        backgroundColor: '#000000',
+        backgroundColor: backgroundColor,
         justifyContent: 'center',
         position: 'relative',
         transform: `rotate(${(artDisplaySetting?.rotateRadius ?? 0).toString()}deg)`,
@@ -347,7 +354,8 @@ const ArtworkPlayer = ({
         (previewType === SeriesPreviewHTMLTag.iframe ||
           previewType === SeriesPreviewHTMLTag.iframePDF) && (
           <iframe
-            style={{ width: '100%', height: '100%' }}
+            ref={iframeRef}
+            style={{ width: '100%', height: '100%', backgroundColor: backgroundColor }}
             src={displaySoftwareURL}
             onLoad={loadedSource}
             onError={handleLoadIframeError}

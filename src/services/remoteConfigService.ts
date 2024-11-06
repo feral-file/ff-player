@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/nextjs';
 export interface AppRemoteConfig {
   duration: number;
   new_daily_hour: number;
+  daily_background_color?: string | null;
 }
 
 class RemoteConfigService {
