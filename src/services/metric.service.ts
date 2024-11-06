@@ -12,7 +12,6 @@ const accountsRequester: AxiosInstance = axios.create({
 });
 
 export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
-  console.log('[METRIC]: sending API', JSON.stringify(events));
   const deviceID = await DeviceManager.getDeviceId();
 
   if (!deviceID) {
@@ -21,6 +20,16 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
 
   accountsRequester.defaults.headers['x-device-id'] = deviceID;
   if (events.length > 0) {
+    const vendor = localStorage.getItem(LocalStorageItem.platform) ?? 'web';
+    const model = await DeviceManager.getDeviceModel();
+    for (const event of events) {
+      event.parameters.device = {
+        vendor,
+        model,
+      };
+    }
+
+    console.log('[METRIC]: sending API', JSON.stringify(events));
     await accountsRequester.post('/apis/metrics', { metrics: events });
   }
 }
