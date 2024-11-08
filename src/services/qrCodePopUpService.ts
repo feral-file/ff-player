@@ -1,21 +1,21 @@
-import { Daily } from '@/models';
-
 export const getDelayTime = (
-  dailies: Daily[]
+  newDailyHour: number
 ): { delay: number; duration: number } => {
   const now = Date.now();
-  const currentDisplayTime = new Date(dailies[0].displayTime);
-  let nextDisplayTime = currentDisplayTime.setDate(
-    currentDisplayTime.getDate() + 1
-  );
-  if (dailies.length > 1 && dailies[1].displayTime) {
-    nextDisplayTime = new Date(dailies[1].displayTime).getTime();
-  }
+  let nextDisplayTime: number;
 
-  const previousDisplayTime = new Date(dailies[0].displayTime).getTime();
+  const dailyRenewAt = new Date();
+  dailyRenewAt.setHours(newDailyHour, 0, 0, 0); // Reset daily time every day
+
+  // If after 6AM
+  if (now > dailyRenewAt.getTime()) {
+    nextDisplayTime = dailyRenewAt.setDate(dailyRenewAt.getDate() + 1);
+  } else {
+    nextDisplayTime = dailyRenewAt.getTime();
+  }
 
   return {
     delay: nextDisplayTime - now,
-    duration: nextDisplayTime - previousDisplayTime,
+    duration: 86400000, // 24 hours
   };
 };

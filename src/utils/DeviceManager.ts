@@ -7,7 +7,10 @@ import {
   TizenConfigService,
   WebConfigService,
 } from './platform';
+import * as Sentry from '@sentry/nextjs';
 import { DeviceNamePrefix, LocalStorageItem, Platform } from '@/constants';
+import { BrowserInfo, detect } from 'detect-browser';
+import { ArtFraming } from '@/services/AppControls';
 
 class DeviceManager {
   static instance = new DeviceManager();
@@ -21,10 +24,21 @@ class DeviceManager {
   }
 
   private createConfigService(): PlatformConfigService {
-    const platform = localStorage.getItem(LocalStorageItem.platform);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    const platform = localStorage?.getItem(LocalStorageItem.platform);
+    const browser = detect() as BrowserInfo;
+
+    Sentry.addBreadcrumb({
+      data: {
+        platform,
+        ...browser,
+      },
+      category: 'DeviceManager',
+      message: 'Creating PlatformConfigService instance',
+    });
 
     console.log(
-      `creating PlatformConfigService instance for platform: ${platform ?? ''}`
+      `[DEVICE] creating PlatformConfigService instance for platform: ${platform ?? 'Web'}`
     );
     switch (platform) {
       case Platform.google:
@@ -38,21 +52,22 @@ class DeviceManager {
     }
   }
 
-  private readonly deviceIdKey = 'deviceId';
-  private readonly locationIdKey = 'locationId';
-  private readonly topicIdKey = 'topicId';
-  private readonly nameKey = 'device_name';
-  private readonly branchLinkKey = 'branchLink';
-  private readonly previouslyConnectedDeviceIdsKey =
-    'previouslyConnectedDeviceIds';
-
   private async getFromLocalStorage(key: string): Promise<string | null> {
-    return await this.configService.getString(key);
+    try {
+      return await this.configService.getString(key);
+    } catch (error) {
+      Sentry.captureException(error);
+      return null;
+    }
   }
 
   private setToLocalStorage(key: string, value: string): void {
     this.configService.setString(key, value).catch((error: unknown) => {
-      console.error('Error setting value to local storage', error);
+      Sentry.captureException(error);
+      console.error(
+        '[DEVICE] Error setting value to local storage',
+        JSON.stringify(error)
+      );
     });
   }
 
@@ -69,7 +84,7 @@ class DeviceManager {
       }
       return deviceId;
     } catch (error) {
-      console.error('Error getting device ID', error);
+      console.error('[DEVICE] Error getting device ID', JSON.stringify(error));
       return '';
     }
   }
@@ -103,13 +118,17 @@ class DeviceManager {
       const name = await this.getFromLocalStorage(LocalStorageItem.name);
       return this.getDeviceName(name);
     } catch (error) {
-      console.error('Error getting device name', error);
+      console.error(
+        '[DEVICE] Error getting device name',
+        JSON.stringify(error)
+      );
       return 'Unknown';
     }
   }
 
   private getDeviceName(name: string | null): string {
-    if (!name) {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (!name || !localStorage) {
       return 'Unknown';
     }
 
@@ -132,54 +151,60 @@ class DeviceManager {
     }
   }
 
-  public setPreviouslyConnectedDeviceIds(deviceIds: string[]): void {
+  public setPrimaryAddress(primaryAddress: string): void {
+    this.setToLocalStorage(LocalStorageItem.primaryAddress, primaryAddress);
+  }
+
+  public async getPrimaryAddress(): Promise<string | null> {
+    return await this.getFromLocalStorage(LocalStorageItem.primaryAddress);
+  }
+
+  public setOrientation(orientation: string): void {
+    this.setToLocalStorage(LocalStorageItem.orientation, orientation);
+  }
+
+  public async getOrientation(): Promise<string | null> {
+    return await this.getFromLocalStorage(LocalStorageItem.orientation);
+  }
+
+  public setArtFrameConfig(artFrameConfig: ArtFraming): void {
     this.setToLocalStorage(
-      LocalStorageItem.previouslyConnectedDeviceIds,
-      JSON.stringify(deviceIds)
+      LocalStorageItem.artFraming,
+      artFrameConfig.toString()
     );
   }
 
-  public async getPreviouslyConnectedDeviceIds(): Promise<string[]> {
-    const deviceIdsJson = await this.getFromLocalStorage(
-      LocalStorageItem.previouslyConnectedDeviceIds
-    );
-    if (!deviceIdsJson) {
-      return [];
-    }
-    return JSON.parse(deviceIdsJson) as string[];
+  public async getArtFrameConfig(): Promise<ArtFraming | undefined> {
+    const config = await this.getFromLocalStorage(LocalStorageItem.artFraming);
+    return config ? (parseInt(config) as ArtFraming) : undefined;
   }
 
-  public async addPreviouslyConnectedDeviceId(deviceId: string): Promise<void> {
-    const deviceIds = await this.getPreviouslyConnectedDeviceIds();
-    deviceIds.push(deviceId);
-    this.setPreviouslyConnectedDeviceIds(deviceIds);
-  }
-
-  public clearPreviouslyConnectedDeviceIds(): void {
-    this.setPreviouslyConnectedDeviceIds([]);
-  }
-
-  public async isPreviouslyConnectedDevice(deviceId: string): Promise<boolean> {
-    const deviceIds = await this.getPreviouslyConnectedDeviceIds();
-    return deviceIds.includes(deviceId);
-  }
-
-  public async getDeviceInfo() {
+  public async getDeviceInfo(appPlatform?: boolean) {
     try {
       const deviceId = await this.getDeviceId();
       const locationId = await this.getLocationId();
       const topicId = await this.getTopicId();
       const name = await this.getName();
 
+      let platform = 'web';
+      if (appPlatform) {
+        platform = (
+          localStorage.getItem(LocalStorageItem.platform) ?? 'web'
+        ).toLocaleUpperCase();
+      }
+
       return {
         deviceId,
         locationId,
         topicId,
         name: name,
-        platform: 'web',
+        platform,
       };
     } catch (error) {
-      console.error('Error getting device info', error);
+      console.error(
+        '[DEVICE] Error getting device info',
+        JSON.stringify(error)
+      );
       return null;
     }
   }
@@ -207,6 +232,11 @@ class DeviceManager {
         await this.setBranchLink(branchLink);
       }
     }
+    Sentry.addBreadcrumb({
+      data: { branchLink },
+      category: 'DeviceManager',
+      message: 'Generated branch link',
+    });
     return branchLink;
   }
 
@@ -216,13 +246,24 @@ class DeviceManager {
       if (!deviceInfo) {
         return null;
       }
+      console.log(
+        '[DEVICE] Generating branch link with device info: ',
+        JSON.stringify(deviceInfo)
+      );
+      Sentry.addBreadcrumb({
+        data: deviceInfo,
+        category: 'DeviceManager',
+        message: 'Generating branch link',
+      });
+
       const data = {
         source: 'feralfile_display',
         device: deviceInfo,
       };
       return await createBranchLink(data);
     } catch (e) {
-      console.error(e);
+      Sentry.captureException(e);
+      console.error('[DEVICE] Error generate branch link: ', JSON.stringify(e));
       return null;
     }
   }

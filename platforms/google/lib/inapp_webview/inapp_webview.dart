@@ -3,8 +3,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:feralfile_display/model/app_state_message.dart';
 import 'package:feralfile_display/model/js_message.dart';
+import 'package:feralfile_display/model/log_data.dart';
 import 'package:feralfile_display/service/configuration_service.dart';
 import 'package:feralfile_display/utils/config_manager.dart';
 import 'package:feralfile_display/utils/injector.dart';
@@ -82,13 +84,8 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
           }
 
           if (_isBackAble &&
-              event.logicalKey.keyId == LogicalKeyboardKey.escape.keyId) {
-            if (event is KeyDownEvent) {
-              unawaited(_webViewController.runJavaScriptReturningResult(
-                  'KeyEvent.handlePlatformEvent("${event.logicalKey.keyId}_'
-                  '${event.logicalKey.keyLabel}");'));
-            }
-
+              [LogicalKeyboardKey.escape.keyId, LogicalKeyboardKey.goBack.keyId]
+                  .contains(event.logicalKey.keyId)) {
             log.info('KeyEventResult.handled');
             return KeyEventResult.handled;
           }
@@ -102,6 +99,22 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
         ),
       ),
     );
+  }
+
+  void _reloadWhenNoInternet() {
+    Connectivity().checkConnectivity().then((result) {
+      log.info('Connectivity: $result');
+      if (result == ConnectivityResult.none) {
+        Connectivity()
+            .onConnectivityChanged
+            .listen((ConnectivityResult result) {
+          log.info('Connectivity changed: $result');
+          if (result != ConnectivityResult.none && _isLoading) {
+            _webViewController.reload();
+          }
+        });
+      }
+    });
   }
 
   void _initWebview() {
@@ -123,6 +136,13 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
         setState(() {
           _isLoading = false;
         });
+      },
+      onPageStarted: (url) {
+        log.info('page started: $url');
+        setState(() {
+          _isLoading = true;
+        });
+        _reloadWhenNoInternet();
       },
     ));
   }
@@ -170,6 +190,18 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
       final rotate = message.message;
       ConfigManager.instance.quarterTurns.value +=
           rotate == 'clockwise' ? 1 : -1;
+    });
+
+    _webViewController.addJavaScriptChannel('Log',
+        onMessageReceived: (message) async {
+      try {
+        log.info('Log: ${message.message}');
+        final json = jsonDecode(message.message);
+        final logData = LogData.fromJson(json['data']);
+        await FileLogger.sendLog(logData: logData);
+      } catch (e) {
+        log.info('Error: $e');
+      }
     });
   }
 

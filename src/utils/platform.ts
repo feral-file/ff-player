@@ -1,8 +1,8 @@
-import { KeyCodes, LocalStorageItem } from '@/constants';
+import { LocalStorageItem } from '@/constants';
 import DeviceManager from './DeviceManager';
 import { v4 as uuidv4 } from 'uuid';
-import { Event, EventEmitter } from './EventEmitter';
 import { BrowserInfo, detect } from 'detect-browser';
+import { keyEventHandler } from '@/services/keyEventHandler';
 
 interface DeviceInfo {
   modelName: string;
@@ -26,18 +26,7 @@ class PlatformEventReceiver {
 export class KeyEvent extends PlatformEventReceiver {
   static override handlePlatformEvent(event: string) {
     super.handlePlatformEvent(event);
-    const [keyId, keyLabel] = event.split('_');
-    console.log(`Handling key event: ${keyId} - ${keyLabel}`);
-    if (
-      [KeyCodes.enter.toString(), KeyCodes.select.toString()].includes(keyId)
-    ) {
-      EventEmitter.emit(Event.toggleQrCode);
-    }
-    if (
-      [KeyCodes.escape.toString(), KeyCodes.goBack.toString()].includes(keyId)
-    ) {
-      EventEmitter.emit(Event.escape);
-    }
+    keyEventHandler(event);
   }
 }
 
@@ -188,12 +177,9 @@ export class GoogleConfigService extends TizenConfigService {}
 export class WebConfigService implements PlatformConfigService {
   // eslint-disable-next-line @typescript-eslint/require-await
   async init() {
-    const deviceId = uuidv4();
     const deviceName = this.getOrCreateDeviceName();
-
-    // Use the device ID as the name for web
-    localStorage.setItem(LocalStorageItem.deviceId, deviceId);
-    localStorage.setItem(LocalStorageItem.name, deviceName);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    localStorage?.setItem(LocalStorageItem.name, deviceName);
   }
 
   generateRandomString(length: number): string {
@@ -208,6 +194,11 @@ export class WebConfigService implements PlatformConfigService {
   }
 
   getOrCreateDeviceName() {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (!localStorage) {
+      return 'Unknown';
+    }
+
     let deviceName = localStorage.getItem(LocalStorageItem.name);
     if (!deviceName) {
       const platform = navigator.platform;
@@ -220,12 +211,14 @@ export class WebConfigService implements PlatformConfigService {
   }
   // eslint-disable-next-line @typescript-eslint/require-await
   async getString(key: string): Promise<string | null> {
-    return localStorage.getItem(key);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    return localStorage?.getItem(key);
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
   async setString(key: string, value: string): Promise<void> {
-    localStorage.setItem(key, value);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    localStorage?.setItem(key, value);
   }
 }
 
@@ -235,7 +228,7 @@ export class LgConfigService implements PlatformConfigService {
     await this.setDeviceInfo();
   }
 
-  async registerDB() {
+  async clearRegisterDB() {
     // Clear the existing database kind (if it exists)
     try {
       await new Promise<void>((resolve, reject) => {
@@ -263,6 +256,9 @@ export class LgConfigService implements PlatformConfigService {
     } catch (error) {
       console.error('Error deleting kind:', error);
     }
+  }
+
+  async registerDB() {
     try {
       // Register the kind first
       await new Promise<void>((resolve, reject) => {

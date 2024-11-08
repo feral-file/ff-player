@@ -5,6 +5,7 @@ import {
   FileUseImage,
   FileUseObject,
   FileUseVideo,
+  MessageModalType,
   MIMETypeAudio,
   MIMETypeImage,
   MIMETypeObject,
@@ -13,13 +14,17 @@ import {
   SeriesPreviewHTMLTag,
 } from '@/utils/types';
 import Hls from 'hls.js';
-import Image from 'next/image';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import Loading from '../loading/loading';
-import { AppContext } from '@/context/AppContext';
+import { useAppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
 import { appendMetricEventToLocalStorage } from '@/services/metric.service';
 import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
+import { ArtFraming } from '@/services/AppControls';
+import { usePopUpContext } from '@/context/PopUpContext';
+import MessageModal from '../MessageModal';
+import { useTranslations } from 'next-intl';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -28,23 +33,24 @@ const ArtworkPlayer = ({
   isCustomView,
 }: {
   previewURL: string;
-  artworkID?: string;
+  artworkID: string;
   castingType?: CastingArtworkType;
   isCustomView?: boolean;
   keyboardCode?: number;
 }) => {
-  const context = useContext(AppContext);
-  if (!context) {
-    return <p>There is no context.</p>;
-  }
-
+  const { context } = useAppContext();
+  const { artDisplaySetting, resetArtDisplaySetting } = usePopUpContext();
   const [previewType, setPreviewType] = useState<string | null>(null);
+  const [displaySoftwareURL, setDisplaySoftwareURL] =
+    useState<string>(previewURL);
   const [loading, setLoading] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const newDayCheckTimeOutID = useRef<
     NodeJS.Timeout | string | number | undefined
   >(undefined);
+  const [showMessageModal, setShowMessageModal] = useState<boolean>(false);
+  const t = useTranslations('ArtworkPlayer');
 
   function compareToGetFileType(type: string) {
     setIsStreaming(false);
@@ -73,6 +79,23 @@ const ArtworkPlayer = ({
     }
   }
 
+  const reTryToPlayVideo = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = true;
+      videoRef.current.play().catch((error: unknown) => {
+        console.log('[CAST] Error play video', JSON.stringify(error));
+        Sentry.captureMessage('[CAST] Error play video');
+      });
+    }
+  };
+
+  const unmuteVideo = () => {
+    if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+      videoRef.current.muted = false;
+      document.removeEventListener('click', unmuteVideo);
+    }
+  };
+
   // Metric
   useEffect(() => {
     if (castingType && artworkID) {
@@ -99,7 +122,7 @@ const ArtworkPlayer = ({
           newDay.setHours(0, 0, 0, 0);
           const delay = newDay.getTime() - now.getTime();
           newDayCheckTimeOutID.current = setTimeout(() => {
-            console.log('METRIC: New day');
+            console.log('[METRIC]: New day');
             handleMetric();
           }, delay);
         };
@@ -133,9 +156,15 @@ const ArtworkPlayer = ({
         });
         const contentType = response.headers.get('Content-Type');
         compareToGetFileType(contentType ?? '');
-        console.log('Content-Type:', contentType);
+        console.log('[CAST] Content-Type:', contentType);
+        Sentry.addBreadcrumb({
+          category: 'ArtworkPlayer',
+          message: 'play artwork',
+          data: { previewURL, contentType },
+        });
       } catch (error) {
-        console.log('Error get content-type', error);
+        console.log('[CAST] Error get content-type', JSON.stringify(error));
+        Sentry.captureException(error);
         setPreviewType(SeriesPreviewHTMLTag.iframe);
       }
     };
@@ -146,11 +175,27 @@ const ArtworkPlayer = ({
       detectPreviewType(previewURL).catch((err: unknown) => {
         console.error(err);
       });
+
+      // Reset artDisplaySetting when new artwork is loaded
+      resetArtDisplaySetting();
     }
   }, [previewURL]);
 
+  useEffect(() => {
+    // Unmute video when user click on the screen
+    if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+      document.addEventListener('click', unmuteVideo);
+    }
+
+    return () => {
+      if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+        document.removeEventListener('click', unmuteVideo);
+      }
+    };
+  }, [previewType, videoRef]);
+
   const loadedSource = () => {
-    console.log('loaded source');
+    console.log('[CAST] loaded source', previewURL);
     // When an iframe is present in a page, the parent window might not receive keydown events because the iframe itself captures these events when it is focused.
     // This is work around to focus the parent window.
     window.focus();
@@ -177,7 +222,8 @@ const ArtworkPlayer = ({
         // Play video when it reaches the end (play in loop)
         hls.on(Hls.Events.BUFFER_EOS, () => {
           videoRef.current?.play().catch((error: unknown) => {
-            console.log('Error play video', error);
+            console.log('[CAST] Error play video', JSON.stringify(error));
+            Sentry.captureMessage('[CAST] Error play video');
           });
         });
       } else {
@@ -185,8 +231,8 @@ const ArtworkPlayer = ({
         videoRef.current.addEventListener('loadeddata', () => {
           videoRef.current
             ?.play()
-            .catch((error: unknown) => {
-              console.log('Error play video', error);
+            .catch(() => {
+              reTryToPlayVideo();
             })
             .finally(() => {
               setLoading(false);
@@ -200,7 +246,8 @@ const ArtworkPlayer = ({
     if (context.isOnline && !context.websocketData.isDisconnected) {
       if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
         videoRef.current.play().catch((error: unknown) => {
-          console.log('Error play video', error);
+          console.log('[CAST] Error play video', JSON.stringify(error));
+          Sentry.captureMessage('[CAST] Error play video');
         });
       }
     } else {
@@ -209,6 +256,29 @@ const ArtworkPlayer = ({
       }
     }
   }, [context, previewType]);
+
+  useEffect(() => {
+    if (!artDisplaySetting || !previewURL) {
+      return;
+    }
+
+    if (previewType === SeriesPreviewHTMLTag.iframe) {
+      const displayMode =
+        artDisplaySetting.frameConfig === ArtFraming.CropToFill
+          ? 'crop'
+          : 'fit';
+      const queryParam = `&display_mode=${displayMode}`;
+      const url = new URL(previewURL);
+      url.search += queryParam;
+      setDisplaySoftwareURL(url.toString());
+    } else {
+      setDisplaySoftwareURL(previewURL);
+    }
+  }, [artDisplaySetting, previewType, previewURL]);
+
+  const handleLoadIframeError = () => {
+    setShowMessageModal(true);
+  };
 
   return (
     <div
@@ -219,17 +289,26 @@ const ArtworkPlayer = ({
         backgroundColor: '#000000',
         justifyContent: 'center',
         position: 'relative',
+        transform: `rotate(${(artDisplaySetting?.rotateRadius ?? 0).toString()}deg)`,
+        transition: 'transform 0.2s',
       }}>
       {(previewType === null || loading) && <Loading />}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (
         <div
           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
           className={isCustomView ? styles.customRendering : ''}>
-          <Image
+          <img
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit:
+                artDisplaySetting?.frameConfig === ArtFraming.FitToScreen
+                  ? 'contain'
+                  : 'cover',
+            }}
+            className={styles.image}
             src={previewURL}
             alt="Preview"
-            layout="fill"
-            objectFit="contain"
             onLoad={loadedSource}
           />
         </div>
@@ -246,7 +325,14 @@ const ArtworkPlayer = ({
       {previewURL && previewType === SeriesPreviewHTMLTag.video && (
         <video
           ref={videoRef}
-          style={{ width: '100%', height: '100%' }}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit:
+              artDisplaySetting?.frameConfig === ArtFraming.FitToScreen
+                ? 'contain'
+                : 'cover',
+          }}
           autoPlay
           loop
           playsInline
@@ -257,15 +343,23 @@ const ArtworkPlayer = ({
           <source src={previewURL} onLoadedData={loadedSource}></source>
         </audio>
       )}
-      {previewURL &&
+      {displaySoftwareURL &&
         (previewType === SeriesPreviewHTMLTag.iframe ||
           previewType === SeriesPreviewHTMLTag.iframePDF) && (
           <iframe
             style={{ width: '100%', height: '100%' }}
-            src={previewURL}
+            src={displaySoftwareURL}
             onLoad={loadedSource}
+            onError={handleLoadIframeError}
             sandbox="allow-same-origin allow-scripts"></iframe>
         )}
+      {showMessageModal && (
+        <MessageModal
+          screenRatio={1}
+          message={t('wrong_artwork')}
+          messageModalType={MessageModalType.error}
+        />
+      )}
     </div>
   );
 };

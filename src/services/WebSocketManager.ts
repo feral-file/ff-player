@@ -3,6 +3,7 @@ import ReconnectingWebSocket from 'reconnecting-websocket';
 import CanvasService from './CanvasService';
 import { LocalStorageItem } from '@/constants';
 import { CastInfo } from '@/utils/types';
+import * as Sentry from '@sentry/nextjs';
 
 const pingIntervalTime = 5 * 60 * 1000; // 5 minutes
 const pongWaitTime = 10 * 1000;
@@ -23,7 +24,18 @@ const useWebSocket = (url: string, apiKey: string) => {
     if (!url || !apiKey) return;
 
     const connect = () => {
+      console.log('[WS] start connecting...');
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      if (!localStorage) {
+        return;
+      }
+
       let wsUrl = `${url}?apiKey=${apiKey}`;
+      Sentry.addBreadcrumb({
+        data: { url: wsUrl },
+        category: 'Websocket',
+        message: 'Websocket connection',
+      });
       const storedLocationID = localStorage.getItem(
         LocalStorageItem.locationID
       );
@@ -31,12 +43,14 @@ const useWebSocket = (url: string, apiKey: string) => {
       if (storedLocationID) wsUrl += `&locationID=${storedLocationID}`;
       if (storedTopicID) wsUrl += `&topicID=${storedTopicID}`;
 
+      console.log('[WS] Connecting to:', wsUrl);
+
       setCastInfo({ dataChecked: true });
 
       ws.current = new ReconnectingWebSocket(wsUrl);
 
       ws.current.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('[WS] WebSocket connected to:', wsUrl);
         setIsDisconnected(false);
         // Retrieve cast info from local storage to keep the state when refresh page
         const castInfo = localStorage.getItem(LocalStorageItem.castInfo);
@@ -52,7 +66,7 @@ const useWebSocket = (url: string, apiKey: string) => {
           );
           pongTimeoutRef.current = setTimeout(() => {
             console.log(
-              'No pong received within the expected time. WebSocket seems disconnected.'
+              '[WS] No pong received within the expected time. WebSocket seems disconnected.'
             );
             setIsDisconnected(true);
           }, pongWaitTime);
@@ -65,6 +79,7 @@ const useWebSocket = (url: string, apiKey: string) => {
         const data = JSON.parse(event.data as string);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         if (data.messageID === 'system') {
+          console.log('[WS] Received message:', data);
           // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
           setLocationID(data.message.locationID);
           // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
@@ -79,12 +94,18 @@ const useWebSocket = (url: string, apiKey: string) => {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             data.message.topicID as string
           );
+          Sentry.addBreadcrumb({
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+            data: data.message,
+            category: 'Websocket',
+            message: 'Websocket system message',
+          });
         }
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         else if (data.messageID === 'ping') {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
           if (data.message === 'pong') {
-            console.log('Pong received');
+            console.log('[WS] Pong received');
             setIsDisconnected(false);
             if (pongTimeoutRef.current) {
               clearTimeout(pongTimeoutRef.current);
@@ -101,12 +122,14 @@ const useWebSocket = (url: string, apiKey: string) => {
       };
 
       ws.current.onerror = error => {
-        console.error('WebSocket error:', error);
+        console.error('[WS] WebSocket error:', JSON.stringify(error));
+        Sentry.captureMessage('[WS] WebSocket error');
         setIsDisconnected(true);
       };
 
       ws.current.onclose = () => {
-        console.log('WebSocket disconnected, attempting to reconnect...');
+        console.log('[WS] WebSocket disconnected, attempting to reconnect...');
+        Sentry.captureMessage('[WS] WebSocket disconnected');
         setIsDisconnected(true);
         if (pingIntervalRef.current) {
           clearInterval(pingIntervalRef.current);

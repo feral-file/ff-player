@@ -1,5 +1,14 @@
-import { Metadata } from "next";
-import { Artwork, ArtworkModel } from "./artwork.model";
+import { Artwork, ArtworkModel } from './artwork.model';
+import { Alumni } from './user.model';
+
+export enum SaleModel {
+  Shopping = 'shopping',
+  EnglishAuction = 'english_auction',
+  DutchAuction = 'dutch_auction',
+  Airdrop = 'airdrop',
+  ShoppingAirdrop = 'shopping_airdrop',
+  ReverseDutchAuction = 'reverse_dutch_auction',
+}
 
 export interface Series {
   id: string;
@@ -8,7 +17,7 @@ export interface Series {
   title: string;
   medium?: string;
   description?: string;
-  artistID?: string;
+  artistAlumniAccountID?: string;
   artistName?: string;
   displayIndex: number;
   settings?: Settings;
@@ -17,7 +26,8 @@ export interface Series {
   thumbnailURI?: string;
   previewFile?: FileInfo;
   artworks?: Artwork[];
-  metadata?: Metadata;
+  metadata?: SeriesMetadata;
+  artistAlumni: Alumni;
 
   // Custom fields
   firstArtwork?: Artwork;
@@ -25,6 +35,7 @@ export interface Series {
 
 export interface Settings {
   artworkModel?: ArtworkModel;
+  saleModel?: SaleModel;
 }
 
 export interface FileInfo {
@@ -32,4 +43,8 @@ export interface FileInfo {
   uri?: string;
   status?: string;
   version?: string;
+}
+
+interface SeriesMetadata {
+  mediumDescription: string[];
 }

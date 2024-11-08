@@ -7,7 +7,8 @@ import {
   YoutubeThumbnailVariants,
 } from '@/models';
 import { Jg043CustomPosts } from '@/models/jg043.model';
-import axiosInstance from './axiosService';
+import axios from 'axios';
+import * as Sentry from '@sentry/nextjs';
 
 const YOUTUBE_VIDEO_QUERY_PARAM_KEY = 'v';
 const YOUTUBE_URL = 'https://www.youtube.com';
@@ -38,15 +39,21 @@ export class PostService {
       }
       return posts;
     } catch (error) {
-      console.log('Failed to load exhibition:', error);
+      console.log(
+        '[API] Failed to load post exhibition:',
+        JSON.stringify(error)
+      );
+      Sentry.captureException(error);
       return [];
     }
   }
 
   private async getCustomPostOfJG043Show(): Promise<Post[]> {
     try {
-      const response = await axiosInstance.get(
-        '/configs/postcard/postcard_configs.json'
+      const response = await axios.get(
+        `${
+          process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
+        }/configs/postcard/postcard_configs.json`
       );
 
       const jg043Section = response.data as Jg043CustomPosts | null;
@@ -65,7 +72,11 @@ export class PostService {
       }
       return [];
     } catch (error) {
-      console.log('Failed to load SOURCE exhibition', error);
+      console.log(
+        '[API] Failed to load post of jg43 exhibition',
+        JSON.stringify(error)
+      );
+      Sentry.captureException(error);
       return [];
     }
   }
@@ -97,7 +108,8 @@ export class PostService {
         resource.thumbUrls = [resource.coverURI];
       }
     } catch (error) {
-      console.log('Failed to format post:', error);
+      console.log('[API] Failed to format post:', JSON.stringify(error));
+      Sentry.captureException(error);
     }
   }
 }

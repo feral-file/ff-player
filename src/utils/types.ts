@@ -1,4 +1,4 @@
-import { Artwork } from '@/models';
+import { Artwork, IndexerToken } from '@/models';
 
 export interface WebSocketMessage {
   messageID: string;
@@ -126,13 +126,6 @@ export interface KeyboardEventRequest {
 }
 export type KeyboardEventReply = Reply;
 
-export interface Series {
-  id: string;
-  previewFile?: FileInfo;
-  artistID: string;
-  title: string;
-}
-
 export interface FileInfo {
   filename: string;
   uri: string;
@@ -187,6 +180,7 @@ export interface PlaylistToken {
     id: string;
     name: string;
   };
+  indexerToken?: IndexerToken;
 }
 
 export interface CastInfo {
@@ -221,4 +215,10 @@ export enum ViewMode {
 export enum Orientation {
   vertical = 'vertical',
   horizontal = 'horizontal',
+}
+
+export enum MessageModalType {
+  error = 'error',
+  warning = 'warning',
+  info = 'info',
 }

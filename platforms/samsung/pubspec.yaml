@@ -1,5 +1,5 @@
 name: feralfile_display_tizen
-description: "A new Flutter project."
+description: 'A new Flutter project.'
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -31,15 +31,14 @@ dependencies:
   flutter:
     sdk: flutter
 
-
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.6
   webview_flutter: ^4.2.2
   webview_flutter_tizen:
-  package_info_plus: ^4.0.2
+  package_info_plus: ^8.0.2
   path_provider: ^2.0.8
-  path_provider_tizen: ^2.1.0
+  path_provider_tizen: ^2.1.1
   after_layout: ^1.2.0
   shared_preferences: ^2.3.1
   shared_preferences_tizen: ^2.1.0
@@ -48,10 +47,10 @@ dependencies:
   flutter_dotenv: ^5.0.2
   network_info_plus: ^3.0.5
   network_info_plus_tizen: ^1.1.3
-  device_info_plus_tizen: ^1.1.0
+  device_info_plus_tizen: ^1.2.0
   connectivity_plus_tizen: ^1.1.4
-  package_info_plus_tizen: ^1.0.3
-  wakelock_tizen: ^1.0.2
+  package_info_plus_tizen: ^1.0.4
+  wakelock_plus_tizen: ^2.0.0
   dio: ^5.5.0+1
   retrofit: ^4.1.0
   connectivity_plus: ^2.3.8
@@ -62,7 +61,7 @@ dependencies:
   get_it: ^7.7.0
   http: ^1.2.2
   page_transition: ^2.1.0
-  wakelock_plus: ^1.1.4
+  wakelock_plus: ^1.2.8
   logging: ^1.2.0
 
 dev_dependencies:
@@ -85,7 +84,6 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

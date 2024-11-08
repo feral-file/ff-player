@@ -58,6 +58,12 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
   }
 
   @override
+  void dispose() {
+    unawaited(WakelockPlus.disable());
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: Colors.transparent,
         body: Focus(
@@ -78,13 +84,10 @@ class _InAppWebViewPageState extends State<InAppWebViewPage> {
             }
 
             if (_isBackAble &&
-                event.logicalKey.keyId == LogicalKeyboardKey.escape.keyId) {
-              if (event is KeyDownEvent) {
-                unawaited(_webViewController.runJavaScriptReturningResult(
-                    'KeyEvent.handlePlatformEvent("${event.logicalKey.keyId}_'
-                    '${event.logicalKey.keyLabel}");'));
-              }
-
+                [
+                  LogicalKeyboardKey.escape.keyId,
+                  LogicalKeyboardKey.goBack.keyId
+                ].contains(event.logicalKey.keyId)) {
               log.info('KeyEventResult.handled');
               return KeyEventResult.handled;
             }

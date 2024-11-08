@@ -1,0 +1,36 @@
+.optionsButton {
+  width: fit-content;
+  display: flex;
+  gap: 0.7em;
+  align-items: center;
+  padding-left: 2em;
+  padding-right: 0.3em;
+  padding-top: 0.4em;
+  padding-bottom: 0.4em;
+  border-radius: 2.35em;
+  border: 0.05em solid transparent;
+  .icon {
+    border-radius: 2.35em;
+    width: 2.35em;
+    height: 2.25em;
+  }
+  .arrowDown {
+    width: 2.35em;
+    height: 2.25em;
+  }
+}
+
+.optionsButton.focused,
+.optionsButton.selected,
+.optionsButton:hover {
+  background-color: white;
+  color: black;
+  .arrowDown {
+    .arrowBackground {
+      fill: none;
+    }
+    path {
+      stroke: black;
+    }
+  }
+}

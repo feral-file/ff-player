@@ -1,5 +1,6 @@
 import { Artwork, Exhibition } from '@/models';
 import axiosInstance from './axiosService';
+import * as Sentry from '@sentry/nextjs';
 
 const cloudFlareHostingDomain = 'imagedelivery.net';
 const ipfsGateway = 'https://ipfs.io/ipfs/';
@@ -12,7 +13,11 @@ export class SeriesService {
       );
       return response.data.result;
     } catch (error) {
-      console.log('Failed to load artworks of series:', error);
+      console.log(
+        '[API] Failed to load artworks of series:',
+        JSON.stringify(error)
+      );
+      Sentry.captureException(error);
       return [];
     }
   }
@@ -31,7 +36,8 @@ export class SeriesService {
       );
       return response.data.result;
     } catch (error) {
-      console.log('Failed to load artwork:', error);
+      console.log('[API] Failed to load artwork:', JSON.stringify(error));
+      Sentry.captureException(error);
       return {};
     }
   }

@@ -25,8 +25,6 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: "20"
-          cache: "npm"
-          cache-dependency-path: ./package-lock.json
 
       - name: Install webOS CLI
         run: |
@@ -45,4 +43,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: feralfile-webos-app
-          path: com.feralfile.display_1.0.0_all.tpk
+          path: platforms/lg/*.ipk

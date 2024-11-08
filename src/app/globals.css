@@ -59,6 +59,8 @@ blockquote,
 input,
 pre {
   font-family: 'PP Mori', sans-serif;
+  padding: 0;
+  margin: 0;
 }
 
 html,

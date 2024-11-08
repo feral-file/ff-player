@@ -1,7 +1,8 @@
 'use client';
 
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
-import { AppContext } from '@/context/AppContext';
+import { useAppContext } from '@/context/AppContext';
+import { usePopUpContext } from '@/context/PopUpContext';
 import { IndexerToken } from '@/models';
 import { CastingArtworkType } from '@/models/metric.model';
 import ArtworkService from '@/services/ArtworkService';
@@ -9,15 +10,13 @@ import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
 import { getIndexerTokenName } from '@/utils/indexer';
 import { calculateStartTime, getIndex } from '@/utils/Playlist';
 import { CastCommand, PlayArtworkV2, PlaylistToken } from '@/utils/types';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export default function PlaylistClient() {
-  const context = useContext(AppContext);
-  if (!context) {
-    return <p>There is no context.</p>;
-  }
-
+  const { context } = useAppContext();
   const { castInfo } = context.websocketData;
+
+  const { setDisplayInfo } = usePopUpContext();
 
   const [artworkID, setArtworkID] = useState<string | undefined>();
   const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
@@ -60,6 +59,10 @@ export default function PlaylistClient() {
     if (currentPlaylist !== currentPlaylistRef.current) {
       currentPlaylistRef.current = currentPlaylist;
       setArtworkID(currentPlaylist.token.id);
+      setDisplayInfo({
+        token: currentPlaylist.indexerToken,
+        ffArtworkID: currentPlaylist.indexerToken?.id,
+      });
     }
     setCastPreviewURL(currentPlaylist.previewURL);
     setIsLeeMucianExhibition(
@@ -221,6 +224,7 @@ export default function PlaylistClient() {
                 const previewData = new Map<string, string>();
                 const tokensName = new Map<string, string>();
                 const contractAddress = new Map<string, string>();
+                const mapTokens = new Map<string, IndexerToken>();
                 tokens.forEach((token: IndexerToken) => {
                   previewData.set(
                     token.indexID,
@@ -228,6 +232,7 @@ export default function PlaylistClient() {
                   );
                   tokensName.set(token.indexID, getIndexerTokenName(token));
                   contractAddress.set(token.indexID, token.contractAddress);
+                  mapTokens.set(token.indexID, token);
                 });
                 const updatedArtworks = artworks.map(
                   (artwork: PlayArtworkV2) => {
@@ -244,6 +249,7 @@ export default function PlaylistClient() {
                       contractAddress: contractAddress.get(
                         artwork.token?.id ?? ''
                       ),
+                      indexerToken: mapTokens.get(artwork.token?.id ?? ''),
                     };
                     return aw;
                   }
@@ -318,7 +324,7 @@ export default function PlaylistClient() {
       <div style={{ width: '100%', height: '100%' }}>
         <ArtworkPlayer
           previewURL={castPreviewURL ?? ''}
-          artworkID={artworkID}
+          artworkID={artworkID ?? ''}
           castingType={CastingArtworkType.Playlist}
           isCustomView={isLeeMucianExhibition}
         />

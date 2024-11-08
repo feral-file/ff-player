@@ -3,6 +3,7 @@ import ArtworkService from './ArtworkService';
 import axiosInstance from './axiosService';
 import { convertToTokenID, getIndexerTokenName } from '@/utils/indexer';
 import { convertToQueryParams } from '@/utils/queryParams';
+import * as Sentry from '@sentry/nextjs';
 
 class DailyService {
   private artworkService = new ArtworkService();
@@ -13,8 +14,8 @@ class DailyService {
     return this.dailies;
   }
 
-  public async isRefreshDailies(): Promise<boolean> {
-    const newDailies = await this.callingDailies();
+  public async isRefreshDailies(newDailyHour: number): Promise<boolean> {
+    const newDailies = await this.callingDailies(newDailyHour);
     if (newDailies !== this.dailies) {
       this.dailies = newDailies;
       return true;
@@ -35,14 +36,35 @@ class DailyService {
     return response.data.result as Daily[];
   }
 
-  public async callingDailies(): Promise<Daily[]> {
+  public async getDailiesByDate(
+    date: string,
+    expand?: string[]
+  ): Promise<Daily[]> {
+    let expandParams = '';
+    if (expand) {
+      expandParams = convertToQueryParams(expand);
+    }
+
+    const response = await axiosInstance.get(
+      `/api/dailies/date/${date}?${expandParams}`
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    return response.data.result as Daily[];
+  }
+
+  public async callingDailies(newDailyHour: number): Promise<Daily[]> {
     try {
-      let dailies = await this.getUpcomingDaily(
-        ['includeSuccessfulSwap'],
-        'limit=2&offset=0'
-      );
+      const date = this.getCurrentLocaleDateOnly(newDailyHour);
+      let dailies = await this.getDailiesByDate(date, [
+        'includeSuccessfulSwap',
+      ]);
 
       if (dailies.length === 0) {
+        console.log('[DAILY] No upcoming dailies, using default daily');
+        Sentry.captureMessage(
+          '[DAILY] No upcoming dailies, using default daily'
+        );
         dailies = [this.getDefaultDaily()];
       }
 
@@ -98,7 +120,11 @@ class DailyService {
 
       return convertDailies;
     } catch (error) {
-      console.error(error);
+      console.error(
+        '[DAILY] Error when convert dailies',
+        JSON.stringify(error)
+      );
+      Sentry.captureException(error);
       return [this.getDefaultDaily()];
     }
   }
@@ -108,11 +134,31 @@ class DailyService {
     return {
       blockchain: 'ethereum',
       contractAddress: '0x1D9787369B1DCf709f92Da1d8743c2A4b6028a83',
-      displayTime: new Date().setHours(0, 0, 0, 0).toString(),
+      displayTime: new Date().toString(),
       id: '',
       tokenName: '#1',
       tokenID: '339348595130070749814751437599411258966098496',
+      note: '',
     };
+  }
+
+  private getCurrentLocaleDateOnly(newDailyHour: number): string {
+    const now = new Date();
+    let currentTimestamp: number;
+    // Previous day if the current time is before 6:00 AM
+    const newDailyAt = new Date().setHours(newDailyHour, 0, -1, 0); // 5:59:59 AM buffer 1s
+    if (now.getTime() < newDailyAt) {
+      currentTimestamp = now.setDate(now.getDate() - 1);
+    } else {
+      currentTimestamp = now.getTime();
+    }
+
+    const date = new Date(currentTimestamp);
+    // Format date to yyyy-mm-dd
+    const year = date.getFullYear().toString();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 }
 
