@@ -163,14 +163,17 @@ export default function DailyClient() {
   }, [index]);
 
   useEffect(() => {
-    const intervalID = setInterval(() => {
-      setIndex(prevIndex => {
-        if (prevIndex >= series.length - 1) {
-          return 0;
-        }
-        return prevIndex + 1;
-      });
-    }, 60 * 1000);
+    const intervalID = setInterval(
+      () => {
+        setIndex(prevIndex => {
+          if (prevIndex >= series.length - 1) {
+            return 0;
+          }
+          return prevIndex + 1;
+        });
+      },
+      3 * 60 * 1000
+    );
     return () => {
       clearInterval(intervalID);
     };
