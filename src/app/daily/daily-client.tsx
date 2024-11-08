@@ -226,7 +226,7 @@ export default function DailyClient() {
 
           const { delay } = getDelayTime(newDailyHour);
           if (dailies[0].previewURL) {
-            setCastPreviewURL(dailies[0].previewURL);
+            // setCastPreviewURL(dailies[0].previewURL);
             setIsLeeMucianExhibition(
               dailies[0].contractAddress === LeeMullican_EXHIBITION_CONTRACT
             );
