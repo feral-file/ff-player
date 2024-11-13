@@ -12,26 +12,40 @@ const accountsRequester: AxiosInstance = axios.create({
 });
 
 export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
-  const deviceID = await DeviceManager.getDeviceId();
-
-  if (!deviceID) {
-    throw new Error('Device ID not found');
+  if (!events.length) {
+    return;
   }
 
-  accountsRequester.defaults.headers['x-device-id'] = deviceID;
-  if (events.length > 0) {
-    const vendor = localStorage.getItem(LocalStorageItem.platform) ?? 'web';
-    const model = await DeviceManager.getDeviceModel();
-    for (const event of events) {
-      event.parameters.device = {
-        vendor,
-        model,
-      };
+  // Add x-device-id to headers if not exists
+  if (!accountsRequester.defaults.headers['x-device-id']) {
+    const deviceID = await DeviceManager.getDeviceId();
+    if (!deviceID) {
+      throw new Error('Device ID not found');
     }
 
-    console.log('[METRIC]: sending API', JSON.stringify(events));
-    await accountsRequester.post('/apis/metrics', { metrics: events });
+    accountsRequester.defaults.headers['x-device-id'] = deviceID;
   }
+
+  // Add x-device-vendor to headers if not exists
+  if (!accountsRequester.defaults.headers['x-device-vendor']) {
+    const vendor = localStorage.getItem(LocalStorageItem.platform) ?? 'web';
+    accountsRequester.defaults.headers['x-device-vendor'] = vendor;
+  }
+
+  // Add x-device-model to headers if not exists
+  if (!accountsRequester.defaults.headers['x-device-model']) {
+    const model = await DeviceManager.getDeviceModel();
+    accountsRequester.defaults.headers['x-device-model'] = model;
+  }
+
+  // Add x-device-name to headers if not exists
+  if (!accountsRequester.defaults.headers['x-device-name']) {
+    const name = await DeviceManager.getName();
+    accountsRequester.defaults.headers['x-device-name'] = name;
+  }
+
+  console.log('[METRIC]: sending API', JSON.stringify(events));
+  await accountsRequester.post('/apis/metrics', { metrics: events });
 }
 
 export function appendMetricEventToLocalStorage(event: MetricEvent) {
