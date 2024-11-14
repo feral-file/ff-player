@@ -1,4 +1,4 @@
-import { LocalStorageItem } from '@/constants';
+import { LocalStorageItem, Platform } from '@/constants';
 import { MetricEvent } from '@/models/metric.model';
 import DeviceManager from '@/utils/DeviceManager';
 import axios, { AxiosInstance } from 'axios';
@@ -12,26 +12,44 @@ const accountsRequester: AxiosInstance = axios.create({
 });
 
 export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
-  const deviceID = await DeviceManager.getDeviceId();
-
-  if (!deviceID) {
-    throw new Error('Device ID not found');
+  if (!events.length) {
+    return;
   }
 
-  accountsRequester.defaults.headers['x-device-id'] = deviceID;
-  if (events.length > 0) {
-    const vendor = localStorage.getItem(LocalStorageItem.platform) ?? 'web';
-    const model = await DeviceManager.getDeviceModel();
-    for (const event of events) {
-      event.parameters.device = {
-        vendor,
-        model,
-      };
+  // Add x-device-id to headers if not exists
+  if (!accountsRequester.defaults.headers['x-device-id']) {
+    const deviceID = await DeviceManager.getDeviceId();
+    if (!deviceID) {
+      throw new Error('Device ID not found');
     }
 
-    console.log('[METRIC]: sending API', JSON.stringify(events));
-    await accountsRequester.post('/apis/metrics', { metrics: events });
+    accountsRequester.defaults.headers['x-device-id'] = deviceID;
   }
+
+  // Add x-device-vendor to headers if not exists
+  if (
+    !accountsRequester.defaults.headers['x-device-vendor'] ||
+    !accountsRequester.defaults.headers['x-device-platform']
+  ) {
+    const { vendor, platform } = getDeviceInfoBaseOnPlatform();
+    accountsRequester.defaults.headers['x-device-vendor'] = vendor;
+    accountsRequester.defaults.headers['x-device-platform'] = platform;
+  }
+
+  // Add x-device-model to headers if not exists
+  if (!accountsRequester.defaults.headers['x-device-model']) {
+    const model = await DeviceManager.getDeviceModel();
+    accountsRequester.defaults.headers['x-device-model'] = model;
+  }
+
+  // Add x-device-name to headers if not exists
+  if (!accountsRequester.defaults.headers['x-device-name']) {
+    const name = await DeviceManager.getName();
+    accountsRequester.defaults.headers['x-device-name'] = name;
+  }
+
+  console.log('[METRIC]: sending API', JSON.stringify(events));
+  await accountsRequester.post('/apis/metrics', { metrics: events });
 }
 
 export function appendMetricEventToLocalStorage(event: MetricEvent) {
@@ -96,5 +114,19 @@ export function uploadMetricEventsFromLocalStorage() {
         );
         Sentry.captureException(error);
       });
+  }
+}
+
+function getDeviceInfoBaseOnPlatform(): { vendor: string; platform: string } {
+  const platform = localStorage.getItem(LocalStorageItem.platform);
+  switch (platform) {
+    case Platform.google:
+      return { vendor: 'google', platform: 'googletv' };
+    case Platform.tizen:
+      return { vendor: 'samsung', platform: 'tizen' };
+    case Platform.lg:
+      return { vendor: 'lg', platform: 'webos' };
+    default:
+      return { vendor: 'web', platform: 'web' };
   }
 }
