@@ -1,4 +1,4 @@
-import { LocalStorageItem } from '@/constants';
+import { LocalStorageItem, Platform } from '@/constants';
 import { MetricEvent } from '@/models/metric.model';
 import DeviceManager from '@/utils/DeviceManager';
 import axios, { AxiosInstance } from 'axios';
@@ -27,9 +27,13 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
   }
 
   // Add x-device-vendor to headers if not exists
-  if (!accountsRequester.defaults.headers['x-device-vendor']) {
-    const vendor = localStorage.getItem(LocalStorageItem.platform) ?? 'web';
+  if (
+    !accountsRequester.defaults.headers['x-device-vendor'] ||
+    !accountsRequester.defaults.headers['x-device-platform']
+  ) {
+    const { vendor, platform } = getDeviceInfoBaseOnPlatform();
     accountsRequester.defaults.headers['x-device-vendor'] = vendor;
+    accountsRequester.defaults.headers['x-device-platform'] = platform;
   }
 
   // Add x-device-model to headers if not exists
@@ -110,5 +114,19 @@ export function uploadMetricEventsFromLocalStorage() {
         );
         Sentry.captureException(error);
       });
+  }
+}
+
+function getDeviceInfoBaseOnPlatform(): { vendor: string; platform: string } {
+  const platform = localStorage.getItem(LocalStorageItem.platform);
+  switch (platform) {
+    case Platform.google:
+      return { vendor: 'google', platform: 'googletv' };
+    case Platform.tizen:
+      return { vendor: 'samsung', platform: 'tizen' };
+    case Platform.lg:
+      return { vendor: 'lg', platform: 'webos' };
+    default:
+      return { vendor: 'web', platform: 'web' };
   }
 }
