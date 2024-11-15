@@ -13,7 +13,7 @@ export interface Artwork {
   index?: number;
   name?: string;
   previewURI?: string;
-  previewDisplay?: { [key: string]: string };
+  previewDisplay?: Record<string, string>;
   thumbnailURI?: string;
   mintedAt?: string;
   series?: Series;
