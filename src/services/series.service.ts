@@ -59,7 +59,8 @@ export class SeriesService {
 
   public getArtworkPreview(artwork: Artwork): string {
     const previewUrl =
-      (artwork.previewDisplay?.['HLS'] || null) ??
+      (artwork.previewDisplay?.['HLS']
+           ? artwork.previewDisplay['HLS'] + '?clientBandwidthHint=1.8' : null) ??
       artwork.metadata?.alternativePreviewURI ??
       artwork.metadata?.previewCloudFlareURL ??
       artwork.previewURI;
