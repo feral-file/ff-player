@@ -28,6 +28,9 @@ const ExhibitionHall = () => {
   const [catalogID, setCatalogID] = useState<string | undefined>();
   const [screen, setScreen] = useState<ExhibitionCatalog | undefined>();
   const [artworkID, setArtworkID] = useState<string | undefined>();
+  const [artworkPreviewMIMEType, setArtworkPreviewMIMEType] = useState<
+    string | undefined
+  >();
 
   const [pageSection, setSection] = useState<ExhibitionCatalog>(
     ExhibitionCatalog.home
@@ -73,6 +76,8 @@ const ExhibitionHall = () => {
       } else {
         setArtworkID(artworkRef.current.id);
       }
+
+      setArtworkPreviewMIMEType(artworkRef.current.previewMIMEType);
     }
 
     const indexID = formatArtworkIndexID(artworkRef.current, exhibition ?? {});
@@ -258,6 +263,7 @@ const ExhibitionHall = () => {
               key={artwork.id}
               previewURL={artwork.previewURI}
               artworkID={artworkID ?? ''}
+              artworkPreviewMIMEType={artworkPreviewMIMEType}
               castingType={CastingArtworkType.Exhibition}
               isCustomView={
                 exhibitionDetail.contracts &&

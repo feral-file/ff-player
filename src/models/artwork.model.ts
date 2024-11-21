@@ -17,6 +17,7 @@ export interface Artwork {
     HLS?: string;
     DASH?: string;
   };
+  previewMIMEType?: string;
   thumbnailURI?: string;
   mintedAt?: string;
   series?: Series;
