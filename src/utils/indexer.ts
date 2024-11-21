@@ -1,6 +1,6 @@
 import { Artwork, Blockchain, Exhibition, IndexerToken } from '@/models';
 
-enum IndexerSource {
+export enum IndexerSource {
   feral_file = 'feralfile',
 }
 

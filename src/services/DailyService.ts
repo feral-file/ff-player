@@ -1,7 +1,11 @@
 import { Daily, IndexerToken } from '@/models';
 import ArtworkService from './ArtworkService';
 import axiosInstance from './axiosService';
-import { convertToTokenID, getIndexerTokenName } from '@/utils/indexer';
+import {
+  convertToTokenID,
+  getIndexerTokenName,
+  IndexerSource,
+} from '@/utils/indexer';
 import { convertToQueryParams } from '@/utils/queryParams';
 import * as Sentry from '@sentry/nextjs';
 
@@ -110,9 +114,14 @@ class DailyService {
           tokenName = getIndexerTokenName(token);
         }
 
+        const previewURL =
+          token?.source === IndexerSource.feral_file && d.artwork
+            ? this.artworkService.getArtworkPreview(d.artwork)
+            : previewData.get(tokenID);
+
         return {
           ...d,
-          previewURL: previewData.get(tokenID),
+          previewURL,
           token,
           tokenName,
         };
