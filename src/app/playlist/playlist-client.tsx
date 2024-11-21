@@ -19,6 +19,9 @@ export default function PlaylistClient() {
   const { setDisplayInfo } = usePopUpContext();
 
   const [artworkID, setArtworkID] = useState<string | undefined>();
+  const [artworkPreviewMIMEType, setArtworkPreviewMIMEType] = useState<
+    string | undefined
+  >();
   const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
     useState<boolean>(false);
 
@@ -59,6 +62,7 @@ export default function PlaylistClient() {
     if (currentPlaylist !== currentPlaylistRef.current) {
       currentPlaylistRef.current = currentPlaylist;
       setArtworkID(currentPlaylist.token.id);
+      setArtworkPreviewMIMEType(currentPlaylist.artwork?.previewMIMEType);
       setDisplayInfo({
         token: currentPlaylist.indexerToken,
         ffArtworkID: currentPlaylist.indexerToken?.id,
@@ -325,6 +329,7 @@ export default function PlaylistClient() {
         <ArtworkPlayer
           previewURL={castPreviewURL ?? ''}
           artworkID={artworkID ?? ''}
+          artworkPreviewMIMEType={artworkPreviewMIMEType}
           castingType={CastingArtworkType.Playlist}
           isCustomView={isLeeMucianExhibition}
         />

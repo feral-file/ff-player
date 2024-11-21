@@ -1,6 +1,5 @@
 import {
   FileUseAudio,
-  FileUseIframe,
   FileUseIframePDF,
   FileUseImage,
   FileUseObject,
@@ -8,8 +7,10 @@ import {
   MIMETypeAudio,
   MIMETypeImage,
   MIMETypeObject,
-  MIMETypeUseStream,
+  MIMETypePdf,
+  MIMETypeUseStream as MIMETypeStreamVideo,
   MIMETypeVideo,
+  MITETypeIframe,
   SeriesPreviewHTMLTag,
 } from '@/utils/types';
 import Hls from 'hls.js';
@@ -31,6 +32,7 @@ const ArtworkPlayer = ({
   exhibitionID,
   castingType,
   isCustomView,
+  artworkPreviewMIMEType,
 }: {
   previewURL: string;
   artworkID?: string;
@@ -39,6 +41,7 @@ const ArtworkPlayer = ({
   castingType?: CastingArtworkType;
   isCustomView?: boolean;
   keyboardCode?: number;
+  artworkPreviewMIMEType?: string;
 }) => {
   const { context } = useAppContext();
   const [previewType, setPreviewType] = useState<string | null>(null);
@@ -56,10 +59,10 @@ const ArtworkPlayer = ({
     }
     type = type.toLowerCase();
 
-    if (MIMETypeUseStream.includes(type)) {
+    if (MIMETypeStreamVideo.includes(type)) {
       setPreviewType(SeriesPreviewHTMLTag.video);
       setIsStreaming(true);
-    } else if (FileUseIframe.includes(type)) {
+    } else if (MITETypeIframe.includes(type)) {
       setPreviewType(SeriesPreviewHTMLTag.iframe);
     } else if (FileUseObject.includes(type) || type.match(MIMETypeObject)) {
       setPreviewType(SeriesPreviewHTMLTag.object);
@@ -69,7 +72,7 @@ const ArtworkPlayer = ({
       setPreviewType(SeriesPreviewHTMLTag.audio);
     } else if (FileUseImage.includes(type) || type.match(MIMETypeImage)) {
       setPreviewType(SeriesPreviewHTMLTag.image);
-    } else if (FileUseIframePDF.includes(type)) {
+    } else if (FileUseIframePDF.includes(type) || type.match(MIMETypePdf)) {
       setPreviewType(SeriesPreviewHTMLTag.iframePDF);
     } else {
       setPreviewType(SeriesPreviewHTMLTag.iframe);
@@ -127,6 +130,20 @@ const ArtworkPlayer = ({
   useEffect(() => {
     const detectPreviewType = async (previewURL: string) => {
       try {
+        if (artworkPreviewMIMEType) {
+          compareToGetFileType(artworkPreviewMIMEType);
+          console.log(
+            '[CAST] Artwork previewMIMEType:',
+            artworkPreviewMIMEType
+          );
+          Sentry.addBreadcrumb({
+            category: 'ArtworkPlayer',
+            message: 'play artwork',
+            data: { previewURL, artworkPreviewMIMEType },
+          });
+          return;
+        }
+
         const url = new URL(previewURL);
         // The second request could be failed, Chrome uses the cached response from the first request, which has no "Access-Control-Allow-Origin" response header.
         // Workaround: Use a dummy "?x-some-key=some-value" query string parameter will convince the browser that the request is different.

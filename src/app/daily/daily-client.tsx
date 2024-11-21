@@ -26,6 +26,9 @@ export default function DailyClient() {
     undefined
   );
   const [artworkID, setArtworkID] = useState<string | undefined>();
+  const [artworkPreviewMIMEType, setArtworkPreviewMIMEType] = useState<
+    string | undefined
+  >();
 
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
@@ -53,6 +56,9 @@ export default function DailyClient() {
                 dailyRef.current.contractAddress,
                 dailyRef.current.tokenID
               )
+            );
+            setArtworkPreviewMIMEType(
+              dailyRef.current.artwork?.previewMIMEType
             );
 
             // Set display info into PopUpContext
@@ -126,6 +132,7 @@ export default function DailyClient() {
           artworkID={artworkID ?? ''}
           castingType={CastingArtworkType.Daily}
           isCustomView={isLeeMucianExhibition}
+          artworkPreviewMIMEType={artworkPreviewMIMEType}
         />
       </div>
     </>
