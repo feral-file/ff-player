@@ -12,6 +12,7 @@ import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
 import { formatArtworkIndexID } from '@/utils/indexer';
 import { CastingArtworkType } from '@/models/metric.model';
 import { usePopUpContext } from '@/context/PopUpContext';
+import ArtworkService from '@/services/ArtworkService';
 
 const ExhibitionHall = () => {
   const { context } = useAppContext();
@@ -42,6 +43,7 @@ const ExhibitionHall = () => {
   // Services
   const exhibitionService = useRef(new ExhibitionService());
   const seriesService = useRef(new SeriesService());
+  const artworkService = useRef(new ArtworkService());
   const postService = useRef(new PostService());
 
   const FERAL_FILE_ASSET_URL =
@@ -59,7 +61,7 @@ const ExhibitionHall = () => {
       return;
     }
 
-    artwork.previewURI = seriesService.current.getArtworkPreview(artwork);
+    artwork.previewURI = artworkService.current.getArtworkPreview(artwork);
     setArtwork(artwork);
 
     // Set mixpanel metadata
