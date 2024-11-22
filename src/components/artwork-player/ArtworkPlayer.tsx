@@ -228,11 +228,12 @@ const ArtworkPlayer = ({
           maxBufferLength: 30,
           liveSyncDuration: 10,
         });
-        hls.loadSource(
-          `${previewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
-        );
+
         hls.attachMedia(videoRef.current);
         hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+          hls.loadSource(
+            `${previewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
+          );
           videoRef.current
             ?.play()
             .catch((error: unknown) => {
