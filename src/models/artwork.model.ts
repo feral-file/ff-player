@@ -13,6 +13,11 @@ export interface Artwork {
   index?: number;
   name?: string;
   previewURI?: string;
+  previewDisplay?: {
+    HLS?: string;
+    DASH?: string;
+  };
+  previewMIMEType?: string;
   thumbnailURI?: string;
   mintedAt?: string;
   series?: Series;

@@ -2,9 +2,6 @@ import { Artwork, Exhibition } from '@/models';
 import axiosInstance from './axiosService';
 import * as Sentry from '@sentry/nextjs';
 
-const cloudFlareHostingDomain = 'imagedelivery.net';
-const ipfsGateway = 'https://ipfs.io/ipfs/';
-
 export class SeriesService {
   public async getArtworkOfSeries(seriesID: string): Promise<Artwork[]> {
     try {
@@ -55,31 +52,5 @@ export class SeriesService {
     }
 
     return artwork;
-  }
-
-  public getArtworkPreview(artwork: Artwork): string {
-    const previewUrl =
-      artwork.metadata?.alternativePreviewURI ??
-      artwork.metadata?.previewCloudFlareURL ??
-      artwork.previewURI;
-
-    return previewUrl ? this.transformPreviewSrc(previewUrl) : '';
-  }
-
-  private transformPreviewSrc(src: string): string {
-    if (src.startsWith('https')) {
-      if (src.includes(cloudFlareHostingDomain)) {
-        const variantSuffix = '/thumbnail';
-        return src.includes(variantSuffix) ? src : src + '/thumbnailLarge';
-      } else {
-        return src;
-      }
-    } else if (src.startsWith('ipfs://')) {
-      return src.replace('ipfs://', ipfsGateway);
-    } else if (src.includes('/assets/images/empty_image.svg')) {
-      return src;
-    }
-
-    return `${process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? ''}/${src}`;
   }
 }

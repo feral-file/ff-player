@@ -5,6 +5,8 @@ import axiosInstance from './axiosService';
 import * as Sentry from '@sentry/nextjs';
 
 const LIMIT_PER_PAGE = 50;
+const cloudFlareHostingDomain = 'imagedelivery.net';
+const ipfsGateway = 'https://ipfs.io/ipfs/';
 
 class ArtworkService {
   public async getArtworkDetail(artworkID: string): Promise<Artwork | null> {
@@ -27,6 +29,16 @@ class ArtworkService {
     }
 
     return null;
+  }
+
+  public getArtworkPreview(artwork: Artwork): string {
+    const previewUrl =
+      artwork.metadata?.alternativePreviewURI ??
+      artwork.metadata?.previewCloudFlareURL ??
+      artwork.previewDisplay?.HLS ??
+      artwork.previewURI;
+
+    return previewUrl ? this.transformPreviewSrc(previewUrl) : '';
   }
 
   public async queryTokens(ids: string[]): Promise<IndexerToken[]> {
@@ -180,6 +192,23 @@ class ArtworkService {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     return response.data.result as Alumni;
   };
+
+  private transformPreviewSrc(src: string): string {
+    if (src.startsWith('https')) {
+      if (src.includes(cloudFlareHostingDomain)) {
+        const variantSuffix = '/thumbnail';
+        return src.includes(variantSuffix) ? src : src + '/thumbnailLarge';
+      } else {
+        return src;
+      }
+    } else if (src.startsWith('ipfs://')) {
+      return src.replace('ipfs://', ipfsGateway);
+    } else if (src.includes('/assets/images/empty_image.svg')) {
+      return src;
+    }
+
+    return `${process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? ''}/${src}`;
+  }
 }
 
 export default ArtworkService;

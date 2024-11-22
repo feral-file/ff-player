@@ -143,7 +143,6 @@ export enum SeriesPreviewHTMLTag {
   stream = 'stream',
 }
 
-export const FileUseIframe: string[] = ['html', 'text/html'];
 export const FileUseIframePDF: string[] = ['pdf', 'application/pdf'];
 export const FileUseObject: string[] = ['txt'];
 export const FileUseVideo: string[] = [
@@ -170,6 +169,8 @@ export const MIMETypeVideo = 'video/*';
 export const MIMETypeAudio = 'audio/*';
 export const MIMETypeImage = 'image/*';
 export const MIMETypeObject = 'text/csv';
+export const MIMETypePdf = 'application/pdf';
+export const MITETypeIframe = ['html', 'text/html', 'text/plain'];
 
 export interface PlaylistToken {
   artwork?: Artwork;

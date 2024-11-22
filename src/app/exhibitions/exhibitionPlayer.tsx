@@ -12,6 +12,7 @@ import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
 import { formatArtworkIndexID } from '@/utils/indexer';
 import { CastingArtworkType } from '@/models/metric.model';
 import { usePopUpContext } from '@/context/PopUpContext';
+import ArtworkService from '@/services/ArtworkService';
 
 const ExhibitionHall = () => {
   const { context } = useAppContext();
@@ -27,6 +28,9 @@ const ExhibitionHall = () => {
   const [catalogID, setCatalogID] = useState<string | undefined>();
   const [screen, setScreen] = useState<ExhibitionCatalog | undefined>();
   const [artworkID, setArtworkID] = useState<string | undefined>();
+  const [artworkPreviewMIMEType, setArtworkPreviewMIMEType] = useState<
+    string | undefined
+  >();
 
   const [pageSection, setSection] = useState<ExhibitionCatalog>(
     ExhibitionCatalog.home
@@ -42,6 +46,7 @@ const ExhibitionHall = () => {
   // Services
   const exhibitionService = useRef(new ExhibitionService());
   const seriesService = useRef(new SeriesService());
+  const artworkService = useRef(new ArtworkService());
   const postService = useRef(new PostService());
 
   const FERAL_FILE_ASSET_URL =
@@ -59,7 +64,7 @@ const ExhibitionHall = () => {
       return;
     }
 
-    artwork.previewURI = seriesService.current.getArtworkPreview(artwork);
+    artwork.previewURI = artworkService.current.getArtworkPreview(artwork);
     setArtwork(artwork);
 
     // Set mixpanel metadata
@@ -71,6 +76,8 @@ const ExhibitionHall = () => {
       } else {
         setArtworkID(artworkRef.current.id);
       }
+
+      setArtworkPreviewMIMEType(artworkRef.current.previewMIMEType);
     }
 
     const indexID = formatArtworkIndexID(artworkRef.current, exhibition ?? {});
@@ -256,6 +263,7 @@ const ExhibitionHall = () => {
               key={artwork.id}
               previewURL={artwork.previewURI}
               artworkID={artworkID ?? ''}
+              artworkPreviewMIMEType={artworkPreviewMIMEType}
               castingType={CastingArtworkType.Exhibition}
               isCustomView={
                 exhibitionDetail.contracts &&
