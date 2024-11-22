@@ -71,3 +71,5 @@ export const NO_YEAR_IN_TITLE_SERIES_IDS = [
   '4e7c1eba-7c17-4c38-9454-36c72ae98249',
   '0b95013a-599b-4af2-a0a4-fe13eff98e89',
 ];
+
+export const CLIENT_BANDWIDTH_HINT = 12; // 12 Mbps

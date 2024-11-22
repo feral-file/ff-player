@@ -26,6 +26,7 @@ import { ArtFraming } from '@/services/AppControls';
 import { usePopUpContext } from '@/context/PopUpContext';
 import MessageModal from '../MessageModal';
 import { useTranslations } from 'next-intl';
+import { CLIENT_BANDWIDTH_HINT } from '@/constants';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -221,27 +222,42 @@ const ArtworkPlayer = ({
 
   useEffect(() => {
     if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
-      if (isStreaming && Hls.isSupported()) {
-        const hls = new Hls();
-        hls.loadSource(previewURL);
+      if (isStreaming && Hls.isSupported() && previewURL.endsWith('.m3u8')) {
+        const hls = new Hls({
+          maxBufferSize: 60 * 1000 * 1000,
+          maxBufferLength: 30,
+          liveSyncDuration: 10,
+        });
+        hls.loadSource(
+          `${previewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
+        );
         hls.attachMedia(videoRef.current);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        hls.on(Hls.Events.MEDIA_ATTACHED, () => {
           videoRef.current
             ?.play()
             .catch((error: unknown) => {
-              console.log(error);
+              console.log('Error play video', error);
             })
             .finally(() => {
               setLoading(false);
             });
         });
 
-        // Play video when it reaches the end (play in loop)
-        hls.on(Hls.Events.BUFFER_EOS, () => {
-          videoRef.current?.play().catch((error: unknown) => {
-            console.log('[CAST] Error play video', JSON.stringify(error));
-            Sentry.captureMessage('[CAST] Error play video');
-          });
+        hls.on(Hls.Events.ERROR, function (event, data) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              if (data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL) {
+                console.log('Buffer stall detected, attempting to recover...');
+                hls.recoverMediaError();
+              }
+              break;
+            default:
+              console.error('An unrecoverable error occurred');
+              hls.destroy();
+              break;
+          }
         });
       } else {
         videoRef.current.src = previewURL;
