@@ -228,11 +228,12 @@ const ArtworkPlayer = ({
           maxBufferLength: 30,
           liveSyncDuration: 10,
         });
-        hls.loadSource(
-          `${previewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
-        );
+
         hls.attachMedia(videoRef.current);
         hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+          hls.loadSource(
+            `${previewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
+          );
           videoRef.current
             ?.play()
             .catch((error: unknown) => {
@@ -242,6 +243,21 @@ const ArtworkPlayer = ({
               setLoading(false);
             });
         });
+
+        // hls.loadSource(
+        //   `${previewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
+        // );
+        // hls.attachMedia(videoRef.current);
+        // hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+        //   videoRef.current
+        //     ?.play()
+        //     .catch((error: unknown) => {
+        //       console.log('Error play video', error);
+        //     })
+        //     .finally(() => {
+        //       setLoading(false);
+        //     });
+        // });
 
         hls.on(Hls.Events.ERROR, function (event, data) {
           switch (data.type) {
