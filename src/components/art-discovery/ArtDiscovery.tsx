@@ -25,7 +25,7 @@ const ArtDiscovery = () => {
     useState<boolean>();
   const lastEventTime = useRef(0);
   const { context } = useAppContext();
-  const { castInfo } = context.websocketData;
+  const castInfo = context.castInfo;
   const { screenRatio } = context.deviceRotation ?? {
     screenRatio: 1,
     viewMode: ViewMode.landscape,
