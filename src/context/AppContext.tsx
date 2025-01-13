@@ -11,7 +11,6 @@ import {
 } from 'react';
 import CanvasService from '../services/CanvasService';
 import useWebSocket from '../services/WebSocketManager';
-import { CastInfo } from '@/utils/types';
 import useNetworkManger from '@/services/NetworkManager';
 import useDeviceRotation, {
   DeviceRotation,
@@ -35,6 +34,8 @@ import useAppControls, {
   AppControls,
   ArtFraming,
 } from '@/services/AppControls';
+import useCastInfo from '@/services/useCastInfo';
+import { CastInfo } from '@/utils/types';
 
 interface AppContextProps {
   children: ReactNode;
@@ -52,12 +53,12 @@ interface AppConfigContext {
   appRemoteConfig: AppRemoteConfig;
   isWebOSTVLoaded: boolean;
   isWebOSTVDevLoaded: boolean;
+  castInfo: CastInfo | null;
 }
 
 interface WebSocketMessage {
   locationID: string | null;
   topicID: string | null;
-  castInfo: CastInfo | null;
   canvasService: MutableRefObject<CanvasService>;
   isDisconnected: boolean;
 }
@@ -89,11 +90,12 @@ export const AppProvider = ({ children }: AppContextProps) => {
     `${process.env.NEXT_PUBLIC_WEBSOCKET_URL ?? ''}/api/connection`,
     process.env.NEXT_PUBLIC_API_KEY ?? ''
   );
+  const { castInfo } = useCastInfo();
   const isOnline = useNetworkManger();
   const appControl = useAppControls(); // Received setting changes from Popup
 
   const deviceRotation = useDeviceRotation(
-    websocketData.castInfo,
+    castInfo,
     rotation,
     appControl.rotated
   );
@@ -107,6 +109,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
     appRemoteConfig,
     isWebOSTVLoaded,
     isWebOSTVDevLoaded,
+    castInfo,
   };
 
   const initContext = async () => {
@@ -254,6 +257,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
           appRemoteConfig,
           isWebOSTVLoaded,
           isWebOSTVDevLoaded,
+          castInfo,
         },
       }}>
       {children}

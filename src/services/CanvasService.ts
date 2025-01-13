@@ -48,6 +48,7 @@ class CanvasService {
   private timer: unknown = null;
 
   private static instance: CanvasService | null;
+  public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
 
   public static getInstance() {
     if (!CanvasService.instance) {
@@ -69,6 +70,7 @@ class CanvasService {
       LocalStorageItem.castInfo,
       JSON.stringify(this.castInfo)
     );
+    this.onCastInfoChange?.(this.castInfo);
     console.log('[CAST] castInfo:', JSON.stringify(this.castInfo));
   }
 
