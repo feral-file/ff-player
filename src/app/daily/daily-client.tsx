@@ -10,10 +10,11 @@ import {
 } from '@/utils/constants';
 import { Daily } from '@/models';
 import { convertToTokenID } from '@/utils/indexer';
-import { TIMESTAMP_PER_HOUR } from '@/constants';
+import { SWITCH_TOKEN_INTERVAL, TIMESTAMP_PER_HOUR } from '@/constants';
 import { CastingArtworkType } from '@/models/metric.model';
 import { useAppContext } from '@/context/AppContext';
 import { usePopUpContext } from '@/context/PopUpContext';
+import * as Sentry from '@sentry/nextjs';
 
 export default function DailyClient() {
   const { context } = useAppContext();
@@ -25,6 +26,10 @@ export default function DailyClient() {
   const dailyIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
+  const switchTokenRef = useRef<ReturnType<typeof setInterval> | undefined>(
+    undefined
+  );
+  const nextTokenIndex = useRef<number>(0);
   const [artworkID, setArtworkID] = useState<string | undefined>();
   const [artworkPreviewMIMEType, setArtworkPreviewMIMEType] = useState<
     string | undefined
@@ -70,8 +75,49 @@ export default function DailyClient() {
           }
 
           const { delay } = getDelayTime(newDailyHour);
-          if (dailies[0].previewURL) {
-            setCastPreviewURL(dailies[0].previewURL);
+          // Reset next token handle
+          nextTokenIndex.current = 0;
+          if (switchTokenRef.current) {
+            clearInterval(switchTokenRef.current);
+          }
+
+          let retryCount = 0;
+          const currentDaily = dailies[0];
+          if (currentDaily.tokenIDs.length > 1) {
+            const tokenIDs = currentDaily.tokenIDs;
+
+            const updatePreview = () => {
+              const numberOfToken = currentDaily.tokenIDs.length;
+              nextTokenIndex.current =
+                (nextTokenIndex.current + 1) % numberOfToken;
+              DailyService.getPreviewURL(
+                tokenIDs[nextTokenIndex.current],
+                dailies[0]
+              )
+                .then(url => {
+                  setCastPreviewURL(url);
+                  setArtworkPreviewMIMEType('image');
+                })
+                .catch((error: unknown) => {
+                  console.error(error, ':', JSON.stringify(error));
+                  Sentry.captureException(error);
+                  if (retryCount < numberOfToken) {
+                    retryCount++;
+                    updatePreview();
+                  }
+                });
+            };
+
+            // Trigger the function immediately
+            updatePreview();
+
+            // Set up the interval
+            switchTokenRef.current = setInterval(
+              updatePreview,
+              SWITCH_TOKEN_INTERVAL
+            );
+          } else if (currentDaily.previewURL) {
+            setCastPreviewURL(currentDaily.previewURL);
             setIsLeeMucianExhibition(
               dailies[0].contractAddress === LeeMullican_EXHIBITION_CONTRACT
             );
