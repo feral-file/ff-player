@@ -20,6 +20,10 @@ class DailyService {
 
   public async isRefreshDailies(newDailyHour: number): Promise<boolean> {
     const newDailies = await this.callingDailies(newDailyHour);
+    // Temporary
+    // for (const daily of newDailies) {
+    //   daily.tokenIDs = [daily.tokenID, daily.tokenID];
+    // }
     if (newDailies !== this.dailies) {
       this.dailies = newDailies;
       return true;
@@ -138,6 +142,38 @@ class DailyService {
     }
   }
 
+  public async getPreviewURL(tokenID: string, daily: Daily): Promise<string> {
+    let { blockchain, contractAddress } = daily;
+    try {
+      const artwork = await this.artworkService.getArtworkDetail(
+        tokenID,
+        false,
+        true
+      );
+      if (artwork?.successfulSwap) {
+        blockchain = artwork.successfulSwap.blockchainType;
+        contractAddress = artwork.successfulSwap.contractAddress;
+        tokenID = artwork.successfulSwap.token;
+      }
+    } catch {
+      console.log(
+        'Artwork with ID:',
+        tokenID,
+        'not found from Feral File, start query indexer.'
+      );
+    }
+
+    const id = convertToTokenID(blockchain, contractAddress, tokenID);
+    const token = await this.artworkService.queryIndexerToken(id);
+    if (!token) {
+      throw new Error('Token not found');
+    }
+
+    return token.asset.staticPreviewURL
+      ? token.asset.staticPreviewURL
+      : token.asset.metadata.project.latest.previewURL || '';
+  }
+
   private getDefaultDaily(): Daily {
     // Payphone Token
     return {
@@ -147,6 +183,7 @@ class DailyService {
       id: '',
       tokenName: '#1',
       tokenID: '339348595130070749814751437599411258966098496',
+      tokenIDs: ['339348595130070749814751437599411258966098496'],
       note: '',
     };
   }

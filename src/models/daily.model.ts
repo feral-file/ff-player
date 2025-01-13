@@ -8,6 +8,7 @@ export interface Daily {
   displayTime: string;
   note: string;
   tokenID: string;
+  tokenIDs: string[];
   tokenName: string;
   previewURL?: string;
   token?: IndexerToken;
