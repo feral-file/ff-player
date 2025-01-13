@@ -47,6 +47,15 @@ class CanvasService {
   private clientDeviceInfo: DeviceInfo | null = null;
   private timer: unknown = null;
 
+  private static instance: CanvasService | null;
+
+  public static getInstance() {
+    if (!CanvasService.instance) {
+      CanvasService.instance = new CanvasService();
+    }
+    return CanvasService.instance;
+  }
+
   public getCastInfo() {
     console.log('[CAST] Retrieving castInfo:', JSON.stringify(this.castInfo));
     return this.castInfo;
@@ -72,8 +81,10 @@ class CanvasService {
       console.error('[CAST] Invalid message:', JSON.stringify(event.data));
       return;
     }
-    console.log('[CAST] WebSocket message received:', JSON.stringify(webSocketMessage));
-
+    console.log(
+      '[CAST] WebSocket message received:',
+      JSON.stringify(webSocketMessage)
+    );
 
     if (!webSocketMessage.message) {
       console.error('[CAST] Invalid message:', JSON.stringify(event.data));
@@ -124,11 +135,15 @@ class CanvasService {
     return responseMessage;
   }
 
-  private async commandHandler(
+  public async commandHandler(
     command: CastCommand,
     requestJson: unknown
   ): Promise<Reply> {
-    console.log('[CAST] commandHandler:', JSON.stringify(command), JSON.stringify(requestJson));
+    console.log(
+      '[CAST] commandHandler:',
+      JSON.stringify(command),
+      JSON.stringify(requestJson)
+    );
     if (command !== CastCommand.checkStatus) {
       if (this.castInfo) {
         this.castInfo = {
@@ -142,50 +157,67 @@ class CanvasService {
       }
     }
 
-    switch (command) {
-      case CastCommand.connect:
-        return this.connect(requestJson as ConnectRequestV2);
-      case CastCommand.disconnect:
-        return this.disconnect(requestJson);
-      case CastCommand.checkStatus:
-        return this.status(requestJson as CheckDeviceStatusRequest);
-      case CastCommand.castListArtwork:
-        return this.castListArtwork(requestJson as CastListArtworkRequest);
-      // case CastCommand.cancelCasting:
-      //   return this.cancelCasting(requestJson);
-      // case CastCommand.appendArtworkToCastingList:
-      //   return this.appendListArtwork(requestJson);
-      case CastCommand.pauseCasting:
-        return this.pauseCasting(requestJson as PauseCastingRequest);
-      case CastCommand.resumeCasting:
-        return this.resumeCasting(requestJson as ResumeCastingRequest);
-      case CastCommand.nextArtwork:
-        return this.nextArtwork(requestJson as NextArtworkRequest);
-      case CastCommand.previousArtwork:
-        return this.previousArtwork(requestJson as PreviousArtworkRequest);
-      case CastCommand.moveToArtwork:
-        return this.moveToArtwork(requestJson as MoveToArtworkRequest);
-      case CastCommand.updateDuration:
-        return this.updateDuration(requestJson as UpdateDurationRequest);
-      case CastCommand.castExhibition:
-        return this.castExhibition(requestJson as CastExhibitionRequest);
-      case CastCommand.rotate:
-        return this.rotate(requestJson as RotateRequest);
-      case CastCommand.tapGesture:
-        return this.tapGesture(requestJson as TapGestureRequest);
-      case CastCommand.dragGesture:
-        return this.dragGesture(requestJson as DragGestureRequest);
-      case CastCommand.setCursorOffset:
-        return this.setCursorOffset(requestJson as SetCursorOffsetRequest);
-      case CastCommand.getCursorOffset:
-        return this.getCursorOffset(requestJson as GetCursorOffsetRequest);
-      case CastCommand.sendKeyboardEvent:
-        return this.keyboardEvent(requestJson as KeyboardEventRequest);
-      case CastCommand.castDaily:
-        return this.castDaily(requestJson as object);
-      default:
-        console.error(`[CAST] Unknown command: ${command}`);
-        return { ok: false };
+    try {
+      switch (command) {
+        case CastCommand.connect:
+          return await this.connect(requestJson as ConnectRequestV2);
+        case CastCommand.disconnect:
+          return await this.disconnect(requestJson);
+        case CastCommand.checkStatus:
+          return await this.status(requestJson as CheckDeviceStatusRequest);
+        case CastCommand.castListArtwork:
+          return await this.castListArtwork(
+            requestJson as CastListArtworkRequest
+          );
+        // case CastCommand.cancelCasting:
+        //   return this.cancelCasting(requestJson);
+        // case CastCommand.appendArtworkToCastingList:
+        //   return this.appendListArtwork(requestJson);
+        case CastCommand.pauseCasting:
+          return await this.pauseCasting(requestJson as PauseCastingRequest);
+        case CastCommand.resumeCasting:
+          return await this.resumeCasting(requestJson as ResumeCastingRequest);
+        case CastCommand.nextArtwork:
+          return await this.nextArtwork(requestJson as NextArtworkRequest);
+        case CastCommand.previousArtwork:
+          return await this.previousArtwork(
+            requestJson as PreviousArtworkRequest
+          );
+        case CastCommand.moveToArtwork:
+          return await this.moveToArtwork(requestJson as MoveToArtworkRequest);
+        case CastCommand.updateDuration:
+          return await this.updateDuration(
+            requestJson as UpdateDurationRequest
+          );
+        case CastCommand.castExhibition:
+          return await this.castExhibition(
+            requestJson as CastExhibitionRequest
+          );
+        case CastCommand.rotate:
+          return await this.rotate(requestJson as RotateRequest);
+        case CastCommand.tapGesture:
+          return await this.tapGesture(requestJson as TapGestureRequest);
+        case CastCommand.dragGesture:
+          return await this.dragGesture(requestJson as DragGestureRequest);
+        case CastCommand.setCursorOffset:
+          return await this.setCursorOffset(
+            requestJson as SetCursorOffsetRequest
+          );
+        case CastCommand.getCursorOffset:
+          return await this.getCursorOffset(
+            requestJson as GetCursorOffsetRequest
+          );
+        case CastCommand.sendKeyboardEvent:
+          return await this.keyboardEvent(requestJson as KeyboardEventRequest);
+        case CastCommand.castDaily:
+          return await this.castDaily(requestJson as object);
+        default:
+          console.error(`[CAST] Unknown command: ${command}`);
+          return { ok: false };
+      }
+    } catch (error) {
+      console.error('[CAST] Error handling command:', error);
+      return { ok: false };
     }
   }
 

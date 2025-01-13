@@ -16,7 +16,7 @@ const useWebSocket = (url: string, apiKey: string) => {
   });
   const [isDisconnected, setIsDisconnected] = useState<boolean>(false);
   const ws = useRef<ReconnectingWebSocket | null>(null);
-  const canvasService = useRef(new CanvasService());
+  const canvasService = useRef(CanvasService.getInstance());
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pongTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
