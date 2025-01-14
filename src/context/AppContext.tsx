@@ -36,6 +36,7 @@ import useAppControls, {
 } from '@/services/AppControls';
 import useCastInfo from '@/services/useCastInfo';
 import { CastInfo } from '@/utils/types';
+import { LocalWebSocketClient } from '@/services/local-websocket/LocalWebSocketClient';
 
 interface AppContextProps {
   children: ReactNode;
@@ -244,6 +245,14 @@ export const AppProvider = ({ children }: AppContextProps) => {
     fetchConfig().catch((error: unknown) => {
       console.log('[API] Failed to load config:', error);
     });
+  }, []);
+
+  useEffect(() => {
+    const websocket = new LocalWebSocketClient();
+
+    return () => {
+      websocket.disconnect();
+    };
   }, []);
 
   return (
