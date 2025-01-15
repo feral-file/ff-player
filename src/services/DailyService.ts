@@ -172,8 +172,12 @@ class DailyService {
       throw new Error('Token not found');
     }
 
-    return token.asset.landscapeURL && token.asset.portraitURL
-      ? [token.asset.landscapeURL, token.asset.portraitURL]
+    return token.asset.staticPreviewURLLandscape &&
+      token.asset.staticPreviewURLPortrait
+      ? [
+          token.asset.staticPreviewURLLandscape,
+          token.asset.staticPreviewURLPortrait,
+        ]
       : token.asset.metadata.project.latest.previewURL
         ? [
             token.asset.metadata.project.latest.previewURL,
