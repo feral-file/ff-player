@@ -10,7 +10,11 @@ import {
 } from '@/utils/constants';
 import { Daily } from '@/models';
 import { convertToTokenID } from '@/utils/indexer';
-import { SWITCH_TOKEN_INTERVAL, TIMESTAMP_PER_HOUR } from '@/constants';
+import {
+  LANDSCAPE_ROTATE_ANGLES,
+  SWITCH_TOKEN_INTERVAL,
+  TIMESTAMP_PER_HOUR,
+} from '@/constants';
 import { CastingArtworkType } from '@/models/metric.model';
 import { useAppContext } from '@/context/AppContext';
 import { usePopUpContext } from '@/context/PopUpContext';
@@ -19,6 +23,9 @@ import * as Sentry from '@sentry/nextjs';
 export default function DailyClient() {
   const { context } = useAppContext();
   const { setDisplayInfo } = usePopUpContext();
+  const { artDisplaySetting } = usePopUpContext();
+  const [landscapeStaticURL, setLandscapeStaticURL] = useState<string | null>();
+  const [portraitStaticURL, setPortraitStaticURL] = useState<string | null>();
   const dailyRef = useRef<Daily>();
   const timeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
@@ -40,6 +47,36 @@ export default function DailyClient() {
     useState<boolean>(false);
 
   const newDailyHour = context.appRemoteConfig.new_daily_hour;
+
+  useEffect(() => {
+    if (!artDisplaySetting?.rotateRadius) {
+      return;
+    }
+
+    if (
+      landscapeStaticURL &&
+      LANDSCAPE_ROTATE_ANGLES.includes(artDisplaySetting.rotateRadius)
+    ) {
+      setCastPreviewURL(landscapeStaticURL);
+      setArtworkPreviewMIMEType('image');
+      return;
+    }
+
+    if (
+      portraitStaticURL &&
+      LANDSCAPE_ROTATE_ANGLES.includes(artDisplaySetting.rotateRadius)
+    ) {
+      setCastPreviewURL(portraitStaticURL);
+      setArtworkPreviewMIMEType('image');
+    }
+  }, [landscapeStaticURL, portraitStaticURL, artDisplaySetting?.rotateRadius]);
+
+  const fallbackToDefaultArtwork = () => {
+    if (dailyRef.current?.previewURL) {
+      setCastPreviewURL(dailyRef.current.previewURL);
+      setArtworkPreviewMIMEType(dailyRef.current.artwork?.previewMIMEType);
+    }
+  };
 
   useEffect(() => {
     // Handle cast daily
@@ -93,9 +130,20 @@ export default function DailyClient() {
                 tokenIDs[nextTokenIndex.current],
                 dailies[0]
               )
-                .then(url => {
-                  setCastPreviewURL(url);
-                  setArtworkPreviewMIMEType('image');
+                .then(urls => {
+                  if (!urls) {
+                    if (retryCount < numberOfToken) {
+                      retryCount++;
+                      updatePreview();
+                    } else {
+                      fallbackToDefaultArtwork();
+                    }
+
+                    return;
+                  }
+
+                  setLandscapeStaticURL(urls[0]);
+                  setPortraitStaticURL(urls[1]);
                 })
                 .catch((error: unknown) => {
                   console.error(error, ':', JSON.stringify(error));
@@ -103,6 +151,8 @@ export default function DailyClient() {
                   if (retryCount < numberOfToken) {
                     retryCount++;
                     updatePreview();
+                  } else {
+                    fallbackToDefaultArtwork();
                   }
                 });
             };
