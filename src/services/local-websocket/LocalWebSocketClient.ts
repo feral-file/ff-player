@@ -6,6 +6,7 @@ export class LocalWebSocketClient {
   private ws: ReconnectingWebSocket | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private isConnecting = false;
+  private connectionAttempts = 0;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -18,7 +19,11 @@ export class LocalWebSocketClient {
     this.isConnecting = true;
 
     try {
-      this.ws = new ReconnectingWebSocket('ws://localhost:8080');
+      this.ws = new ReconnectingWebSocket('ws://localhost:8080', [], {
+        maxRetries: 3,
+        reconnectionDelayGrowFactor: 1.3,
+        maxReconnectionDelay: 10000,
+      });
 
       this.ws.onopen = this.handleOpen.bind(this);
       // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -32,9 +37,14 @@ export class LocalWebSocketClient {
   }
 
   private handleOpen() {
+    this.connectionAttempts++;
     console.log('Connected to Raspberry Pi');
     this.isConnecting = false;
-    this.ping(); // Request initial system info
+
+    // Only ping on initial connection
+    if (this.connectionAttempts === 1) {
+      this.ping();
+    }
   }
 
   private async handleMessage(event: MessageEvent) {
@@ -57,6 +67,7 @@ export class LocalWebSocketClient {
     // Attempt to reconnect
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = setTimeout(() => {
+      this.connectionAttempts = 0;
       this.connect();
     }, 5000);
   }
