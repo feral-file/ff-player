@@ -45,6 +45,7 @@ const ArtworkPlayer = ({
   const { context } = useAppContext();
   const { artDisplaySetting, resetArtDisplaySetting } = usePopUpContext();
   const [opacity, setOpacity] = useState(1);
+  const [transition, setTransition] = useState('transform 0.2s');
   const fadeInTimeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
@@ -196,6 +197,7 @@ const ArtworkPlayer = ({
         clearTimeout(fadeInTimeoutRef.current);
       }
 
+      setTransition('transform 0.2s');
       setOpacity(0);
       setPreviewType(null);
       detectPreviewType(previewURL).catch((err: unknown) => {
@@ -206,6 +208,7 @@ const ArtworkPlayer = ({
       resetArtDisplaySetting();
 
       fadeInTimeoutRef.current = setTimeout(() => {
+        setTransition('transform 0.2s, opacity 0.5s');
         setOpacity(1);
       }, 500);
     }
@@ -348,7 +351,7 @@ const ArtworkPlayer = ({
         justifyContent: 'center',
         position: 'relative',
         transform: `rotate(${(artDisplaySetting?.rotateRadius ?? 0).toString()}deg)`,
-        transition: 'transform 0.2s, opacity 0.5s',
+        transition: transition,
         opacity: opacity,
       }}>
       {(previewType === null || loading) && <Loading />}

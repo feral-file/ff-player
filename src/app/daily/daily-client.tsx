@@ -72,6 +72,10 @@ export default function DailyClient() {
   }, [landscapeStaticURL, portraitStaticURL, artDisplaySetting?.rotateRadius]);
 
   const fallbackToDefaultArtwork = () => {
+    if (switchTokenRef.current) {
+      clearInterval(switchTokenRef.current);
+    }
+
     if (dailyRef.current?.previewURL) {
       setCastPreviewURL(dailyRef.current.previewURL);
       setArtworkPreviewMIMEType(dailyRef.current.artwork?.previewMIMEType);
@@ -118,7 +122,6 @@ export default function DailyClient() {
             clearInterval(switchTokenRef.current);
           }
 
-          let retryCount = 0;
           if (dailyRef.current.tokenIDs.length > 1) {
             const tokenIDs = dailyRef.current.tokenIDs;
 
@@ -132,13 +135,7 @@ export default function DailyClient() {
               )
                 .then(urls => {
                   if (!urls) {
-                    if (retryCount < numberOfToken) {
-                      retryCount++;
-                      updatePreview();
-                    } else {
-                      fallbackToDefaultArtwork();
-                    }
-
+                    fallbackToDefaultArtwork();
                     return;
                   }
 
@@ -148,12 +145,7 @@ export default function DailyClient() {
                 .catch((error: unknown) => {
                   console.error(error, ':', JSON.stringify(error));
                   Sentry.captureException(error);
-                  if (retryCount < numberOfToken) {
-                    retryCount++;
-                    updatePreview();
-                  } else {
-                    fallbackToDefaultArtwork();
-                  }
+                  fallbackToDefaultArtwork();
                 });
             };
 
