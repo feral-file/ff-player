@@ -44,6 +44,10 @@ const ArtworkPlayer = ({
 }) => {
   const { context } = useAppContext();
   const { artDisplaySetting, resetArtDisplaySetting } = usePopUpContext();
+  const [opacity, setOpacity] = useState(1);
+  const fadeInTimeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
+    undefined
+  );
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [displaySoftwareURL, setDisplaySoftwareURL] =
     useState<string>(previewURL);
@@ -188,7 +192,11 @@ const ArtworkPlayer = ({
     };
 
     if (previewURL) {
-      setLoading(true);
+      if (fadeInTimeoutRef.current) {
+        clearTimeout(fadeInTimeoutRef.current);
+      }
+
+      setOpacity(0);
       setPreviewType(null);
       detectPreviewType(previewURL).catch((err: unknown) => {
         console.error(err);
@@ -196,8 +204,24 @@ const ArtworkPlayer = ({
 
       // Reset artDisplaySetting when new artwork is loaded
       resetArtDisplaySetting();
+
+      fadeInTimeoutRef.current = setTimeout(() => {
+        setOpacity(1);
+      }, 500);
     }
+
+    return () => {
+      if (fadeInTimeoutRef.current) {
+        clearTimeout(fadeInTimeoutRef.current);
+      }
+    };
   }, [previewURL]);
+
+  useEffect(() => {
+    if (artworkID) {
+      setLoading(true);
+    }
+  }, [artworkID]);
 
   useEffect(() => {
     // Unmute video when user click on the screen
@@ -324,7 +348,8 @@ const ArtworkPlayer = ({
         justifyContent: 'center',
         position: 'relative',
         transform: `rotate(${(artDisplaySetting?.rotateRadius ?? 0).toString()}deg)`,
-        transition: 'transform 0.2s',
+        transition: 'transform 0.2s, opacity 0.5s',
+        opacity: opacity,
       }}>
       {(previewType === null || loading) && <Loading />}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (

@@ -82,12 +82,11 @@ export default function DailyClient() {
           }
 
           let retryCount = 0;
-          const currentDaily = dailies[0];
-          if (currentDaily.tokenIDs.length > 1) {
-            const tokenIDs = currentDaily.tokenIDs;
+          if (dailyRef.current.tokenIDs.length > 1) {
+            const tokenIDs = dailyRef.current.tokenIDs;
 
             const updatePreview = () => {
-              const numberOfToken = currentDaily.tokenIDs.length;
+              const numberOfToken = dailyRef.current?.tokenIDs.length ?? 0;
               nextTokenIndex.current =
                 (nextTokenIndex.current + 1) % numberOfToken;
               DailyService.getPreviewURL(
@@ -116,8 +115,8 @@ export default function DailyClient() {
               updatePreview,
               SWITCH_TOKEN_INTERVAL
             );
-          } else if (currentDaily.previewURL) {
-            setCastPreviewURL(currentDaily.previewURL);
+          } else if (dailyRef.current.previewURL) {
+            setCastPreviewURL(dailyRef.current.previewURL);
             setIsLeeMucianExhibition(
               dailies[0].contractAddress === LeeMullican_EXHIBITION_CONTRACT
             );
