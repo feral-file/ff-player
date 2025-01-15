@@ -142,7 +142,10 @@ class DailyService {
     }
   }
 
-  public async getPreviewURL(tokenID: string, daily: Daily): Promise<string> {
+  public async getPreviewURL(
+    tokenID: string,
+    daily: Daily
+  ): Promise<string[] | null> {
     let { blockchain, contractAddress } = daily;
     try {
       const artwork = await this.artworkService.getArtworkDetail(
@@ -169,9 +172,14 @@ class DailyService {
       throw new Error('Token not found');
     }
 
-    return token.asset.staticPreviewURL
-      ? token.asset.staticPreviewURL
-      : token.asset.metadata.project.latest.previewURL || '';
+    return token.asset.landscapeURL && token.asset.portraitURL
+      ? [token.asset.landscapeURL, token.asset.portraitURL]
+      : token.asset.metadata.project.latest.previewURL
+        ? [
+            token.asset.metadata.project.latest.previewURL,
+            token.asset.metadata.project.latest.previewURL,
+          ]
+        : null;
   }
 
   private getDefaultDaily(): Daily {
