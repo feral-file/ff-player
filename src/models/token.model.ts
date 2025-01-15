@@ -48,8 +48,8 @@ interface AssetMetadata {
 }
 
 interface Asset {
-  landscapeURL?: string;
-  portraitURL?: string;
+  staticPreviewURLLandscape?: string;
+  staticPreviewURLPortrait?: string;
   indexID: string;
   thumbnailID: string;
   lastRefreshedTime: string;
