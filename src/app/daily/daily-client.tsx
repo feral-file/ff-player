@@ -49,7 +49,7 @@ export default function DailyClient() {
   const newDailyHour = context.appRemoteConfig.new_daily_hour;
 
   useEffect(() => {
-    if (!artDisplaySetting?.rotateRadius) {
+    if (artDisplaySetting?.rotateRadius === undefined) {
       return;
     }
 
