@@ -21,9 +21,9 @@ class DailyService {
   public async isRefreshDailies(newDailyHour: number): Promise<boolean> {
     const newDailies = await this.callingDailies(newDailyHour);
     // Temporary
-    // for (const daily of newDailies) {
-    //   daily.tokenIDs = [daily.tokenID, daily.tokenID];
-    // }
+    for (const daily of newDailies) {
+      daily.tokenIDs = [daily.tokenID];
+    }
     if (newDailies !== this.dailies) {
       this.dailies = newDailies;
       return true;
