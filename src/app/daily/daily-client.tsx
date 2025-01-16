@@ -10,14 +10,17 @@ import {
 } from '@/utils/constants';
 import { Daily } from '@/models';
 import { convertToTokenID } from '@/utils/indexer';
-import { TIMESTAMP_PER_HOUR } from '@/constants';
+import { SWITCH_TOKEN_INTERVAL, TIMESTAMP_PER_HOUR } from '@/constants';
 import { CastingArtworkType } from '@/models/metric.model';
 import { useAppContext } from '@/context/AppContext';
 import { usePopUpContext } from '@/context/PopUpContext';
+import * as Sentry from '@sentry/nextjs';
 
 export default function DailyClient() {
   const { context } = useAppContext();
-  const { setDisplayInfo } = usePopUpContext();
+  const { setDisplayInfo, artDisplaySetting } = usePopUpContext();
+  const [landscapeStaticURL, setLandscapeStaticURL] = useState<string | null>();
+  const [portraitStaticURL, setPortraitStaticURL] = useState<string | null>();
   const dailyRef = useRef<Daily>();
   const timeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
@@ -25,6 +28,10 @@ export default function DailyClient() {
   const dailyIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
+  const switchTokenRef = useRef<ReturnType<typeof setInterval> | undefined>(
+    undefined
+  );
+  const nextTokenIndex = useRef<number>(0);
   const [artworkID, setArtworkID] = useState<string | undefined>();
   const [artworkPreviewMIMEType, setArtworkPreviewMIMEType] = useState<
     string | undefined
@@ -35,6 +42,35 @@ export default function DailyClient() {
     useState<boolean>(false);
 
   const newDailyHour = context.appRemoteConfig.new_daily_hour;
+
+  useEffect(() => {
+    if (artDisplaySetting?.rotateRadius === undefined) {
+      return;
+    }
+
+    const landScape = artDisplaySetting.rotateRadius % 180 === 0;
+    if (landscapeStaticURL && landScape) {
+      setCastPreviewURL(landscapeStaticURL);
+      setArtworkPreviewMIMEType('image');
+      return;
+    }
+
+    if (portraitStaticURL && !landScape) {
+      setCastPreviewURL(portraitStaticURL);
+      setArtworkPreviewMIMEType('image');
+    }
+  }, [landscapeStaticURL, portraitStaticURL, artDisplaySetting?.rotateRadius]);
+
+  const fallbackToDefaultArtwork = () => {
+    if (switchTokenRef.current) {
+      clearInterval(switchTokenRef.current);
+    }
+
+    if (dailyRef.current?.previewURL) {
+      setCastPreviewURL(dailyRef.current.previewURL);
+      setArtworkPreviewMIMEType(dailyRef.current.artwork?.previewMIMEType);
+    }
+  };
 
   useEffect(() => {
     // Handle cast daily
@@ -70,8 +106,49 @@ export default function DailyClient() {
           }
 
           const { delay } = getDelayTime(newDailyHour);
-          if (dailies[0].previewURL) {
-            setCastPreviewURL(dailies[0].previewURL);
+          // Reset next token handle
+          nextTokenIndex.current = 0;
+          if (switchTokenRef.current) {
+            clearInterval(switchTokenRef.current);
+          }
+
+          if (dailyRef.current.tokenIDs.length > 1) {
+            const tokenIDs = dailyRef.current.tokenIDs;
+
+            const updatePreview = () => {
+              const numberOfToken = dailyRef.current?.tokenIDs.length ?? 0;
+              nextTokenIndex.current =
+                (nextTokenIndex.current + 1) % numberOfToken;
+              DailyService.getPreviewURLs(
+                tokenIDs[nextTokenIndex.current],
+                dailies[0]
+              )
+                .then(urls => {
+                  if (!urls) {
+                    fallbackToDefaultArtwork();
+                    return;
+                  }
+
+                  setLandscapeStaticURL(urls[0]);
+                  setPortraitStaticURL(urls[1]);
+                })
+                .catch((error: unknown) => {
+                  console.error(error, ':', JSON.stringify(error));
+                  Sentry.captureException(error);
+                  fallbackToDefaultArtwork();
+                });
+            };
+
+            // Trigger the function immediately
+            updatePreview();
+
+            // Set up the interval
+            switchTokenRef.current = setInterval(
+              updatePreview,
+              SWITCH_TOKEN_INTERVAL
+            );
+          } else if (dailyRef.current.previewURL) {
+            setCastPreviewURL(dailyRef.current.previewURL);
             setIsLeeMucianExhibition(
               dailies[0].contractAddress === LeeMullican_EXHIBITION_CONTRACT
             );

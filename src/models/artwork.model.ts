@@ -24,6 +24,7 @@ export interface Artwork {
   metadata?: ArtworkMetadata;
   artistAlias?: string;
   swap?: Swap;
+  successfulSwap?: Swap;
 }
 
 interface ArtworkMetadata {

@@ -138,6 +138,51 @@ class DailyService {
     }
   }
 
+  public async getPreviewURLs(
+    tokenID: string,
+    daily: Daily
+  ): Promise<string[] | null> {
+    let { blockchain, contractAddress } = daily;
+    try {
+      const artwork = await this.artworkService.getArtworkDetail(
+        tokenID,
+        false,
+        true
+      );
+      if (artwork?.successfulSwap) {
+        blockchain = artwork.successfulSwap.blockchainType;
+        contractAddress = artwork.successfulSwap.contractAddress;
+        tokenID = artwork.successfulSwap.token;
+      }
+    } catch {
+      console.log(
+        'Artwork with ID:',
+        tokenID,
+        'not found from Feral File, start query indexer.'
+      );
+    }
+
+    const id = convertToTokenID(blockchain, contractAddress, tokenID);
+    const token = await this.artworkService.queryIndexerToken(id);
+    if (!token) {
+      throw new Error('Token not found');
+    }
+
+    return token.asset.staticPreviewURLLandscape &&
+      token.asset.staticPreviewURLPortrait
+      ? [
+          token.asset.staticPreviewURLLandscape,
+          token.asset.staticPreviewURLPortrait,
+        ]
+      : token.asset.metadata.project.latest.medium === 'image' &&
+          token.asset.metadata.project.latest.previewURL
+        ? [
+            token.asset.metadata.project.latest.previewURL,
+            token.asset.metadata.project.latest.previewURL,
+          ] // Use the same image for both landscape and portrait
+        : null;
+  }
+
   private getDefaultDaily(): Daily {
     // Payphone Token
     return {
@@ -147,6 +192,7 @@ class DailyService {
       id: '',
       tokenName: '#1',
       tokenID: '339348595130070749814751437599411258966098496',
+      tokenIDs: ['339348595130070749814751437599411258966098496'],
       note: '',
     };
   }

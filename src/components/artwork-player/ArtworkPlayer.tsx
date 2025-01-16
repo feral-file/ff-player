@@ -44,6 +44,11 @@ const ArtworkPlayer = ({
 }) => {
   const { context } = useAppContext();
   const { artDisplaySetting, resetArtDisplaySetting } = usePopUpContext();
+  const [opacity, setOpacity] = useState(1);
+  const [displayPreviewURL, setDisplayPreviewURL] = useState<string>('');
+  const fadeInTimeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
+    undefined
+  );
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [displaySoftwareURL, setDisplaySoftwareURL] =
     useState<string>(previewURL);
@@ -188,16 +193,36 @@ const ArtworkPlayer = ({
     };
 
     if (previewURL) {
-      setLoading(true);
+      if (fadeInTimeoutRef.current) {
+        clearTimeout(fadeInTimeoutRef.current);
+      }
+
+      setOpacity(0);
       setPreviewType(null);
       detectPreviewType(previewURL).catch((err: unknown) => {
         console.error(err);
       });
 
+      fadeInTimeoutRef.current = setTimeout(() => {
+        setOpacity(1);
+        setDisplayPreviewURL(previewURL);
+      }, 500);
+    }
+
+    return () => {
+      if (fadeInTimeoutRef.current) {
+        clearTimeout(fadeInTimeoutRef.current);
+      }
+    };
+  }, [previewURL]);
+
+  useEffect(() => {
+    if (artworkID) {
+      setLoading(true);
       // Reset artDisplaySetting when new artwork is loaded
       resetArtDisplaySetting();
     }
-  }, [previewURL]);
+  }, [artworkID]);
 
   useEffect(() => {
     // Unmute video when user click on the screen
@@ -324,10 +349,11 @@ const ArtworkPlayer = ({
         justifyContent: 'center',
         position: 'relative',
         transform: `rotate(${(artDisplaySetting?.rotateRadius ?? 0).toString()}deg)`,
-        transition: 'transform 0.2s',
+        transition: 'transform 0.2s, opacity 0.375s',
+        opacity: opacity,
       }}>
       {(previewType === null || loading) && <Loading />}
-      {previewURL && previewType === SeriesPreviewHTMLTag.image && (
+      {displayPreviewURL && previewType === SeriesPreviewHTMLTag.image && (
         <div
           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
           className={isCustomView ? styles.customRendering : ''}>
@@ -341,22 +367,22 @@ const ArtworkPlayer = ({
                   : 'cover',
             }}
             className={styles.image}
-            src={previewURL}
+            src={displayPreviewURL}
             alt="Preview"
             onLoad={loadedSource}
           />
         </div>
       )}
-      {previewURL && previewType === SeriesPreviewHTMLTag.object && (
+      {displayPreviewURL && previewType === SeriesPreviewHTMLTag.object && (
         <object
           style={{ width: '100%', height: '100%' }}
-          data={previewURL}
+          data={displayPreviewURL}
           type="text/html"
           onLoad={loadedSource}>
           Not supported
         </object>
       )}
-      {previewURL && previewType === SeriesPreviewHTMLTag.video && (
+      {displayPreviewURL && previewType === SeriesPreviewHTMLTag.video && (
         <video
           ref={videoRef}
           style={{
@@ -372,9 +398,9 @@ const ArtworkPlayer = ({
           playsInline
           crossOrigin="anonymous"></video>
       )}
-      {previewURL && previewType === SeriesPreviewHTMLTag.audio && (
+      {displayPreviewURL && previewType === SeriesPreviewHTMLTag.audio && (
         <audio autoPlay={true} loop={true}>
-          <source src={previewURL} onLoadedData={loadedSource}></source>
+          <source src={displayPreviewURL} onLoadedData={loadedSource}></source>
         </audio>
       )}
       {displaySoftwareURL &&
