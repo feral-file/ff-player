@@ -137,7 +137,7 @@ class CanvasService {
     return responseMessage;
   }
 
-  public async commandHandler(
+  private async commandHandler(
     command: CastCommand,
     requestJson: unknown
   ): Promise<Reply> {
