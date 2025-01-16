@@ -22,12 +22,7 @@ import RemoteConfigService, {
 } from '@/services/remoteConfigService';
 import { AppSettings, LocalStorageItem, Platform } from '@/constants';
 import { useSearchParams } from 'next/navigation';
-import {
-  Config,
-  DeviceName,
-  FeralfileDeviceEvent,
-  KeyEvent,
-} from '@/utils/platform';
+import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import DeviceManager from '@/utils/DeviceManager';
 import useLoadScript from '@/services/LoadScripts';
 import useAppControls, {
@@ -193,11 +188,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
       (window as any).Config = {
         // eslint-disable-next-line @typescript-eslint/unbound-method
         handlePlatformEvent: Config.handlePlatformEvent,
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).FeralfileDevice = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        requestCommand: FeralfileDeviceEvent.requestCommand,
       };
 
       const pl = searchParams?.get('platform') ?? '';

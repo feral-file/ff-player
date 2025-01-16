@@ -3,13 +3,6 @@ import DeviceManager from './DeviceManager';
 import { v4 as uuidv4 } from 'uuid';
 import { BrowserInfo, detect } from 'detect-browser';
 import { keyEventHandler } from '@/services/keyEventHandler';
-import CanvasService from '@/services/CanvasService';
-import { CastCommand } from './types';
-
-interface FFDeviceRequestEvent {
-  command: CastCommand;
-  request: Record<string, unknown>;
-}
 
 interface DeviceInfo {
   modelName: string;
@@ -44,17 +37,6 @@ export class DeviceName extends PlatformEventReceiver {
     DeviceManager.setName(`Samsung-${event}`);
   }
 }
-
-export const FeralfileDeviceEvent = {
-  async requestCommand(data: FFDeviceRequestEvent) {
-    const responseMessage = await CanvasService.getInstance().commandHandler(
-      data.command,
-      data.request
-    );
-    console.log('[FF] Response message:', JSON.stringify(responseMessage));
-    return responseMessage;
-  },
-};
 
 class Future<T> {
   promise: Promise<T>;
