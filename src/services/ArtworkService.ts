@@ -100,6 +100,8 @@ class ArtworkService {
                   indexID
                   thumbnailID
                   lastRefreshedTime
+                  staticPreviewURLLandscape
+                  staticPreviewURLPortrait
                   attributes {
                     scrollable
                   }
