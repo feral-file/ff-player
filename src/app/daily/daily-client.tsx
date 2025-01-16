@@ -10,11 +10,7 @@ import {
 } from '@/utils/constants';
 import { Daily } from '@/models';
 import { convertToTokenID } from '@/utils/indexer';
-import {
-  LANDSCAPE_ROTATE_ANGLES,
-  SWITCH_TOKEN_INTERVAL,
-  TIMESTAMP_PER_HOUR,
-} from '@/constants';
+import { SWITCH_TOKEN_INTERVAL, TIMESTAMP_PER_HOUR } from '@/constants';
 import { CastingArtworkType } from '@/models/metric.model';
 import { useAppContext } from '@/context/AppContext';
 import { usePopUpContext } from '@/context/PopUpContext';
@@ -53,19 +49,16 @@ export default function DailyClient() {
       return;
     }
 
-    if (
-      landscapeStaticURL &&
-      LANDSCAPE_ROTATE_ANGLES.includes(artDisplaySetting.rotateRadius)
-    ) {
+    const landScape =
+      artDisplaySetting.rotateRadius === 0 ||
+      (artDisplaySetting.rotateRadius / 90) % 2 === 0;
+    if (landscapeStaticURL && landScape) {
       setCastPreviewURL(landscapeStaticURL);
       setArtworkPreviewMIMEType('image');
       return;
     }
 
-    if (
-      portraitStaticURL &&
-      LANDSCAPE_ROTATE_ANGLES.includes(artDisplaySetting.rotateRadius)
-    ) {
+    if (portraitStaticURL && !landScape) {
       setCastPreviewURL(portraitStaticURL);
       setArtworkPreviewMIMEType('image');
     }

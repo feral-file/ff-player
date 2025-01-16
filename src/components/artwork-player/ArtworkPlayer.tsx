@@ -45,7 +45,7 @@ const ArtworkPlayer = ({
   const { context } = useAppContext();
   const { artDisplaySetting, resetArtDisplaySetting } = usePopUpContext();
   const [opacity, setOpacity] = useState(1);
-  const [transition, setTransition] = useState('transform 0.2s');
+  const [transition, setTransition] = useState('transform 0.2s, opacity 0.1s');
   const fadeInTimeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
@@ -197,15 +197,12 @@ const ArtworkPlayer = ({
         clearTimeout(fadeInTimeoutRef.current);
       }
 
-      setTransition('transform 0.2s');
+      setTransition('transform 0.2s, opacity 0.1s');
       setOpacity(0);
       setPreviewType(null);
       detectPreviewType(previewURL).catch((err: unknown) => {
         console.error(err);
       });
-
-      // Reset artDisplaySetting when new artwork is loaded
-      resetArtDisplaySetting();
 
       fadeInTimeoutRef.current = setTimeout(() => {
         setTransition('transform 0.2s, opacity 0.5s');
@@ -223,6 +220,8 @@ const ArtworkPlayer = ({
   useEffect(() => {
     if (artworkID) {
       setLoading(true);
+      // Reset artDisplaySetting when new artwork is loaded
+      resetArtDisplaySetting();
     }
   }, [artworkID]);
 
