@@ -18,8 +18,7 @@ import * as Sentry from '@sentry/nextjs';
 
 export default function DailyClient() {
   const { context } = useAppContext();
-  const { setDisplayInfo } = usePopUpContext();
-  const { artDisplaySetting } = usePopUpContext();
+  const { setDisplayInfo, artDisplaySetting } = usePopUpContext();
   const [landscapeStaticURL, setLandscapeStaticURL] = useState<string | null>();
   const [portraitStaticURL, setPortraitStaticURL] = useState<string | null>();
   const dailyRef = useRef<Daily>();
@@ -49,9 +48,7 @@ export default function DailyClient() {
       return;
     }
 
-    const landScape =
-      artDisplaySetting.rotateRadius === 0 ||
-      (artDisplaySetting.rotateRadius / 90) % 2 === 0;
+    const landScape = artDisplaySetting.rotateRadius % 180 === 0;
     if (landscapeStaticURL && landScape) {
       setCastPreviewURL(landscapeStaticURL);
       setArtworkPreviewMIMEType('image');
@@ -122,7 +119,7 @@ export default function DailyClient() {
               const numberOfToken = dailyRef.current?.tokenIDs.length ?? 0;
               nextTokenIndex.current =
                 (nextTokenIndex.current + 1) % numberOfToken;
-              DailyService.getPreviewURL(
+              DailyService.getPreviewURLs(
                 tokenIDs[nextTokenIndex.current],
                 dailies[0]
               )

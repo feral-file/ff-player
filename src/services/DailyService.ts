@@ -138,7 +138,7 @@ class DailyService {
     }
   }
 
-  public async getPreviewURL(
+  public async getPreviewURLs(
     tokenID: string,
     daily: Daily
   ): Promise<string[] | null> {
@@ -179,7 +179,7 @@ class DailyService {
         ? [
             token.asset.metadata.project.latest.previewURL,
             token.asset.metadata.project.latest.previewURL,
-          ]
+          ] // Use the same image for both landscape and portrait
         : null;
   }
 
