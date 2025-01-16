@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import CanvasService from './CanvasService';
 import { LocalStorageItem } from '@/constants';
-import { CastInfo } from '@/utils/types';
 import * as Sentry from '@sentry/nextjs';
 
 const pingIntervalTime = 5 * 60 * 1000; // 5 minutes
@@ -11,12 +10,9 @@ const pongWaitTime = 10 * 1000;
 const useWebSocket = (url: string, apiKey: string) => {
   const [locationID, setLocationID] = useState<string | null>(null);
   const [topicID, setTopicID] = useState<string | null>(null);
-  const [castInfo, setCastInfo] = useState<CastInfo | null>({
-    dataChecked: false,
-  });
   const [isDisconnected, setIsDisconnected] = useState<boolean>(false);
   const ws = useRef<ReconnectingWebSocket | null>(null);
-  const canvasService = useRef(new CanvasService());
+  const canvasService = useRef(CanvasService.getInstance());
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pongTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -45,8 +41,6 @@ const useWebSocket = (url: string, apiKey: string) => {
 
       console.log('[WS] Connecting to:', wsUrl);
 
-      setCastInfo({ dataChecked: true });
-
       ws.current = new ReconnectingWebSocket(wsUrl);
 
       ws.current.onopen = () => {
@@ -57,7 +51,6 @@ const useWebSocket = (url: string, apiKey: string) => {
         if (castInfo) {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
           canvasService.current.setCastInfo(JSON.parse(castInfo));
-          setCastInfo(canvasService.current.getCastInfo());
         }
 
         pingIntervalRef.current = setInterval(() => {
@@ -114,7 +107,6 @@ const useWebSocket = (url: string, apiKey: string) => {
         } else {
           const responseMessage =
             await canvasService.current.processMessage(event);
-          setCastInfo(canvasService.current.getCastInfo());
           if (responseMessage) {
             ws.current?.send(JSON.stringify(responseMessage));
           }
@@ -146,7 +138,7 @@ const useWebSocket = (url: string, apiKey: string) => {
     };
   }, [url, apiKey]);
 
-  return { locationID, topicID, castInfo, canvasService, isDisconnected };
+  return { locationID, topicID, canvasService, isDisconnected };
 };
 
 export default useWebSocket;
