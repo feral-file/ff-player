@@ -240,7 +240,7 @@ const ArtworkPlayer = ({
   }, [previewType, videoRef]);
 
   const loadedSource = () => {
-    console.log('[CAST] loaded source', previewURL);
+    console.log('[CAST] loaded source', displayPreviewURL);
     // When an iframe is present in a page, the parent window might not receive keydown events because the iframe itself captures these events when it is focused.
     // This is work around to focus the parent window.
     window.focus();
@@ -249,7 +249,11 @@ const ArtworkPlayer = ({
 
   useEffect(() => {
     if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
-      if (isStreaming && Hls.isSupported() && previewURL.endsWith('.m3u8')) {
+      if (
+        isStreaming &&
+        Hls.isSupported() &&
+        displayPreviewURL.endsWith('.m3u8')
+      ) {
         const hls = new Hls({
           maxBufferSize: 60 * 1000 * 1000,
           maxBufferLength: 30,
@@ -259,7 +263,7 @@ const ArtworkPlayer = ({
         hls.attachMedia(videoRef.current);
         hls.on(Hls.Events.MEDIA_ATTACHED, () => {
           hls.loadSource(
-            `${previewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
+            `${displayPreviewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
           );
           videoRef.current
             ?.play()
@@ -288,7 +292,7 @@ const ArtworkPlayer = ({
           }
         });
       } else {
-        videoRef.current.src = previewURL;
+        videoRef.current.src = displayPreviewURL;
         videoRef.current.addEventListener('loadeddata', () => {
           videoRef.current
             ?.play()
@@ -301,7 +305,7 @@ const ArtworkPlayer = ({
         });
       }
     }
-  }, [previewType, isStreaming, previewURL]);
+  }, [previewType, isStreaming, displayPreviewURL]);
 
   useEffect(() => {
     if (context.isOnline && !context.websocketData.isDisconnected) {
@@ -319,7 +323,7 @@ const ArtworkPlayer = ({
   }, [context, previewType]);
 
   useEffect(() => {
-    if (!artDisplaySetting || !previewURL) {
+    if (!artDisplaySetting || !displayPreviewURL) {
       return;
     }
 
@@ -329,13 +333,13 @@ const ArtworkPlayer = ({
           ? 'crop'
           : 'fit';
       const queryParam = `&display_mode=${displayMode}`;
-      const url = new URL(previewURL);
+      const url = new URL(displayPreviewURL);
       url.search += queryParam;
       setDisplaySoftwareURL(url.toString());
     } else {
-      setDisplaySoftwareURL(previewURL);
+      setDisplaySoftwareURL(displayPreviewURL);
     }
-  }, [artDisplaySetting, previewType, previewURL]);
+  }, [artDisplaySetting, previewType, displayPreviewURL]);
 
   const handleLoadIframeError = () => {
     setShowMessageModal(true);
