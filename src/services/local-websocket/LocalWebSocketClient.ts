@@ -4,7 +4,6 @@ import CanvasService from '../CanvasService';
 
 export class LocalWebSocketClient {
   private ws: ReconnectingWebSocket | null = null;
-  private reconnectTimer: NodeJS.Timeout | null = null;
   private isConnecting = false;
   private connectionAttempts = 0;
 
@@ -63,13 +62,6 @@ export class LocalWebSocketClient {
   private handleClose() {
     this.isConnecting = false;
     this.ws = null;
-
-    // Attempt to reconnect
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = setTimeout(() => {
-      this.connectionAttempts = 0;
-      this.connect();
-    }, 5000);
   }
 
   private handleError(event: unknown) {
@@ -95,11 +87,6 @@ export class LocalWebSocketClient {
   }
 
   public disconnect() {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-    }
-    if (this.ws) {
-      this.ws.close();
-    }
+    this.ws?.close();
   }
 }
