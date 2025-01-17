@@ -204,9 +204,11 @@ const ArtworkPlayer = ({
       });
 
       fadeInTimeoutRef.current = setTimeout(() => {
-        setOpacity(1);
         setDisplayPreviewURL(previewURL);
-      }, 500);
+        setTimeout(() => {
+          setOpacity(1);
+        }, 100);
+      }, 375);
     }
 
     return () => {
