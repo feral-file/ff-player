@@ -23,7 +23,7 @@ import {
 
 const ExhibitionHall = () => {
   const { context } = useAppContext();
-  const castInfo = context.castInfo;
+  const { castInfo } = context.websocketData;
   const { screenRatio, viewMode } = context.deviceRotation ?? {
     screenRatio: 1,
     viewMode: ViewMode.landscape,
