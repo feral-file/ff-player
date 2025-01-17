@@ -228,7 +228,7 @@ const ArtworkPlayer = ({
   }, [previewType, isStreaming, previewURL]);
 
   useEffect(() => {
-    if (context.isOnline && !context.websocketData.isDisconnected) {
+    if (context.isOnline) {
       if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
         videoRef.current.play().catch((error: unknown) => {
           console.log('[CAST] Error play video', JSON.stringify(error));

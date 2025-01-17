@@ -20,6 +20,7 @@ import DeviceManager from '@/utils/DeviceManager';
 import { AbstractIntlMessages, NextIntlClientProvider } from 'next-intl';
 import { getUserLocale } from '@/utils/locale';
 import ArtDiscovery from './art-discovery/ArtDiscovery';
+import CanvasService from '@/services/CanvasService';
 
 const enum CastState {
   None, // Not casting
@@ -37,7 +38,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const router = useRouter();
   const pathname = usePathname();
 
-  const { canvasService } = context.websocketData;
+  const canvasService = CanvasService.getInstance();
   const castInfo = context.castInfo;
   const { screenOrientation, rotateRadius } = context.deviceRotation ?? {
     screenOrientation: Orientation.horizontal,
@@ -105,7 +106,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   useEffect(() => {
     const handleEscapeKey = () => {
       router.back();
-      canvasService.current.disconnect({}).catch((error: unknown) => {
+      canvasService.disconnect({}).catch((error: unknown) => {
         console.log(error);
       });
 

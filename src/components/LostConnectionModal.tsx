@@ -7,7 +7,6 @@ import { useTranslations } from 'next-intl';
 export default function LostConnectionModal() {
   const { context } = useAppContext();
   const { isOnline } = context;
-  const { isDisconnected } = context.websocketData;
   const { screenRatio } = context.deviceRotation ?? { screenRatio: 1 };
   const t = useTranslations('LostConnectionModal');
 
@@ -17,12 +16,6 @@ export default function LostConnectionModal() {
         <MessageModal
           screenRatio={screenRatio}
           message={t('internet_connection_lost')}
-        />
-      )}
-      {isOnline && isDisconnected && (
-        <MessageModal
-          screenRatio={screenRatio}
-          message={t('connection_lost')}
         />
       )}
     </div>

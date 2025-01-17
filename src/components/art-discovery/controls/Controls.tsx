@@ -10,7 +10,6 @@ import FocusableLeaf, {
 } from '../components/focusable-leaf/focusable-leaf';
 import { useEffect, useState } from 'react';
 import RotateButton from '../components/rotate-button/rotate-button';
-import PairQRCode from './components/pair-qr-code/pair-qr-code';
 import { ArtFraming } from '@/services/AppControls';
 import NextDailyTimer from './components/next-daily-timer/next-daily-timer';
 import SettingItem from './components/setting-item/setting-item';
@@ -21,7 +20,6 @@ import { artworkFramingOptions } from '../art-discovery.model';
 export enum SettingOption {
   ArtworkFraming = 'Artwork Framing',
   DisplayRotation = 'Display Rotation',
-  PairMobileApp = 'Pair Mobile App',
 }
 
 export enum ControlFocusableLeafKey {
@@ -29,7 +27,6 @@ export enum ControlFocusableLeafKey {
   RotateButton = 'rotate-button',
   ArtworkFraming = 'artwork-framing',
   DisplayRotation = 'display-rotation',
-  PairMobileApp = 'pair-mobile-app',
   ControlsLoseFocus = 'control-lose-focus',
   BackToHideButton = 'back-to-hide-button',
 }
@@ -40,8 +37,6 @@ function getLeafKey(option: SettingOption): ControlFocusableLeafKey | string {
       return ControlFocusableLeafKey.ArtworkFraming;
     case SettingOption.DisplayRotation:
       return ControlFocusableLeafKey.DisplayRotation;
-    case SettingOption.PairMobileApp:
-      return ControlFocusableLeafKey.PairMobileApp;
     default:
       return '';
   }
@@ -126,16 +121,6 @@ const Controls: React.FC<{
               </FocusableLeaf>
             </SettingDetail>
           </FocusableContainer>
-        );
-      }
-
-      case SettingOption.PairMobileApp: {
-        return (
-          <SettingDetail
-            title="Pair Mobile App"
-            description="Scan the QR code to explore 15,000+ artworks in the Feral File mobile app. Upgrade to Premium to display any artwork on your TV, including your personal collection.">
-            <PairQRCode></PairQRCode>
-          </SettingDetail>
         );
       }
 

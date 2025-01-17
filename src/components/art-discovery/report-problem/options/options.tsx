@@ -17,7 +17,6 @@ const ReasonOptions: React.FC<{
 }> = ({ onSubmitted }) => {
   const { displayInfo, artDisplaySetting } = usePopUpContext();
   const { context } = useAppContext();
-  const { locationID, topicID } = context.websocketData;
   const deviceRotation = context.deviceRotation;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedOption, setSelectedOption] = useState<SupportRequestReason>(
@@ -62,14 +61,6 @@ const ReasonOptions: React.FC<{
     const deviceInfo = await DeviceManager.getDeviceInfo(true);
     if (!deviceInfo) {
       return currentArtDisplaySetting;
-    }
-
-    if (!deviceInfo.locationId) {
-      deviceInfo.locationId = locationID;
-    }
-
-    if (!deviceInfo.topicId) {
-      deviceInfo.topicId = topicID;
     }
 
     return { ...deviceInfo, ...currentArtDisplaySetting };
