@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  MutableRefObject,
   ReactNode,
   createContext,
   useContext,
@@ -9,8 +8,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import CanvasService from '../services/CanvasService';
-import useWebSocket from '../services/WebSocketManager';
 import useNetworkManger from '@/services/NetworkManager';
 import useDeviceRotation, {
   DeviceRotation,
@@ -42,7 +39,6 @@ interface AppContextValue {
 }
 
 interface AppConfigContext {
-  websocketData: WebSocketMessage;
   appControl: AppControls;
   isOnline: boolean;
   deviceRotation: DeviceRotation | null;
@@ -50,13 +46,6 @@ interface AppConfigContext {
   isWebOSTVLoaded: boolean;
   isWebOSTVDevLoaded: boolean;
   castInfo: CastInfo | null;
-}
-
-interface WebSocketMessage {
-  locationID: string | null;
-  topicID: string | null;
-  canvasService: MutableRefObject<CanvasService>;
-  isDisconnected: boolean;
 }
 
 export const AppContext = createContext<AppContextValue | undefined>(undefined);
@@ -82,10 +71,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
   const isWebOSTVLoaded = useLoadScript('/webOSTVjs-1.2.11/webOSTV.js');
   const isWebOSTVDevLoaded = useLoadScript('/webOSTVjs-1.2.11/webOSTV-dev.js');
-  const websocketData = useWebSocket(
-    `${process.env.NEXT_PUBLIC_WEBSOCKET_URL ?? ''}/api/connection`,
-    process.env.NEXT_PUBLIC_API_KEY ?? ''
-  );
   const { castInfo } = useCastInfo();
   const isOnline = useNetworkManger();
   const appControl = useAppControls(); // Received setting changes from Popup
@@ -98,7 +83,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const searchParams = useSearchParams();
 
   const contextConfig = {
-    websocketData,
     appControl,
     isOnline,
     deviceRotation,
@@ -249,7 +233,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
     <AppContext.Provider
       value={{
         context: {
-          websocketData,
           appControl,
           isOnline,
           deviceRotation,

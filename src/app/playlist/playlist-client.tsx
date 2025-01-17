@@ -310,13 +310,13 @@ export default function PlaylistClient() {
   }, [castInfo]);
 
   useEffect(() => {
-    if (context.isOnline && !context.websocketData.isDisconnected) {
+    if (context.isOnline) {
       handleResumeCasting();
     } else {
       handlePauseCasting();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context.isOnline, context.websocketData.isDisconnected]);
+  }, [context.isOnline]);
 
   return (
     <>
