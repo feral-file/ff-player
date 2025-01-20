@@ -55,8 +55,11 @@ const ArtworkPlayer = ({
   >(undefined);
   const [showMessageModal, setShowMessageModal] = useState<boolean>(false);
   const t = useTranslations('ArtworkPlayer');
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   function compareToGetFileType(type: string) {
+    setPreviewType(SeriesPreviewHTMLTag.iframe);
+    return;
     setIsStreaming(false);
     if (!type) {
       return;
@@ -216,7 +219,8 @@ const ArtworkPlayer = ({
     console.log('[CAST] loaded source', previewURL);
     // When an iframe is present in a page, the parent window might not receive keydown events because the iframe itself captures these events when it is focused.
     // This is work around to focus the parent window.
-    window.focus();
+    // window.focus();
+    iframeRef.current?.focus();
     setLoading(false);
   };
 
@@ -381,11 +385,16 @@ const ArtworkPlayer = ({
         (previewType === SeriesPreviewHTMLTag.iframe ||
           previewType === SeriesPreviewHTMLTag.iframePDF) && (
           <iframe
+            ref={iframeRef}
             style={{ width: '100%', height: '100%' }}
             src={displaySoftwareURL}
             onLoad={loadedSource}
             onError={handleLoadIframeError}
-            sandbox="allow-same-origin allow-scripts"></iframe>
+            sandbox="allow-same-origin allow-scripts"
+            tabIndex={0}
+            onFocus={e => {
+              console.log('focused', e);
+            }}></iframe>
         )}
       {showMessageModal && (
         <MessageModal
