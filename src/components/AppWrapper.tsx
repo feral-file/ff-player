@@ -313,7 +313,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        {hasLocalStorage && <ArtDiscovery></ArtDiscovery>}
+        {/* {hasLocalStorage && <ArtDiscovery></ArtDiscovery>}
         <div
           style={{
             position: 'absolute',
@@ -323,7 +323,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             background: 'transparent',
             top: 0,
             left: 0,
-          }}></div>
+            pointerEvents: 'none',
+          }}></div> */}
       </div>
     </NextIntlClientProvider>
   ) : (

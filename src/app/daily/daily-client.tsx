@@ -128,7 +128,8 @@ export default function DailyClient() {
     <>
       <div style={{ width: '100%', height: '100%' }}>
         <ArtworkPlayer
-          previewURL={castPreviewURL ?? ''}
+          // previewURL={castPreviewURL ?? ''}
+          previewURL="https://generator.artblocks.io/0xa7d8d9ef8d8ce8992df33d8b8cf4aebabd5bd270/164000380?&display_mode=fit"
           artworkID={artworkID ?? ''}
           castingType={CastingArtworkType.Daily}
           isCustomView={isLeeMucianExhibition}
