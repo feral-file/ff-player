@@ -37,8 +37,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const router = useRouter();
   const pathname = usePathname();
 
-  const { canvasService } = context.websocketData;
-  const castInfo = context.castInfo;
+  const { castInfo, canvasService } = context.websocketData;
   const { screenOrientation, rotateRadius } = context.deviceRotation ?? {
     screenOrientation: Orientation.horizontal,
     rotateRadius: 0,

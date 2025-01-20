@@ -196,6 +196,7 @@ export interface CastInfo {
   catalogId?: string;
   catalog?: ExhibitionCatalog;
   displayKey?: string;
+  dataChecked?: boolean;
 }
 
 // Enum for ExhibitionCatalog

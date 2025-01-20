@@ -14,8 +14,9 @@ import { useEffect, useRef, useState } from 'react';
 
 export default function PlaylistClient() {
   const { context } = useAppContext();
+  const { castInfo } = context.websocketData;
+
   const { setDisplayInfo } = usePopUpContext();
-  const castInfo = context.castInfo;
 
   const [artworkID, setArtworkID] = useState<string | undefined>();
   const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
