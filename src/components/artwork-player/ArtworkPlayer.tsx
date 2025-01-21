@@ -58,8 +58,6 @@ const ArtworkPlayer = ({
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   function compareToGetFileType(type: string) {
-    setPreviewType(SeriesPreviewHTMLTag.iframe);
-    return;
     setIsStreaming(false);
     if (!type) {
       return;
@@ -391,10 +389,7 @@ const ArtworkPlayer = ({
             onLoad={loadedSource}
             onError={handleLoadIframeError}
             sandbox="allow-same-origin allow-scripts"
-            tabIndex={0}
-            onFocus={e => {
-              console.log('focused', e);
-            }}></iframe>
+            tabIndex={0}></iframe>
         )}
       {showMessageModal && (
         <MessageModal
