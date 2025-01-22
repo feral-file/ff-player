@@ -31,8 +31,6 @@ export enum LocalStorageItem {
   branchLink = 'branchLink',
   metricEvents = 'metricEvents',
   primaryAddress = 'primaryAddress',
-  orientation = 'orientation',
-  artFraming = 'artFraming',
 }
 
 export enum Platform {

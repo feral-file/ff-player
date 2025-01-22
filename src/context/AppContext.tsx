@@ -61,7 +61,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const { castInfo } = useCastInfo();
   const isOnline = useNetworkManger();
 
-  const deviceRotation = useDeviceRotation(castInfo, rotation);
+  const deviceRotation = useDeviceRotation(rotation);
   const searchParams = useSearchParams();
 
   const contextConfig = {
