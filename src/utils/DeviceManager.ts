@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import createBranchLink from './createBranchLink';
 import {
+  FfDeviceConfigService,
   GoogleConfigService,
   LgConfigService,
   PlatformConfigService,
@@ -46,6 +47,8 @@ class DeviceManager {
         return new TizenConfigService();
       case Platform.lg:
         return new LgConfigService();
+      case Platform.ffDevice:
+        return new FfDeviceConfigService();
       default:
         return new WebConfigService();
     }
@@ -159,6 +162,8 @@ class DeviceManager {
         return `${DeviceNamePrefix.samsung}${model}`;
       case Platform.lg:
         return `${DeviceNamePrefix.lg}${model}`;
+      case Platform.ffDevice:
+        return `${DeviceNamePrefix.ffDevice}${model}`;
       default:
         return model;
     }
