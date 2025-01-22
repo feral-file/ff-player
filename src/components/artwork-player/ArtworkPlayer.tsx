@@ -42,6 +42,8 @@ const ArtworkPlayer = ({
   keyboardCode?: number;
   artworkPreviewMIMEType?: string;
 }) => {
+  const FADE_IN_BUFFER_MS = 50;
+  const FADE_IN_OUT_DAILY_MS = 350;
   const { context } = useAppContext();
   const { artDisplaySetting, resetArtDisplaySetting } = usePopUpContext();
   const [opacity, setOpacity] = useState(1);
@@ -205,10 +207,7 @@ const ArtworkPlayer = ({
 
       fadeInTimeoutRef.current = setTimeout(() => {
         setDisplayPreviewURL(previewURL);
-        setTimeout(() => {
-          setOpacity(1);
-        }, 100);
-      }, 375);
+      }, FADE_IN_OUT_DAILY_MS + FADE_IN_BUFFER_MS);
     }
 
     return () => {
@@ -240,6 +239,7 @@ const ArtworkPlayer = ({
   }, [previewType, videoRef]);
 
   const loadedSource = () => {
+    setOpacity(1);
     console.log('[CAST] loaded source', displayPreviewURL);
     // When an iframe is present in a page, the parent window might not receive keydown events because the iframe itself captures these events when it is focused.
     // This is work around to focus the parent window.
@@ -249,6 +249,7 @@ const ArtworkPlayer = ({
 
   useEffect(() => {
     if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+      setOpacity(1);
       if (
         isStreaming &&
         Hls.isSupported() &&
@@ -342,6 +343,7 @@ const ArtworkPlayer = ({
   }, [artDisplaySetting, previewType, displayPreviewURL]);
 
   const handleLoadIframeError = () => {
+    setOpacity(1);
     setShowMessageModal(true);
   };
 
@@ -355,7 +357,7 @@ const ArtworkPlayer = ({
         justifyContent: 'center',
         position: 'relative',
         transform: `rotate(${(artDisplaySetting?.rotateRadius ?? 0).toString()}deg)`,
-        transition: 'transform 0.2s, opacity 0.375s',
+        transition: `transform 0.2s, opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms`,
         opacity: opacity,
       }}>
       {(previewType === null || loading) && <Loading />}
@@ -402,7 +404,8 @@ const ArtworkPlayer = ({
           autoPlay
           loop
           playsInline
-          crossOrigin="anonymous"></video>
+          crossOrigin="anonymous"
+          onLoad={loadedSource}></video>
       )}
       {displayPreviewURL && previewType === SeriesPreviewHTMLTag.audio && (
         <audio autoPlay={true} loop={true}>

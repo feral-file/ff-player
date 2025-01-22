@@ -116,9 +116,6 @@ export default function DailyClient() {
             const tokenIDs = dailyRef.current.tokenIDs;
 
             const updatePreview = () => {
-              const numberOfToken = dailyRef.current?.tokenIDs.length ?? 0;
-              nextTokenIndex.current =
-                (nextTokenIndex.current + 1) % numberOfToken;
               DailyService.getPreviewURLs(
                 tokenIDs[nextTokenIndex.current],
                 dailies[0]
@@ -137,6 +134,9 @@ export default function DailyClient() {
                   Sentry.captureException(error);
                   fallbackToDefaultArtwork();
                 });
+              const numberOfToken = dailyRef.current?.tokenIDs.length ?? 0;
+              nextTokenIndex.current =
+                (nextTokenIndex.current + 1) % numberOfToken;
             };
 
             // Trigger the function immediately
