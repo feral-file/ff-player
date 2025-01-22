@@ -9,7 +9,6 @@ export function getUserLocale() {
   if (typeof window !== 'undefined') {
     // Client-side context
     languages = [navigator.language];
-    console.log('Client-side languages:', languages);
   } else {
     languages = [];
   }
