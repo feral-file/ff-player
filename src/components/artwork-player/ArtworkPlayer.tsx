@@ -25,7 +25,6 @@ import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
 import MessageModal from '../MessageModal';
 import { useTranslations } from 'next-intl';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
-import { usePopUpContext } from '@/context/PopUpContext';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -42,7 +41,6 @@ const ArtworkPlayer = ({
   artworkPreviewMIMEType?: string;
 }) => {
   const { context } = useAppContext();
-  const { artDisplaySetting } = usePopUpContext();
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [displaySoftwareURL, setDisplaySoftwareURL] =
     useState<string>(previewURL);
@@ -318,8 +316,6 @@ const ArtworkPlayer = ({
         backgroundColor: '#000000',
         justifyContent: 'center',
         position: 'relative',
-        transform: `rotate(${(artDisplaySetting?.rotateRadius ?? 0).toString()}deg)`,
-        transition: 'transform 0.2s',
       }}>
       {(previewType === null || loading) && <Loading />}
       {previewURL && previewType === SeriesPreviewHTMLTag.image && (

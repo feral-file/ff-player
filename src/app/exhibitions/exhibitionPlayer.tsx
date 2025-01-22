@@ -11,7 +11,6 @@ import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
 import { formatArtworkIndexID } from '@/utils/indexer';
 import { CastingArtworkType } from '@/models/metric.model';
-import { usePopUpContext } from '@/context/PopUpContext';
 import ArtworkService from '@/services/ArtworkService';
 
 const ExhibitionHall = () => {
@@ -21,8 +20,6 @@ const ExhibitionHall = () => {
     screenRatio: 1,
     viewMode: ViewMode.landscape,
   };
-
-  const { setDisplayInfo } = usePopUpContext();
 
   const [exhibitionID, setExhibitionID] = useState<string | undefined>();
   const [catalogID, setCatalogID] = useState<string | undefined>();
@@ -79,13 +76,6 @@ const ExhibitionHall = () => {
 
       setArtworkPreviewMIMEType(artworkRef.current.previewMIMEType);
     }
-
-    const indexID = formatArtworkIndexID(artworkRef.current, exhibition ?? {});
-    setDisplayInfo({
-      token: undefined,
-      indexID,
-      ffArtworkID: artwork.id,
-    });
   };
 
   useEffect(() => {
@@ -152,15 +142,12 @@ const ExhibitionHall = () => {
       switch (screen) {
         case ExhibitionCatalog.home:
           setArtwork(undefined);
-          setDisplayInfo(undefined);
           break;
         case ExhibitionCatalog.curatorNote:
           setPostIndex(0);
-          setDisplayInfo(undefined);
           break;
         case ExhibitionCatalog.resource:
           if (catalogID) getPostIndexByID(catalogID);
-          setDisplayInfo(undefined);
           break;
         case ExhibitionCatalog.artwork:
           if (catalogID && exhibitionDetail) {
