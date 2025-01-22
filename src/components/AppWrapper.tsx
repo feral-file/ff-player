@@ -8,7 +8,7 @@ import {
 import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
-import { CastCommand, Orientation } from '@/utils/types';
+import { CastCommand } from '@/utils/types';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useRef, useState } from 'react';
 import DeviceManager from '@/utils/DeviceManager';
@@ -30,10 +30,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const canvasService = CanvasService.getInstance();
   const castInfo = context.castInfo;
-  const { screenOrientation, rotateRadius } = context.deviceRotation ?? {
-    screenOrientation: Orientation.horizontal,
-    rotateRadius: 0,
-  };
   const [castState, setCastState] = useState<CastState>(CastState.None);
   // const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
   const sendLogEventInterval = useRef<NodeJS.Timeout | null>(null);
@@ -229,29 +225,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     <NextIntlClientProvider locale={locale} messages={messages}>
       <div
         style={{
-          width:
-            (screenOrientation === Orientation.vertical &&
-              (rotateRadius || 0) % 180 !== 90) ||
-            (screenOrientation === Orientation.horizontal &&
-              (rotateRadius || 0) % 180 === 0)
-              ? '100vw'
-              : '100vh',
-          height:
-            (screenOrientation === Orientation.vertical &&
-              (rotateRadius || 0) % 180 !== 90) ||
-            (screenOrientation === Orientation.horizontal &&
-              (rotateRadius || 0) % 180 === 0)
-              ? '100vh'
-              : '100vw',
-          transform: `rotate(${(rotateRadius || 0).toString()}deg) `,
-          transformOrigin:
-            (screenOrientation === Orientation.vertical &&
-              (rotateRadius || 0) % 360 === 90) ||
-            (screenOrientation === Orientation.horizontal &&
-              (rotateRadius || 0) % 360 === 90)
-              ? '50vw center'
-              : 'center 50vh',
-          transition: 'transform 0.2s',
+          width: '100vw',
+          height: '100vh',
+          transformOrigin: 'center 50vh',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',

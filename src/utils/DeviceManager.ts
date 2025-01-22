@@ -172,14 +172,6 @@ class DeviceManager {
     return await this.getFromLocalStorage(LocalStorageItem.primaryAddress);
   }
 
-  public setOrientation(orientation: string): void {
-    this.setToLocalStorage(LocalStorageItem.orientation, orientation);
-  }
-
-  public async getOrientation(): Promise<string | null> {
-    return await this.getFromLocalStorage(LocalStorageItem.orientation);
-  }
-
   public async getDeviceInfo(appPlatform?: boolean) {
     try {
       const deviceId = await this.getDeviceId();
