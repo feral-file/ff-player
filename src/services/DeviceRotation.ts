@@ -53,8 +53,7 @@ const cacheStringToRotation = (s: string): DeviceRotation => {
 
 const useDeviceRotation = (
   castInfo: CastInfo | null,
-  cacheSetting: DeviceRotation | null,
-  selfRotated: boolean
+  cacheSetting: DeviceRotation | null
 ) => {
   const [screenOrientation, setScreenOrientation] = useState<Orientation>(
     Orientation.horizontal
@@ -93,16 +92,6 @@ const useDeviceRotation = (
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [castInfo]);
-
-  useEffect(() => {
-    if (selfRotated) {
-      setViewMode(
-        viewMode === ViewMode.landscape ? ViewMode.portrait : ViewMode.landscape
-      );
-      setRotateRadius(rotateRadius + 90);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selfRotated]);
 
   useEffect(() => {
     if (cacheSetting) {

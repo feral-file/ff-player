@@ -19,10 +19,6 @@ import RemoteConfigService, {
 import { AppSettings, LocalStorageItem, Platform } from '@/constants';
 import { useSearchParams } from 'next/navigation';
 import DeviceManager from '@/utils/DeviceManager';
-import useAppControls, {
-  AppControls,
-  ArtFraming,
-} from '@/services/AppControls';
 import useCastInfo from '@/services/useCastInfo';
 import { CastInfo } from '@/utils/types';
 import { LocalWebSocketClient } from '@/services/local-websocket/LocalWebSocketClient';
@@ -36,7 +32,6 @@ interface AppContextValue {
 }
 
 interface AppConfigContext {
-  appControl: AppControls;
   isOnline: boolean;
   deviceRotation: DeviceRotation | null;
   appRemoteConfig: AppRemoteConfig;
@@ -65,17 +60,11 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
   const { castInfo } = useCastInfo();
   const isOnline = useNetworkManger();
-  const appControl = useAppControls(); // Received setting changes from Popup
 
-  const deviceRotation = useDeviceRotation(
-    castInfo,
-    rotation,
-    appControl.rotated
-  );
+  const deviceRotation = useDeviceRotation(castInfo, rotation);
   const searchParams = useSearchParams();
 
   const contextConfig = {
-    appControl,
     isOnline,
     deviceRotation,
     appRemoteConfig,
@@ -95,7 +84,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
     try {
       await DeviceManager.init();
       initialOrientation();
-      initialArtFrameConfig();
     } catch (error) {
       console.log('Error init device manager', error);
     }
@@ -103,10 +91,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
   const initialOrientation = () => {
     setRotation(defaultRotation());
-  };
-
-  const initialArtFrameConfig = () => {
-    appControl.setFrameConfig(ArtFraming.FitToScreen);
   };
 
   // Initialize platform events
@@ -166,7 +150,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
     <AppContext.Provider
       value={{
         context: {
-          appControl,
           isOnline,
           deviceRotation,
           appRemoteConfig,

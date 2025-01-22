@@ -22,11 +22,10 @@ import { useAppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
 import { appendMetricEventToLocalStorage } from '@/services/metric.service';
 import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
-import { ArtFraming } from '@/services/AppControls';
-import { usePopUpContext } from '@/context/PopUpContext';
 import MessageModal from '../MessageModal';
 import { useTranslations } from 'next-intl';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
+import { usePopUpContext } from '@/context/PopUpContext';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -43,7 +42,7 @@ const ArtworkPlayer = ({
   artworkPreviewMIMEType?: string;
 }) => {
   const { context } = useAppContext();
-  const { artDisplaySetting, resetArtDisplaySetting } = usePopUpContext();
+  const { artDisplaySetting } = usePopUpContext();
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [displaySoftwareURL, setDisplaySoftwareURL] =
     useState<string>(previewURL);
@@ -194,9 +193,6 @@ const ArtworkPlayer = ({
       detectPreviewType(previewURL).catch((err: unknown) => {
         console.error(err);
       });
-
-      // Reset artDisplaySetting when new artwork is loaded
-      resetArtDisplaySetting();
     }
   }, [previewURL]);
 
@@ -294,15 +290,12 @@ const ArtworkPlayer = ({
   }, [context, previewType]);
 
   useEffect(() => {
-    if (!artDisplaySetting || !previewURL) {
+    if (!previewURL) {
       return;
     }
 
     if (previewType === SeriesPreviewHTMLTag.iframe) {
-      const displayMode =
-        artDisplaySetting.frameConfig === ArtFraming.CropToFill
-          ? 'crop'
-          : 'fit';
+      const displayMode = 'fit';
       const queryParam = `&display_mode=${displayMode}`;
       const url = new URL(previewURL);
       url.search += queryParam;
@@ -310,7 +303,7 @@ const ArtworkPlayer = ({
     } else {
       setDisplaySoftwareURL(previewURL);
     }
-  }, [artDisplaySetting, previewType, previewURL]);
+  }, [previewType, previewURL]);
 
   const handleLoadIframeError = () => {
     setShowMessageModal(true);
@@ -337,10 +330,7 @@ const ArtworkPlayer = ({
             style={{
               width: '100%',
               height: '100%',
-              objectFit:
-                artDisplaySetting?.frameConfig === ArtFraming.FitToScreen
-                  ? 'contain'
-                  : 'cover',
+              objectFit: 'contain',
             }}
             className={styles.image}
             src={previewURL}
@@ -364,10 +354,7 @@ const ArtworkPlayer = ({
           style={{
             width: '100%',
             height: '100%',
-            objectFit:
-              artDisplaySetting?.frameConfig === ArtFraming.FitToScreen
-                ? 'contain'
-                : 'cover',
+            objectFit: 'contain',
           }}
           autoPlay
           loop
