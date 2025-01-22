@@ -400,3 +400,9 @@ export class LgConfigService implements PlatformConfigService {
     }
   }
 }
+
+export class FfDeviceConfigService extends WebConfigService {
+  override getOrCreateDeviceName(): string {
+    return 'FFDevice ' + super.getOrCreateDeviceName();
+  }
+}
