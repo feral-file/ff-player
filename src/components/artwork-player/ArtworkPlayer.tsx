@@ -26,7 +26,7 @@ import { ArtFraming } from '@/services/AppControls';
 import { usePopUpContext } from '@/context/PopUpContext';
 import MessageModal from '../MessageModal';
 import { useTranslations } from 'next-intl';
-import { CLIENT_BANDWIDTH_HINT, FADE_IN_OUT_DAILY_MS } from '@/constants';
+import { CLIENT_BANDWIDTH_HINT } from '@/constants';
 
 const ArtworkPlayer = ({
   previewURL,
@@ -42,6 +42,8 @@ const ArtworkPlayer = ({
   keyboardCode?: number;
   artworkPreviewMIMEType?: string;
 }) => {
+  const FADE_IN_BUFFER_MS = 50;
+  const FADE_IN_OUT_DAILY_MS = 350;
   const { context } = useAppContext();
   const { artDisplaySetting, resetArtDisplaySetting } = usePopUpContext();
   const [opacity, setOpacity] = useState(1);
@@ -203,7 +205,6 @@ const ArtworkPlayer = ({
         console.error(err);
       });
 
-      const FADE_IN_BUFFER_MS = 50;
       fadeInTimeoutRef.current = setTimeout(() => {
         setDisplayPreviewURL(previewURL);
       }, FADE_IN_OUT_DAILY_MS + FADE_IN_BUFFER_MS);
