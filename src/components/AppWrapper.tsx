@@ -2,9 +2,6 @@
 
 import {
   AppSettings,
-  LocalStorageItem,
-  Platform,
-  PUSH_METRIC_INTERVAL,
   SEND_LOG_EVENT_NUMBER,
   SEND_LOG_INTERVAL,
 } from '@/constants';
@@ -14,7 +11,6 @@ import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { CastCommand, Orientation } from '@/utils/types';
 import { usePathname, useRouter } from 'next/navigation';
 import React, { useEffect, useRef, useState } from 'react';
-import { uploadMetricEventsFromLocalStorage } from '@/services/metric.service';
 import DeviceManager from '@/utils/DeviceManager';
 
 import { AbstractIntlMessages, NextIntlClientProvider } from 'next-intl';
@@ -29,10 +25,6 @@ const enum CastState {
   Daily, // Displaying exhibition
 }
 
-// The webOS declaration for access the LG webOS functions
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-declare const webOS: any;
-
 const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { context } = useAppContext();
   const router = useRouter();
@@ -46,11 +38,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
   const [castState, setCastState] = useState<CastState>(CastState.None);
   // const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
-  const isWebOSTVLoaded = context.isWebOSTVLoaded;
-  const isWebOSTVDevLoaded = context.isWebOSTVDevLoaded;
-  const pushMetricIntervalID = useRef<
-    NodeJS.Timeout | string | number | undefined
-  >(undefined);
   const sendLogEventInterval = useRef<NodeJS.Timeout | null>(null);
   const [messages, setMessages] = useState<AbstractIntlMessages>();
   const locale = getUserLocale();
@@ -109,15 +96,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       canvasService.disconnect({}).catch((error: unknown) => {
         console.log(error);
       });
-
-      if (window.history.length <= 1 || pathname === '/daily') {
-        const platform = (localStorage.getItem(LocalStorageItem.platform) ??
-          'web') as Platform;
-        if (platform === Platform.lg) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-          webOS.platformBack();
-        }
-      }
     };
 
     EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
@@ -262,24 +240,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [castInfo]);
-
-  useEffect(() => {
-    if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
-      if (pushMetricIntervalID.current) {
-        clearInterval(pushMetricIntervalID.current);
-      }
-
-      pushMetricIntervalID.current = setInterval(() => {
-        uploadMetricEventsFromLocalStorage();
-      }, PUSH_METRIC_INTERVAL);
-    }
-
-    return () => {
-      if (pushMetricIntervalID.current) {
-        clearInterval(pushMetricIntervalID.current);
-      }
-    };
-  }, [isWebOSTVLoaded, isWebOSTVDevLoaded]);
 
   return messages != undefined ? (
     <NextIntlClientProvider locale={locale} messages={messages}>

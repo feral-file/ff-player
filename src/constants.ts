@@ -57,8 +57,6 @@ export const AppSettings = {
 export const TIMESTAMP_PER_MINUTE = 60 * 1000;
 export const TIMESTAMP_PER_HOUR = 60 * 60 * 1000;
 
-export const PUSH_METRIC_INTERVAL = 60 * 1000;
-
 export const SEND_LOG_INTERVAL = 10 * 1000;
 
 export const SEND_LOG_EVENT_NUMBER = 8;

@@ -21,7 +21,6 @@ import { AppSettings, LocalStorageItem, Platform } from '@/constants';
 import { useSearchParams } from 'next/navigation';
 import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import DeviceManager from '@/utils/DeviceManager';
-import useLoadScript from '@/services/LoadScripts';
 import useAppControls, {
   AppControls,
   ArtFraming,
@@ -43,8 +42,6 @@ interface AppConfigContext {
   isOnline: boolean;
   deviceRotation: DeviceRotation | null;
   appRemoteConfig: AppRemoteConfig;
-  isWebOSTVLoaded: boolean;
-  isWebOSTVDevLoaded: boolean;
   castInfo: CastInfo | null;
 }
 
@@ -69,8 +66,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const [platformInitialized, setPlatformInitialized] = useState(false);
   const [platform, setPlatform] = useState<Platform | null>(null);
 
-  const isWebOSTVLoaded = useLoadScript('/webOSTVjs-1.2.11/webOSTV.js');
-  const isWebOSTVDevLoaded = useLoadScript('/webOSTVjs-1.2.11/webOSTV-dev.js');
   const { castInfo } = useCastInfo();
   const isOnline = useNetworkManger();
   const appControl = useAppControls(); // Received setting changes from Popup
@@ -87,23 +82,13 @@ export const AppProvider = ({ children }: AppContextProps) => {
     isOnline,
     deviceRotation,
     appRemoteConfig,
-    isWebOSTVLoaded,
-    isWebOSTVDevLoaded,
     castInfo,
   };
 
   const initContext = async () => {
     try {
       setContextConfig(contextConfig);
-
-      if (platform === Platform.lg) {
-        // If LG platform, wait for both webOS TV and webOS TV dev to be loaded
-        if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
-          await initDeviceConfigService();
-        }
-      } else {
-        await initDeviceConfigService();
-      }
+      await initDeviceConfigService();
     } catch (error) {
       console.log('Error init context', error);
     }
@@ -191,7 +176,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
       console.log('Error init context', error);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platformInitialized, isWebOSTVLoaded, isWebOSTVDevLoaded]);
+  }, [platformInitialized]);
 
   useEffect(() => {
     setContextConfig({
@@ -237,8 +222,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
           isOnline,
           deviceRotation,
           appRemoteConfig,
-          isWebOSTVLoaded,
-          isWebOSTVDevLoaded,
           castInfo,
         },
       }}>
