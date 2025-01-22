@@ -39,12 +39,14 @@ export enum Platform {
   google = 'google',
   tizen = 'tizen',
   lg = 'lg',
+  ffDevice = 'ff-device',
 }
 
 export enum DeviceNamePrefix {
   google = 'Google-',
   samsung = 'Samsung-',
   lg = 'LG-',
+  ffDevice = 'FF-',
 }
 
 export const AppSettings = {
