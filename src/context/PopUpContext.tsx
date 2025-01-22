@@ -1,7 +1,6 @@
 'use client';
 
 import { IndexerToken } from '@/models';
-import { ArtFraming } from '@/services/AppControls';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAppContext } from './AppContext';
 
@@ -24,7 +23,6 @@ interface DisplayInfoProps {
 }
 
 interface ArtDisplaySetting {
-  frameConfig: ArtFraming;
   rotateRadius: number;
 }
 
@@ -54,16 +52,14 @@ export const PopUpProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     const setting = {
-      frameConfig: context.appControl.frameConfig ?? ArtFraming.FitToScreen,
       rotateRadius: 0, // Reset rotation if the device is rotated
     };
 
     setArtDisplaySetting(setting);
-  }, [context.appControl.frameConfig, context.deviceRotation?.rotateRadius]);
+  }, [context.deviceRotation?.rotateRadius]);
 
   const resetArtDisplaySetting = () => {
     const setting = {
-      frameConfig: context.appControl.frameConfig ?? ArtFraming.FitToScreen,
       rotateRadius: 0,
     };
     setArtDisplaySetting(setting);
