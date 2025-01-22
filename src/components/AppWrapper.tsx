@@ -9,13 +9,12 @@ import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { CastCommand, Orientation } from '@/utils/types';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import React, { useEffect, useRef, useState } from 'react';
 import DeviceManager from '@/utils/DeviceManager';
 
 import { AbstractIntlMessages, NextIntlClientProvider } from 'next-intl';
 import { getUserLocale } from '@/utils/locale';
-import ArtDiscovery from './art-discovery/ArtDiscovery';
 import CanvasService from '@/services/CanvasService';
 
 const enum CastState {
@@ -28,7 +27,6 @@ const enum CastState {
 const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { context } = useAppContext();
   const router = useRouter();
-  const pathname = usePathname();
 
   const canvasService = CanvasService.getInstance();
   const castInfo = context.castInfo;
@@ -41,20 +39,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const sendLogEventInterval = useRef<NodeJS.Timeout | null>(null);
   const [messages, setMessages] = useState<AbstractIntlMessages>();
   const locale = getUserLocale();
-
-  const [hasLocalStorage, setHasLocalStorage] = useState<boolean>(false);
-
-  useEffect(() => {
-    setHasLocalStorage(
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      typeof window !== 'undefined' && window.localStorage ? true : false
-    );
-  }, []);
-
-  // Initialize platform events
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Check version update
   useEffect(() => {
@@ -273,18 +257,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        {/* {hasLocalStorage && <ArtDiscovery></ArtDiscovery>}
-        <div
-          style={{
-            position: 'absolute',
-            width: '100%',
-            height: '100%',
-            zIndex: 8,
-            background: 'transparent',
-            top: 0,
-            left: 0,
-            pointerEvents: 'none',
-          }}></div> */}
       </div>
     </NextIntlClientProvider>
   ) : (
