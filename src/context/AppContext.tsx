@@ -11,7 +11,6 @@ import {
 import useNetworkManger from '@/services/NetworkManager';
 import useDeviceRotation, {
   DeviceRotation,
-  cacheStringToRotation,
   defaultRotation,
 } from '@/services/DeviceRotation';
 import RemoteConfigService, {
@@ -19,13 +18,7 @@ import RemoteConfigService, {
 } from '@/services/remoteConfigService';
 import { AppSettings, LocalStorageItem, Platform } from '@/constants';
 import { useSearchParams } from 'next/navigation';
-import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import DeviceManager from '@/utils/DeviceManager';
-import useLoadScript from '@/services/LoadScripts';
-import useAppControls, {
-  AppControls,
-  ArtFraming,
-} from '@/services/AppControls';
 import useCastInfo from '@/services/useCastInfo';
 import { CastInfo } from '@/utils/types';
 import { LocalWebSocketClient } from '@/services/local-websocket/LocalWebSocketClient';
@@ -39,12 +32,9 @@ interface AppContextValue {
 }
 
 interface AppConfigContext {
-  appControl: AppControls;
   isOnline: boolean;
   deviceRotation: DeviceRotation | null;
   appRemoteConfig: AppRemoteConfig;
-  isWebOSTVLoaded: boolean;
-  isWebOSTVDevLoaded: boolean;
   castInfo: CastInfo | null;
 }
 
@@ -67,43 +57,24 @@ export const AppProvider = ({ children }: AppContextProps) => {
   );
   const [rotation, setRotation] = useState<DeviceRotation | null>(null);
   const [platformInitialized, setPlatformInitialized] = useState(false);
-  const [platform, setPlatform] = useState<Platform | null>(null);
 
-  const isWebOSTVLoaded = useLoadScript('/webOSTVjs-1.2.11/webOSTV.js');
-  const isWebOSTVDevLoaded = useLoadScript('/webOSTVjs-1.2.11/webOSTV-dev.js');
   const { castInfo } = useCastInfo();
   const isOnline = useNetworkManger();
-  const appControl = useAppControls(); // Received setting changes from Popup
 
-  const deviceRotation = useDeviceRotation(
-    castInfo,
-    rotation,
-    appControl.rotated
-  );
+  const deviceRotation = useDeviceRotation(rotation);
   const searchParams = useSearchParams();
 
   const contextConfig = {
-    appControl,
     isOnline,
     deviceRotation,
     appRemoteConfig,
-    isWebOSTVLoaded,
-    isWebOSTVDevLoaded,
     castInfo,
   };
 
   const initContext = async () => {
     try {
       setContextConfig(contextConfig);
-
-      if (platform === Platform.lg) {
-        // If LG platform, wait for both webOS TV and webOS TV dev to be loaded
-        if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
-          await initDeviceConfigService();
-        }
-      } else {
-        await initDeviceConfigService();
-      }
+      await initDeviceConfigService();
     } catch (error) {
       console.log('Error init context', error);
     }
@@ -112,76 +83,32 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const initDeviceConfigService = async () => {
     try {
       await DeviceManager.init();
-      initialOrientation().catch((error: unknown) => {
-        console.log('Error initial orientation', error);
-      });
-
-      initialArtFrameConfig().catch((error: unknown) => {
-        console.log('Error initial art frame config', error);
-      });
+      initialOrientation();
     } catch (error) {
       console.log('Error init device manager', error);
     }
   };
 
-  const initialOrientation = async () => {
-    try {
-      const data = await DeviceManager.getOrientation();
-      if (!data) {
-        setRotation(defaultRotation());
-        return;
-      }
-
-      const orientation = cacheStringToRotation(data);
-      setRotation(orientation);
-    } catch (error) {
-      console.log('Error initial orientation', error);
-      setRotation(defaultRotation());
-    }
-  };
-
-  const initialArtFrameConfig = async () => {
-    try {
-      const data = await DeviceManager.getArtFrameConfig();
-      if (data === undefined) {
-        appControl.setFrameConfig(ArtFraming.FitToScreen);
-        return;
-      }
-
-      appControl.setFrameConfig(data);
-    } catch (error) {
-      console.log('Error initial art frame config', error);
-      appControl.setFrameConfig(ArtFraming.FitToScreen);
-    }
+  const initialOrientation = () => {
+    setRotation(defaultRotation());
   };
 
   // Initialize platform events
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).KeyEvent = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: KeyEvent.handlePlatformEvent,
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).DeviceName = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: DeviceName.handlePlatformEvent,
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).Config = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: Config.handlePlatformEvent,
-      };
-
-      const pl = searchParams?.get('platform') ?? '';
-      if (pl) {
-        localStorage.setItem(LocalStorageItem.platform, pl);
-        setPlatform(pl as Platform);
+    let websocket: LocalWebSocketClient | null = null;
+    const platform = searchParams?.get('platform') ?? '';
+    if (platform) {
+      localStorage.setItem(LocalStorageItem.platform, platform);
+      if (platform === Platform.ffDevice.toString()) {
+        websocket = new LocalWebSocketClient();
       }
-      setPlatformInitialized(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    setPlatformInitialized(true);
+
+    return () => {
+      websocket?.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -190,15 +117,13 @@ export const AppProvider = ({ children }: AppContextProps) => {
     initContext().catch((error: unknown) => {
       console.log('Error init context', error);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platformInitialized, isWebOSTVLoaded, isWebOSTVDevLoaded]);
+  }, [platformInitialized]);
 
   useEffect(() => {
     setContextConfig({
       ...contextConfig,
       deviceRotation: rotation,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rotation]);
 
   useEffect(() => {
@@ -221,24 +146,13 @@ export const AppProvider = ({ children }: AppContextProps) => {
     });
   }, []);
 
-  useEffect(() => {
-    const websocket = new LocalWebSocketClient();
-
-    return () => {
-      websocket.disconnect();
-    };
-  }, []);
-
   return (
     <AppContext.Provider
       value={{
         context: {
-          appControl,
           isOnline,
           deviceRotation,
           appRemoteConfig,
-          isWebOSTVLoaded,
-          isWebOSTVDevLoaded,
           castInfo,
         },
       }}>

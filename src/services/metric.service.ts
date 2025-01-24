@@ -126,6 +126,8 @@ function getDeviceInfoBaseOnPlatform(): { vendor: string; platform: string } {
       return { vendor: 'samsung', platform: 'tizen' };
     case Platform.lg:
       return { vendor: 'lg', platform: 'webos' };
+    case Platform.ffDevice:
+      return { vendor: 'ffDevice', platform: 'ffDevice' };
     default:
       return { vendor: 'web', platform: 'web' };
   }

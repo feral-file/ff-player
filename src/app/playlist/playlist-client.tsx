@@ -2,7 +2,6 @@
 
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { useAppContext } from '@/context/AppContext';
-import { usePopUpContext } from '@/context/PopUpContext';
 import { IndexerToken } from '@/models';
 import { CastingArtworkType } from '@/models/metric.model';
 import ArtworkService from '@/services/ArtworkService';
@@ -14,7 +13,6 @@ import { useEffect, useRef, useState } from 'react';
 
 export default function PlaylistClient() {
   const { context } = useAppContext();
-  const { setDisplayInfo } = usePopUpContext();
   const castInfo = context.castInfo;
 
   const [artworkID, setArtworkID] = useState<string | undefined>();
@@ -58,10 +56,6 @@ export default function PlaylistClient() {
     if (currentPlaylist !== currentPlaylistRef.current) {
       currentPlaylistRef.current = currentPlaylist;
       setArtworkID(currentPlaylist.token.id);
-      setDisplayInfo({
-        token: currentPlaylist.indexerToken,
-        ffArtworkID: currentPlaylist.indexerToken?.id,
-      });
     }
     setCastPreviewURL(currentPlaylist.previewURL);
     setIsLeeMucianExhibition(

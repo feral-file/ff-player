@@ -31,20 +31,20 @@ export enum LocalStorageItem {
   branchLink = 'branchLink',
   metricEvents = 'metricEvents',
   primaryAddress = 'primaryAddress',
-  orientation = 'orientation',
-  artFraming = 'artFraming',
 }
 
 export enum Platform {
   google = 'google',
   tizen = 'tizen',
   lg = 'lg',
+  ffDevice = 'ff-device',
 }
 
 export enum DeviceNamePrefix {
   google = 'Google-',
   samsung = 'Samsung-',
   lg = 'LG-',
+  ffDevice = 'FF-',
 }
 
 export const AppSettings = {
@@ -56,8 +56,6 @@ export const AppSettings = {
 
 export const TIMESTAMP_PER_MINUTE = 60 * 1000;
 export const TIMESTAMP_PER_HOUR = 60 * 60 * 1000;
-
-export const PUSH_METRIC_INTERVAL = 60 * 1000;
 
 export const SEND_LOG_INTERVAL = 10 * 1000;
 

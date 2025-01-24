@@ -13,11 +13,9 @@ import { convertToTokenID } from '@/utils/indexer';
 import { TIMESTAMP_PER_HOUR } from '@/constants';
 import { CastingArtworkType } from '@/models/metric.model';
 import { useAppContext } from '@/context/AppContext';
-import { usePopUpContext } from '@/context/PopUpContext';
 
 export default function DailyClient() {
   const { context } = useAppContext();
-  const { setDisplayInfo } = usePopUpContext();
   const dailyRef = useRef<Daily>();
   const timeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
@@ -60,13 +58,6 @@ export default function DailyClient() {
             setArtworkPreviewMIMEType(
               dailyRef.current.artwork?.previewMIMEType
             );
-
-            // Set display info into PopUpContext
-            setDisplayInfo({
-              token: dailyRef.current.token,
-              ffArtworkID: dailyRef.current.artwork?.id, // Assume that daily should be FF artwork
-              dailyNote: dailyRef.current.note,
-            });
           }
 
           const { delay } = getDelayTime(newDailyHour);

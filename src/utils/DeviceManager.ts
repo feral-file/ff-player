@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import createBranchLink from './createBranchLink';
 import {
+  FfDeviceConfigService,
   GoogleConfigService,
   LgConfigService,
   PlatformConfigService,
@@ -10,7 +11,6 @@ import {
 import * as Sentry from '@sentry/nextjs';
 import { DeviceNamePrefix, LocalStorageItem, Platform } from '@/constants';
 import { BrowserInfo, detect } from 'detect-browser';
-import { ArtFraming } from '@/services/AppControls';
 
 class DeviceManager {
   static instance = new DeviceManager();
@@ -47,6 +47,8 @@ class DeviceManager {
         return new TizenConfigService();
       case Platform.lg:
         return new LgConfigService();
+      case Platform.ffDevice:
+        return new FfDeviceConfigService();
       default:
         return new WebConfigService();
     }
@@ -160,6 +162,8 @@ class DeviceManager {
         return `${DeviceNamePrefix.samsung}${model}`;
       case Platform.lg:
         return `${DeviceNamePrefix.lg}${model}`;
+      case Platform.ffDevice:
+        return `${DeviceNamePrefix.ffDevice}${model}`;
       default:
         return model;
     }
@@ -171,26 +175,6 @@ class DeviceManager {
 
   public async getPrimaryAddress(): Promise<string | null> {
     return await this.getFromLocalStorage(LocalStorageItem.primaryAddress);
-  }
-
-  public setOrientation(orientation: string): void {
-    this.setToLocalStorage(LocalStorageItem.orientation, orientation);
-  }
-
-  public async getOrientation(): Promise<string | null> {
-    return await this.getFromLocalStorage(LocalStorageItem.orientation);
-  }
-
-  public setArtFrameConfig(artFrameConfig: ArtFraming): void {
-    this.setToLocalStorage(
-      LocalStorageItem.artFraming,
-      artFrameConfig.toString()
-    );
-  }
-
-  public async getArtFrameConfig(): Promise<ArtFraming | undefined> {
-    const config = await this.getFromLocalStorage(LocalStorageItem.artFraming);
-    return config ? (parseInt(config) as ArtFraming) : undefined;
   }
 
   public async getDeviceInfo(appPlatform?: boolean) {
