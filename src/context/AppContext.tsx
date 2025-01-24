@@ -99,10 +99,12 @@ export const AppProvider = ({ children }: AppContextProps) => {
     const platform = searchParams?.get('platform') ?? '';
     if (platform) {
       localStorage.setItem(LocalStorageItem.platform, platform);
-      if (platform === Platform.ffDevice.toString()) {
-        websocket = new LocalWebSocketClient();
-      }
+      // if (platform === Platform.ffDevice.toString()) {
+      //   websocket = new LocalWebSocketClient();
+      // }
     }
+
+    websocket = new LocalWebSocketClient();
 
     setPlatformInitialized(true);
 
