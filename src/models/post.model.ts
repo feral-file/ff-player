@@ -33,6 +33,7 @@ export enum PostType {
   Schedule = 'schedule',
   WhitePaper = 'white-paper',
   J043Custom = 'jg043-custom',
+  Foreword = 'foreword',
 }
 
 export enum PostMediaType {
