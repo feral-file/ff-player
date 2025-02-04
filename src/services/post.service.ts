@@ -93,9 +93,7 @@ export class PostService {
   private async getCustomPostOfJG043Show(): Promise<Post[]> {
     try {
       const response = await axios.get(
-        `${
-          process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
-        }/configs/postcard/postcard_configs.json`
+        `${process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''}/configs/app.json`
       );
 
       const jg043Section = response.data as Jg043CustomPosts | null;
