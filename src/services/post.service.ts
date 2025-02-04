@@ -34,7 +34,7 @@ export class PostService {
         posts = [curatorNote, ...J043Customs, ...posts];
       } else if (isEF046Exhibition) {
         const EF43Customs = await this.getCustomPostOfEF046Exhibition();
-        posts = [curatorNote, ...(EF43Customs ?? []), ...posts];
+        posts = [...EF43Customs, ...posts];
       } else {
         posts = [curatorNote, ...posts];
       }
@@ -60,14 +60,18 @@ export class PostService {
       );
 
       const forewordSection = response.data as {
-        foreword?: Map<string, string[]>;
+        exhibition?: {
+          foreword?: Record<string, string[]>;
+        };
       } | null;
-      if (forewordSection?.foreword?.has(AppSettings.EF_046_EXHIBITION_ID)) {
-        const forewords = forewordSection.foreword.get(
-          AppSettings.EF_046_EXHIBITION_ID
-        );
 
-        const posts = forewords?.map((foreword, index) => {
+      const forewords =
+        forewordSection?.exhibition?.foreword?.[
+          AppSettings.EF_046_EXHIBITION_ID
+        ];
+
+      if (forewords) {
+        const posts = forewords.map((foreword, index) => {
           const id = `foreword_${AppSettings.EF_046_EXHIBITION_ID}_${index.toString()}`;
           return {
             id: id,
