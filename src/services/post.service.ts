@@ -20,6 +20,8 @@ export class PostService {
   public async getPostExhibition(exhibition: Exhibition): Promise<Post[]> {
     try {
       const isJG043Show = exhibition.id === AppSettings.JG_043_EXHIBITION_ID;
+      const isEF046Exhibition =
+        exhibition.id === AppSettings.EF_046_EXHIBITION_ID;
       let posts = exhibition.posts ?? [];
       const curatorNote = {
         id: 'curatorNote',
@@ -30,6 +32,9 @@ export class PostService {
       if (isJG043Show) {
         const J043Customs = await this.getCustomPostOfJG043Show();
         posts = [curatorNote, ...J043Customs, ...posts];
+      } else if (isEF046Exhibition) {
+        const EF43Customs = await this.getCustomPostOfEF046Exhibition();
+        posts = [curatorNote, ...(EF43Customs ?? []), ...posts];
       } else {
         posts = [curatorNote, ...posts];
       }
@@ -41,6 +46,43 @@ export class PostService {
     } catch (error) {
       console.log(
         '[API] Failed to load post exhibition:',
+        JSON.stringify(error)
+      );
+      Sentry.captureException(error);
+      return [];
+    }
+  }
+
+  private async getCustomPostOfEF046Exhibition() {
+    try {
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''}/configs/app.json`
+      );
+
+      const forewordSection = response.data as {
+        foreword?: Map<string, string[]>;
+      } | null;
+      if (forewordSection?.foreword?.has(AppSettings.EF_046_EXHIBITION_ID)) {
+        const forewords = forewordSection.foreword.get(
+          AppSettings.EF_046_EXHIBITION_ID
+        );
+
+        const posts = forewords?.map((foreword, index) => {
+          const id = `foreword_${AppSettings.EF_046_EXHIBITION_ID}_${index.toString()}`;
+          return {
+            id: id,
+            type: PostType.Foreword,
+            title: 'Foreword',
+            content: foreword,
+          } as Post;
+        });
+        return posts;
+      }
+
+      return [];
+    } catch (error) {
+      console.log(
+        '[API] Failed to load post of EF046 exhibition',
         JSON.stringify(error)
       );
       Sentry.captureException(error);
