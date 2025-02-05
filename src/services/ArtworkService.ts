@@ -54,8 +54,12 @@ class ArtworkService {
     return new Promise((resolve, reject) => {
       client
         .query({
-          query: gql`{tokens(ids: ["${ids.join('","')}"])
-              {
+          query: gql`
+            {
+              tokens(
+                ids: ["${ids.join('","')}"]
+                burnedIncluded: true
+              ) {
                 id
                 blockchain
                 fungible
@@ -92,23 +96,23 @@ class ArtworkService {
                   txURL
                 }
                 lastRefreshedTime
-                asset{
+                asset {
                   indexID
                   thumbnailID
                   lastRefreshedTime
                   attributes {
                     scrollable
                   }
-                  metadata{
-                    project{
-                      origin{
+                  metadata {
+                    project {
+                      origin {
                         artistID
                         artistName
                         artistURL
-                        artists{
-                        name
-                        id
-                        url
+                        artists {
+                          name
+                          id
+                          url
                         }
                         assetID
                         title
@@ -127,14 +131,14 @@ class ArtworkService {
                         assetURL
                         artworkMetadata
                       }
-                      latest{
+                      latest {
                         artistID
                         artistName
                         artistURL
-                        artists{
-                        name
-                        id
-                        url
+                        artists {
+                          name
+                          id
+                          url
                         }
                         assetID
                         title
@@ -156,9 +160,9 @@ class ArtworkService {
                     }
                   }
                 }
-
               }
-            }`,
+            }
+          `,
         })
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .then((result: any) => {
