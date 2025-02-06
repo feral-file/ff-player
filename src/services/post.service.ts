@@ -59,16 +59,14 @@ export class PostService {
         `${process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''}/configs/app.json`
       );
 
-      const forewordSection = response.data as {
+      const appConfigData = response.data as {
         exhibition?: {
           foreword?: Record<string, string[]>;
         };
       } | null;
 
-      const forewords =
-        forewordSection?.exhibition?.foreword?.[
-          AppSettings.EF_046_EXHIBITION_ID
-        ];
+      const forewordSection = appConfigData?.exhibition?.foreword;
+      const forewords = forewordSection?.[AppSettings.EF_046_EXHIBITION_ID];
 
       if (forewords) {
         const posts = forewords.map((foreword, index) => {
