@@ -31,6 +31,7 @@ export enum CastCommand {
   getCursorOffset = 'getCursorOffset',
   sendKeyboardEvent = 'sendKeyboardEvent',
   castDaily = 'castDaily',
+  updateArtFraming = 'updateArtFraming',
 }
 
 export interface Reply {
@@ -75,6 +76,9 @@ export type CastExhibitionReply = Reply;
 export interface CastListArtworkRequest {
   startTime?: number;
   artworks: PlayArtworkV2[];
+}
+export interface UpdateArtFramingRequest {
+  frameConfig: ArtFraming;
 }
 export type CastListArtworkReply = Reply;
 export type NextArtworkRequest = object;
@@ -216,4 +220,9 @@ export enum MessageModalType {
   error = 'error',
   warning = 'warning',
   info = 'info',
+}
+
+export enum ArtFraming {
+  FitToScreen,
+  CropToFill,
 }
