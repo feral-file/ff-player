@@ -1,4 +1,5 @@
 import {
+  ArtFraming,
   FileUseAudio,
   FileUseIframePDF,
   FileUseImage,
@@ -293,7 +294,8 @@ const ArtworkPlayer = ({
     }
 
     if (previewType === SeriesPreviewHTMLTag.iframe) {
-      const displayMode = 'fit';
+      const displayMode =
+        context.frameConfig === ArtFraming.CropToFill ? 'crop' : 'fit';
       const queryParam = `&display_mode=${displayMode}`;
       const url = new URL(previewURL);
       url.search += queryParam;
@@ -301,7 +303,7 @@ const ArtworkPlayer = ({
     } else {
       setDisplaySoftwareURL(previewURL);
     }
-  }, [previewType, previewURL]);
+  }, [context.frameConfig, previewType, previewURL]);
 
   const handleLoadIframeError = () => {
     setShowMessageModal(true);
@@ -326,7 +328,10 @@ const ArtworkPlayer = ({
             style={{
               width: '100%',
               height: '100%',
-              objectFit: 'contain',
+              objectFit:
+                context.frameConfig === ArtFraming.FitToScreen
+                  ? 'contain'
+                  : 'cover',
             }}
             className={styles.image}
             src={previewURL}
@@ -350,7 +355,10 @@ const ArtworkPlayer = ({
           style={{
             width: '100%',
             height: '100%',
-            objectFit: 'contain',
+            objectFit:
+              context.frameConfig === ArtFraming.FitToScreen
+                ? 'contain'
+                : 'cover',
           }}
           autoPlay
           loop

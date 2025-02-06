@@ -37,6 +37,8 @@ import {
   KeyboardEventReply,
   CastInfo,
   DeviceInfo,
+  UpdateArtFramingRequest,
+  ArtFraming,
 } from '../utils/types';
 
 import { LocalStorageItem } from '@/constants';
@@ -49,6 +51,8 @@ class CanvasService {
 
   private static instance: CanvasService | null;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
+  public onFrameConfigUpdated: ((frameConfig: ArtFraming) => void) | null =
+    null;
 
   public static getInstance() {
     if (!CanvasService.instance) {
@@ -213,6 +217,10 @@ class CanvasService {
           return await this.keyboardEvent(requestJson as KeyboardEventRequest);
         case CastCommand.castDaily:
           return await this.castDaily(requestJson as object);
+        case CastCommand.updateArtFraming:
+          return await this.updateArtFraming(
+            requestJson as UpdateArtFramingRequest
+          );
         default:
           console.error(`[CAST] Unknown command: ${command}`);
           return { ok: false };
@@ -399,6 +407,18 @@ class CanvasService {
       ...this.castInfo,
       value: request.code,
     });
+    return Promise.resolve({ ok: true });
+  }
+
+  public updateArtFraming(
+    request: UpdateArtFramingRequest
+  ): Promise<KeyboardEventReply> {
+    console.log('Update ArtFraming: ', request);
+
+    if (this.onFrameConfigUpdated) {
+      this.onFrameConfigUpdated(request.frameConfig);
+    }
+
     return Promise.resolve({ ok: true });
   }
 }

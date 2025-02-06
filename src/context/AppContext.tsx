@@ -16,12 +16,13 @@ import useDeviceRotation, {
 import RemoteConfigService, {
   AppRemoteConfig,
 } from '@/services/remoteConfigService';
-import { AppSettings, LocalStorageItem, Platform } from '@/constants';
+import { AppSettings, LocalStorageItem } from '@/constants';
 import { useSearchParams } from 'next/navigation';
 import DeviceManager from '@/utils/DeviceManager';
 import useCastInfo from '@/services/useCastInfo';
-import { CastInfo } from '@/utils/types';
+import { ArtFraming, CastInfo } from '@/utils/types';
 import { LocalWebSocketClient } from '@/services/local-websocket/LocalWebSocketClient';
+import useFrameConfig from '@/services/useArtFraming';
 
 interface AppContextProps {
   children: ReactNode;
@@ -36,6 +37,7 @@ interface AppConfigContext {
   deviceRotation: DeviceRotation | null;
   appRemoteConfig: AppRemoteConfig;
   castInfo: CastInfo | null;
+  frameConfig: ArtFraming | null;
 }
 
 export const AppContext = createContext<AppContextValue | undefined>(undefined);
@@ -59,6 +61,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const [platformInitialized, setPlatformInitialized] = useState(false);
 
   const { castInfo } = useCastInfo();
+  const { frameConfig } = useFrameConfig();
   const isOnline = useNetworkManger();
 
   const deviceRotation = useDeviceRotation(rotation);
@@ -69,6 +72,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
     deviceRotation,
     appRemoteConfig,
     castInfo,
+    frameConfig,
   };
 
   const initContext = async () => {
@@ -156,6 +160,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
           deviceRotation,
           appRemoteConfig,
           castInfo,
+          frameConfig,
         },
       }}>
       {children}
