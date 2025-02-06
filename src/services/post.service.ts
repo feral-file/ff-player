@@ -20,6 +20,8 @@ export class PostService {
   public async getPostExhibition(exhibition: Exhibition): Promise<Post[]> {
     try {
       const isJG043Show = exhibition.id === AppSettings.JG_043_EXHIBITION_ID;
+      const isEF046Exhibition =
+        exhibition.id === AppSettings.EF_046_EXHIBITION_ID;
       let posts = exhibition.posts ?? [];
       const curatorNote = {
         id: 'curatorNote',
@@ -30,6 +32,9 @@ export class PostService {
       if (isJG043Show) {
         const J043Customs = await this.getCustomPostOfJG043Show();
         posts = [curatorNote, ...J043Customs, ...posts];
+      } else if (isEF046Exhibition) {
+        const EF43Customs = await this.getCustomPostOfEF046Exhibition();
+        posts = [...EF43Customs, ...posts];
       } else {
         posts = [curatorNote, ...posts];
       }
@@ -48,12 +53,49 @@ export class PostService {
     }
   }
 
+  private async getCustomPostOfEF046Exhibition() {
+    try {
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''}/configs/app.json`
+      );
+
+      const appConfigData = response.data as {
+        exhibition?: {
+          foreword?: Record<string, string[]>;
+        };
+      } | null;
+
+      const forewordSection = appConfigData?.exhibition?.foreword;
+      const forewords = forewordSection?.[AppSettings.EF_046_EXHIBITION_ID];
+
+      if (forewords) {
+        const posts = forewords.map((foreword, index) => {
+          const id = `foreword_${AppSettings.EF_046_EXHIBITION_ID}_${index.toString()}`;
+          return {
+            id: id,
+            type: PostType.Foreword,
+            title: 'Foreword',
+            content: foreword,
+          } as Post;
+        });
+        return posts;
+      }
+
+      return [];
+    } catch (error) {
+      console.log(
+        '[API] Failed to load post of EF046 exhibition',
+        JSON.stringify(error)
+      );
+      Sentry.captureException(error);
+      return [];
+    }
+  }
+
   private async getCustomPostOfJG043Show(): Promise<Post[]> {
     try {
       const response = await axios.get(
-        `${
-          process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''
-        }/configs/postcard/postcard_configs.json`
+        `${process.env.NEXT_PUBLIC_PUB_DOC_URL ?? ''}/configs/app.json`
       );
 
       const jg043Section = response.data as Jg043CustomPosts | null;
