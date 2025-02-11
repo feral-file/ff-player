@@ -61,7 +61,7 @@ export type ConnectReplyV2 = Reply;
 export type DisconnectReplyV2 = Reply;
 export type CheckDeviceStatusRequest = object;
 export interface CheckDeviceStatusReply extends Reply {
-  startTime: number;
+  startTime?: number;
   artworks: PlayArtworkV2[];
   connectedDevice?: DeviceInfo;
   exhibitionId?: string;

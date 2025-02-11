@@ -266,12 +266,12 @@ class CanvasService {
     console.log('[CAST] Check status:', JSON.stringify(request));
     return Promise.resolve({
       ok: true,
-      startTime: Date.now(),
       artworks: this.castInfo?.artworks ?? [],
       connectedDevice: this.castInfo?.deviceInfo,
       exhibitionId: this.castInfo?.exhibitionId,
       displayKey: this.castInfo?.displayKey,
       catalogId: this.castInfo?.catalogId,
+      startTime: this.castInfo?.startTime,
     });
   }
 
