@@ -9,11 +9,25 @@ const cloudFlareHostingDomain = 'imagedelivery.net';
 const ipfsGateway = 'https://ipfs.io/ipfs/';
 
 class ArtworkService {
-  public async getArtworkDetail(artworkID: string): Promise<Artwork | null> {
+  public async getArtworkDetail(
+    artworkID: string,
+    includeSeries = true,
+    includeSuccessfulSwap = false
+  ): Promise<Artwork | null> {
     try {
-      const response = await axiosInstance.get(
-        `/api/artworks/${artworkID}?includeSeries=true`
-      );
+      const path = `/api/artworks/${artworkID}`;
+      const params = new URLSearchParams();
+      if (includeSeries) {
+        params.append('includeSeries', 'true');
+      }
+
+      if (includeSuccessfulSwap) {
+        params.append('includeSuccessfulSwap', 'true');
+      }
+
+      const queryString = params.toString();
+      const fullPath = queryString ? `${path}?${queryString}` : path;
+      const response = await axiosInstance.get(fullPath);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const artwork = response.data.result as Artwork;
 
@@ -39,6 +53,13 @@ class ArtworkService {
       artwork.previewURI;
 
     return previewUrl ? this.transformPreviewSrc(previewUrl) : '';
+  }
+
+  public async queryIndexerToken(id: string): Promise<IndexerToken | null> {
+    const client = createApolloClient();
+    const data = await this.queryTokensChunk(client, [id]);
+    const token = data[0] || null;
+    return token;
   }
 
   public async queryTokens(ids: string[]): Promise<IndexerToken[]> {
@@ -114,6 +135,8 @@ class ArtworkService {
                   indexID
                   thumbnailID
                   lastRefreshedTime
+                  staticPreviewURLLandscape
+                  staticPreviewURLPortrait
                   attributes {
                     scrollable
                   }

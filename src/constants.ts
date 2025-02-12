@@ -52,6 +52,7 @@ export const AppSettings = {
   VERSION_CHECK_INTERVAL_DURATION: 1000 * 60 * 60, // 1 minutes
   DEFAULT_NEW_DAILY_HOUR: 6, // 6:00 AM
   JG_043_EXHIBITION_ID: '46a0f68b-a657-4364-92a0-32a88b65fbd9',
+  EF_046_EXHIBITION_ID: '796f9fd9-d405-451c-a584-d9f21222c6dd',
   STANDARD_HEIGHT: 1080,
 };
 
@@ -72,3 +73,5 @@ export const NO_YEAR_IN_TITLE_SERIES_IDS = [
 ];
 
 export const CLIENT_BANDWIDTH_HINT = 16; // Mbps
+
+export const SWITCH_TOKEN_INTERVAL = 5 * 60 * 1000;

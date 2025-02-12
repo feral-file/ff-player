@@ -41,7 +41,14 @@ const ArtworkPlayer = ({
   keyboardCode?: number;
   artworkPreviewMIMEType?: string;
 }) => {
+  const FADE_IN_BUFFER_MS = 50;
+  const FADE_IN_OUT_DAILY_MS = 350;
   const { context } = useAppContext();
+  const [opacity, setOpacity] = useState(1);
+  const [displayPreviewURL, setDisplayPreviewURL] = useState<string>('');
+  const fadeInTimeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
+    undefined
+  );
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [displaySoftwareURL, setDisplaySoftwareURL] =
     useState<string>(previewURL);
@@ -187,12 +194,26 @@ const ArtworkPlayer = ({
     };
 
     if (previewURL) {
-      setLoading(true);
+      if (fadeInTimeoutRef.current) {
+        clearTimeout(fadeInTimeoutRef.current);
+      }
+
+      setOpacity(0);
       setPreviewType(null);
       detectPreviewType(previewURL).catch((err: unknown) => {
         console.error(err);
       });
+
+      fadeInTimeoutRef.current = setTimeout(() => {
+        setDisplayPreviewURL(previewURL);
+      }, FADE_IN_OUT_DAILY_MS + FADE_IN_BUFFER_MS);
     }
+
+    return () => {
+      if (fadeInTimeoutRef.current) {
+        clearTimeout(fadeInTimeoutRef.current);
+      }
+    };
   }, [previewURL]);
 
   useEffect(() => {
@@ -209,7 +230,8 @@ const ArtworkPlayer = ({
   }, [previewType, videoRef]);
 
   const loadedSource = () => {
-    console.log('[CAST] loaded source', previewURL);
+    setOpacity(1);
+    console.log('[CAST] loaded source', displayPreviewURL);
     // When an iframe is present in a page, the parent window might not receive keydown events because the iframe itself captures these events when it is focused.
     // This is work around to focus the parent window.
     // window.focus();
@@ -219,7 +241,12 @@ const ArtworkPlayer = ({
 
   useEffect(() => {
     if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
-      if (isStreaming && Hls.isSupported() && previewURL.endsWith('.m3u8')) {
+      setOpacity(1);
+      if (
+        isStreaming &&
+        Hls.isSupported() &&
+        displayPreviewURL.endsWith('.m3u8')
+      ) {
         const hls = new Hls({
           maxBufferSize: 60 * 1000 * 1000,
           maxBufferLength: 30,
@@ -229,7 +256,7 @@ const ArtworkPlayer = ({
         hls.attachMedia(videoRef.current);
         hls.on(Hls.Events.MEDIA_ATTACHED, () => {
           hls.loadSource(
-            `${previewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
+            `${displayPreviewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
           );
           videoRef.current
             ?.play()
@@ -258,7 +285,7 @@ const ArtworkPlayer = ({
           }
         });
       } else {
-        videoRef.current.src = previewURL;
+        videoRef.current.src = displayPreviewURL;
         videoRef.current.addEventListener('loadeddata', () => {
           videoRef.current
             ?.play()
@@ -271,7 +298,7 @@ const ArtworkPlayer = ({
         });
       }
     }
-  }, [previewType, isStreaming, previewURL]);
+  }, [previewType, isStreaming, displayPreviewURL]);
 
   useEffect(() => {
     if (context.isOnline) {
@@ -289,7 +316,7 @@ const ArtworkPlayer = ({
   }, [context, previewType]);
 
   useEffect(() => {
-    if (!previewURL) {
+    if (!displayPreviewURL) {
       return;
     }
 
@@ -297,15 +324,16 @@ const ArtworkPlayer = ({
       const displayMode =
         context.frameConfig === ArtFraming.CropToFill ? 'crop' : 'fit';
       const queryParam = `&display_mode=${displayMode}`;
-      const url = new URL(previewURL);
+      const url = new URL(displayPreviewURL);
       url.search += queryParam;
       setDisplaySoftwareURL(url.toString());
     } else {
-      setDisplaySoftwareURL(previewURL);
+      setDisplaySoftwareURL(displayPreviewURL);
     }
-  }, [context.frameConfig, previewType, previewURL]);
+  }, [previewType, displayPreviewURL]);
 
   const handleLoadIframeError = () => {
+    setOpacity(1);
     setShowMessageModal(true);
   };
 
@@ -318,9 +346,11 @@ const ArtworkPlayer = ({
         backgroundColor: '#000000',
         justifyContent: 'center',
         position: 'relative',
+        transition: `transform 0.2s, opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms`,
+        opacity: opacity,
       }}>
       {(previewType === null || loading) && <Loading />}
-      {previewURL && previewType === SeriesPreviewHTMLTag.image && (
+      {displayPreviewURL && previewType === SeriesPreviewHTMLTag.image && (
         <div
           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
           className={isCustomView ? styles.customRendering : ''}>
@@ -334,22 +364,22 @@ const ArtworkPlayer = ({
                   : 'cover',
             }}
             className={styles.image}
-            src={previewURL}
+            src={displayPreviewURL}
             alt="Preview"
             onLoad={loadedSource}
           />
         </div>
       )}
-      {previewURL && previewType === SeriesPreviewHTMLTag.object && (
+      {displayPreviewURL && previewType === SeriesPreviewHTMLTag.object && (
         <object
           style={{ width: '100%', height: '100%' }}
-          data={previewURL}
+          data={displayPreviewURL}
           type="text/html"
           onLoad={loadedSource}>
           Not supported
         </object>
       )}
-      {previewURL && previewType === SeriesPreviewHTMLTag.video && (
+      {displayPreviewURL && previewType === SeriesPreviewHTMLTag.video && (
         <video
           ref={videoRef}
           style={{
@@ -363,11 +393,12 @@ const ArtworkPlayer = ({
           autoPlay
           loop
           playsInline
-          crossOrigin="anonymous"></video>
+          crossOrigin="anonymous"
+          onLoad={loadedSource}></video>
       )}
-      {previewURL && previewType === SeriesPreviewHTMLTag.audio && (
+      {displayPreviewURL && previewType === SeriesPreviewHTMLTag.audio && (
         <audio autoPlay={true} loop={true}>
-          <source src={previewURL} onLoadedData={loadedSource}></source>
+          <source src={displayPreviewURL} onLoadedData={loadedSource}></source>
         </audio>
       )}
       {displaySoftwareURL &&

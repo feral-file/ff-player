@@ -111,7 +111,8 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
               </div>
             )}
 
-            {item.type === PostType.J043Custom && (
+            {(item.type === PostType.J043Custom ||
+              item.type === PostType.Foreword) && (
               <div
                 className={styles.card}
                 style={{
