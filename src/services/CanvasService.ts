@@ -270,6 +270,7 @@ class CanvasService {
       connectedDevice: this.castInfo?.deviceInfo,
       exhibitionId: this.castInfo?.exhibitionId,
       displayKey: this.castInfo?.displayKey,
+      catalog: this.castInfo?.catalog,
       catalogId: this.castInfo?.catalogId,
       startTime: this.castInfo?.startTime,
     });
