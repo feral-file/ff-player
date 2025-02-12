@@ -74,6 +74,7 @@ class CanvasService {
       LocalStorageItem.castInfo,
       JSON.stringify(this.castInfo)
     );
+    this.onCastInfoChange?.(this.castInfo);
     console.log('[CAST] castInfo:', JSON.stringify(this.castInfo));
   }
 
