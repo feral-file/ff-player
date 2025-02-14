@@ -75,4 +75,4 @@ export const NO_YEAR_IN_TITLE_SERIES_IDS = [
 
 export const CLIENT_BANDWIDTH_HINT = 16; // Mbps
 
-export const SWITCH_TOKEN_INTERVAL = 10 * 1000;
+export const SWITCH_TOKEN_INTERVAL = 5 * 60 * 1000;
