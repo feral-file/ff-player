@@ -171,8 +171,8 @@ class DailyService {
     return token.asset.staticPreviewURLLandscape &&
       token.asset.staticPreviewURLPortrait
       ? [
-          token.asset.staticPreviewURLLandscape,
-          token.asset.staticPreviewURLPortrait,
+          token.asset.staticPreviewURLLandscape + '/raw',
+          token.asset.staticPreviewURLPortrait + '/raw',
         ]
       : token.asset.metadata.project.latest.medium === 'image' &&
           token.asset.metadata.project.latest.previewURL
