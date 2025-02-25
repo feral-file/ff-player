@@ -15,6 +15,7 @@ import { CastingArtworkType } from '@/models/metric.model';
 import { useAppContext } from '@/context/AppContext';
 import { usePopUpContext } from '@/context/PopUpContext';
 import * as Sentry from '@sentry/nextjs';
+import { ViewMode } from '@/utils/types';
 
 export default function DailyClient() {
   const { context } = useAppContext();
@@ -44,22 +45,34 @@ export default function DailyClient() {
   const newDailyHour = context.appRemoteConfig.new_daily_hour;
 
   useEffect(() => {
-    if (artDisplaySetting?.rotateRadius === undefined) {
+    const { viewMode } = context.deviceRotation ?? {};
+    const artworkRotateAngle = artDisplaySetting?.rotateRadius;
+    if (
+      artworkRotateAngle === undefined ||
+      !viewMode ||
+      (!landscapeStaticURL && !portraitStaticURL)
+    ) {
       return;
     }
 
-    const landScape = artDisplaySetting.rotateRadius % 180 === 0;
-    if (landscapeStaticURL && landScape) {
-      setCastPreviewURL(landscapeStaticURL);
-      setArtworkPreviewMIMEType('image');
-      return;
-    }
+    const isArtworkLandscape =
+      viewMode === ViewMode.landscape
+        ? artworkRotateAngle % 180 === 0
+        : artworkRotateAngle % 180 !== 0;
+    const staticURL = isArtworkLandscape
+      ? landscapeStaticURL
+      : portraitStaticURL;
 
-    if (portraitStaticURL && !landScape) {
-      setCastPreviewURL(portraitStaticURL);
+    if (staticURL) {
+      setCastPreviewURL(staticURL);
       setArtworkPreviewMIMEType('image');
     }
-  }, [landscapeStaticURL, portraitStaticURL, artDisplaySetting?.rotateRadius]);
+  }, [
+    landscapeStaticURL,
+    portraitStaticURL,
+    artDisplaySetting?.rotateRadius,
+    context.deviceRotation,
+  ]);
 
   const fallbackToDefaultArtwork = () => {
     if (switchTokenRef.current) {
