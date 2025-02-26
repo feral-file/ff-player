@@ -19,9 +19,9 @@ export class LocalWebSocketClient {
 
     try {
       this.ws = new ReconnectingWebSocket('ws://localhost:8080', [], {
-        maxRetries: 3,
         reconnectionDelayGrowFactor: 1.3,
-        maxReconnectionDelay: 10000,
+        minReconnectionDelay: 1000,
+        maxReconnectionDelay: 30000,
       });
 
       this.ws.onopen = this.handleOpen.bind(this);
