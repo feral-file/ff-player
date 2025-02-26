@@ -60,8 +60,8 @@ export class LocalWebSocketClient {
   }
 
   private handleClose() {
+    console.log('WebSocket connection closed');
     this.isConnecting = false;
-    this.ws = null;
   }
 
   private handleError(event: unknown) {
