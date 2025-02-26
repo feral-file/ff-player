@@ -69,6 +69,9 @@ export class LocalWebSocketClient {
   }
 
   public sendMessage(message: WebSocketMessage) {
+    console.log('sendMessage this.ws', this.ws);
+    console.log('this.ws.readyState', this.ws?.readyState);
+
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       console.warn('WebSocket is not connected');
       return;
