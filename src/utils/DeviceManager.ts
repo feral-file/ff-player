@@ -11,6 +11,7 @@ import {
 import * as Sentry from '@sentry/nextjs';
 import { DeviceNamePrefix, LocalStorageItem, Platform } from '@/constants';
 import { BrowserInfo, detect } from 'detect-browser';
+import { ArtFraming } from './types';
 
 class DeviceManager {
   static instance = new DeviceManager();
@@ -264,6 +265,18 @@ class DeviceManager {
       console.error('[DEVICE] Error generate branch link: ', JSON.stringify(e));
       return null;
     }
+  }
+
+  public setArtFrameConfig(artFrameConfig: ArtFraming): void {
+    this.setToLocalStorage(
+      LocalStorageItem.artFraming,
+      artFrameConfig.toString()
+    );
+  }
+
+  public async getArtFrameConfig(): Promise<ArtFraming | undefined> {
+    const config = await this.getFromLocalStorage(LocalStorageItem.artFraming);
+    return config ? (parseInt(config) as ArtFraming) : undefined;
   }
 }
 
