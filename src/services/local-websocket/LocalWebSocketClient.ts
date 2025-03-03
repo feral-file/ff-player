@@ -1,7 +1,6 @@
 import { WebSocketMessage } from '@/utils/types';
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import CanvasService from '../CanvasService';
-import { LocalStorageItem } from '@/constants';
 
 export class LocalWebSocketClient {
   private ws: ReconnectingWebSocket | null = null;
@@ -44,12 +43,6 @@ export class LocalWebSocketClient {
     // Only ping on initial connection
     if (this.connectionAttempts === 1) {
       this.ping();
-    }
-
-    const castInfo = localStorage.getItem(LocalStorageItem.castInfo);
-    if (castInfo) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      CanvasService.getInstance().setCastInfo(JSON.parse(castInfo));
     }
   }
 
