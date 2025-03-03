@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import CanvasService from './CanvasService';
 import { ArtFraming } from '@/utils/types';
+import DeviceManager from '@/utils/DeviceManager';
 
 const useFrameConfig = () => {
   const [frameConfig, setFrameConfig] = useState<ArtFraming>(
@@ -23,7 +24,11 @@ const useFrameConfig = () => {
     };
   }, []);
 
-  return { frameConfig };
+  useEffect(() => {
+    DeviceManager.setArtFrameConfig(frameConfig);
+  }, [frameConfig]);
+
+  return { frameConfig, setFrameConfig };
 };
 
 export default useFrameConfig;
