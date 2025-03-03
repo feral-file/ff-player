@@ -61,7 +61,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const [platformInitialized, setPlatformInitialized] = useState(false);
 
   const { castInfo } = useCastInfo();
-  const { frameConfig } = useFrameConfig();
+  const { frameConfig, setFrameConfig } = useFrameConfig();
   const isOnline = useNetworkManger();
 
   const deviceRotation = useDeviceRotation(rotation);
@@ -88,6 +88,9 @@ export const AppProvider = ({ children }: AppContextProps) => {
     try {
       await DeviceManager.init();
       initialOrientation();
+      initialArtFrameConfig().catch((error: unknown) => {
+        console.log('Error initial art frame config', error);
+      });
     } catch (error) {
       console.log('Error init device manager', error);
     }
@@ -95,6 +98,21 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
   const initialOrientation = () => {
     setRotation(defaultRotation());
+  };
+
+  const initialArtFrameConfig = async () => {
+    try {
+      const data = await DeviceManager.getArtFrameConfig();
+      if (data === undefined) {
+        setFrameConfig(ArtFraming.FitToScreen);
+        return;
+      }
+
+      setFrameConfig(data);
+    } catch (error) {
+      console.log('Error initial art frame config', error);
+      setFrameConfig(ArtFraming.FitToScreen);
+    }
   };
 
   // Initialize platform events
