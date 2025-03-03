@@ -161,6 +161,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     console.log('[CAST] process cast info:', JSON.stringify(castInfo));
     if (castInfo) {
       const handleCastCommand = () => {
+        console.log('AppWrapper castInfo', castInfo);
+        console.log('AppWrapper castState', castState);
+
         switch (castInfo.castCommand) {
           case CastCommand.castListArtwork: {
             if (castState === CastState.Artwork) {
@@ -216,6 +219,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         // Disconnect
         setCastState(CastState.None);
         router.back();
+      } else {
+        router.push('/daily');
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

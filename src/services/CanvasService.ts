@@ -41,7 +41,6 @@ import {
   ArtFraming,
 } from '../utils/types';
 
-import { LocalStorageItem } from '@/constants';
 import * as Sentry from '@sentry/nextjs';
 
 class CanvasService {
@@ -66,16 +65,12 @@ class CanvasService {
     return this.castInfo;
   }
 
-  public setCastInfo(castInfo: CastInfo | null) {
+  public setCastInfo(castInfo: CastInfo | null, notify = true) {
     console.log('[CAST] Setting castInfo:', JSON.stringify(castInfo));
     this.castInfo = castInfo;
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    localStorage?.setItem(
-      LocalStorageItem.castInfo,
-      JSON.stringify(this.castInfo)
-    );
-    this.onCastInfoChange?.(this.castInfo);
-    console.log('[CAST] castInfo:', JSON.stringify(this.castInfo));
+    if (notify) {
+      this.onCastInfoChange?.(this.castInfo);
+    }
   }
 
   public async processMessage(event: MessageEvent) {
