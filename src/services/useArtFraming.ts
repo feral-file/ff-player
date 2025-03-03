@@ -10,6 +10,7 @@ const useFrameConfig = () => {
     ArtFraming.FitToScreen
   );
   const canvasService = useRef(CanvasService.getInstance());
+  const isFirstRender = useRef(true);
 
   useEffect(() => {
     const handleFrameConfigChanged = (artFrame: ArtFraming | null) => {
@@ -25,6 +26,11 @@ const useFrameConfig = () => {
   }, []);
 
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
     DeviceManager.setArtFrameConfig(frameConfig);
   }, [frameConfig]);
 

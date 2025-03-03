@@ -3,12 +3,12 @@
 import { useState, useEffect, useRef } from 'react';
 import CanvasService from './CanvasService';
 import { CastInfo } from '@/utils/types';
+import { LocalStorageItem } from '@/constants';
 
 const useCastInfo = () => {
-  const [castInfo, setCastInfo] = useState<CastInfo | null>(
-    CanvasService.getInstance().getCastInfo()
-  );
+  const [castInfo, setCastInfo] = useState<CastInfo | null>(null);
   const canvasService = useRef(CanvasService.getInstance());
+  const isFirstRender = useRef(true);
 
   useEffect(() => {
     const handleCastInfoChange = (newCastInfo: CastInfo | null) => {
@@ -24,6 +24,16 @@ const useCastInfo = () => {
       service.onCastInfoChange = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    localStorage?.setItem(LocalStorageItem.castInfo, JSON.stringify(castInfo));
+  }, [castInfo]);
 
   return { castInfo, setCastInfo };
 };

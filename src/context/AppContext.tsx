@@ -23,6 +23,7 @@ import useCastInfo from '@/services/useCastInfo';
 import { ArtFraming, CastInfo } from '@/utils/types';
 import { LocalWebSocketClient } from '@/services/local-websocket/LocalWebSocketClient';
 import useFrameConfig from '@/services/useArtFraming';
+import CanvasService from '@/services/CanvasService';
 
 interface AppContextProps {
   children: ReactNode;
@@ -60,12 +61,13 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const [rotation, setRotation] = useState<DeviceRotation | null>(null);
   const [platformInitialized, setPlatformInitialized] = useState(false);
 
-  const { castInfo } = useCastInfo();
+  const { castInfo, setCastInfo } = useCastInfo();
   const { frameConfig, setFrameConfig } = useFrameConfig();
   const isOnline = useNetworkManger();
 
   const deviceRotation = useDeviceRotation(rotation);
   const searchParams = useSearchParams();
+  const canvasService = useRef(CanvasService.getInstance());
 
   const contextConfig = {
     isOnline,
@@ -91,6 +93,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
       initialArtFrameConfig().catch((error: unknown) => {
         console.log('Error initial art frame config', error);
       });
+      initCastInfo();
     } catch (error) {
       console.log('Error init device manager', error);
     }
@@ -103,6 +106,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const initialArtFrameConfig = async () => {
     try {
       const data = await DeviceManager.getArtFrameConfig();
+      console.log('Initial art frame config', data);
       if (data === undefined) {
         setFrameConfig(ArtFraming.FitToScreen);
         return;
@@ -112,6 +116,20 @@ export const AppProvider = ({ children }: AppContextProps) => {
     } catch (error) {
       console.log('Error initial art frame config', error);
       setFrameConfig(ArtFraming.FitToScreen);
+    }
+  };
+
+  const initCastInfo = () => {
+    const castInfoString = localStorage.getItem(LocalStorageItem.castInfo);
+    console.log('LocalStorage castInfo', castInfo);
+    if (castInfoString != null) {
+      try {
+        const castInfo = JSON.parse(castInfoString) as CastInfo;
+        setCastInfo(castInfo);
+        canvasService.current.setCastInfo(castInfo, false);
+      } catch (error) {
+        console.log('Error init cast info', error);
+      }
     }
   };
 
