@@ -310,15 +310,13 @@ class CanvasService {
     return Promise.resolve({ ok: true });
   }
 
-  private nextArtwork(request: NextArtworkRequest): Promise<NextArtworkReply> {
-    console.log('[CAST] next artwork: ', request);
-    return Promise.resolve({ ok: true });
-  }
-
   private pauseCasting(
     request: PauseCastingRequest
   ): Promise<PauseCastingReply> {
     console.log('[CAST]: pause casting', request);
+    this.setCastInfo({
+      ...this.castInfo,
+    });
     return Promise.resolve({ ok: true });
   }
 
@@ -326,6 +324,17 @@ class CanvasService {
     request: ResumeCastingRequest
   ): Promise<ResumeCastingReply> {
     console.log('[CAST] resume casting:', request);
+    this.setCastInfo({
+      ...this.castInfo,
+    });
+    return Promise.resolve({ ok: true });
+  }
+
+  private nextArtwork(request: NextArtworkRequest): Promise<NextArtworkReply> {
+    console.log('[CAST] next artwork: ', request);
+    this.setCastInfo({
+      ...this.castInfo,
+    });
     return Promise.resolve({ ok: true });
   }
 
@@ -333,6 +342,9 @@ class CanvasService {
     request: PreviousArtworkRequest
   ): Promise<PreviousArtworkReply> {
     console.log('[CAST] previous artwork', request);
+    this.setCastInfo({
+      ...this.castInfo,
+    });
     return Promise.resolve({ ok: true });
   }
 

@@ -2,13 +2,25 @@
 
 import { useState, useEffect, useRef } from 'react';
 import CanvasService from './CanvasService';
-import { CastInfo } from '@/utils/types';
+import { CastCommand, CastInfo } from '@/utils/types';
 import { LocalStorageItem } from '@/constants';
 
 const useCastInfo = () => {
   const [castInfo, setCastInfo] = useState<CastInfo | null>(null);
   const canvasService = useRef(CanvasService.getInstance());
   const isFirstRender = useRef(true);
+
+  const shouldStoreCastInfo = () => {
+    return (
+      !castInfo?.castCommand ||
+      ![
+        CastCommand.pauseCasting,
+        CastCommand.resumeCasting,
+        CastCommand.nextArtwork,
+        CastCommand.previousArtwork,
+      ].includes(castInfo.castCommand)
+    );
+  };
 
   useEffect(() => {
     const handleCastInfoChange = (newCastInfo: CastInfo | null) => {
@@ -31,8 +43,22 @@ const useCastInfo = () => {
       return;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    localStorage?.setItem(LocalStorageItem.castInfo, JSON.stringify(castInfo));
+    if (shouldStoreCastInfo()) {
+      if (
+        castInfo?.castCommand &&
+        [CastCommand.updateDuration, CastCommand.moveToArtwork].includes(
+          castInfo.castCommand
+        )
+      ) {
+        castInfo.castCommand = CastCommand.castListArtwork;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      localStorage?.setItem(
+        LocalStorageItem.castInfo,
+        JSON.stringify(castInfo)
+      );
+    }
   }, [castInfo]);
 
   return { castInfo, setCastInfo };
