@@ -21,7 +21,7 @@ const useFrameConfig = () => {
     service.onFrameConfigUpdated = handleFrameConfigChanged;
 
     return () => {
-      service.onCastInfoChange = null;
+      service.onFrameConfigUpdated = null;
     };
   }, []);
 
