@@ -32,6 +32,7 @@ export enum CastCommand {
   sendKeyboardEvent = 'sendKeyboardEvent',
   castDaily = 'castDaily',
   updateArtFraming = 'updateArtFraming',
+  ping = 'ping',
 }
 
 export interface Reply {
