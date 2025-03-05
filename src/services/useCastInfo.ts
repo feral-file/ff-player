@@ -10,16 +10,15 @@ const useCastInfo = () => {
   const canvasService = useRef(CanvasService.getInstance());
   const isFirstRender = useRef(true);
 
-  const shouldStoreCastInfo = () => {
-    return (
-      !castInfo?.castCommand ||
-      ![
-        CastCommand.pauseCasting,
-        CastCommand.resumeCasting,
-        CastCommand.nextArtwork,
-        CastCommand.previousArtwork,
-      ].includes(castInfo.castCommand)
-    );
+  const isPlaylistControlCommand = (castInfo: CastInfo) => {
+    return [
+      castInfo.castCommand && CastCommand.updateDuration,
+      CastCommand.moveToArtwork,
+      CastCommand.pauseCasting,
+      CastCommand.resumeCasting,
+      CastCommand.nextArtwork,
+      CastCommand.previousArtwork,
+    ].includes(castInfo.castCommand);
   };
 
   useEffect(() => {
@@ -43,22 +42,16 @@ const useCastInfo = () => {
       return;
     }
 
-    if (shouldStoreCastInfo()) {
-      if (
-        castInfo?.castCommand &&
-        [CastCommand.updateDuration, CastCommand.moveToArtwork].includes(
-          castInfo.castCommand
-        )
-      ) {
-        castInfo.castCommand = CastCommand.castListArtwork;
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      localStorage?.setItem(
-        LocalStorageItem.castInfo,
-        JSON.stringify(castInfo)
-      );
+    const castInfoToStore = castInfo;
+    if (castInfoToStore && isPlaylistControlCommand(castInfoToStore)) {
+      castInfoToStore.castCommand = CastCommand.castListArtwork;
     }
+
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    localStorage?.setItem(
+      LocalStorageItem.castInfo,
+      JSON.stringify(castInfoToStore)
+    );
   }, [castInfo]);
 
   return { castInfo, setCastInfo };
