@@ -158,7 +158,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    console.log('[CAST] process cast info:', JSON.stringify(castInfo));
+    console.log('[AppWrapper] process cast info:', JSON.stringify(castInfo));
     if (castInfo) {
       const handleCastCommand = () => {
         console.log('AppWrapper castInfo', castInfo);

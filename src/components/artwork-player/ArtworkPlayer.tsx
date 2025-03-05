@@ -94,8 +94,8 @@ const ArtworkPlayer = ({
     if (videoRef.current) {
       videoRef.current.muted = true;
       videoRef.current.play().catch((error: unknown) => {
-        console.log('[CAST] Error play video', JSON.stringify(error));
-        Sentry.captureMessage('[CAST] Error play video');
+        console.log('[ArtworkPlayer] Error play video', JSON.stringify(error));
+        Sentry.captureMessage('[ArtworkPlayer] Error play video');
       });
     }
   };
@@ -225,7 +225,7 @@ const ArtworkPlayer = ({
 
   const loadedSource = () => {
     setOpacity(1);
-    console.log('[CAST] loaded source', displayPreviewURL);
+    console.log('[ArtworkPlayer] loaded source', displayPreviewURL);
     // When an iframe is present in a page, the parent window might not receive keydown events because the iframe itself captures these events when it is focused.
     // This is work around to focus the parent window.
     // window.focus();
@@ -298,8 +298,11 @@ const ArtworkPlayer = ({
     if (context.isOnline) {
       if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
         videoRef.current.play().catch((error: unknown) => {
-          console.log('[CAST] Error play video', JSON.stringify(error));
-          Sentry.captureMessage('[CAST] Error play video');
+          console.log(
+            '[ArtworkPlayer] Error play video',
+            JSON.stringify(error)
+          );
+          Sentry.captureMessage('[ArtworkPlayer] Error play video');
         });
       }
     } else {
