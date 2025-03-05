@@ -16,7 +16,7 @@ export default function PlaylistClient() {
   const castInfo = context.castInfo;
 
   const [artworkID, setArtworkID] = useState<string | undefined>();
-  const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
+  const [isLeeMullicanExhibition, setIsLeeMullicanExhibition] =
     useState<boolean>(false);
 
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
@@ -58,7 +58,7 @@ export default function PlaylistClient() {
       setArtworkID(currentPlaylist.token.id);
     }
     setCastPreviewURL(currentPlaylist.previewURL);
-    setIsLeeMucianExhibition(
+    setIsLeeMullicanExhibition(
       currentPlaylist.contractAddress === LeeMullican_EXHIBITION_CONTRACT
     );
 
@@ -196,6 +196,48 @@ export default function PlaylistClient() {
     }
   };
 
+  const getNftTokens = async (
+    artworks: PlayArtworkV2[]
+  ): Promise<PlaylistToken[]> => {
+    try {
+      const assetIds = artworks.map(
+        (artwork: PlayArtworkV2) => artwork.token?.id ?? ''
+      );
+      const tokens = await artworkService.current.queryTokens(assetIds);
+      const previewData = new Map<string, string>();
+      const tokensName = new Map<string, string>();
+      const contractAddress = new Map<string, string>();
+      const mapTokens = new Map<string, IndexerToken>();
+      tokens.forEach((token: IndexerToken) => {
+        previewData.set(
+          token.indexID,
+          token.asset.metadata.project.latest.previewURL
+        );
+        tokensName.set(token.indexID, getIndexerTokenName(token));
+        contractAddress.set(token.indexID, token.contractAddress);
+        mapTokens.set(token.indexID, token);
+      });
+      const updatedArtworks = artworks.map((artwork: PlayArtworkV2) => {
+        if (artwork.token) {
+          artwork.token.name = tokensName.get(artwork.token.id) ?? '';
+        }
+
+        const aw: PlaylistToken = {
+          duration: artwork.duration,
+          previewURL: previewData.get(artwork.token?.id ?? '') ?? '',
+          token: artwork.token ?? { id: '', name: '' },
+          contractAddress: contractAddress.get(artwork.token?.id ?? ''),
+          indexerToken: mapTokens.get(artwork.token?.id ?? ''),
+        };
+        return aw;
+      });
+      return updatedArtworks;
+    } catch (error) {
+      console.log('Error fetching NFT tokens:', JSON.stringify(error));
+      return [];
+    }
+  };
+
   useEffect(() => {
     console.log('castInfo', castInfo);
 
@@ -204,70 +246,27 @@ export default function PlaylistClient() {
         switch (castInfo.castCommand) {
           case CastCommand.castListArtwork: {
             indexRef.current = -1;
-            const getNftTokens = async (ids: string[]) => {
-              if (!ids.length) {
-                return;
-              }
-              try {
-                const tokens = await artworkService.current.queryTokens(ids);
-                const artworks = castInfo.artworks;
-                if (!artworks) {
-                  return;
-                }
-                const previewData = new Map<string, string>();
-                const tokensName = new Map<string, string>();
-                const contractAddress = new Map<string, string>();
-                const mapTokens = new Map<string, IndexerToken>();
-                tokens.forEach((token: IndexerToken) => {
-                  previewData.set(
-                    token.indexID,
-                    token.asset.metadata.project.latest.previewURL
-                  );
-                  tokensName.set(token.indexID, getIndexerTokenName(token));
-                  contractAddress.set(token.indexID, token.contractAddress);
-                  mapTokens.set(token.indexID, token);
-                });
-                const updatedArtworks = artworks.map(
-                  (artwork: PlayArtworkV2) => {
-                    if (artwork.token) {
-                      artwork.token.name =
-                        tokensName.get(artwork.token.id) ?? '';
-                    }
 
-                    const aw: PlaylistToken = {
-                      duration: artwork.duration,
-                      previewURL:
-                        previewData.get(artwork.token?.id ?? '') ?? '',
-                      token: artwork.token ?? { id: '', name: '' },
-                      contractAddress: contractAddress.get(
-                        artwork.token?.id ?? ''
-                      ),
-                      indexerToken: mapTokens.get(artwork.token?.id ?? ''),
-                    };
-                    return aw;
+            if (castInfo.artworks?.length) {
+              getNftTokens(castInfo.artworks)
+                .then((updatedArtworks: PlaylistToken[]) => {
+                  setPlaylist(updatedArtworks);
+
+                  if (castInfo.startTime) {
+                    setStartTime(castInfo.startTime);
+                    const i = getIndex(updatedArtworks, castInfo.startTime);
+                    setCurrentIndex(i);
                   }
-                );
-                setPlaylist(updatedArtworks);
-                if (castInfo.startTime) {
-                  setStartTime(castInfo.startTime);
-                  const i = getIndex(updatedArtworks, castInfo.startTime);
-                  setCurrentIndex(i);
-                }
-              } catch (error) {
-                console.log(
-                  'Error fetching NFT tokens:',
-                  JSON.stringify(error)
-                );
-              }
-            };
-            if (castInfo.artworks) {
-              const assetIds = castInfo.artworks.map(
-                (artwork: PlayArtworkV2) => artwork.token?.id ?? ''
-              );
-              getNftTokens(assetIds).catch((error: unknown) => {
-                console.error(error);
-              });
+
+                  if (castInfo.isPaused) {
+                    handlePauseCasting();
+                  }
+                })
+                .catch((error: unknown) => {
+                  console.error(error);
+                });
             }
+
             break;
           }
           case CastCommand.nextArtwork: {
@@ -300,7 +299,6 @@ export default function PlaylistClient() {
       };
       handleCastCommand();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [castInfo]);
 
   useEffect(() => {
@@ -319,7 +317,7 @@ export default function PlaylistClient() {
           previewURL={castPreviewURL ?? ''}
           artworkID={artworkID ?? ''}
           castingType={CastingArtworkType.Playlist}
-          isCustomView={isLeeMucianExhibition}
+          isCustomView={isLeeMullicanExhibition}
         />
       </div>
     </>

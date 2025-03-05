@@ -191,8 +191,6 @@ export interface PlaylistToken {
 }
 
 export interface CastInfo {
-  artworks?: PlayArtworkV2[];
-  startTime?: number;
   castCommand?: CastCommand;
   deviceInfo?: DeviceInfo;
   value?: string | number;
@@ -201,6 +199,14 @@ export interface CastInfo {
   exhibitionId?: string;
   catalogId?: string;
   catalog?: ExhibitionCatalog;
+
+  // Cast list artwork
+  artworks?: PlayArtworkV2[];
+  startTime?: number;
+  index?: number;
+  isPaused?: boolean;
+
+  // Cast daily
   displayKey?: string;
 }
 
