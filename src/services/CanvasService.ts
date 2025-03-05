@@ -1,3 +1,4 @@
+import { calculateStartTime, getArtworkStartTime } from '@/utils/Playlist';
 import {
   WebSocketMessage,
   CastCommand,
@@ -37,6 +38,7 @@ import {
   CastInfo,
   UpdateArtFramingRequest,
   ArtFraming,
+  PlayArtworkV2,
 } from '../utils/types';
 
 import * as Sentry from '@sentry/nextjs';
@@ -313,10 +315,24 @@ class CanvasService {
     request: PauseCastingRequest
   ): Promise<PauseCastingReply> {
     console.log('[CanvasService]: pause casting', request);
+
+    const now = Date.now();
+    const currentIndex = this.castInfo?.index ?? 0;
+    const playlist = this.castInfo?.artworks ?? [];
+    const startPlayArtworkTime = getArtworkStartTime(
+      playlist,
+      currentIndex,
+      this.castInfo?.startTime ?? Date.now()
+    );
+    const elapsedTime = now - startPlayArtworkTime;
+    const remainTime = playlist[currentIndex].duration - elapsedTime;
+
     this.setCastInfo({
       ...this.castInfo,
       castCommand: CastCommand.pauseCasting,
       isPaused: true,
+      elapsedTime,
+      remainTime,
     });
     return Promise.resolve({ ok: true });
   }
@@ -325,20 +341,39 @@ class CanvasService {
     request: ResumeCastingRequest
   ): Promise<ResumeCastingReply> {
     console.log('[CanvasService] resume casting:', request);
+
+    const startTime = calculateStartTime(
+      this.castInfo?.artworks ?? [],
+      this.castInfo?.index ?? 0,
+      this.castInfo?.elapsedTime
+        ? new Date(this.castInfo.elapsedTime).setMilliseconds(0)
+        : undefined
+    );
+
     this.setCastInfo({
       ...this.castInfo,
       castCommand: CastCommand.resumeCasting,
       isPaused: false,
+      startTime,
     });
     return Promise.resolve({ ok: true });
   }
 
   private nextArtwork(request: NextArtworkRequest): Promise<NextArtworkReply> {
     console.log('[CanvasService] next artwork: ', request);
+
+    const currentIndex = this.castInfo?.index ?? 0;
+    const playlist = this.castInfo?.artworks ?? [];
+
+    const index = (currentIndex + 1) % playlist.length;
+    const startTime = calculateStartTime(playlist, index);
+
     this.setCastInfo({
       ...this.castInfo,
       castCommand: CastCommand.nextArtwork,
       isPaused: false,
+      startTime,
+      index,
     });
     return Promise.resolve({ ok: true });
   }
@@ -347,10 +382,25 @@ class CanvasService {
     request: PreviousArtworkRequest
   ): Promise<PreviousArtworkReply> {
     console.log('[CanvasService] previous artwork', request);
+
+    const currentIndex = this.castInfo?.index ?? 0;
+    const playlist = this.castInfo?.artworks ?? [];
+
+    let index: number;
+    if (currentIndex === 0) {
+      index = playlist.length - 1;
+    } else {
+      index = (currentIndex - 1) % playlist.length;
+    }
+
+    const startTime = calculateStartTime(playlist, index);
+
     this.setCastInfo({
       ...this.castInfo,
       castCommand: CastCommand.previousArtwork,
       isPaused: false,
+      startTime,
+      index,
     });
     return Promise.resolve({ ok: true });
   }
@@ -359,11 +409,29 @@ class CanvasService {
     request: MoveToArtworkRequest
   ): Promise<MoveToArtworkReply> {
     console.log('[CanvasService] move to artwork', request);
+
+    const tokenID = this.castInfo?.value;
+    if (!tokenID) {
+      return Promise.resolve({ ok: false });
+    }
+
+    const playlist = this.castInfo?.artworks ?? [];
+    const index = playlist.findIndex(
+      (p: PlayArtworkV2) => p.token?.id === tokenID
+    );
+    if (index < 0) {
+      return Promise.resolve({ ok: false });
+    }
+
+    const startTime = calculateStartTime(playlist, index);
+
     this.setCastInfo({
       ...this.castInfo,
       castCommand: CastCommand.moveToArtwork,
       isPaused: false,
       value: request.artwork.token.id,
+      startTime,
+      index,
     });
     return Promise.resolve({ ok: true });
   }
@@ -372,10 +440,16 @@ class CanvasService {
     request: UpdateDurationRequest
   ): Promise<UpdateDurationReply> {
     console.log('[CanvasService] update duration', request);
+
+    const currentIndex = this.castInfo?.index ?? 0;
+    const playlist = request.artworks;
+    const startTime = calculateStartTime(playlist, currentIndex);
+
     this.setCastInfo({
       ...this.castInfo,
       castCommand: CastCommand.updateDuration,
       artworks: request.artworks,
+      startTime,
     });
 
     return Promise.resolve({

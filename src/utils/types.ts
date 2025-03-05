@@ -22,6 +22,7 @@ export enum CastCommand {
   nextArtwork = 'nextArtwork',
   previousArtwork = 'previousArtwork',
   moveToArtwork = 'moveToArtwork',
+  updateIndex = 'updateIndex',
   updateDuration = 'updateDuration',
   castExhibition = 'castExhibition',
   rotate = 'rotate',
@@ -205,6 +206,8 @@ export interface CastInfo {
   startTime?: number;
   index?: number;
   isPaused?: boolean;
+  elapsedTime?: number;
+  remainTime?: number;
 
   // Cast daily
   displayKey?: string;
