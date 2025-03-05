@@ -5,9 +5,10 @@ import { useAppContext } from '@/context/AppContext';
 import { IndexerToken } from '@/models';
 import { CastingArtworkType } from '@/models/metric.model';
 import ArtworkService from '@/services/ArtworkService';
+import CanvasService from '@/services/CanvasService';
 import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
 import { getIndexerTokenName } from '@/utils/indexer';
-import { calculateStartTime, getIndex } from '@/utils/Playlist';
+import { getIndex } from '@/utils/Playlist';
 import { CastCommand, PlayArtworkV2, PlaylistToken } from '@/utils/types';
 import { useEffect, useRef, useState } from 'react';
 
@@ -35,6 +36,13 @@ export default function PlaylistClient() {
 
   // Services
   const artworkService = useRef(new ArtworkService());
+  const canvasService = useRef(CanvasService.getInstance());
+
+  useEffect(() => {
+    return () => {
+      clearTimer();
+    };
+  }, []);
 
   useEffect(() => {
     if (currentIndex < 0) {
@@ -76,11 +84,6 @@ export default function PlaylistClient() {
         durationMap.set(a.token.id, a.duration);
       }
     });
-    let index = currentIndex % playlist.length;
-    const currentPlaylistItem = playlist[currentIndex];
-    const currentArtwork = artworks.find(
-      a => a.token?.id === currentPlaylistItem.token.id
-    );
 
     const updatedPlaylist = playlist.map((p: PlaylistToken, i: number) => {
       return {
@@ -89,29 +92,13 @@ export default function PlaylistClient() {
       };
     });
 
-    let startTime = calculateStartTime(updatedPlaylist, index);
+    const startTime = castInfo?.startTime ?? Date.now();
+    const currentPlaylistItem = playlist[currentIndex];
+    const currentArtwork = artworks.find(
+      a => a.token?.id === currentPlaylistItem.token.id
+    );
     if (currentArtwork) {
-      const playTime = Date.now() - startPlayArtworkTime.current;
-      if (currentPlaylistItem.duration < currentArtwork.duration) {
-        const remainTime = new Date(
-          currentPlaylistItem.duration -
-            playTime +
-            (currentArtwork.duration - currentPlaylistItem.duration)
-        ).setMilliseconds(0);
-        startTime = calculateStartTime(updatedPlaylist, index, remainTime);
-        startInterval(remainTime);
-      } else if (currentPlaylistItem.duration > currentArtwork.duration) {
-        if (playTime >= currentArtwork.duration) {
-          index = (index + 1) % playlist.length;
-          startTime = calculateStartTime(updatedPlaylist, index);
-        } else {
-          const remainTime = new Date(
-            currentArtwork.duration - playTime
-          ).setMilliseconds(0);
-          startTime = calculateStartTime(updatedPlaylist, index, remainTime);
-          startInterval(remainTime);
-        }
-      }
+      startInterval(currentArtwork.duration);
     }
 
     setStartTime(startTime);
@@ -121,57 +108,43 @@ export default function PlaylistClient() {
   const handlePauseCasting = () => {
     console.log('handlePauseCasting');
     clearTimer();
-    const now = Date.now();
-    elapsedTimeRef.current = now - startPlayArtworkTime.current;
-    remainTimeRef.current = endPlayArtworkTime.current - now;
+    elapsedTimeRef.current = castInfo?.elapsedTime ?? 0;
+    remainTimeRef.current = castInfo?.remainTime ?? 0;
   };
 
   const handleResumeCasting = () => {
     console.log('handleResumeCasting');
-    const st = calculateStartTime(
-      playlist,
-      currentIndex,
-      new Date(elapsedTimeRef.current).setMilliseconds(0)
-    );
-    setStartTime(st);
+    const startTime = castInfo?.startTime ?? Date.now();
+    setStartTime(startTime);
     startInterval(remainTimeRef.current);
   };
 
   const handleNext = () => {
-    const i = (currentIndex + 1) % playlist.length;
-    const st = calculateStartTime(playlist, i);
-    setStartTime(st);
+    const index = castInfo?.index ?? 0;
+    const startTime = castInfo?.startTime ?? Date.now();
+    setStartTime(startTime);
     clearTimer();
-    setCurrentIndex(i);
+    setCurrentIndex(index);
   };
 
   const handlePrevious = () => {
-    let i: number;
-    if (currentIndex === 0) {
-      i = playlist.length - 1;
-    } else {
-      i = (currentIndex - 1) % playlist.length;
-    }
-
-    const st = calculateStartTime(playlist, i);
-    setStartTime(st);
-    clearTimer();
-    setCurrentIndex(i);
-  };
-
-  const handleMoveToArtwork = (tokenID: string) => {
-    const index = playlist.findIndex(
-      (p: PlaylistToken) => p.token.id === tokenID
-    );
-    if (index < 0) {
-      return;
-    }
-
-    const st = calculateStartTime(playlist, index);
-
-    setStartTime(st);
+    const index = castInfo?.index ?? 0;
+    const startTime = castInfo?.startTime ?? Date.now();
+    setStartTime(startTime);
     clearTimer();
     setCurrentIndex(index);
+  };
+
+  const handleMoveToArtwork = () => {
+    const index = castInfo?.index ?? 0;
+    const startTime = castInfo?.startTime ?? Date.now();
+    setStartTime(startTime);
+    clearTimer();
+    setCurrentIndex(index);
+  };
+
+  const handleUpdateIndex = () => {
+    setCurrentIndex(castInfo?.index ?? 0);
   };
 
   const startInterval = (duration: number) => {
@@ -184,8 +157,12 @@ export default function PlaylistClient() {
     }
 
     intervalRef.current = setInterval(() => {
-      const i = getIndex(playlist, startTime);
-      setCurrentIndex(i);
+      const index = getIndex(playlist, startTime);
+      canvasService.current.setCastInfo({
+        ...castInfo,
+        castCommand: CastCommand.updateIndex,
+        index,
+      });
     }, duration);
   };
 
@@ -278,7 +255,7 @@ export default function PlaylistClient() {
             break;
           }
           case CastCommand.moveToArtwork: {
-            handleMoveToArtwork(castInfo.value as string);
+            handleMoveToArtwork();
             break;
           }
           case CastCommand.updateDuration: {
@@ -293,6 +270,10 @@ export default function PlaylistClient() {
           }
           case CastCommand.resumeCasting: {
             handleResumeCasting();
+            break;
+          }
+          case CastCommand.updateIndex: {
+            handleUpdateIndex();
             break;
           }
         }

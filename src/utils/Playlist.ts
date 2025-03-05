@@ -1,4 +1,4 @@
-import { PlaylistToken } from './types';
+import { PlayArtworkV2, PlaylistToken } from './types';
 
 export function getIndex(
   playlistTokens: PlaylistToken[],
@@ -29,13 +29,13 @@ export function getIndex(
 }
 
 export function calculateStartTime(
-  playlistTokens: PlaylistToken[],
+  artworks: PlayArtworkV2[],
   index: number,
   elapsedTime?: number
 ): number {
   let startTime = new Date().setMilliseconds(0);
   for (let i = 0; i < index; i++) {
-    startTime -= playlistTokens[i].duration || 0;
+    startTime -= artworks[i].duration || 0;
   }
 
   if (elapsedTime) {
@@ -43,4 +43,20 @@ export function calculateStartTime(
   }
 
   return startTime;
+}
+
+export function getArtworkStartTime(
+  playlist: PlayArtworkV2[],
+  index: number,
+  playlistStartTime: number
+): number {
+  // Start with the playlist's start time
+  let artworkStartTime = playlistStartTime;
+
+  // Add the duration of all previous artworks
+  for (let i = 0; i < index; i++) {
+    artworkStartTime += playlist[i].duration || 0;
+  }
+
+  return artworkStartTime;
 }

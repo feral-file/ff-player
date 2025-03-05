@@ -11,14 +11,18 @@ const useCastInfo = () => {
   const isFirstRender = useRef(true);
 
   const isPlaylistControlCommand = (castInfo: CastInfo) => {
-    return [
-      castInfo.castCommand && CastCommand.updateDuration,
-      CastCommand.moveToArtwork,
-      CastCommand.pauseCasting,
-      CastCommand.resumeCasting,
-      CastCommand.nextArtwork,
-      CastCommand.previousArtwork,
-    ].includes(castInfo.castCommand);
+    return (
+      castInfo.castCommand &&
+      [
+        CastCommand.moveToArtwork,
+        CastCommand.pauseCasting,
+        CastCommand.resumeCasting,
+        CastCommand.nextArtwork,
+        CastCommand.previousArtwork,
+        CastCommand.updateDuration,
+        CastCommand.updateIndex,
+      ].includes(castInfo.castCommand)
+    );
   };
 
   useEffect(() => {
@@ -46,6 +50,9 @@ const useCastInfo = () => {
     if (castInfoToStore && isPlaylistControlCommand(castInfoToStore)) {
       castInfoToStore.castCommand = CastCommand.castListArtwork;
     }
+
+    delete castInfoToStore?.elapsedTime;
+    delete castInfoToStore?.remainTime;
 
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     localStorage?.setItem(
