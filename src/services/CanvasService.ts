@@ -298,7 +298,7 @@ class CanvasService {
     return Promise.resolve({ ok: true });
   }
 
-  private castDaily(request: object): Promise<Reply> {
+  public castDaily(request: object): Promise<Reply> {
     console.log('[CanvasService] Cast daily: ', request);
 
     this.setCastInfo({
