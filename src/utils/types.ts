@@ -159,6 +159,7 @@ export const FileUseVideo: string[] = [
   'webm',
   'mkv',
 ];
+export const FileUseStreamVideo: string[] = ['m3u8'];
 export const FileUseAudio: string[] = ['mp3', 'm4a', 'wav', 'wma', 'aac'];
 export const FileUseImage: string[] = [
   'png',
