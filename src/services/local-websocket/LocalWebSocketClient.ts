@@ -6,11 +6,20 @@ export class LocalWebSocketClient {
   private ws: ReconnectingWebSocket | null = null;
   private isConnecting = false;
   private connectionAttempts = 0;
+  private static instance: LocalWebSocketClient;
 
   constructor() {
     if (typeof window !== 'undefined') {
       this.connect();
     }
+  }
+
+  public static getInstance(): LocalWebSocketClient {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (!LocalWebSocketClient.instance) {
+      LocalWebSocketClient.instance = new LocalWebSocketClient();
+    }
+    return LocalWebSocketClient.instance;
   }
 
   private connect() {

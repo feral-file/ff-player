@@ -2,13 +2,17 @@
 
 import { useState, useEffect, useRef } from 'react';
 import CanvasService from './CanvasService';
-import { CastCommand, CastInfo } from '@/utils/types';
+import { CastCommand, CastInfo, WebSocketMessage } from '@/utils/types';
 import { LocalStorageItem } from '@/constants';
+import { LocalWebSocketClient } from './local-websocket/LocalWebSocketClient';
 
 const useCastInfo = () => {
   const [castInfo, setCastInfo] = useState<CastInfo | null>(null);
-  const canvasService = useRef(CanvasService.getInstance());
   const isFirstRender = useRef(true);
+
+  // Services
+  const canvasService = useRef(CanvasService.getInstance());
+  const webSocketClient = useRef(LocalWebSocketClient.getInstance());
 
   const isPlaylistControlCommand = (castInfo: CastInfo) => {
     return (
@@ -44,6 +48,17 @@ const useCastInfo = () => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
+    }
+
+    if (castInfo?.castCommand === CastCommand.updateIndex) {
+      // Send message to WebSocket
+      const message: WebSocketMessage = {
+        messageID: 'updateIndex',
+        message: JSON.stringify({
+          index: castInfo.index,
+        }),
+      };
+      webSocketClient.current.sendMessage(message);
     }
 
     const castInfoToStore = castInfo;
