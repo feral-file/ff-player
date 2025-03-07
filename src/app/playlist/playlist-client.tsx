@@ -195,14 +195,10 @@ export default function PlaylistClient() {
         mapTokens.set(token.indexID, token);
       });
       const updatedArtworks = artworks.map((artwork: PlayArtworkV2) => {
-        if (artwork.token) {
-          artwork.token.name = tokensName.get(artwork.token.id) ?? '';
-        }
-
         const aw: PlaylistToken = {
           duration: artwork.duration,
           previewURL: previewData.get(artwork.token?.id ?? '') ?? '',
-          token: artwork.token ?? { id: '', name: '' },
+          token: artwork.token ?? { id: '' },
           contractAddress: contractAddress.get(artwork.token?.id ?? ''),
           indexerToken: mapTokens.get(artwork.token?.id ?? ''),
         };
