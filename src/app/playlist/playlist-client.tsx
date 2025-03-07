@@ -26,9 +26,6 @@ export default function PlaylistClient() {
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [startTime, setStartTime] = useState<number>(0);
 
-  const startPlayArtworkTime = useRef<number>(0);
-  const endPlayArtworkTime = useRef<number>(0);
-
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>();
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
@@ -70,11 +67,9 @@ export default function PlaylistClient() {
       currentPlaylist.contractAddress === LeeMullican_EXHIBITION_CONTRACT
     );
 
-    const currentTime = Date.now();
-    startPlayArtworkTime.current = currentTime;
-    endPlayArtworkTime.current = currentTime + currentPlaylist.duration;
-    startInterval(currentPlaylist.duration);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!castInfo?.isPaused) {
+      startInterval(currentPlaylist.duration);
+    }
   }, [currentIndex, playlist]);
 
   const handleUpdateDuration = (artworks: PlayArtworkV2[]) => {
@@ -116,7 +111,12 @@ export default function PlaylistClient() {
     console.log('handleResumeCasting');
     const startTime = castInfo?.startTime ?? Date.now();
     setStartTime(startTime);
-    startInterval(remainTimeRef.current);
+    let duration = remainTimeRef.current;
+    if (duration === 0 && castInfo?.artworks?.length && currentIndex >= 0) {
+      duration = castInfo.artworks[currentIndex].duration;
+    }
+
+    startInterval(duration);
   };
 
   const handleNext = () => {
@@ -284,7 +284,6 @@ export default function PlaylistClient() {
     } else {
       handlePauseCasting();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.isOnline]);
 
   return (
