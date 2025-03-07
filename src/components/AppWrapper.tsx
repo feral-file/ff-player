@@ -240,24 +240,6 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
         {children}
-        <p
-          style={{
-            zIndex: 1000,
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            backgroundColor: 'black',
-          }}>
-          {JSON.stringify({
-            ...castInfo,
-            deviceInfo: {},
-            artworks: [],
-            startTime: castInfo?.startTime
-              ? new Date(castInfo.startTime).toISOString()
-              : undefined,
-          })}
-        </p>
       </div>
     </NextIntlClientProvider>
   ) : (
