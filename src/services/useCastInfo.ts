@@ -2,22 +2,29 @@
 
 import { useState, useEffect, useRef } from 'react';
 import CanvasService from './CanvasService';
-import { CastCommand, CastInfo } from '@/utils/types';
+import { CastCommand, CastInfo, WebSocketMessage } from '@/utils/types';
 import { LocalStorageItem } from '@/constants';
+import { LocalWebSocketClient } from './local-websocket/LocalWebSocketClient';
 
 const useCastInfo = () => {
   const [castInfo, setCastInfo] = useState<CastInfo | null>(null);
-  const canvasService = useRef(CanvasService.getInstance());
   const isFirstRender = useRef(true);
 
-  const shouldStoreCastInfo = () => {
+  // Services
+  const canvasService = useRef(CanvasService.getInstance());
+  const webSocketClient = useRef(LocalWebSocketClient.getInstance());
+
+  const isPlaylistControlCommand = (castInfo: CastInfo) => {
     return (
-      !castInfo?.castCommand ||
-      ![
+      castInfo.castCommand &&
+      [
+        CastCommand.moveToArtwork,
         CastCommand.pauseCasting,
         CastCommand.resumeCasting,
         CastCommand.nextArtwork,
         CastCommand.previousArtwork,
+        CastCommand.updateDuration,
+        CastCommand.updateIndex,
       ].includes(castInfo.castCommand)
     );
   };
@@ -43,22 +50,30 @@ const useCastInfo = () => {
       return;
     }
 
-    if (shouldStoreCastInfo()) {
-      if (
-        castInfo?.castCommand &&
-        [CastCommand.updateDuration, CastCommand.moveToArtwork].includes(
-          castInfo.castCommand
-        )
-      ) {
-        castInfo.castCommand = CastCommand.castListArtwork;
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      localStorage?.setItem(
-        LocalStorageItem.castInfo,
-        JSON.stringify(castInfo)
-      );
+    if (castInfo?.castCommand === CastCommand.updateIndex) {
+      // Send message to WebSocket
+      const message: WebSocketMessage = {
+        messageID: 'updateIndex',
+        message: JSON.stringify({
+          index: castInfo.index,
+        }),
+      };
+      webSocketClient.current.sendMessage(message);
     }
+
+    const castInfoToStore = castInfo;
+    if (castInfoToStore && isPlaylistControlCommand(castInfoToStore)) {
+      castInfoToStore.castCommand = CastCommand.castListArtwork;
+    }
+
+    delete castInfoToStore?.elapsedTime;
+    delete castInfoToStore?.remainTime;
+
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    localStorage?.setItem(
+      LocalStorageItem.castInfo,
+      JSON.stringify(castInfoToStore)
+    );
   }, [castInfo]);
 
   return { castInfo, setCastInfo };

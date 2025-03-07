@@ -158,7 +158,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    console.log('[CAST] process cast info:', JSON.stringify(castInfo));
+    console.log('[AppWrapper] process cast info:', JSON.stringify(castInfo));
     if (castInfo) {
       const handleCastCommand = () => {
         console.log('AppWrapper castInfo', castInfo);
@@ -220,7 +220,9 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         setCastState(CastState.None);
         router.back();
       } else {
-        router.push('/daily');
+        canvasService.castDaily({}).catch((error: unknown) => {
+          console.log('[AppWrapper] Error Cast daily', error);
+        });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

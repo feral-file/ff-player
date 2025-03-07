@@ -5,9 +5,10 @@ import { useAppContext } from '@/context/AppContext';
 import { IndexerToken } from '@/models';
 import { CastingArtworkType } from '@/models/metric.model';
 import ArtworkService from '@/services/ArtworkService';
+import CanvasService from '@/services/CanvasService';
 import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
 import { getIndexerTokenName } from '@/utils/indexer';
-import { calculateStartTime, getIndex } from '@/utils/Playlist';
+import { getIndex } from '@/utils/Playlist';
 import { CastCommand, PlayArtworkV2, PlaylistToken } from '@/utils/types';
 import { useEffect, useRef, useState } from 'react';
 
@@ -16,7 +17,7 @@ export default function PlaylistClient() {
   const castInfo = context.castInfo;
 
   const [artworkID, setArtworkID] = useState<string | undefined>();
-  const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
+  const [isLeeMullicanExhibition, setIsLeeMullicanExhibition] =
     useState<boolean>(false);
 
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
@@ -25,9 +26,6 @@ export default function PlaylistClient() {
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [startTime, setStartTime] = useState<number>(0);
 
-  const startPlayArtworkTime = useRef<number>(0);
-  const endPlayArtworkTime = useRef<number>(0);
-
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>();
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
@@ -35,6 +33,13 @@ export default function PlaylistClient() {
 
   // Services
   const artworkService = useRef(new ArtworkService());
+  const canvasService = useRef(CanvasService.getInstance());
+
+  useEffect(() => {
+    return () => {
+      clearTimer();
+    };
+  }, []);
 
   useEffect(() => {
     if (currentIndex < 0) {
@@ -58,15 +63,13 @@ export default function PlaylistClient() {
       setArtworkID(currentPlaylist.token.id);
     }
     setCastPreviewURL(currentPlaylist.previewURL);
-    setIsLeeMucianExhibition(
+    setIsLeeMullicanExhibition(
       currentPlaylist.contractAddress === LeeMullican_EXHIBITION_CONTRACT
     );
 
-    const currentTime = Date.now();
-    startPlayArtworkTime.current = currentTime;
-    endPlayArtworkTime.current = currentTime + currentPlaylist.duration;
-    startInterval(currentPlaylist.duration);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!castInfo?.isPaused) {
+      startInterval(currentPlaylist.duration);
+    }
   }, [currentIndex, playlist]);
 
   const handleUpdateDuration = (artworks: PlayArtworkV2[]) => {
@@ -76,11 +79,6 @@ export default function PlaylistClient() {
         durationMap.set(a.token.id, a.duration);
       }
     });
-    let index = currentIndex % playlist.length;
-    const currentPlaylistItem = playlist[currentIndex];
-    const currentArtwork = artworks.find(
-      a => a.token?.id === currentPlaylistItem.token.id
-    );
 
     const updatedPlaylist = playlist.map((p: PlaylistToken, i: number) => {
       return {
@@ -89,29 +87,13 @@ export default function PlaylistClient() {
       };
     });
 
-    let startTime = calculateStartTime(updatedPlaylist, index);
+    const startTime = castInfo?.startTime ?? Date.now();
+    const currentPlaylistItem = playlist[currentIndex];
+    const currentArtwork = artworks.find(
+      a => a.token?.id === currentPlaylistItem.token.id
+    );
     if (currentArtwork) {
-      const playTime = Date.now() - startPlayArtworkTime.current;
-      if (currentPlaylistItem.duration < currentArtwork.duration) {
-        const remainTime = new Date(
-          currentPlaylistItem.duration -
-            playTime +
-            (currentArtwork.duration - currentPlaylistItem.duration)
-        ).setMilliseconds(0);
-        startTime = calculateStartTime(updatedPlaylist, index, remainTime);
-        startInterval(remainTime);
-      } else if (currentPlaylistItem.duration > currentArtwork.duration) {
-        if (playTime >= currentArtwork.duration) {
-          index = (index + 1) % playlist.length;
-          startTime = calculateStartTime(updatedPlaylist, index);
-        } else {
-          const remainTime = new Date(
-            currentArtwork.duration - playTime
-          ).setMilliseconds(0);
-          startTime = calculateStartTime(updatedPlaylist, index, remainTime);
-          startInterval(remainTime);
-        }
-      }
+      startInterval(currentArtwork.duration);
     }
 
     setStartTime(startTime);
@@ -121,57 +103,48 @@ export default function PlaylistClient() {
   const handlePauseCasting = () => {
     console.log('handlePauseCasting');
     clearTimer();
-    const now = Date.now();
-    elapsedTimeRef.current = now - startPlayArtworkTime.current;
-    remainTimeRef.current = endPlayArtworkTime.current - now;
+    elapsedTimeRef.current = castInfo?.elapsedTime ?? 0;
+    remainTimeRef.current = castInfo?.remainTime ?? 0;
   };
 
   const handleResumeCasting = () => {
     console.log('handleResumeCasting');
-    const st = calculateStartTime(
-      playlist,
-      currentIndex,
-      new Date(elapsedTimeRef.current).setMilliseconds(0)
-    );
-    setStartTime(st);
-    startInterval(remainTimeRef.current);
+    const startTime = castInfo?.startTime ?? Date.now();
+    setStartTime(startTime);
+    let duration = remainTimeRef.current;
+    if (duration === 0 && castInfo?.artworks?.length && currentIndex >= 0) {
+      duration = castInfo.artworks[currentIndex].duration;
+    }
+
+    startInterval(duration);
   };
 
   const handleNext = () => {
-    const i = (currentIndex + 1) % playlist.length;
-    const st = calculateStartTime(playlist, i);
-    setStartTime(st);
+    const index = castInfo?.index ?? 0;
+    const startTime = castInfo?.startTime ?? Date.now();
+    setStartTime(startTime);
     clearTimer();
-    setCurrentIndex(i);
+    setCurrentIndex(index);
   };
 
   const handlePrevious = () => {
-    let i: number;
-    if (currentIndex === 0) {
-      i = playlist.length - 1;
-    } else {
-      i = (currentIndex - 1) % playlist.length;
-    }
-
-    const st = calculateStartTime(playlist, i);
-    setStartTime(st);
-    clearTimer();
-    setCurrentIndex(i);
-  };
-
-  const handleMoveToArtwork = (tokenID: string) => {
-    const index = playlist.findIndex(
-      (p: PlaylistToken) => p.token.id === tokenID
-    );
-    if (index < 0) {
-      return;
-    }
-
-    const st = calculateStartTime(playlist, index);
-
-    setStartTime(st);
+    const index = castInfo?.index ?? 0;
+    const startTime = castInfo?.startTime ?? Date.now();
+    setStartTime(startTime);
     clearTimer();
     setCurrentIndex(index);
+  };
+
+  const handleMoveToArtwork = () => {
+    const index = castInfo?.index ?? 0;
+    const startTime = castInfo?.startTime ?? Date.now();
+    setStartTime(startTime);
+    clearTimer();
+    setCurrentIndex(index);
+  };
+
+  const handleUpdateIndex = () => {
+    setCurrentIndex(castInfo?.index ?? 0);
   };
 
   const startInterval = (duration: number) => {
@@ -184,8 +157,12 @@ export default function PlaylistClient() {
     }
 
     intervalRef.current = setInterval(() => {
-      const i = getIndex(playlist, startTime);
-      setCurrentIndex(i);
+      const index = getIndex(playlist, startTime);
+      canvasService.current.setCastInfo({
+        ...castInfo,
+        castCommand: CastCommand.updateIndex,
+        index,
+      });
     }, duration);
   };
 
@@ -193,6 +170,44 @@ export default function PlaylistClient() {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = undefined;
+    }
+  };
+
+  const getNftTokens = async (
+    artworks: PlayArtworkV2[]
+  ): Promise<PlaylistToken[]> => {
+    try {
+      const assetIds = artworks.map(
+        (artwork: PlayArtworkV2) => artwork.token?.id ?? ''
+      );
+      const tokens = await artworkService.current.queryTokens(assetIds);
+      const previewData = new Map<string, string>();
+      const tokensName = new Map<string, string>();
+      const contractAddress = new Map<string, string>();
+      const mapTokens = new Map<string, IndexerToken>();
+      tokens.forEach((token: IndexerToken) => {
+        previewData.set(
+          token.indexID,
+          token.asset.metadata.project.latest.previewURL
+        );
+        tokensName.set(token.indexID, getIndexerTokenName(token));
+        contractAddress.set(token.indexID, token.contractAddress);
+        mapTokens.set(token.indexID, token);
+      });
+      const updatedArtworks = artworks.map((artwork: PlayArtworkV2) => {
+        const aw: PlaylistToken = {
+          duration: artwork.duration,
+          previewURL: previewData.get(artwork.token?.id ?? '') ?? '',
+          token: artwork.token ?? { id: '' },
+          contractAddress: contractAddress.get(artwork.token?.id ?? ''),
+          indexerToken: mapTokens.get(artwork.token?.id ?? ''),
+        };
+        return aw;
+      });
+      return updatedArtworks;
+    } catch (error) {
+      console.log('Error fetching NFT tokens:', JSON.stringify(error));
+      return [];
     }
   };
 
@@ -204,70 +219,27 @@ export default function PlaylistClient() {
         switch (castInfo.castCommand) {
           case CastCommand.castListArtwork: {
             indexRef.current = -1;
-            const getNftTokens = async (ids: string[]) => {
-              if (!ids.length) {
-                return;
-              }
-              try {
-                const tokens = await artworkService.current.queryTokens(ids);
-                const artworks = castInfo.artworks;
-                if (!artworks) {
-                  return;
-                }
-                const previewData = new Map<string, string>();
-                const tokensName = new Map<string, string>();
-                const contractAddress = new Map<string, string>();
-                const mapTokens = new Map<string, IndexerToken>();
-                tokens.forEach((token: IndexerToken) => {
-                  previewData.set(
-                    token.indexID,
-                    token.asset.metadata.project.latest.previewURL
-                  );
-                  tokensName.set(token.indexID, getIndexerTokenName(token));
-                  contractAddress.set(token.indexID, token.contractAddress);
-                  mapTokens.set(token.indexID, token);
-                });
-                const updatedArtworks = artworks.map(
-                  (artwork: PlayArtworkV2) => {
-                    if (artwork.token) {
-                      artwork.token.name =
-                        tokensName.get(artwork.token.id) ?? '';
-                    }
 
-                    const aw: PlaylistToken = {
-                      duration: artwork.duration,
-                      previewURL:
-                        previewData.get(artwork.token?.id ?? '') ?? '',
-                      token: artwork.token ?? { id: '', name: '' },
-                      contractAddress: contractAddress.get(
-                        artwork.token?.id ?? ''
-                      ),
-                      indexerToken: mapTokens.get(artwork.token?.id ?? ''),
-                    };
-                    return aw;
+            if (castInfo.artworks?.length) {
+              getNftTokens(castInfo.artworks)
+                .then((updatedArtworks: PlaylistToken[]) => {
+                  setPlaylist(updatedArtworks);
+
+                  if (castInfo.startTime) {
+                    setStartTime(castInfo.startTime);
+                    const i = getIndex(updatedArtworks, castInfo.startTime);
+                    setCurrentIndex(i);
                   }
-                );
-                setPlaylist(updatedArtworks);
-                if (castInfo.startTime) {
-                  setStartTime(castInfo.startTime);
-                  const i = getIndex(updatedArtworks, castInfo.startTime);
-                  setCurrentIndex(i);
-                }
-              } catch (error) {
-                console.log(
-                  'Error fetching NFT tokens:',
-                  JSON.stringify(error)
-                );
-              }
-            };
-            if (castInfo.artworks) {
-              const assetIds = castInfo.artworks.map(
-                (artwork: PlayArtworkV2) => artwork.token?.id ?? ''
-              );
-              getNftTokens(assetIds).catch((error: unknown) => {
-                console.error(error);
-              });
+
+                  if (castInfo.isPaused) {
+                    handlePauseCasting();
+                  }
+                })
+                .catch((error: unknown) => {
+                  console.error(error);
+                });
             }
+
             break;
           }
           case CastCommand.nextArtwork: {
@@ -279,7 +251,7 @@ export default function PlaylistClient() {
             break;
           }
           case CastCommand.moveToArtwork: {
-            handleMoveToArtwork(castInfo.value as string);
+            handleMoveToArtwork();
             break;
           }
           case CastCommand.updateDuration: {
@@ -296,11 +268,14 @@ export default function PlaylistClient() {
             handleResumeCasting();
             break;
           }
+          case CastCommand.updateIndex: {
+            handleUpdateIndex();
+            break;
+          }
         }
       };
       handleCastCommand();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [castInfo]);
 
   useEffect(() => {
@@ -309,7 +284,6 @@ export default function PlaylistClient() {
     } else {
       handlePauseCasting();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.isOnline]);
 
   return (
@@ -319,7 +293,7 @@ export default function PlaylistClient() {
           previewURL={castPreviewURL ?? ''}
           artworkID={artworkID ?? ''}
           castingType={CastingArtworkType.Playlist}
-          isCustomView={isLeeMucianExhibition}
+          isCustomView={isLeeMullicanExhibition}
         />
       </div>
     </>

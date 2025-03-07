@@ -22,6 +22,7 @@ export enum CastCommand {
   nextArtwork = 'nextArtwork',
   previousArtwork = 'previousArtwork',
   moveToArtwork = 'moveToArtwork',
+  updateIndex = 'updateIndex',
   updateDuration = 'updateDuration',
   castExhibition = 'castExhibition',
   rotate = 'rotate',
@@ -49,7 +50,6 @@ export interface PlayArtworkV2 {
   duration: number;
   token?: {
     id: string;
-    name: string;
   };
 }
 
@@ -185,14 +185,11 @@ export interface PlaylistToken {
   contractAddress?: string;
   token: {
     id: string;
-    name: string;
   };
   indexerToken?: IndexerToken;
 }
 
 export interface CastInfo {
-  artworks?: PlayArtworkV2[];
-  startTime?: number;
   castCommand?: CastCommand;
   deviceInfo?: DeviceInfo;
   value?: string | number;
@@ -201,6 +198,16 @@ export interface CastInfo {
   exhibitionId?: string;
   catalogId?: string;
   catalog?: ExhibitionCatalog;
+
+  // Cast list artwork
+  artworks?: PlayArtworkV2[];
+  startTime?: number;
+  index?: number;
+  isPaused?: boolean;
+  elapsedTime?: number;
+  remainTime?: number;
+
+  // Cast daily
   displayKey?: string;
 }
 
