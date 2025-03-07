@@ -50,7 +50,6 @@ export interface PlayArtworkV2 {
   duration: number;
   token?: {
     id: string;
-    name: string;
   };
 }
 
@@ -186,7 +185,6 @@ export interface PlaylistToken {
   contractAddress?: string;
   token: {
     id: string;
-    name: string;
   };
   indexerToken?: IndexerToken;
 }
