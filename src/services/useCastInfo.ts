@@ -53,7 +53,7 @@ const useCastInfo = () => {
     if (castInfo?.castCommand === CastCommand.updateIndex) {
       // Send message to WebSocket
       const message: WebSocketMessage = {
-        messageID: 'updateIndex',
+        messageID: 'statusChanged',
         message: JSON.stringify({
           index: castInfo.index,
         }),
