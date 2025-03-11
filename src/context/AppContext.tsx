@@ -34,6 +34,7 @@ interface AppContextValue {
 }
 
 interface AppConfigContext {
+  isInitialized: boolean;
   isOnline: boolean;
   deviceRotation: DeviceRotation | null;
   appRemoteConfig: AppRemoteConfig;
@@ -60,6 +61,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   );
   const [rotation, setRotation] = useState<DeviceRotation | null>(null);
   const [platformInitialized, setPlatformInitialized] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const { castInfo, setCastInfo } = useCastInfo();
   const { frameConfig, setFrameConfig } = useFrameConfig();
@@ -71,6 +73,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const canvasService = useRef(CanvasService.getInstance());
 
   const contextConfig = {
+    isInitialized,
     isOnline,
     deviceRotation,
     appRemoteConfig,
@@ -82,6 +85,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
     try {
       setContextConfig(contextConfig);
       await initDeviceConfigService();
+      setIsInitialized(true);
     } catch (error) {
       console.log('Error init context', error);
     }
@@ -237,6 +241,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
     <AppContext.Provider
       value={{
         context: {
+          isInitialized,
           isOnline,
           deviceRotation,
           appRemoteConfig,

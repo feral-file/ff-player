@@ -28,6 +28,10 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { context } = useAppContext();
   const router = useRouter();
 
+  if (!context.isInitialized) {
+    return <></>;
+  }
+
   const canvasService = CanvasService.getInstance();
   const castInfo = context.castInfo;
   const [castState, setCastState] = useState<CastState>(CastState.None);
