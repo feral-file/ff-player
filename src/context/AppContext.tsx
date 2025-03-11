@@ -127,6 +127,23 @@ export const AppProvider = ({ children }: AppContextProps) => {
         const castInfo = JSON.parse(castInfoString) as CastInfo;
         setCastInfo(castInfo);
         canvasService.current.setCastInfo(castInfo, false);
+        LocalWebSocketClient.getInstance().sendMessage({
+          messageID: 'statusChanged',
+          message: JSON.stringify({
+            connectedDevice: castInfo.deviceInfo,
+
+            exhibitionId: castInfo.exhibitionId,
+            catalog: castInfo.catalog,
+            catalogId: castInfo.catalogId,
+
+            artworks: castInfo.artworks ?? [],
+            startTime: castInfo.startTime,
+            index: castInfo.index,
+            isPaused: castInfo.isPaused,
+
+            displayKey: castInfo.displayKey,
+          }),
+        });
       } catch (error) {
         console.log('Error init cast info', error);
       }
