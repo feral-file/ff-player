@@ -64,6 +64,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const { castInfo, setCastInfo } = useCastInfo();
   const { frameConfig, setFrameConfig } = useFrameConfig();
   const isOnline = useNetworkManger();
+  const isFirstRender = useRef(true);
 
   const deviceRotation = useDeviceRotation(rotation);
   const searchParams = useSearchParams();
@@ -120,34 +121,47 @@ export const AppProvider = ({ children }: AppContextProps) => {
   };
 
   const initCastInfo = () => {
+    const castInfo = getCastInfoFromLocalStorage();
+    if (castInfo) {
+      setCastInfo(castInfo);
+      canvasService.current.setCastInfo(castInfo, false);
+      sendCastInfoToWebSocket(castInfo);
+    }
+  };
+
+  const getCastInfoFromLocalStorage = () => {
     const castInfoString = localStorage.getItem(LocalStorageItem.castInfo);
-    console.log('LocalStorage castInfo', castInfo);
+    console.log('LocalStorage castInfo', castInfoString);
     if (castInfoString != null) {
       try {
         const castInfo = JSON.parse(castInfoString) as CastInfo;
-        setCastInfo(castInfo);
-        canvasService.current.setCastInfo(castInfo, false);
-        LocalWebSocketClient.getInstance().sendMessage({
-          messageID: 'statusChanged',
-          message: JSON.stringify({
-            connectedDevice: castInfo.deviceInfo,
-
-            exhibitionId: castInfo.exhibitionId,
-            catalog: castInfo.catalog,
-            catalogId: castInfo.catalogId,
-
-            artworks: castInfo.artworks ?? [],
-            startTime: castInfo.startTime,
-            index: castInfo.index,
-            isPaused: castInfo.isPaused,
-
-            displayKey: castInfo.displayKey,
-          }),
-        });
+        return castInfo;
       } catch (error) {
         console.log('Error init cast info', error);
       }
     }
+
+    return null;
+  };
+
+  const sendCastInfoToWebSocket = (castInfo: CastInfo) => {
+    LocalWebSocketClient.getInstance().sendMessage({
+      messageID: 'statusChanged',
+      message: JSON.stringify({
+        connectedDevice: castInfo.deviceInfo,
+
+        exhibitionId: castInfo.exhibitionId,
+        catalog: castInfo.catalog,
+        catalogId: castInfo.catalogId,
+
+        artworks: castInfo.artworks ?? [],
+        startTime: castInfo.startTime,
+        index: castInfo.index,
+        isPaused: castInfo.isPaused,
+
+        displayKey: castInfo.displayKey,
+      }),
+    });
   };
 
   // Initialize platform events
@@ -171,21 +185,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
   }, []);
 
   useEffect(() => {
-    if (!platformInitialized) return;
-
-    initContext().catch((error: unknown) => {
-      console.log('Error init context', error);
-    });
-  }, [platformInitialized]);
-
-  useEffect(() => {
-    setContextConfig({
-      ...contextConfig,
-      deviceRotation: rotation,
-    });
-  }, [rotation]);
-
-  useEffect(() => {
     const fetchConfig = async () => {
       try {
         const appRemoteConfig =
@@ -204,6 +203,35 @@ export const AppProvider = ({ children }: AppContextProps) => {
       console.log('[API] Failed to load config:', error);
     });
   }, []);
+
+  useEffect(() => {
+    if (!platformInitialized) return;
+
+    initContext().catch((error: unknown) => {
+      console.log('Error init context', error);
+    });
+  }, [platformInitialized]);
+
+  useEffect(() => {
+    setContextConfig({
+      ...contextConfig,
+      deviceRotation: rotation,
+    });
+  }, [rotation]);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    if (isOnline) {
+      const castInfo = getCastInfoFromLocalStorage();
+      if (castInfo) {
+        sendCastInfoToWebSocket(castInfo);
+      }
+    }
+  }, [isOnline]);
 
   return (
     <AppContext.Provider
