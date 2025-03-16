@@ -24,18 +24,20 @@ const enum CastState {
   Daily, // Displaying exhibition
 }
 
-const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// Separate loading component
+const LoadingWrapper: React.FC = () => {
+  return <></>;
+};
+
+// Main component that only renders when initialized
+const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const { context } = useAppContext();
   const router = useRouter();
-
-  if (!context.isInitialized) {
-    return <></>;
-  }
-
   const canvasService = CanvasService.getInstance();
   const castInfo = context.castInfo;
   const [castState, setCastState] = useState<CastState>(CastState.None);
-  // const [displayOnboarding, setDisplayOnboarding] = useState<boolean>(false);
   const sendLogEventInterval = useRef<NodeJS.Timeout | null>(null);
   const [messages, setMessages] = useState<AbstractIntlMessages>();
   const locale = getUserLocale();
@@ -62,7 +64,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     validateVersion().catch((error: unknown) => {
       console.error(error);
     });
-  }, []);
+  }, [context.appRemoteConfig]);
 
   const checkVersion = async () => {
     const currentVersion = await AppService.getCurrentVersion();
@@ -89,7 +91,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return () => {
       EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
     };
-  });
+  }, [router]);
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -162,75 +164,79 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, []);
 
   useEffect(() => {
+    if (!castInfo) return;
+
     console.log('[AppWrapper] process cast info:', JSON.stringify(castInfo));
-    if (castInfo) {
-      const handleCastCommand = () => {
-        console.log('AppWrapper castInfo', castInfo);
-        console.log('AppWrapper castState', castState);
 
-        switch (castInfo.castCommand) {
-          case CastCommand.castListArtwork: {
-            if (castState === CastState.Artwork) {
-              return;
-            }
+    const handleCastCommand = () => {
+      console.log('AppWrapper castInfo', castInfo);
+      console.log('AppWrapper castState', castState);
 
-            setCastState(CastState.Artwork);
-            if (castState === CastState.None) {
-              router.push('/playlist');
-            } else {
-              router.replace('/playlist');
-            }
-            break;
+      switch (castInfo.castCommand) {
+        case CastCommand.castListArtwork: {
+          if (castState === CastState.Artwork) {
+            return;
           }
 
-          case CastCommand.castExhibition: {
-            if (castState === CastState.Exhibition) {
-              return;
-            }
-
-            setCastState(CastState.Exhibition);
-            if (castState === CastState.None) {
-              router.push('/exhibitions');
-            } else {
-              router.replace('/exhibitions');
-            }
-
-            break;
+          setCastState(CastState.Artwork);
+          if (castState === CastState.None) {
+            router.push('/playlist');
+          } else {
+            router.replace('/playlist');
           }
-
-          case CastCommand.castDaily: {
-            if (castState === CastState.Daily) {
-              return;
-            }
-
-            setCastState(CastState.Daily);
-            if (castState === CastState.None) {
-              router.push('/daily');
-            } else {
-              router.replace('/daily');
-            }
-            break;
-          }
-
-          default: {
-            break;
-          }
+          break;
         }
-      };
-      handleCastCommand();
-    } else {
-      if (castState !== CastState.None && castState !== CastState.Daily) {
-        // Disconnect
-        setCastState(CastState.None);
-        router.back();
-      } else {
-        canvasService.castDaily({}).catch((error: unknown) => {
-          console.log('[AppWrapper] Error Cast daily', error);
-        });
+
+        case CastCommand.castExhibition: {
+          if (castState === CastState.Exhibition) {
+            return;
+          }
+
+          setCastState(CastState.Exhibition);
+          if (castState === CastState.None) {
+            router.push('/exhibitions');
+          } else {
+            router.replace('/exhibitions');
+          }
+
+          break;
+        }
+
+        case CastCommand.castDaily: {
+          if (castState === CastState.Daily) {
+            return;
+          }
+
+          setCastState(CastState.Daily);
+          if (castState === CastState.None) {
+            router.push('/daily');
+          } else {
+            router.replace('/daily');
+          }
+          break;
+        }
+
+        default: {
+          break;
+        }
       }
+    };
+    handleCastCommand();
+  }, [castInfo, castState, router]);
+
+  useEffect(() => {
+    if (castInfo) return;
+
+    if (castState !== CastState.None && castState !== CastState.Daily) {
+      // Disconnect
+      setCastState(CastState.None);
+      router.back();
+    } else {
+      canvasService.castDaily({}).catch((error: unknown) => {
+        console.log('[AppWrapper] Error Cast daily', error);
+      });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [castInfo]);
+  }, [castInfo, castState, router]);
 
   return messages != undefined ? (
     <NextIntlClientProvider locale={locale} messages={messages}>
@@ -249,6 +255,17 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   ) : (
     <></>
   );
+};
+
+// Wrapper component that conditionally renders based on initialization state
+const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { context } = useAppContext();
+
+  if (!context.isInitialized) {
+    return <LoadingWrapper />;
+  }
+
+  return <InitializedAppWrapper>{children}</InitializedAppWrapper>;
 };
 
 export default AppWrapper;
