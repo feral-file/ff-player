@@ -14,6 +14,7 @@ import {
   MIMETypeVideo,
   MITETypeIframe,
   SeriesPreviewHTMLTag,
+  ViewMode,
 } from '@/utils/types';
 import Hls from 'hls.js';
 import { useEffect, useRef, useState } from 'react';
@@ -343,8 +344,14 @@ const ArtworkPlayer = ({
         backgroundColor: '#000000',
         justifyContent: 'center',
         position: 'relative',
-        transition: `transform 0.2s, opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms`,
+        transition: `transform 0.2s, opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.3s ease`,
         opacity: opacity,
+        padding:
+          context.frameConfig === ArtFraming.FitToScreen
+            ? context.deviceRotation?.viewMode === ViewMode.landscape
+              ? '7.485vh 8.783vw'
+              : '8.783vh 7.485vw'
+            : '0',
       }}>
       {(previewType === null || loading) && <Loading />}
       {displayPreviewURL && previewType === SeriesPreviewHTMLTag.image && (
