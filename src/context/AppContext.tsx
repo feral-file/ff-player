@@ -156,23 +156,38 @@ export const AppProvider = ({ children }: AppContextProps) => {
   };
 
   const sendCastInfoToWebSocket = (castInfo: CastInfo) => {
-    LocalWebSocketClient.getInstance().sendMessage({
-      messageID: 'statusChanged',
-      message: JSON.stringify({
-        connectedDevice: castInfo.deviceInfo,
+    const websocket = LocalWebSocketClient.getInstance();
 
-        exhibitionId: castInfo.exhibitionId,
-        catalog: castInfo.catalog,
-        catalogId: castInfo.catalogId,
+    const sendCastInfo = () => {
+      console.log('AppContext send cast info', JSON.stringify(castInfo));
+      websocket.sendMessage({
+        messageID: 'statusChanged',
+        message: JSON.stringify({
+          connectedDevice: castInfo.deviceInfo,
 
-        artworks: castInfo.artworks ?? [],
-        startTime: castInfo.startTime,
-        index: castInfo.index,
-        isPaused: castInfo.isPaused,
+          exhibitionId: castInfo.exhibitionId,
+          catalog: castInfo.catalog,
+          catalogId: castInfo.catalogId,
 
-        displayKey: castInfo.displayKey,
-      }),
-    });
+          artworks: castInfo.artworks ?? [],
+          startTime: castInfo.startTime,
+          index: castInfo.index,
+          isPaused: castInfo.isPaused,
+
+          displayKey: castInfo.displayKey,
+        }),
+      });
+    };
+
+    if (websocket.isConnected()) {
+      sendCastInfo();
+    } else {
+      const onConnectedCallback = () => {
+        sendCastInfo();
+        websocket.removeOnConnected(onConnectedCallback);
+      };
+      websocket.onConnected(onConnectedCallback);
+    }
   };
 
   // Initialize platform events
@@ -186,11 +201,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
       // }
     }
 
-    websocket = new LocalWebSocketClient();
-
+    websocket = LocalWebSocketClient.getInstance();
     setPlatformInitialized(true);
-
     return () => {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       websocket?.disconnect();
     };
   }, []);

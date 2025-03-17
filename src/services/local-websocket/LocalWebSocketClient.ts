@@ -7,6 +7,7 @@ export class LocalWebSocketClient {
   private isConnecting = false;
   private connectionAttempts = 0;
   private static instance: LocalWebSocketClient;
+  private connectionListeners: (() => void)[] = [];
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -20,6 +21,20 @@ export class LocalWebSocketClient {
       LocalWebSocketClient.instance = new LocalWebSocketClient();
     }
     return LocalWebSocketClient.instance;
+  }
+
+  public isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  public onConnected(callback: () => void): void {
+    this.connectionListeners.push(callback);
+  }
+
+  public removeOnConnected(callback: () => void): void {
+    this.connectionListeners = this.connectionListeners.filter(
+      listener => listener !== callback
+    );
   }
 
   private connect() {
@@ -53,6 +68,10 @@ export class LocalWebSocketClient {
     if (this.connectionAttempts === 1) {
       this.ping();
     }
+
+    this.connectionListeners.forEach(listener => {
+      listener();
+    });
   }
 
   private async handleMessage(event: MessageEvent) {
