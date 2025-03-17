@@ -20,7 +20,7 @@ import { AppSettings, LocalStorageItem } from '@/constants';
 import { useSearchParams } from 'next/navigation';
 import DeviceManager from '@/utils/DeviceManager';
 import useCastInfo from '@/services/useCastInfo';
-import { ArtFraming, CastInfo } from '@/utils/types';
+import { ArtFraming, CastCommand, CastInfo } from '@/utils/types';
 import { LocalWebSocketClient } from '@/services/local-websocket/LocalWebSocketClient';
 import useFrameConfig from '@/services/useArtFraming';
 import CanvasService from '@/services/CanvasService';
@@ -130,6 +130,13 @@ export const AppProvider = ({ children }: AppContextProps) => {
       setCastInfo(castInfo);
       canvasService.current.setCastInfo(castInfo, false);
       sendCastInfoToWebSocket(castInfo);
+    } else {
+      console.log('CastInfo is null, send cast daily message');
+
+      sendCastInfoToWebSocket({
+        castCommand: CastCommand.castDaily,
+        displayKey: 'daily_work',
+      });
     }
   };
 
