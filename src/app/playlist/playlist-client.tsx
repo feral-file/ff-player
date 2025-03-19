@@ -157,7 +157,9 @@ export default function PlaylistClient() {
     }
 
     intervalRef.current = setInterval(() => {
+      console.log('playlist', playlist);
       const index = getIndex(playlist, startTime);
+      console.log('index', index);
       canvasService.current.setCastInfo({
         ...castInfo,
         castCommand: CastCommand.updateIndex,
@@ -222,6 +224,7 @@ export default function PlaylistClient() {
             if (castInfo.artworks?.length) {
               getNftTokens(castInfo.artworks)
                 .then((updatedArtworks: PlaylistToken[]) => {
+                  console.log('updatedArtworks', updatedArtworks);
                   setPlaylist(updatedArtworks);
 
                   if (castInfo.startTime) {
