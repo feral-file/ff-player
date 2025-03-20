@@ -226,6 +226,7 @@ class CanvasService {
 
     this.setCastInfo({
       ...(this.castInfo ?? {}),
+      castCommand: CastCommand.connect,
       deviceInfo: request.clientDevice,
     });
 

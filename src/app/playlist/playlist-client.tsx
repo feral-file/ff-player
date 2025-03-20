@@ -148,12 +148,12 @@ export default function PlaylistClient() {
   };
 
   const startInterval = (duration: number) => {
-    if (duration === 0) {
-      return;
-    }
-
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
+    }
+
+    if (duration === 0) {
+      return;
     }
 
     intervalRef.current = setInterval(() => {
@@ -212,14 +212,13 @@ export default function PlaylistClient() {
   };
 
   useEffect(() => {
-    console.log('castInfo', castInfo);
-
+    console.log('[PlaylistClient] castInfo', castInfo);
     if (castInfo) {
       const handleCastCommand = () => {
         switch (castInfo.castCommand) {
           case CastCommand.castListArtwork: {
             indexRef.current = -1;
-
+            setCurrentIndex(-1);
             if (castInfo.artworks?.length) {
               getNftTokens(castInfo.artworks)
                 .then((updatedArtworks: PlaylistToken[]) => {
