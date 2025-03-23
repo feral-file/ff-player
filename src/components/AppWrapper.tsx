@@ -222,7 +222,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       }
     };
     handleCastCommand();
-  }, [castInfo, castState, router]);
+  }, [castInfo]);
 
   useEffect(() => {
     if (castInfo) return;
