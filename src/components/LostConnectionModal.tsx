@@ -15,7 +15,7 @@ export default function LostConnectionModal() {
       {!isOnline && (
         <MessageModal
           screenRatio={screenRatio}
-          message={t('internet_connection_lost')}
+          title={t('internet_connection_lost')}
         />
       )}
     </div>
