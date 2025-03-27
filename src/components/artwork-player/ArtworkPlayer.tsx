@@ -441,7 +441,7 @@ const ArtworkPlayer = ({
 
       if (glContext) {
         console.log(
-          `[ArtworkPlayer] WebGL ${glContext.getParameter(glContext.VERSION) as string} is available`
+          `[ArtworkPlayer] WebGL ${glContext instanceof WebGL2RenderingContext ? '2' : glContext instanceof WebGLRenderingContext ? '1' : 'null'} is available`
         );
         return true;
       }
