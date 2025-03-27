@@ -29,6 +29,8 @@ import { useTranslations } from 'next-intl';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
 import { getContentTypeFromURL } from '@/utils/content-type';
 
+const MAX_RECOVERY_TIME = 60000 * 10;
+
 const ArtworkPlayer = ({
   previewURL,
   artworkID,
@@ -45,6 +47,7 @@ const ArtworkPlayer = ({
 }) => {
   const FADE_IN_BUFFER_MS = 50;
   const FADE_IN_OUT_DAILY_MS = 350;
+  const t = useTranslations('ArtworkPlayer');
   const { context } = useAppContext();
   const [opacity, setOpacity] = useState(1);
   const [displayPreviewURL, setDisplayPreviewURL] = useState<string>('');
@@ -54,15 +57,22 @@ const ArtworkPlayer = ({
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [displaySoftwareURL, setDisplaySoftwareURL] =
     useState<string>(previewURL);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const newDayCheckTimeOutID = useRef<
     NodeJS.Timeout | string | number | undefined
   >(undefined);
   const [showMessageModal, setShowMessageModal] = useState<boolean>(false);
-  const t = useTranslations('ArtworkPlayer');
+  const [messageModalText, setMessageModalText] = useState<string | null>(null);
+  const [messageModalTitle, setMessageModalTitle] = useState<string | null>(
+    null
+  );
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [iframeKey, setIframeKey] = useState(0);
+  const webGLRecoveryIntervalRef = useRef<NodeJS.Timeout>();
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isWebGLContextLost = useRef<boolean>(false);
 
   function compareToGetFileType(type: string) {
     setIsStreaming(false);
@@ -155,6 +165,7 @@ const ArtworkPlayer = ({
 
   useEffect(() => {
     const detectPreviewType = async (previewURL: string) => {
+      console.log('[ArtworkPlayer] detectPreviewType', previewURL);
       try {
         if (artworkPreviewMIMEType) {
           compareToGetFileType(artworkPreviewMIMEType);
@@ -223,6 +234,16 @@ const ArtworkPlayer = ({
       }
     };
   }, [previewType, videoRef]);
+
+  const handleIframeLoad = () => {
+    console.log('[ArtworkPlayer] Iframe loaded');
+    if (isWebGLAvailable()) {
+      setShowMessageModal(false);
+      loadedSource();
+    } else {
+      handleWebGLLost();
+    }
+  };
 
   const loadedSource = () => {
     setOpacity(1);
@@ -332,33 +353,184 @@ const ArtworkPlayer = ({
 
   const handleLoadIframeError = () => {
     setOpacity(1);
+    setMessageModalTitle(t('wrong_artwork'));
     setShowMessageModal(true);
   };
 
+  const reloadIframe = () => {
+    console.log('[ArtworkPlayer] reloadIframe');
+    setIframeKey(prevKey => prevKey + 1);
+  };
+
+  const getCurrentCanvas = () => {
+    if (!canvasRef.current) {
+      canvasRef.current = document.createElement('canvas');
+    }
+    return canvasRef.current;
+  };
+
+  const handleWebGLLost = () => {
+    if (isWebGLContextLost.current) {
+      return;
+    }
+
+    isWebGLContextLost.current = true;
+    console.log('[ArtworkPlayer] WebGL context lost!');
+    setMessageModalText(
+      'This artwork appears to be especially demanding and may have caused a GPU crash. ' +
+        'The system is now working to restore the display environment.<br/><br/>' +
+        'This may take a moment. If the issue repeats, we recommend trying a different artwork ' +
+        'or viewing this one on a higher-performance device.<br/><br/>' +
+        'Thanks for your patience.'
+    );
+    setMessageModalTitle('Artwork Recovery in Progress');
+    setShowMessageModal(true);
+    setOpacity(0);
+    startWebGLRecovery();
+  };
+
+  const handleWebGLRestored = () => {
+    console.log('[ArtworkPlayer] WebGL context restored!');
+  };
+
+  const startWebGLRecovery = () => {
+    console.log('[ArtworkPlayer] startWebGLRecovery');
+    if (webGLRecoveryIntervalRef.current) {
+      clearInterval(webGLRecoveryIntervalRef.current);
+    }
+
+    const startTime = Date.now();
+    webGLRecoveryIntervalRef.current = setInterval(() => {
+      if (Date.now() - startTime > MAX_RECOVERY_TIME) {
+        if (webGLRecoveryIntervalRef.current) {
+          clearInterval(webGLRecoveryIntervalRef.current);
+        }
+        console.log('[ArtworkPlayer] WebGL recovery timed out');
+        setMessageModalText(null);
+        setMessageModalTitle(
+          'Unfortunately, the system was unable to automatically recover the display environment.'
+        );
+        return;
+      }
+
+      if (isWebGLAvailable()) {
+        if (webGLRecoveryIntervalRef.current) {
+          clearInterval(webGLRecoveryIntervalRef.current);
+        }
+
+        console.log('[ArtworkPlayer] WebGL recovered!');
+        isWebGLContextLost.current = false;
+        setTimeout(() => {
+          reloadIframe();
+        }, 2000);
+      } else {
+        console.log(
+          '[ArtworkPlayer] WebGL still unavailable - attempting recovery'
+        );
+      }
+    }, 5000);
+  };
+
+  // Assumes that GPU works normally if at least one of WebGL or WebGL2 is available
+  const isWebGLAvailable = () => {
+    try {
+      const canvas = getCurrentCanvas();
+      const glContext =
+        canvas.getContext('webgl2', { antialias: true }) ??
+        canvas.getContext('webgl');
+
+      if (glContext) {
+        console.log(
+          `[ArtworkPlayer] WebGL ${glContext.getParameter(glContext.VERSION) as string} is available`
+        );
+        return true;
+      }
+
+      console.warn(`[ArtworkPlayer] Both WebGL and WebGL2 is not available`);
+
+      return false;
+    } catch (error) {
+      console.error('[ArtworkPlayer] Error checking WebGL:', error);
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (webGLRecoveryIntervalRef.current) {
+        clearInterval(webGLRecoveryIntervalRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const webGLContextLostListener = (event: Event) => {
+      console.log('[ArtworkPlayer] webGLContextLostListener');
+      event.preventDefault();
+      handleWebGLLost();
+    };
+    const canvas = getCurrentCanvas();
+    canvas.addEventListener('webglcontextlost', webGLContextLostListener);
+    canvas.addEventListener('webglcontextrestored', handleWebGLRestored);
+
+    return () => {
+      canvas.removeEventListener('webglcontextlost', webGLContextLostListener);
+      canvas.removeEventListener('webglcontextrestored', handleWebGLRestored);
+    };
+  }, [previewURL]);
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        width: '100%',
-        height: '100%',
-        backgroundColor: '#000000',
-        justifyContent: 'center',
-        position: 'relative',
-        transition: `transform 0.2s, opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.3s ease`,
-        opacity: opacity,
-        padding:
-          context.frameConfig === ArtFraming.FitToScreen
-            ? context.deviceRotation?.viewMode === ViewMode.landscape
-              ? '7.485vh 8.783vw'
-              : '8.783vh 7.485vw'
-            : '0',
-      }}>
-      {(previewType === null || loading) && <Loading />}
-      {displayPreviewURL && previewType === SeriesPreviewHTMLTag.image && (
-        <div
-          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-          className={isCustomView ? styles.customRendering : ''}>
-          <img
+    <>
+      <div
+        style={{
+          display: 'flex',
+          width: '100%',
+          height: '100%',
+          backgroundColor: '#000000',
+          justifyContent: 'center',
+          position: 'relative',
+          transition: `transform 0.2s, opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.3s ease`,
+          opacity: opacity,
+          padding:
+            context.frameConfig === ArtFraming.FitToScreen
+              ? context.deviceRotation?.viewMode === ViewMode.landscape
+                ? '7.485vh 8.783vw'
+                : '8.783vh 7.485vw'
+              : '0',
+        }}>
+        {(previewType === null || loading) && <Loading />}
+        {displayPreviewURL && previewType === SeriesPreviewHTMLTag.image && (
+          <div
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            className={isCustomView ? styles.customRendering : ''}>
+            <img
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit:
+                  context.frameConfig === ArtFraming.FitToScreen
+                    ? 'contain'
+                    : 'cover',
+              }}
+              className={styles.image}
+              src={displayPreviewURL}
+              alt="Preview"
+              onLoad={loadedSource}
+            />
+          </div>
+        )}
+        {displayPreviewURL && previewType === SeriesPreviewHTMLTag.object && (
+          <object
+            style={{ width: '100%', height: '100%' }}
+            data={displayPreviewURL}
+            type="text/html"
+            onLoad={loadedSource}>
+            Not supported
+          </object>
+        )}
+        {displayPreviewURL && previewType === SeriesPreviewHTMLTag.video && (
+          <video
+            ref={videoRef}
             style={{
               width: '100%',
               height: '100%',
@@ -367,64 +539,42 @@ const ArtworkPlayer = ({
                   ? 'contain'
                   : 'cover',
             }}
-            className={styles.image}
-            src={displayPreviewURL}
-            alt="Preview"
-            onLoad={loadedSource}
-          />
-        </div>
-      )}
-      {displayPreviewURL && previewType === SeriesPreviewHTMLTag.object && (
-        <object
-          style={{ width: '100%', height: '100%' }}
-          data={displayPreviewURL}
-          type="text/html"
-          onLoad={loadedSource}>
-          Not supported
-        </object>
-      )}
-      {displayPreviewURL && previewType === SeriesPreviewHTMLTag.video && (
-        <video
-          ref={videoRef}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit:
-              context.frameConfig === ArtFraming.FitToScreen
-                ? 'contain'
-                : 'cover',
-          }}
-          autoPlay
-          loop
-          playsInline
-          crossOrigin="anonymous"
-          onLoad={loadedSource}></video>
-      )}
-      {displayPreviewURL && previewType === SeriesPreviewHTMLTag.audio && (
-        <audio autoPlay={true} loop={true}>
-          <source src={displayPreviewURL} onLoadedData={loadedSource}></source>
-        </audio>
-      )}
-      {displaySoftwareURL &&
-        (previewType === SeriesPreviewHTMLTag.iframe ||
-          previewType === SeriesPreviewHTMLTag.iframePDF) && (
-          <iframe
-            ref={iframeRef}
-            style={{ width: '100%', height: '100%' }}
-            src={displaySoftwareURL}
-            onLoad={loadedSource}
-            onError={handleLoadIframeError}
-            sandbox="allow-same-origin allow-scripts"
-            tabIndex={0}></iframe>
+            autoPlay
+            loop
+            playsInline
+            crossOrigin="anonymous"
+            onLoad={loadedSource}></video>
         )}
+        {displayPreviewURL && previewType === SeriesPreviewHTMLTag.audio && (
+          <audio autoPlay={true} loop={true}>
+            <source
+              src={displayPreviewURL}
+              onLoadedData={loadedSource}></source>
+          </audio>
+        )}
+        {displaySoftwareURL &&
+          (previewType === SeriesPreviewHTMLTag.iframe ||
+            previewType === SeriesPreviewHTMLTag.iframePDF) && (
+            <iframe
+              key={iframeKey}
+              ref={iframeRef}
+              style={{ width: '100%', height: '100%' }}
+              src={displaySoftwareURL}
+              onLoad={handleIframeLoad}
+              onError={handleLoadIframeError}
+              sandbox="allow-same-origin allow-scripts"
+              tabIndex={0}></iframe>
+          )}
+      </div>
       {showMessageModal && (
         <MessageModal
           screenRatio={1}
-          message={t('wrong_artwork')}
-          messageModalType={MessageModalType.error}
+          message={messageModalText ?? ''}
+          messageModalType={MessageModalType.info}
+          title={messageModalTitle ?? ''}
         />
       )}
-    </div>
+    </>
   );
 };
 

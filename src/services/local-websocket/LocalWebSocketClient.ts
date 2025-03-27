@@ -97,7 +97,7 @@ export class LocalWebSocketClient {
   }
 
   public sendMessage(message: WebSocketMessage) {
-    console.log('sendMessage', message);
+    console.log('sendMessage', JSON.stringify(message));
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       console.warn('WebSocket is not connected');
       return;
