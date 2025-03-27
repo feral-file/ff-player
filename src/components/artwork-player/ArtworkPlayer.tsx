@@ -235,7 +235,7 @@ const ArtworkPlayer = ({
 
   const handleIframeLoad = () => {
     console.log('[ArtworkPlayer] Iframe loaded');
-    if (checkWebGL()) {
+    if (isWebGLAvailable()) {
       setShowMessageModal(false);
       loadedSource();
     } else {
@@ -398,7 +398,7 @@ const ArtworkPlayer = ({
     }
 
     webGLRecoveryIntervalRef.current = setInterval(() => {
-      if (checkWebGL()) {
+      if (isWebGLAvailable()) {
         if (webGLRecoveryIntervalRef.current) {
           clearInterval(webGLRecoveryIntervalRef.current);
         }
@@ -416,22 +416,26 @@ const ArtworkPlayer = ({
     }, 5000);
   };
 
-  const checkWebGL = () => {
+  // Assumes that GPU works normally if at least one of WebGL or WebGL2 is available
+  const isWebGLAvailable = () => {
     try {
       const canvas = getCurrentCanvas();
-      const glContext = canvas.getContext('webgl2', {
-        antialias: true,
-      });
+      const glContext =
+        canvas.getContext('webgl2', { antialias: true }) ??
+        canvas.getContext('webgl');
 
       if (glContext) {
-        console.log('[ArtworkPlayer] WebGL available');
+        console.log(
+          `[ArtworkPlayer] WebGL ${glContext.getParameter(glContext.VERSION) as string} is available`
+        );
         return true;
       }
 
-      console.warn('[ArtworkPlayer] WebGL is not available.');
+      console.warn(`[ArtworkPlayer] Both WebGL and WebGL2 is not available`);
+
       return false;
     } catch (error) {
-      console.error('Error checking WebGL:', error);
+      console.error('[ArtworkPlayer] Error checking WebGL:', error);
       return false;
     }
   };
