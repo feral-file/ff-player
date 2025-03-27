@@ -436,8 +436,14 @@ const ArtworkPlayer = ({
     try {
       const canvas = getCurrentCanvas();
       const glContext =
-        canvas.getContext('webgl2', { antialias: true }) ??
-        canvas.getContext('webgl');
+        canvas.getContext('webgl2', {
+          antialias: true,
+          failIfMajorPerformanceCaveat: true,
+        }) ??
+        canvas.getContext('webgl', {
+          antialias: true,
+          failIfMajorPerformanceCaveat: true,
+        });
 
       if (glContext) {
         console.log(
