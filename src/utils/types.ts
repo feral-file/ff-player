@@ -90,7 +90,9 @@ export interface UpdateArtFramingRequest {
   frameConfig: ArtFraming;
 }
 export interface UpdateDisplaySettingsRequest {
-  displaySettings: DisplaySettings;
+  tokenId: string;
+  viewMode?: ArtFraming;
+  rotationAngle?: number;
 }
 export type CastListArtworkReply = Reply;
 export type NextArtworkRequest = object;
@@ -247,7 +249,18 @@ export enum ArtFraming {
   CropToFill,
 }
 
-export interface DisplaySettings {
-  viewMode: ViewMode;
-  rotationAngle: number;
+export class DisplaySettings {
+  tokenId: string;
+  viewMode?: ArtFraming;
+  rotationAngle?: number;
+
+  constructor(tokenId: string, viewMode?: ArtFraming, rotationAngle?: number) {
+    this.tokenId = tokenId;
+    this.viewMode = viewMode;
+    this.rotationAngle = rotationAngle;
+  }
+
+  static defaultSettings(tokenId: string) {
+    return new DisplaySettings(tokenId, ArtFraming.FitToScreen, 0);
+  }
 }

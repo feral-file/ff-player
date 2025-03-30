@@ -28,6 +28,7 @@ import MessageModal from '../MessageModal';
 import { useTranslations } from 'next-intl';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
 import { getContentTypeFromURL } from '@/utils/content-type';
+import { useArtworkSettings } from '@/services/useArtworkSettings';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
 
@@ -73,6 +74,27 @@ const ArtworkPlayer = ({
   const webGLRecoveryIntervalRef = useRef<NodeJS.Timeout>();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isWebGLContextLost = useRef<boolean>(false);
+  const { displaySettings } = useArtworkSettings(artworkID);
+  const { viewMode } = context.deviceRotation ?? { viewMode: null };
+
+  useEffect(() => {
+    console.log(
+      '[ArtworkPlayer] artworkSettings',
+      JSON.stringify(displaySettings)
+    );
+    if (displaySettings?.viewModeChanged && displaySettings.viewMode) {
+      if (displayPreviewURL && previewType === SeriesPreviewHTMLTag.iframe) {
+        const displayMode =
+          (displaySettings.viewMode as ArtFraming) === ArtFraming.CropToFill
+            ? 'crop'
+            : 'fit';
+        const queryParam = `&display_mode=${displayMode}`;
+        const url = new URL(displayPreviewURL);
+        url.search += queryParam;
+        setDisplaySoftwareURL(url.toString());
+      }
+    }
+  }, [displaySettings]);
 
   function compareToGetFileType(type: string) {
     setIsStreaming(false);
@@ -490,19 +512,43 @@ const ArtworkPlayer = ({
       <div
         style={{
           display: 'flex',
-          width: '100%',
-          height: '100%',
+          // width: '100%',
+          // height: '100%',
           backgroundColor: '#000000',
           justifyContent: 'center',
           position: 'relative',
-          transition: `transform 0.2s, opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.3s ease`,
+          transition: `transform 0.2s, opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.2s ease`,
+          // transform: `rotate(${(displaySettings?.rotationAngle ?? 0).toString()}deg)`,
           opacity: opacity,
           padding:
-            context.frameConfig === ArtFraming.FitToScreen
+            (displaySettings?.viewMode ?? context.frameConfig) ===
+            ArtFraming.FitToScreen
               ? context.deviceRotation?.viewMode === ViewMode.landscape
                 ? '7.485vh 8.783vw'
                 : '8.783vh 7.485vw'
               : '0',
+          width:
+            (viewMode === ViewMode.portrait &&
+              (displaySettings?.rotationAngle || 0) % 180 !== 90) ||
+            (viewMode === ViewMode.landscape &&
+              (displaySettings?.rotationAngle || 0) % 180 === 0)
+              ? '100vw'
+              : '100vh',
+          height:
+            (viewMode === ViewMode.portrait &&
+              (displaySettings?.rotationAngle || 0) % 180 !== 90) ||
+            (viewMode === ViewMode.landscape &&
+              (displaySettings?.rotationAngle || 0) % 180 === 0)
+              ? '100vh'
+              : '100vw',
+          transform: `rotate(${(displaySettings?.rotationAngle ?? 0).toString()}deg) `,
+          transformOrigin:
+            (viewMode === ViewMode.portrait &&
+              (displaySettings?.rotationAngle || 0) % 360 === 90) ||
+            (viewMode === ViewMode.landscape &&
+              (displaySettings?.rotationAngle || 0) % 360 === 90)
+              ? '50vw center'
+              : 'center 50vh',
         }}>
         {(previewType === null || loading) && <Loading />}
         {displayPreviewURL && previewType === SeriesPreviewHTMLTag.image && (
@@ -514,7 +560,8 @@ const ArtworkPlayer = ({
                 width: '100%',
                 height: '100%',
                 objectFit:
-                  context.frameConfig === ArtFraming.FitToScreen
+                  (displaySettings?.viewMode ?? context.frameConfig) ===
+                  ArtFraming.FitToScreen
                     ? 'contain'
                     : 'cover',
               }}
@@ -541,7 +588,8 @@ const ArtworkPlayer = ({
               width: '100%',
               height: '100%',
               objectFit:
-                context.frameConfig === ArtFraming.FitToScreen
+                (displaySettings?.viewMode ?? context.frameConfig) ===
+                ArtFraming.FitToScreen
                   ? 'contain'
                   : 'cover',
             }}

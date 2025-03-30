@@ -40,6 +40,7 @@ import {
   UpdateDisplaySettingsRequest,
   ArtFraming,
   PlayArtworkV2,
+  DisplaySettings,
 } from '../utils/types';
 
 import * as Sentry from '@sentry/nextjs';
@@ -50,6 +51,9 @@ class CanvasService {
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
   public onFrameConfigUpdated: ((frameConfig: ArtFraming) => void) | null =
     null;
+  public onDisplaySettingsUpdated:
+    | ((displaySettings: DisplaySettings) => void)
+    | null = null;
 
   public static getInstance() {
     if (!CanvasService.instance) {
@@ -523,7 +527,14 @@ class CanvasService {
   public updateDisplaySettings(
     request: UpdateDisplaySettingsRequest
   ): Promise<Reply> {
-    console.log('[CanvasService] updateDisplaySettings: ', request);
+    console.log(
+      '[CanvasService] updateDisplaySettings: ',
+      JSON.stringify(request)
+    );
+    if (this.onDisplaySettingsUpdated) {
+      this.onDisplaySettingsUpdated(request);
+    }
+
     return Promise.resolve({ ok: true });
   }
 }
