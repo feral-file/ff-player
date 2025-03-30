@@ -37,6 +37,7 @@ import {
   KeyboardEventReply,
   CastInfo,
   UpdateArtFramingRequest,
+  UpdateDisplaySettingsRequest,
   ArtFraming,
   PlayArtworkV2,
 } from '../utils/types';
@@ -210,6 +211,10 @@ class CanvasService {
         case CastCommand.updateArtFraming:
           return await this.updateArtFraming(
             requestJson as UpdateArtFramingRequest
+          );
+        case CastCommand.updateDisplaySettings:
+          return await this.updateDisplaySettings(
+            requestJson as UpdateDisplaySettingsRequest
           );
         default:
           console.error(`[CAST] Unknown command: ${command}`);
@@ -505,15 +510,20 @@ class CanvasService {
     return Promise.resolve({ ok: true });
   }
 
-  public updateArtFraming(
-    request: UpdateArtFramingRequest
-  ): Promise<KeyboardEventReply> {
+  public updateArtFraming(request: UpdateArtFramingRequest): Promise<Reply> {
     console.log('Update ArtFraming: ', request);
 
     if (this.onFrameConfigUpdated) {
       this.onFrameConfigUpdated(request.frameConfig);
     }
 
+    return Promise.resolve({ ok: true });
+  }
+
+  public updateDisplaySettings(
+    request: UpdateDisplaySettingsRequest
+  ): Promise<Reply> {
+    console.log('[CanvasService] updateDisplaySettings: ', request);
     return Promise.resolve({ ok: true });
   }
 }

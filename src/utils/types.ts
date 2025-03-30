@@ -33,6 +33,7 @@ export enum CastCommand {
   sendKeyboardEvent = 'sendKeyboardEvent',
   castDaily = 'castDaily',
   updateArtFraming = 'updateArtFraming',
+  updateDisplaySettings = 'updateDisplaySettings',
   ping = 'ping',
 }
 
@@ -87,6 +88,9 @@ export interface CastListArtworkRequest {
 }
 export interface UpdateArtFramingRequest {
   frameConfig: ArtFraming;
+}
+export interface UpdateDisplaySettingsRequest {
+  displaySettings: DisplaySettings;
 }
 export type CastListArtworkReply = Reply;
 export type NextArtworkRequest = object;
@@ -241,4 +245,9 @@ export enum MessageModalType {
 export enum ArtFraming {
   FitToScreen,
   CropToFill,
+}
+
+export interface DisplaySettings {
+  viewMode: ViewMode;
+  rotationAngle: number;
 }
