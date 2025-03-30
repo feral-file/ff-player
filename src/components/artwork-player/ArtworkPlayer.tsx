@@ -29,6 +29,8 @@ import { useTranslations } from 'next-intl';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
 import { getContentTypeFromURL } from '@/utils/content-type';
 
+const MAX_RECOVERY_TIME = 60000 * 10;
+
 const ArtworkPlayer = ({
   previewURL,
   artworkID,
@@ -397,7 +399,20 @@ const ArtworkPlayer = ({
       clearInterval(webGLRecoveryIntervalRef.current);
     }
 
+    const startTime = Date.now();
     webGLRecoveryIntervalRef.current = setInterval(() => {
+      if (Date.now() - startTime > MAX_RECOVERY_TIME) {
+        if (webGLRecoveryIntervalRef.current) {
+          clearInterval(webGLRecoveryIntervalRef.current);
+        }
+        console.log('[ArtworkPlayer] WebGL recovery timed out');
+        setMessageModalText(null);
+        setMessageModalTitle(
+          'Unfortunately, the system was unable to automatically recover the display environment.'
+        );
+        return;
+      }
+
       if (isWebGLAvailable()) {
         if (webGLRecoveryIntervalRef.current) {
           clearInterval(webGLRecoveryIntervalRef.current);
@@ -421,12 +436,18 @@ const ArtworkPlayer = ({
     try {
       const canvas = getCurrentCanvas();
       const glContext =
-        canvas.getContext('webgl2', { antialias: true }) ??
-        canvas.getContext('webgl');
+        canvas.getContext('webgl2', {
+          antialias: true,
+          failIfMajorPerformanceCaveat: true,
+        }) ??
+        canvas.getContext('webgl', {
+          antialias: true,
+          failIfMajorPerformanceCaveat: true,
+        });
 
       if (glContext) {
         console.log(
-          `[ArtworkPlayer] WebGL ${glContext.getParameter(glContext.VERSION) as string} is available`
+          `[ArtworkPlayer] WebGL ${glContext instanceof WebGL2RenderingContext ? '2' : glContext instanceof WebGLRenderingContext ? '1' : 'null'} is available`
         );
         return true;
       }
