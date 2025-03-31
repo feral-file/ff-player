@@ -90,7 +90,7 @@ export interface UpdateArtFramingRequest {
   frameConfig: ArtFraming;
 }
 export interface UpdateDisplaySettingsRequest {
-  tokenId: string;
+  tokenId?: string;
   viewMode?: ArtFraming;
   rotationAngle?: number;
 }
@@ -250,17 +250,15 @@ export enum ArtFraming {
 }
 
 export class DisplaySettings {
-  tokenId: string;
   viewMode?: ArtFraming;
   rotationAngle?: number;
 
-  constructor(tokenId: string, viewMode?: ArtFraming, rotationAngle?: number) {
-    this.tokenId = tokenId;
+  constructor(tokenId?: string, viewMode?: ArtFraming, rotationAngle?: number) {
     this.viewMode = viewMode;
     this.rotationAngle = rotationAngle;
   }
 
-  static defaultSettings(tokenId: string) {
+  static defaultSettings(tokenId?: string) {
     return new DisplaySettings(tokenId, ArtFraming.FitToScreen, 0);
   }
 }
