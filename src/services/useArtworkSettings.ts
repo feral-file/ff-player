@@ -57,7 +57,6 @@ export function useArtworkSettings(tokenId: string) {
   }, [tokenId]);
 
   useEffect(() => {
-    console.log('displaySettings', displaySettings);
     displaySettingsRef.current = displaySettings;
     if (displaySettings) {
       localStorage.setItem(
