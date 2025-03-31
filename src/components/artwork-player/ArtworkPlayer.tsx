@@ -512,13 +512,10 @@ const ArtworkPlayer = ({
       <div
         style={{
           display: 'flex',
-          // width: '100%',
-          // height: '100%',
           backgroundColor: '#000000',
           justifyContent: 'center',
           position: 'relative',
           transition: `transform 0.2s, opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.2s ease`,
-          // transform: `rotate(${(displaySettings?.rotationAngle ?? 0).toString()}deg)`,
           opacity: opacity,
           padding:
             (displaySettings?.viewMode ?? context.frameConfig) ===
