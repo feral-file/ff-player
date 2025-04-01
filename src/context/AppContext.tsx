@@ -125,8 +125,20 @@ export const AppProvider = ({ children }: AppContextProps) => {
   };
 
   const initCastInfo = () => {
-    const castInfo = getCastInfoFromLocalStorage();
+    let castInfo = getCastInfoFromLocalStorage();
+
     if (castInfo) {
+      const path = window.location.pathname;
+      const isDaily = path.includes('daily');
+      if (isDaily) {
+        // Reset to daily cast info
+        castInfo = {
+          castCommand: CastCommand.castDaily,
+          deviceInfo: castInfo.deviceInfo,
+          displayKey: 'daily_work',
+        };
+      }
+
       setCastInfo(castInfo);
       canvasService.current.setCastInfo(castInfo, false);
       sendCastInfoToWebSocket(castInfo);
