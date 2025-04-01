@@ -1,6 +1,6 @@
 import { ApolloClient, gql, NormalizedCacheObject } from '@apollo/client';
 import createApolloClient from '@/utils/ApolloClient';
-import { Artwork, IndexerToken, Alumni } from '@/models';
+import { Artwork, IndexerToken, Alumni, AssetConfiguration } from '@/models';
 import axiosInstance from './axiosService';
 import * as Sentry from '@sentry/nextjs';
 
@@ -82,6 +82,55 @@ class ArtworkService {
     return [];
   }
 
+  public async queryTokenConfiguration(
+    tokenId: string
+  ): Promise<AssetConfiguration | undefined> {
+    const client = createApolloClient();
+
+    return new Promise((resolve, reject) => {
+      client
+        .query({
+          query: gql`
+            {
+              tokens(
+                ids: ["${tokenId}"]
+                burnedIncluded: true
+              ) {
+                asset {
+                  attributes {
+                    configuration {
+                      scaling
+                      backgroundColor
+                      marginLeft
+                      marginRight
+                      marginTop
+                      marginBottom
+                      autoPlay
+                      looping
+                      overridable
+                    }
+                  }
+                }
+              }
+            }
+          `,
+        })
+        .then((result: { data: { tokens: IndexerToken[] } }) => {
+          if (result.data.tokens.length === 0) {
+            resolve(undefined);
+          }
+
+          const token = result.data.tokens[0];
+          resolve(token.asset?.attributes?.configuration);
+        })
+        .catch((error: unknown) => {
+          console.log('[API] Error querying tokens:', JSON.stringify(error));
+          // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+          reject(error);
+        });
+    });
+  }
+
   private async queryTokensChunk(
     client: ApolloClient<NormalizedCacheObject>,
     ids: string[]
@@ -96,103 +145,18 @@ class ArtworkService {
                 burnedIncluded: true
               ) {
                 id
-                blockchain
-                fungible
-                contractType
                 contractAddress
-                edition
-                editionName
-                mintedAt
-                balance
-                owner
-                owners {
-                  address
-                  balance
-                }
                 indexID
                 source
-                swapped
-                burned
-                lastActivityTime
-                originTokenInfo {
-                  id
-                  blockchain
-                  fungible
-                  contractType
-                  contractAddress
-                }
-                provenance {
-                  type
-                  owner
-                  blockchain
-                  blockNumber
-                  timestamp
-                  txID
-                  txURL
-                }
-                lastRefreshedTime
                 asset {
-                  indexID
                   thumbnailID
-                  lastRefreshedTime
                   staticPreviewURLLandscape
                   staticPreviewURLPortrait
-                  attributes {
-                    scrollable
-                  }
                   metadata {
                     project {
-                      origin {
-                        artistID
-                        artistName
-                        artistURL
-                        artists {
-                          name
-                          id
-                          url
-                        }
-                        assetID
-                        title
-                        description
-                        mimeType
-                        medium
-                        maxEdition
-                        baseCurrency
-                        basePrice
-                        source
-                        sourceURL
-                        previewURL
-                        thumbnailURL
-                        galleryThumbnailURL
-                        assetData
-                        assetURL
-                        artworkMetadata
-                      }
                       latest {
-                        artistID
-                        artistName
-                        artistURL
-                        artists {
-                          name
-                          id
-                          url
-                        }
-                        assetID
-                        title
-                        description
-                        mimeType
                         medium
-                        maxEdition
-                        baseCurrency
-                        basePrice
-                        source
-                        sourceURL
                         previewURL
-                        thumbnailURL
-                        galleryThumbnailURL
-                        assetData
-                        assetURL
-                        artworkMetadata
                       }
                     }
                   }

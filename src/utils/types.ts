@@ -1,4 +1,5 @@
 import { Artwork, IndexerToken } from '@/models';
+import { TokenDisplaySettings } from '@/models/display_settings.model';
 
 export interface WebSocketMessage {
   messageID: string;
@@ -87,12 +88,11 @@ export interface CastListArtworkRequest {
   artworks: PlayArtworkV2[];
 }
 export interface UpdateArtFramingRequest {
-  frameConfig: ArtFraming;
+  frameConfig: number;
 }
-export interface UpdateDisplaySettingsRequest {
+export interface UpdateDisplaySettingsRequest extends TokenDisplaySettings {
   tokenId?: string;
-  viewMode?: ArtFraming;
-  rotationAngle?: number;
+  fromArtist?: boolean;
 }
 export type CastListArtworkReply = Reply;
 export type NextArtworkRequest = object;
@@ -234,8 +234,8 @@ export enum ExhibitionCatalog {
 }
 
 export enum ViewMode {
-  landscape = 'landscape',
   portrait = 'portrait',
+  landscape = 'landscape',
 }
 
 export enum MessageModalType {
@@ -245,20 +245,6 @@ export enum MessageModalType {
 }
 
 export enum ArtFraming {
-  FitToScreen,
-  CropToFill,
-}
-
-export class DisplaySettings {
-  viewMode?: ArtFraming;
-  rotationAngle?: number;
-
-  constructor(tokenId?: string, viewMode?: ArtFraming, rotationAngle?: number) {
-    this.viewMode = viewMode;
-    this.rotationAngle = rotationAngle;
-  }
-
-  static defaultSettings(tokenId?: string) {
-    return new DisplaySettings(tokenId, ArtFraming.FitToScreen, 0);
-  }
+  FitToScreen = 'fit',
+  CropToFill = 'fill',
 }

@@ -7,7 +7,6 @@ import { CastingArtworkType } from '@/models/metric.model';
 import ArtworkService from '@/services/ArtworkService';
 import CanvasService from '@/services/CanvasService';
 import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
-import { getIndexerTokenName } from '@/utils/indexer';
 import { getIndex } from '@/utils/Playlist';
 import { CastCommand, PlayArtworkV2, PlaylistToken } from '@/utils/types';
 import { useEffect, useRef, useState } from 'react';
@@ -183,15 +182,13 @@ export default function PlaylistClient() {
       );
       const tokens = await artworkService.current.queryTokens(assetIds);
       const previewData = new Map<string, string>();
-      const tokensName = new Map<string, string>();
       const contractAddress = new Map<string, string>();
       const mapTokens = new Map<string, IndexerToken>();
       tokens.forEach((token: IndexerToken) => {
         previewData.set(
           token.indexID,
-          token.asset.metadata.project.latest.previewURL
+          token.asset?.metadata.project.latest.previewURL ?? ''
         );
-        tokensName.set(token.indexID, getIndexerTokenName(token));
         contractAddress.set(token.indexID, token.contractAddress);
         mapTokens.set(token.indexID, token);
       });

@@ -14,7 +14,6 @@ import {
   MIMETypeVideo,
   MITETypeIframe,
   SeriesPreviewHTMLTag,
-  ViewMode,
 } from '@/utils/types';
 import Hls from 'hls.js';
 import { useEffect, useRef, useState } from 'react';
@@ -74,20 +73,17 @@ const ArtworkPlayer = ({
   const webGLRecoveryIntervalRef = useRef<NodeJS.Timeout>();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isWebGLContextLost = useRef<boolean>(false);
-  const { displaySettings } = useArtworkSettings(artworkID);
-  const { viewMode } = context.deviceRotation ?? { viewMode: null };
+  const { loadingSettings, displaySettings } = useArtworkSettings(artworkID);
 
   useEffect(() => {
     console.log(
       '[ArtworkPlayer] artworkSettings',
       JSON.stringify(displaySettings)
     );
-    if (displaySettings?.viewModeChanged && displaySettings.viewMode) {
+    if (displaySettings.scalingChanged && displaySettings.scaling) {
       if (displayPreviewURL && previewType === SeriesPreviewHTMLTag.iframe) {
         const displayMode =
-          (displaySettings.viewMode as ArtFraming) === ArtFraming.CropToFill
-            ? 'crop'
-            : 'fit';
+          displaySettings.scaling === ArtFraming.CropToFill ? 'crop' : 'fit';
         const queryParam = `&display_mode=${displayMode}`;
         const url = new URL(displayPreviewURL);
         url.search += queryParam;
@@ -363,7 +359,7 @@ const ArtworkPlayer = ({
 
     if (previewType === SeriesPreviewHTMLTag.iframe) {
       const displayMode =
-        context.frameConfig === ArtFraming.CropToFill ? 'crop' : 'fit';
+        displaySettings.scaling === ArtFraming.CropToFill ? 'crop' : 'fit';
       const queryParam = `&display_mode=${displayMode}`;
       const url = new URL(displayPreviewURL);
       url.search += queryParam;
@@ -371,7 +367,7 @@ const ArtworkPlayer = ({
     } else {
       setDisplaySoftwareURL(displayPreviewURL);
     }
-  }, [previewType, displayPreviewURL]);
+  }, [previewType, displayPreviewURL, displaySettings]);
 
   const handleLoadIframeError = () => {
     setOpacity(1);
@@ -512,53 +508,30 @@ const ArtworkPlayer = ({
       <div
         style={{
           display: 'flex',
-          backgroundColor: '#000000',
+          backgroundColor: displaySettings.backgroundColor ?? '#000000',
           justifyContent: 'center',
           position: 'relative',
           transition: `transform 0.2s, opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.2s ease`,
           opacity: opacity,
-          padding:
-            (displaySettings?.viewMode ?? context.frameConfig) ===
-            ArtFraming.FitToScreen
-              ? context.deviceRotation?.viewMode === ViewMode.landscape
-                ? '7.485vh 8.783vw'
-                : '8.783vh 7.485vw'
-              : '0',
-          width:
-            (viewMode === ViewMode.portrait &&
-              (displaySettings?.rotationAngle || 0) % 180 !== 90) ||
-            (viewMode === ViewMode.landscape &&
-              (displaySettings?.rotationAngle || 0) % 180 === 0)
-              ? '100vw'
-              : '100vh',
-          height:
-            (viewMode === ViewMode.portrait &&
-              (displaySettings?.rotationAngle || 0) % 180 !== 90) ||
-            (viewMode === ViewMode.landscape &&
-              (displaySettings?.rotationAngle || 0) % 180 === 0)
-              ? '100vh'
-              : '100vw',
-          transform: `rotate(${(displaySettings?.rotationAngle ?? 0).toString()}deg) `,
-          transformOrigin:
-            (viewMode === ViewMode.portrait &&
-              (displaySettings?.rotationAngle || 0) % 360 === 90) ||
-            (viewMode === ViewMode.landscape &&
-              (displaySettings?.rotationAngle || 0) % 360 === 90)
-              ? '50vw center'
-              : 'center 50vh',
+          padding: `${String((displaySettings.marginTop ?? 0) * 100)}vh ${String((displaySettings.marginRight ?? 0) * 100)}vw ${String((displaySettings.marginBottom ?? 0) * 100)}vh ${String((displaySettings.marginLeft ?? 0) * 100)}vw`,
+          width: '100vw',
+          height: '100vh',
+          transformOrigin: 'center 50vh',
         }}>
-        {(previewType === null || loading) && <Loading />}
+        {(previewType === null || loading || loadingSettings) && <Loading />}
         {displayPreviewURL && previewType === SeriesPreviewHTMLTag.image && (
           <div
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            style={{
+              width: '100%',
+              height: '100%',
+            }}
             className={isCustomView ? styles.customRendering : ''}>
             <img
               style={{
                 width: '100%',
                 height: '100%',
                 objectFit:
-                  (displaySettings?.viewMode ?? context.frameConfig) ===
-                  ArtFraming.FitToScreen
+                  displaySettings.scaling === ArtFraming.FitToScreen
                     ? 'contain'
                     : 'cover',
               }}
@@ -585,19 +558,20 @@ const ArtworkPlayer = ({
               width: '100%',
               height: '100%',
               objectFit:
-                (displaySettings?.viewMode ?? context.frameConfig) ===
-                ArtFraming.FitToScreen
+                displaySettings.scaling === ArtFraming.FitToScreen
                   ? 'contain'
                   : 'cover',
             }}
-            autoPlay
-            loop
+            autoPlay={displaySettings.autoPlay ?? true}
+            loop={displaySettings.looping ?? true}
             playsInline
             crossOrigin="anonymous"
             onLoad={loadedSource}></video>
         )}
         {displayPreviewURL && previewType === SeriesPreviewHTMLTag.audio && (
-          <audio autoPlay={true} loop={true}>
+          <audio
+            autoPlay={displaySettings.autoPlay ?? true}
+            loop={displaySettings.looping ?? true}>
             <source
               src={displayPreviewURL}
               onLoadedData={loadedSource}></source>

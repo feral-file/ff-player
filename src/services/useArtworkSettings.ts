@@ -1,70 +1,120 @@
 import { useEffect, useRef, useState } from 'react';
-import { DisplaySettings } from '../utils/types';
 import CanvasService from './CanvasService';
+import {
+  DisplaySettings,
+  TokenDisplaySettings,
+} from '@/models/display_settings.model';
+import ArtworkService from './ArtworkService';
+import { useAppContext } from '@/context/AppContext';
 
-type DisplaySettingWithChanged = DisplaySettings & {
-  viewModeChanged?: boolean;
+type TokenDisplaySettingWithChanged = TokenDisplaySettings & {
+  scalingChanged?: boolean;
 };
 
-const NOW_DISPLAY_SETTINGS_KEY = 'now_display_settings';
-
 export function useArtworkSettings(tokenId: string) {
-  const [displaySettings, setDisplaySettings] = useState<
-    DisplaySettingWithChanged | undefined
+  const { context } = useAppContext();
+  const [tokenDisplaySettings, setTokenDisplaySettings] = useState<
+    TokenDisplaySettingWithChanged | undefined
   >();
-  const displaySettingsRef = useRef<DisplaySettingWithChanged | undefined>(
+  const [loading, setLoading] = useState(true);
+  const displaySettingsRef = useRef<TokenDisplaySettingWithChanged | undefined>(
     undefined
   );
 
-  const getNowDisplaySetting = () => {
-    const savedSettings = localStorage.getItem(NOW_DISPLAY_SETTINGS_KEY);
-    if (savedSettings) {
-      try {
-        return JSON.parse(savedSettings) as DisplaySettings;
-      } catch (error) {
-        console.log('Error get display settings from local storage', error);
-        return DisplaySettings.defaultSettings();
-      }
-    }
+  // Services
+  const artworkService = useRef(new ArtworkService());
+  const canvasService = useRef(CanvasService.getInstance());
 
-    return DisplaySettings.defaultSettings();
-  };
-
+  // Load token display settings
   useEffect(() => {
     if (!tokenId) return;
 
-    const loadSetting = () => {
-      const savedSettings = getNowDisplaySetting();
-      setDisplaySettings(savedSettings);
+    const getTokenConfiguration = async () => {
+      try {
+        return await artworkService.current.queryTokenConfiguration(tokenId);
+      } catch (error) {
+        console.log('Error get token configuration', error);
+        return undefined;
+      }
     };
 
-    const handleArtSettingChanged = (artSetting: DisplaySettings | null) => {
-      setDisplaySettings({
-        ...displaySettingsRef.current,
-        ...artSetting,
-        viewModeChanged: !!artSetting?.viewMode,
-      });
+    const loadSetting = async () => {
+      const tokenDisplayConfig = await getTokenConfiguration();
+      if (tokenDisplayConfig) {
+        setTokenDisplaySettings(
+          TokenDisplaySettings.fromAssetConfiguration(tokenDisplayConfig)
+        );
+      }
+      setLoading(false);
     };
 
-    const canvasService = CanvasService.getInstance();
-    canvasService.onDisplaySettingsUpdated = handleArtSettingChanged;
-    loadSetting();
+    loadSetting().catch((error: unknown) => {
+      console.log('Error load setting', error);
+    });
+  }, [tokenId]);
 
+  // Listen to token display settings changes
+  useEffect(() => {
+    if (!tokenId) return;
+
+    const handleArtSettingChanged = (
+      isFromArtist: boolean,
+      artSetting: TokenDisplaySettings
+    ) => {
+      if (isFromArtist) {
+        console.log('update artist settings', JSON.stringify(artSetting));
+        setTokenDisplaySettings({
+          ...displaySettingsRef.current,
+          ...artSetting,
+          scalingChanged: !!artSetting.scaling,
+        });
+      }
+    };
+    canvasService.current.addDisplaySettingsChangedListener(
+      handleArtSettingChanged
+    );
     return () => {
-      canvasService.onDisplaySettingsUpdated = null;
-      localStorage.removeItem(NOW_DISPLAY_SETTINGS_KEY);
+      canvasService.current.removeDisplaySettingsChangedListener(
+        handleArtSettingChanged
+      );
     };
   }, [tokenId]);
 
   useEffect(() => {
-    displaySettingsRef.current = displaySettings;
-    if (displaySettings) {
-      localStorage.setItem(
-        NOW_DISPLAY_SETTINGS_KEY,
-        JSON.stringify(displaySettings)
-      );
-    }
-  }, [displaySettings]);
+    console.log(
+      '[useArtworkSettings] Token display settings changed',
+      tokenDisplaySettings
+    );
 
-  return { displaySettings };
+    displaySettingsRef.current = tokenDisplaySettings;
+  }, [tokenDisplaySettings]);
+
+  const getDisplaySettings = (): TokenDisplaySettingWithChanged => {
+    console.log('tokenDisplaySettings', JSON.stringify(tokenDisplaySettings));
+    console.log(
+      'context.displaySettings',
+      JSON.stringify(context.displaySettings)
+    );
+
+    if (!tokenDisplaySettings)
+      return context.displaySettings ?? DisplaySettings.defaultSettings();
+
+    if (tokenDisplaySettings.fromArtist) {
+      return tokenDisplaySettings;
+    }
+
+    if (tokenDisplaySettings.overridable) {
+      return {
+        ...tokenDisplaySettings,
+        ...context.displaySettings,
+      };
+    }
+
+    return tokenDisplaySettings;
+  };
+
+  return {
+    loadingSettings: loading,
+    displaySettings: getDisplaySettings(),
+  };
 }
