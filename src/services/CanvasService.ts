@@ -38,22 +38,55 @@ import {
   CastInfo,
   UpdateArtFramingRequest,
   UpdateDisplaySettingsRequest,
-  ArtFraming,
   PlayArtworkV2,
-  DisplaySettings,
+  ArtFraming,
 } from '../utils/types';
-
+import { TokenDisplaySettings } from '@/models/display_settings.model';
 import * as Sentry from '@sentry/nextjs';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
   private static instance: CanvasService | null;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
-  public onFrameConfigUpdated: ((frameConfig: ArtFraming) => void) | null =
-    null;
-  public onDisplaySettingsUpdated:
-    | ((displaySettings: DisplaySettings) => void)
-    | null = null;
+
+  private displaySettingsChangedListeners: ((
+    isFromArtist: boolean,
+    displaySettings: TokenDisplaySettings
+  ) => void)[] = [];
+
+  public addDisplaySettingsChangedListener(
+    callback: (
+      isFromArtist: boolean,
+      displaySettings: TokenDisplaySettings
+    ) => void
+  ) {
+    this.displaySettingsChangedListeners.push(callback);
+  }
+
+  public removeDisplaySettingsChangedListener(
+    callback: (
+      isFromArtist: boolean,
+      displaySettings: TokenDisplaySettings
+    ) => void
+  ) {
+    this.displaySettingsChangedListeners =
+      this.displaySettingsChangedListeners.filter(
+        listener => listener !== callback
+      );
+  }
+
+  private notifyDisplaySettingsChanged(
+    isFromArtist: boolean,
+    displaySettings: TokenDisplaySettings
+  ) {
+    this.displaySettingsChangedListeners.forEach(listener => {
+      try {
+        listener(isFromArtist, displaySettings);
+      } catch (error) {
+        console.error('Error in display settings listener:', error);
+      }
+    });
+  }
 
   public static getInstance() {
     if (!CanvasService.instance) {
@@ -515,11 +548,11 @@ class CanvasService {
   }
 
   public updateArtFraming(request: UpdateArtFramingRequest): Promise<Reply> {
-    console.log('Update ArtFraming: ', request);
+    console.log('Update ArtFraming: ', JSON.stringify(request));
 
-    if (this.onFrameConfigUpdated) {
-      this.onFrameConfigUpdated(request.frameConfig);
-    }
+    this.notifyDisplaySettingsChanged(false, {
+      scaling: Object.values(ArtFraming)[request.frameConfig],
+    });
 
     return Promise.resolve({ ok: true });
   }
@@ -531,10 +564,8 @@ class CanvasService {
       '[CanvasService] updateDisplaySettings: ',
       JSON.stringify(request)
     );
-    if (this.onDisplaySettingsUpdated) {
-      this.onDisplaySettingsUpdated(request);
-    }
 
+    this.notifyDisplaySettingsChanged(request.fromArtist ?? false, request);
     return Promise.resolve({ ok: true });
   }
 }
