@@ -363,7 +363,10 @@ const ArtworkPlayer = ({
 
     if (previewType === SeriesPreviewHTMLTag.iframe) {
       const displayMode =
-        context.frameConfig === ArtFraming.CropToFill ? 'crop' : 'fit';
+        (displaySettings?.viewMode ?? context.frameConfig) ===
+        ArtFraming.CropToFill
+          ? 'crop'
+          : 'fit';
       const queryParam = `&display_mode=${displayMode}`;
       const url = new URL(displayPreviewURL);
       url.search += queryParam;

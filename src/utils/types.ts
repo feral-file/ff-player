@@ -257,8 +257,4 @@ export class DisplaySettings {
     this.viewMode = viewMode;
     this.rotationAngle = rotationAngle;
   }
-
-  static defaultSettings(tokenId?: string) {
-    return new DisplaySettings(tokenId, ArtFraming.FitToScreen, 0);
-  }
 }

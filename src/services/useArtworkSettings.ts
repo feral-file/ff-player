@@ -23,11 +23,11 @@ export function useArtworkSettings(tokenId: string) {
         return JSON.parse(savedSettings) as DisplaySettings;
       } catch (error) {
         console.log('Error get display settings from local storage', error);
-        return DisplaySettings.defaultSettings();
+        return undefined;
       }
     }
 
-    return DisplaySettings.defaultSettings();
+    return undefined;
   };
 
   useEffect(() => {
