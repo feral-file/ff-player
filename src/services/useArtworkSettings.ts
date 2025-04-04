@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import CanvasService from './CanvasService';
 import {
   DisplaySettings,
@@ -19,45 +19,40 @@ export function useArtworkSettings(tokenId: string) {
     TokenDisplaySettingWithChanged | undefined
   >();
   const [loading, setLoading] = useState(true);
-  const displaySettingsRef = useRef<TokenDisplaySettingWithChanged | undefined>(
-    undefined
-  );
 
   // Services
-  const artworkService = useRef(new ArtworkService());
-  const canvasService = useRef(CanvasService.getInstance());
-  const webSocketClient = useRef(LocalWebSocketClient.getInstance());
+  const artworkService = useRef(new ArtworkService()).current;
+  const canvasService = useRef(CanvasService.getInstance()).current;
+  const webSocketClient = useRef(LocalWebSocketClient.getInstance()).current;
 
   // Load token display settings
   useEffect(() => {
     if (!tokenId) return;
 
-    const getTokenConfiguration = async () => {
+    const fetchTokenSettings = async () => {
       try {
-        return await artworkService.current.queryTokenConfiguration(tokenId);
-      } catch (error) {
-        console.log('Error get token configuration', error);
-        return undefined;
+        const config = await artworkService.queryTokenConfiguration(tokenId);
+        console.log('[useArtworkSettings] getTokenConfiguration', config);
+
+        if (config) {
+          setTokenDisplaySettings(
+            TokenDisplaySettings.fromAssetConfiguration(config)
+          );
+        } else {
+          console.warn(
+            '[useArtworkSettings] No token config found — requesting device rotation'
+          );
+          webSocketClient.requestRotateDevice(null);
+        }
+      } catch (err) {
+        console.error('[useArtworkSettings] Failed to load token config:', err);
+      } finally {
+        setLoading(false);
       }
     };
 
-    const loadSetting = async () => {
-      const tokenDisplayConfig = await getTokenConfiguration();
-      console.log('getTokenConfiguration', tokenDisplayConfig);
-
-      if (tokenDisplayConfig) {
-        setTokenDisplaySettings(
-          TokenDisplaySettings.fromAssetConfiguration(tokenDisplayConfig)
-        );
-      } else {
-        console.log('No token display config found, requesting rotate device');
-        webSocketClient.current.requestRotateDevice(null);
-      }
-      setLoading(false);
-    };
-
-    loadSetting().catch((error: unknown) => {
-      console.log('Error load setting', error);
+    fetchTokenSettings().catch((error: unknown) => {
+      console.log('Error fetch token settings', error);
     });
   }, [tokenId]);
 
@@ -65,29 +60,23 @@ export function useArtworkSettings(tokenId: string) {
   useEffect(() => {
     if (!tokenId) return;
 
-    const handleArtSettingChanged = (
+    const onSettingsChanged = (
       isSaveToDevice: boolean,
-      artSetting: TokenDisplaySettings
+      newSettings: TokenDisplaySettings
     ) => {
-      if (isSaveToDevice) {
-        return;
-      }
+      if (isSaveToDevice) return;
 
-      console.log('update artist settings', JSON.stringify(artSetting));
-      setTokenDisplaySettings({
-        ...displaySettingsRef.current,
-        ...artSetting,
-        scalingChanged: !!artSetting.scaling,
+      console.log('[useArtworkSettings] Updating artist settings', newSettings);
+      setTokenDisplaySettings(prev => ({
+        ...prev,
+        ...newSettings,
+        scalingChanged: prev?.scaling !== newSettings.scaling,
         changed: true,
-      });
+      }));
     };
-    canvasService.current.addDisplaySettingsChangedListener(
-      handleArtSettingChanged
-    );
+    canvasService.addDisplaySettingsChangedListener(onSettingsChanged);
     return () => {
-      canvasService.current.removeDisplaySettingsChangedListener(
-        handleArtSettingChanged
-      );
+      canvasService.removeDisplaySettingsChangedListener(onSettingsChanged);
     };
   }, [tokenId]);
 
@@ -98,27 +87,19 @@ export function useArtworkSettings(tokenId: string) {
     );
 
     if (!tokenDisplaySettings || tokenDisplaySettings.overridable) {
-      webSocketClient.current.requestRotateDevice(null);
-      return;
+      webSocketClient.requestRotateDevice(null);
+    } else {
+      const targetOrientation = tokenDisplaySettings.orientation ?? null;
+      if (targetOrientation !== context.deviceRotation?.viewMode) {
+        webSocketClient.requestRotateDevice(targetOrientation);
+      }
     }
-
-    const targetOrientation = tokenDisplaySettings.orientation ?? null;
-    if (targetOrientation !== context.deviceRotation?.viewMode) {
-      webSocketClient.current.requestRotateDevice(targetOrientation);
-    }
-
-    displaySettingsRef.current = tokenDisplaySettings;
   }, [tokenDisplaySettings]);
 
-  const getDisplaySettings = (): TokenDisplaySettingWithChanged => {
-    console.log('tokenDisplaySettings', JSON.stringify(tokenDisplaySettings));
-    console.log(
-      'context.displaySettings',
-      JSON.stringify(context.displaySettings)
-    );
-
-    if (!tokenDisplaySettings)
+  const displaySettings = useMemo((): TokenDisplaySettingWithChanged => {
+    if (!tokenDisplaySettings) {
       return context.displaySettings ?? DisplaySettings.defaultSettings();
+    }
 
     if (tokenDisplaySettings.changed) {
       return tokenDisplaySettings;
@@ -132,10 +113,10 @@ export function useArtworkSettings(tokenId: string) {
     }
 
     return tokenDisplaySettings;
-  };
+  }, [tokenDisplaySettings, context.displaySettings]);
 
   return {
     loadingSettings: loading,
-    displaySettings: getDisplaySettings(),
+    displaySettings,
   };
 }
