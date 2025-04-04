@@ -92,7 +92,7 @@ export interface UpdateArtFramingRequest {
 }
 export interface UpdateDisplaySettingsRequest extends TokenDisplaySettings {
   tokenId?: string;
-  fromArtist?: boolean;
+  isSaved: boolean;
 }
 export type CastListArtworkReply = Reply;
 export type NextArtworkRequest = object;

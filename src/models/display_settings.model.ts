@@ -25,7 +25,6 @@ export class TokenDisplaySettings extends DisplaySettings {
   looping?: boolean;
   interactable?: boolean;
   overridable?: boolean;
-  fromArtist?: boolean;
 
   constructor(
     scaling?: ArtFraming,
@@ -38,8 +37,7 @@ export class TokenDisplaySettings extends DisplaySettings {
     autoPlay?: boolean,
     looping?: boolean,
     interactable?: boolean,
-    overridable?: boolean,
-    fromArtist?: boolean
+    overridable?: boolean
   ) {
     super(scaling, orientation);
     this.backgroundColor = backgroundColor;
@@ -51,7 +49,6 @@ export class TokenDisplaySettings extends DisplaySettings {
     this.looping = looping;
     this.interactable = interactable;
     this.overridable = overridable;
-    this.fromArtist = fromArtist;
   }
 
   // tokenDisplaySettings from asset configuration
@@ -68,8 +65,7 @@ export class TokenDisplaySettings extends DisplaySettings {
       assetConfiguration.autoPlay,
       assetConfiguration.looping,
       assetConfiguration.interactable,
-      assetConfiguration.overridable,
-      false
+      assetConfiguration.overridable
     );
   }
 }
