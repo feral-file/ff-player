@@ -6,6 +6,7 @@ import {
 } from '@/models/display_settings.model';
 import ArtworkService from './ArtworkService';
 import { useAppContext } from '@/context/AppContext';
+import { LocalWebSocketClient } from './local-websocket/LocalWebSocketClient';
 
 type TokenDisplaySettingWithChanged = TokenDisplaySettings & {
   scalingChanged?: boolean;
@@ -25,6 +26,7 @@ export function useArtworkSettings(tokenId: string) {
   // Services
   const artworkService = useRef(new ArtworkService());
   const canvasService = useRef(CanvasService.getInstance());
+  const webSocketClient = useRef(LocalWebSocketClient.getInstance());
 
   // Load token display settings
   useEffect(() => {
@@ -45,6 +47,8 @@ export function useArtworkSettings(tokenId: string) {
         setTokenDisplaySettings(
           TokenDisplaySettings.fromAssetConfiguration(tokenDisplayConfig)
         );
+      } else {
+        webSocketClient.current.requestRotateDevice(null);
       }
       setLoading(false);
     };
@@ -89,6 +93,15 @@ export function useArtworkSettings(tokenId: string) {
       '[useArtworkSettings] Token display settings changed',
       tokenDisplaySettings
     );
+
+    if (
+      (tokenDisplaySettings?.overridable ?? true) &&
+      tokenDisplaySettings?.orientation !== context.deviceRotation?.viewMode
+    ) {
+      webSocketClient.current.requestRotateDevice(
+        tokenDisplaySettings?.orientation ?? null
+      );
+    }
 
     displaySettingsRef.current = tokenDisplaySettings;
   }, [tokenDisplaySettings]);
