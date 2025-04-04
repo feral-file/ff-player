@@ -99,6 +99,7 @@ class ArtworkService {
                 asset {
                   attributes {
                     configuration {
+                      orientation
                       scaling
                       backgroundColor
                       marginLeft
@@ -107,6 +108,7 @@ class ArtworkService {
                       marginBottom
                       autoPlay
                       looping
+                      interactable
                       overridable
                     }
                   }
