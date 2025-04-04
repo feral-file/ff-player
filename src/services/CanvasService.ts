@@ -50,13 +50,13 @@ class CanvasService {
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
 
   private displaySettingsChangedListeners: ((
-    isFromArtist: boolean,
+    isSaveToDevice: boolean,
     displaySettings: TokenDisplaySettings
   ) => void)[] = [];
 
   public addDisplaySettingsChangedListener(
     callback: (
-      isFromArtist: boolean,
+      isSaveToDevice: boolean,
       displaySettings: TokenDisplaySettings
     ) => void
   ) {
@@ -65,7 +65,7 @@ class CanvasService {
 
   public removeDisplaySettingsChangedListener(
     callback: (
-      isFromArtist: boolean,
+      isSaveToDevice: boolean,
       displaySettings: TokenDisplaySettings
     ) => void
   ) {
@@ -76,12 +76,12 @@ class CanvasService {
   }
 
   private notifyDisplaySettingsChanged(
-    isFromArtist: boolean,
+    isSaveToDevice: boolean,
     displaySettings: TokenDisplaySettings
   ) {
     this.displaySettingsChangedListeners.forEach(listener => {
       try {
-        listener(isFromArtist, displaySettings);
+        listener(isSaveToDevice, displaySettings);
       } catch (error) {
         console.error('Error in display settings listener:', error);
       }
@@ -550,7 +550,7 @@ class CanvasService {
   public updateArtFraming(request: UpdateArtFramingRequest): Promise<Reply> {
     console.log('Update ArtFraming: ', JSON.stringify(request));
 
-    this.notifyDisplaySettingsChanged(false, {
+    this.notifyDisplaySettingsChanged(true, {
       scaling: Object.values(ArtFraming)[request.frameConfig],
     });
 
@@ -565,7 +565,7 @@ class CanvasService {
       JSON.stringify(request)
     );
 
-    this.notifyDisplaySettingsChanged(request.fromArtist ?? false, request);
+    this.notifyDisplaySettingsChanged(request.isSaved, request);
     return Promise.resolve({ ok: true });
   }
 }

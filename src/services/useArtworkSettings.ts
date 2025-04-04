@@ -9,6 +9,7 @@ import { useAppContext } from '@/context/AppContext';
 
 type TokenDisplaySettingWithChanged = TokenDisplaySettings & {
   scalingChanged?: boolean;
+  changed?: boolean;
 };
 
 export function useArtworkSettings(tokenId: string) {
@@ -58,17 +59,20 @@ export function useArtworkSettings(tokenId: string) {
     if (!tokenId) return;
 
     const handleArtSettingChanged = (
-      isFromArtist: boolean,
+      isSaveToDevice: boolean,
       artSetting: TokenDisplaySettings
     ) => {
-      if (isFromArtist) {
-        console.log('update artist settings', JSON.stringify(artSetting));
-        setTokenDisplaySettings({
-          ...displaySettingsRef.current,
-          ...artSetting,
-          scalingChanged: !!artSetting.scaling,
-        });
+      if (isSaveToDevice) {
+        return;
       }
+
+      console.log('update artist settings', JSON.stringify(artSetting));
+      setTokenDisplaySettings({
+        ...displaySettingsRef.current,
+        ...artSetting,
+        scalingChanged: !!artSetting.scaling,
+        changed: true,
+      });
     };
     canvasService.current.addDisplaySettingsChangedListener(
       handleArtSettingChanged
@@ -99,7 +103,7 @@ export function useArtworkSettings(tokenId: string) {
     if (!tokenDisplaySettings)
       return context.displaySettings ?? DisplaySettings.defaultSettings();
 
-    if (tokenDisplaySettings.fromArtist) {
+    if (tokenDisplaySettings.changed) {
       return tokenDisplaySettings;
     }
 

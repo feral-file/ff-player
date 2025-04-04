@@ -16,14 +16,14 @@ export function useDeviceSettings() {
 
   useEffect(() => {
     const handleDisplaySettingsChanged = (
-      isFromArtist: boolean,
+      isSaveToDevice: boolean,
       displaySettings: DisplaySettings
     ) => {
       console.log(
         '[useDeviceSettings] handleDisplaySettingsChanged',
         JSON.stringify(displaySettings)
       );
-      if (!isFromArtist) {
+      if (isSaveToDevice) {
         setDisplaySettings({
           ...displaySettingsRef.current,
           ...displaySettings,
