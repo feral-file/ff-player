@@ -12,41 +12,29 @@ export function useDeviceSettings() {
     useState<DisplaySettingWithChanged | null>(null);
 
   const isFirstRender = useRef(true);
-  const displaySettingsRef = useRef<DisplaySettingWithChanged | null>(null);
 
   useEffect(() => {
-    const handleDisplaySettingsChanged = (
+    const onSettingsChanged = (
       isSaveToDevice: boolean,
-      displaySettings: DisplaySettings
+      newSettings: DisplaySettings
     ) => {
-      console.log(
-        '[useDeviceSettings] handleDisplaySettingsChanged',
-        JSON.stringify(displaySettings)
-      );
       if (isSaveToDevice) {
-        setDisplaySettings({
-          ...displaySettingsRef.current,
-          ...displaySettings,
-          scalingChanged: !!displaySettings.scaling,
-        });
+        setDisplaySettings(prev => ({
+          ...prev,
+          ...newSettings,
+          scalingChanged: prev?.scaling !== newSettings.scaling,
+        }));
       }
     };
 
     const canvasService = CanvasService.getInstance();
-    canvasService.addDisplaySettingsChangedListener(
-      handleDisplaySettingsChanged
-    );
-
+    canvasService.addDisplaySettingsChangedListener(onSettingsChanged);
     return () => {
-      canvasService.removeDisplaySettingsChangedListener(
-        handleDisplaySettingsChanged
-      );
+      canvasService.removeDisplaySettingsChangedListener(onSettingsChanged);
     };
   }, []);
 
   useEffect(() => {
-    displaySettingsRef.current = displaySettings;
-
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
