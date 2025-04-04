@@ -43,11 +43,14 @@ export function useArtworkSettings(tokenId: string) {
 
     const loadSetting = async () => {
       const tokenDisplayConfig = await getTokenConfiguration();
+      console.log('getTokenConfiguration', tokenDisplayConfig);
+
       if (tokenDisplayConfig) {
         setTokenDisplaySettings(
           TokenDisplaySettings.fromAssetConfiguration(tokenDisplayConfig)
         );
       } else {
+        console.log('No token display config found, requesting rotate device');
         webSocketClient.current.requestRotateDevice(null);
       }
       setLoading(false);
