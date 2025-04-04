@@ -97,13 +97,14 @@ export function useArtworkSettings(tokenId: string) {
       tokenDisplaySettings
     );
 
-    if (
-      (tokenDisplaySettings?.overridable ?? true) &&
-      tokenDisplaySettings?.orientation !== context.deviceRotation?.viewMode
-    ) {
-      webSocketClient.current.requestRotateDevice(
-        tokenDisplaySettings?.orientation ?? null
-      );
+    if (!tokenDisplaySettings || tokenDisplaySettings.overridable) {
+      webSocketClient.current.requestRotateDevice(null);
+      return;
+    }
+
+    const targetOrientation = tokenDisplaySettings.orientation ?? null;
+    if (targetOrientation !== context.deviceRotation?.viewMode) {
+      webSocketClient.current.requestRotateDevice(targetOrientation);
     }
 
     displaySettingsRef.current = tokenDisplaySettings;
