@@ -110,7 +110,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
   };
 
   const initialDisplaySettings = async () => {
-    DeviceManager.setDeviceDisplaySettings(null);
     const displaySettings = await DeviceManager.getDeviceDisplaySettings();
     if (displaySettings) {
       setDisplaySettings(displaySettings);
