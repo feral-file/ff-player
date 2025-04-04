@@ -11,7 +11,7 @@ export class DisplaySettings {
   }
 
   static defaultSettings() {
-    return new DisplaySettings(ArtFraming.CropToFill, ViewMode.landscape);
+    return new DisplaySettings(ArtFraming.FitToScreen, ViewMode.landscape);
   }
 }
 
