@@ -27,7 +27,11 @@ import MessageModal from '../MessageModal';
 import { useTranslations } from 'next-intl';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
 import { getContentTypeFromURL } from '@/utils/content-type';
-import { useArtworkSettings } from '@/services/useArtworkSettings';
+import {
+  TokenDisplaySettingWithChanged,
+  useArtworkSettings,
+} from '@/services/useArtworkSettings';
+import { DisplaySettings } from '@/models/display_settings.model';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
 
@@ -74,23 +78,6 @@ const ArtworkPlayer = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isWebGLContextLost = useRef<boolean>(false);
   const { loadingSettings, displaySettings } = useArtworkSettings(artworkID);
-
-  useEffect(() => {
-    console.log(
-      '[ArtworkPlayer] artworkSettings',
-      JSON.stringify(displaySettings)
-    );
-    if (displaySettings.scalingChanged && displaySettings.scaling) {
-      if (displayPreviewURL && previewType === SeriesPreviewHTMLTag.iframe) {
-        const displayMode =
-          displaySettings.scaling === ArtFraming.CropToFill ? 'crop' : 'fit';
-        const queryParam = `&display_mode=${displayMode}`;
-        const url = new URL(displayPreviewURL);
-        url.search += queryParam;
-        setDisplaySoftwareURL(url.toString());
-      }
-    }
-  }, [displaySettings]);
 
   function compareToGetFileType(type: string) {
     setIsStreaming(false);
@@ -353,13 +340,27 @@ const ArtworkPlayer = ({
   }, [context, previewType]);
 
   useEffect(() => {
-    if (!displayPreviewURL) {
+    if (!displayPreviewURL || !displaySettings) {
       return;
     }
 
+    console.log(
+      '[ArtworkPlayer] displaySettings',
+      JSON.stringify(displaySettings)
+    );
+    // Update URL when settings first load or when scaling changes
+    updateSoftwareURL(displaySettings);
+  }, [displayPreviewURL, displaySettings]);
+
+  const updateSoftwareURL = (
+    displaySettings: TokenDisplaySettingWithChanged
+  ) => {
     if (previewType === SeriesPreviewHTMLTag.iframe) {
       const displayMode =
-        displaySettings.scaling === ArtFraming.CropToFill ? 'crop' : 'fit';
+        (displaySettings.scaling ?? DisplaySettings.defaultScaling) ===
+        ArtFraming.CropToFill
+          ? 'crop'
+          : 'fit';
       const queryParam = `&display_mode=${displayMode}`;
       const url = new URL(displayPreviewURL);
       url.search += queryParam;
@@ -367,7 +368,7 @@ const ArtworkPlayer = ({
     } else {
       setDisplaySoftwareURL(displayPreviewURL);
     }
-  }, [previewType, displayPreviewURL, displaySettings]);
+  };
 
   const handleLoadIframeError = () => {
     setOpacity(1);
@@ -508,12 +509,12 @@ const ArtworkPlayer = ({
       <div
         style={{
           display: 'flex',
-          backgroundColor: displaySettings.backgroundColor ?? '#000000',
+          backgroundColor: displaySettings?.backgroundColor ?? '#000000',
           justifyContent: 'center',
           position: 'relative',
           transition: `transform 0.2s, opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.2s ease`,
           opacity: opacity,
-          padding: `${String((displaySettings.marginTop ?? 0) * 100)}vh ${String((displaySettings.marginRight ?? 0) * 100)}vw ${String((displaySettings.marginBottom ?? 0) * 100)}vh ${String((displaySettings.marginLeft ?? 0) * 100)}vw`,
+          padding: `${String((displaySettings?.marginTop ?? 0) * 100)}vh ${String((displaySettings?.marginRight ?? 0) * 100)}vw ${String((displaySettings?.marginBottom ?? 0) * 100)}vh ${String((displaySettings?.marginLeft ?? 0) * 100)}vw`,
           width: '100vw',
           height: '100vh',
           transformOrigin: 'center 50vh',
@@ -531,7 +532,8 @@ const ArtworkPlayer = ({
                 width: '100%',
                 height: '100%',
                 objectFit:
-                  displaySettings.scaling === ArtFraming.FitToScreen
+                  (displaySettings?.scaling ??
+                    DisplaySettings.defaultScaling) === ArtFraming.FitToScreen
                     ? 'contain'
                     : 'cover',
               }}
@@ -558,20 +560,21 @@ const ArtworkPlayer = ({
               width: '100%',
               height: '100%',
               objectFit:
-                displaySettings.scaling === ArtFraming.FitToScreen
+                (displaySettings?.scaling ?? DisplaySettings.defaultScaling) ===
+                ArtFraming.FitToScreen
                   ? 'contain'
                   : 'cover',
             }}
-            autoPlay={displaySettings.autoPlay ?? true}
-            loop={displaySettings.looping ?? true}
+            autoPlay={displaySettings?.autoPlay ?? true}
+            loop={displaySettings?.looping ?? true}
             playsInline
             crossOrigin="anonymous"
             onLoad={loadedSource}></video>
         )}
         {displayPreviewURL && previewType === SeriesPreviewHTMLTag.audio && (
           <audio
-            autoPlay={displaySettings.autoPlay ?? true}
-            loop={displaySettings.looping ?? true}>
+            autoPlay={displaySettings?.autoPlay ?? true}
+            loop={displaySettings?.looping ?? true}>
             <source
               src={displayPreviewURL}
               onLoadedData={loadedSource}></source>

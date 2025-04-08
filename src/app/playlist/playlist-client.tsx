@@ -157,7 +157,6 @@ export default function PlaylistClient() {
 
     intervalRef.current = setInterval(() => {
       const index = getIndex(playlist, startTime);
-      console.log('index', index);
       canvasService.current.setCastInfo({
         ...castInfo,
         castCommand: CastCommand.updateIndex,

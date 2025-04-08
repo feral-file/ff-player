@@ -10,8 +10,14 @@ export class DisplaySettings {
     this.orientation = orientation;
   }
 
+  static defaultScaling: ArtFraming = ArtFraming.FitToScreen;
+  static defaultOrientation: ViewMode = ViewMode.landscape;
+
   static defaultSettings() {
-    return new DisplaySettings(ArtFraming.FitToScreen, ViewMode.landscape);
+    return new DisplaySettings(
+      DisplaySettings.defaultScaling,
+      DisplaySettings.defaultOrientation
+    );
   }
 }
 
@@ -50,8 +56,6 @@ export class TokenDisplaySettings extends DisplaySettings {
     this.interactable = interactable;
     this.overridable = overridable;
   }
-
-  // tokenDisplaySettings from asset configuration
 
   static fromAssetConfiguration(assetConfiguration: AssetConfiguration) {
     return new TokenDisplaySettings(
