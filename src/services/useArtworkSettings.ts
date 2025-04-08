@@ -97,6 +97,11 @@ export function useArtworkSettings(tokenId: string) {
   }, [tokenDisplaySettings]);
 
   const displaySettings = useMemo((): TokenDisplaySettingWithChanged => {
+    console.log('[useArtworkSettings] displaySettings', tokenDisplaySettings);
+    console.log(
+      '[useArtworkSettings] context.displaySettings',
+      context.displaySettings
+    );
     if (!tokenDisplaySettings) {
       return context.displaySettings ?? DisplaySettings.defaultSettings();
     }
