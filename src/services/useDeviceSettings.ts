@@ -35,6 +35,9 @@ export function useDeviceSettings() {
   }, []);
 
   useEffect(() => {
+    console.log('[useDeviceSettings] displaySettings', displaySettings);
+    console.log('[useDeviceSettings] isFirstRender', isFirstRender.current);
+
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
