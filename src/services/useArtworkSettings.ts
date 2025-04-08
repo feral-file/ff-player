@@ -7,16 +7,16 @@ import {
 import ArtworkService from './ArtworkService';
 import { useAppContext } from '@/context/AppContext';
 import { LocalWebSocketClient } from './local-websocket/LocalWebSocketClient';
+import { useEffectAfterFirstRender } from '@/utils/custom-hooks/useSkipFirstRender';
 
-type TokenDisplaySettingWithChanged = TokenDisplaySettings & {
-  scalingChanged?: boolean;
+export type TokenDisplaySettingWithChanged = TokenDisplaySettings & {
   changed?: boolean;
 };
 
 export function useArtworkSettings(tokenId: string) {
   const { context } = useAppContext();
   const [tokenDisplaySettings, setTokenDisplaySettings] = useState<
-    TokenDisplaySettingWithChanged | undefined
+    TokenDisplaySettingWithChanged | null | undefined
   >();
   const [loading, setLoading] = useState(true);
 
@@ -29,31 +29,33 @@ export function useArtworkSettings(tokenId: string) {
   useEffect(() => {
     if (!tokenId) return;
 
-    const fetchTokenSettings = async () => {
+    const getTokenSettings = async () => {
       try {
+        setLoading(true);
         const config = await artworkService.queryTokenConfiguration(tokenId);
         console.log('[useArtworkSettings] getTokenConfiguration', config);
 
         if (config) {
-          setTokenDisplaySettings(
-            TokenDisplaySettings.fromAssetConfiguration(config)
-          );
+          return TokenDisplaySettings.fromAssetConfiguration(config);
         } else {
-          console.warn(
-            '[useArtworkSettings] No token config found — requesting device rotation'
-          );
-          webSocketClient.requestRotateDevice(null);
+          console.warn('[useArtworkSettings] No token config found');
+          return null;
         }
       } catch (err) {
         console.error('[useArtworkSettings] Failed to load token config:', err);
+        return null;
       } finally {
         setLoading(false);
       }
     };
 
-    fetchTokenSettings().catch((error: unknown) => {
-      console.log('Error fetch token settings', error);
-    });
+    getTokenSettings()
+      .then(settings => {
+        setTokenDisplaySettings(settings);
+      })
+      .catch((error: unknown) => {
+        console.log('Error fetch token settings', error);
+      });
   }, [tokenId]);
 
   // Listen to token display settings changes
@@ -70,7 +72,6 @@ export function useArtworkSettings(tokenId: string) {
       setTokenDisplaySettings(prev => ({
         ...prev,
         ...newSettings,
-        scalingChanged: prev?.scaling !== newSettings.scaling,
         changed: true,
       }));
     };
@@ -80,13 +81,14 @@ export function useArtworkSettings(tokenId: string) {
     };
   }, [tokenId]);
 
-  useEffect(() => {
+  useEffectAfterFirstRender(() => {
     console.log(
       '[useArtworkSettings] Token display settings changed',
       tokenDisplaySettings
     );
 
     if (!tokenDisplaySettings || tokenDisplaySettings.overridable) {
+      // Restore to the device orientation
       webSocketClient.requestRotateDevice(null);
     } else {
       const targetOrientation = tokenDisplaySettings.orientation ?? null;
@@ -96,7 +98,12 @@ export function useArtworkSettings(tokenId: string) {
     }
   }, [tokenDisplaySettings]);
 
-  const displaySettings = useMemo((): TokenDisplaySettingWithChanged => {
+  const displaySettings = useMemo(():
+    | TokenDisplaySettingWithChanged
+    | undefined => {
+    // ignore first render
+    if (tokenDisplaySettings === undefined) return undefined;
+
     console.log('[useArtworkSettings] displaySettings', tokenDisplaySettings);
     console.log(
       '[useArtworkSettings] context.displaySettings',

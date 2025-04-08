@@ -1,17 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import CanvasService from './CanvasService';
 import DeviceManager from '@/utils/DeviceManager';
 import { DisplaySettings } from '@/models/display_settings.model';
 
-type DisplaySettingWithChanged = DisplaySettings & {
-  scalingChanged?: boolean;
-};
-
 export function useDeviceSettings() {
   const [displaySettings, setDisplaySettings] =
-    useState<DisplaySettingWithChanged | null>(null);
-
-  const isFirstRender = useRef(true);
+    useState<DisplaySettings | null>(null);
 
   useEffect(() => {
     const onSettingsChanged = (
@@ -22,7 +16,6 @@ export function useDeviceSettings() {
         setDisplaySettings(prev => ({
           ...prev,
           ...newSettings,
-          scalingChanged: prev?.scaling !== newSettings.scaling,
         }));
       }
     };
@@ -35,14 +28,6 @@ export function useDeviceSettings() {
   }, []);
 
   useEffect(() => {
-    console.log('[useDeviceSettings] displaySettings', displaySettings);
-    console.log('[useDeviceSettings] isFirstRender', isFirstRender.current);
-
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-
     if (displaySettings) {
       DeviceManager.setDeviceDisplaySettings(displaySettings);
     }
