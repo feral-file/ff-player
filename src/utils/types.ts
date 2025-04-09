@@ -1,4 +1,5 @@
 import { Artwork, IndexerToken } from '@/models';
+import { TokenDisplaySettings } from '@/models/display_settings.model';
 
 export interface WebSocketMessage {
   messageID: string;
@@ -33,6 +34,7 @@ export enum CastCommand {
   sendKeyboardEvent = 'sendKeyboardEvent',
   castDaily = 'castDaily',
   updateArtFraming = 'updateArtFraming',
+  updateDisplaySettings = 'updateDisplaySettings',
   ping = 'ping',
 }
 
@@ -86,7 +88,11 @@ export interface CastListArtworkRequest {
   artworks: PlayArtworkV2[];
 }
 export interface UpdateArtFramingRequest {
-  frameConfig: ArtFraming;
+  frameConfig: number;
+}
+export interface UpdateDisplaySettingsRequest extends TokenDisplaySettings {
+  tokenId?: string;
+  isSaved: boolean;
 }
 export type CastListArtworkReply = Reply;
 export type NextArtworkRequest = object;
@@ -228,8 +234,8 @@ export enum ExhibitionCatalog {
 }
 
 export enum ViewMode {
-  landscape = 'landscape',
   portrait = 'portrait',
+  landscape = 'landscape',
 }
 
 export enum MessageModalType {
@@ -239,6 +245,6 @@ export enum MessageModalType {
 }
 
 export enum ArtFraming {
-  FitToScreen,
-  CropToFill,
+  FitToScreen = 'fit',
+  CropToFill = 'fill',
 }

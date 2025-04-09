@@ -20,10 +20,11 @@ import { AppSettings, LocalStorageItem } from '@/constants';
 import { useSearchParams } from 'next/navigation';
 import DeviceManager from '@/utils/DeviceManager';
 import useCastInfo from '@/services/useCastInfo';
-import { ArtFraming, CastCommand, CastInfo } from '@/utils/types';
+import { CastCommand, CastInfo } from '@/utils/types';
 import { LocalWebSocketClient } from '@/services/local-websocket/LocalWebSocketClient';
-import useFrameConfig from '@/services/useArtFraming';
 import CanvasService from '@/services/CanvasService';
+import { useDeviceSettings } from '@/services/useDeviceSettings';
+import { DisplaySettings } from '@/models/display_settings.model';
 
 interface AppContextProps {
   children: ReactNode;
@@ -39,7 +40,7 @@ interface AppConfigContext {
   deviceRotation: DeviceRotation | null;
   appRemoteConfig: AppRemoteConfig;
   castInfo: CastInfo | null;
-  frameConfig: ArtFraming | null;
+  displaySettings: DisplaySettings | null;
 }
 
 export const AppContext = createContext<AppContextValue | undefined>(undefined);
@@ -64,7 +65,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const [isInitialized, setIsInitialized] = useState(false);
 
   const { castInfo, setCastInfo } = useCastInfo();
-  const { frameConfig, setFrameConfig } = useFrameConfig();
+  const { displaySettings, setDisplaySettings } = useDeviceSettings();
   const isOnline = useNetworkManger();
   const isFirstRender = useRef(true);
 
@@ -78,7 +79,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
     deviceRotation,
     appRemoteConfig,
     castInfo,
-    frameConfig,
+    displaySettings,
   };
 
   const initContext = async () => {
@@ -95,8 +96,8 @@ export const AppProvider = ({ children }: AppContextProps) => {
     try {
       await DeviceManager.init();
       initialOrientation();
-      initialArtFrameConfig().catch((error: unknown) => {
-        console.log('Error initial art frame config', error);
+      initialDisplaySettings().catch((error: unknown) => {
+        console.log('Error initial display settings', error);
       });
       initCastInfo();
     } catch (error) {
@@ -108,19 +109,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
     setRotation(defaultRotation());
   };
 
-  const initialArtFrameConfig = async () => {
-    try {
-      const data = await DeviceManager.getArtFrameConfig();
-      console.log('Initial art frame config', data);
-      if (data === undefined) {
-        setFrameConfig(ArtFraming.FitToScreen);
-        return;
-      }
-
-      setFrameConfig(data);
-    } catch (error) {
-      console.log('Error initial art frame config', error);
-      setFrameConfig(ArtFraming.FitToScreen);
+  const initialDisplaySettings = async () => {
+    const displaySettings = await DeviceManager.getDeviceDisplaySettings();
+    if (displaySettings) {
+      setDisplaySettings(displaySettings);
     }
   };
 
@@ -279,7 +271,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
           deviceRotation,
           appRemoteConfig,
           castInfo,
-          frameConfig,
+          displaySettings,
         },
       }}>
       {children}

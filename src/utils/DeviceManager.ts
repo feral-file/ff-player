@@ -11,7 +11,7 @@ import {
 import * as Sentry from '@sentry/nextjs';
 import { DeviceNamePrefix, LocalStorageItem, Platform } from '@/constants';
 import { BrowserInfo, detect } from 'detect-browser';
-import { ArtFraming } from './types';
+import { DisplaySettings } from '@/models/display_settings.model';
 
 class DeviceManager {
   static instance = new DeviceManager();
@@ -267,16 +267,20 @@ class DeviceManager {
     }
   }
 
-  public setArtFrameConfig(artFrameConfig: ArtFraming): void {
+  public setDeviceDisplaySettings(
+    displaySettings: DisplaySettings | null
+  ): void {
     this.setToLocalStorage(
-      LocalStorageItem.artFraming,
-      artFrameConfig.toString()
+      LocalStorageItem.displaySettings,
+      displaySettings ? JSON.stringify(displaySettings) : '{}'
     );
   }
 
-  public async getArtFrameConfig(): Promise<ArtFraming | undefined> {
-    const config = await this.getFromLocalStorage(LocalStorageItem.artFraming);
-    return config ? (parseInt(config) as ArtFraming) : undefined;
+  public async getDeviceDisplaySettings(): Promise<DisplaySettings | null> {
+    const config = await this.getFromLocalStorage(
+      LocalStorageItem.displaySettings
+    );
+    return config ? (JSON.parse(config) as DisplaySettings) : null;
   }
 }
 

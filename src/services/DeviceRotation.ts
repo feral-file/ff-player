@@ -35,18 +35,28 @@ const useDeviceRotation = (cacheSetting: DeviceRotation | null) => {
     if (typeof window !== 'undefined') {
       const resizeHandler = () => {
         let minSize;
+        let newViewMode: ViewMode;
         if (window.innerHeight > window.innerWidth) {
-          setViewMode(ViewMode.portrait);
+          newViewMode = ViewMode.portrait;
           minSize = window.innerWidth;
         } else {
-          setViewMode(ViewMode.landscape);
+          newViewMode = ViewMode.landscape;
           minSize = window.innerHeight;
         }
 
         setScreenRatio(minSize / AppSettings.STANDARD_HEIGHT);
+        if (newViewMode !== viewMode) {
+          setViewMode(newViewMode);
+        }
       };
 
       resizeHandler();
+
+      window.addEventListener('resize', resizeHandler);
+
+      return () => {
+        window.removeEventListener('resize', resizeHandler);
+      };
     }
   }, []);
 

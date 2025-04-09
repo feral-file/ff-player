@@ -37,18 +37,56 @@ import {
   KeyboardEventReply,
   CastInfo,
   UpdateArtFramingRequest,
-  ArtFraming,
+  UpdateDisplaySettingsRequest,
   PlayArtworkV2,
+  ArtFraming,
 } from '../utils/types';
-
+import { TokenDisplaySettings } from '@/models/display_settings.model';
 import * as Sentry from '@sentry/nextjs';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
   private static instance: CanvasService | null;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
-  public onFrameConfigUpdated: ((frameConfig: ArtFraming) => void) | null =
-    null;
+
+  private displaySettingsChangedListeners: ((
+    isSaveToDevice: boolean,
+    displaySettings: TokenDisplaySettings
+  ) => void)[] = [];
+
+  public addDisplaySettingsChangedListener(
+    callback: (
+      isSaveToDevice: boolean,
+      displaySettings: TokenDisplaySettings
+    ) => void
+  ) {
+    this.displaySettingsChangedListeners.push(callback);
+  }
+
+  public removeDisplaySettingsChangedListener(
+    callback: (
+      isSaveToDevice: boolean,
+      displaySettings: TokenDisplaySettings
+    ) => void
+  ) {
+    this.displaySettingsChangedListeners =
+      this.displaySettingsChangedListeners.filter(
+        listener => listener !== callback
+      );
+  }
+
+  private notifyDisplaySettingsChanged(
+    isSaveToDevice: boolean,
+    displaySettings: TokenDisplaySettings
+  ) {
+    this.displaySettingsChangedListeners.forEach(listener => {
+      try {
+        listener(isSaveToDevice, displaySettings);
+      } catch (error) {
+        console.error('Error in display settings listener:', error);
+      }
+    });
+  }
 
   public static getInstance() {
     if (!CanvasService.instance) {
@@ -210,6 +248,10 @@ class CanvasService {
         case CastCommand.updateArtFraming:
           return await this.updateArtFraming(
             requestJson as UpdateArtFramingRequest
+          );
+        case CastCommand.updateDisplaySettings:
+          return await this.updateDisplaySettings(
+            requestJson as UpdateDisplaySettingsRequest
           );
         default:
           console.error(`[CAST] Unknown command: ${command}`);
@@ -505,15 +547,25 @@ class CanvasService {
     return Promise.resolve({ ok: true });
   }
 
-  public updateArtFraming(
-    request: UpdateArtFramingRequest
-  ): Promise<KeyboardEventReply> {
-    console.log('Update ArtFraming: ', request);
+  public updateArtFraming(request: UpdateArtFramingRequest): Promise<Reply> {
+    console.log('Update ArtFraming: ', JSON.stringify(request));
 
-    if (this.onFrameConfigUpdated) {
-      this.onFrameConfigUpdated(request.frameConfig);
-    }
+    this.notifyDisplaySettingsChanged(true, {
+      scaling: Object.values(ArtFraming)[request.frameConfig],
+    });
 
+    return Promise.resolve({ ok: true });
+  }
+
+  public updateDisplaySettings(
+    request: UpdateDisplaySettingsRequest
+  ): Promise<Reply> {
+    console.log(
+      '[CanvasService] updateDisplaySettings: ',
+      JSON.stringify(request)
+    );
+
+    this.notifyDisplaySettingsChanged(request.isSaved, request);
     return Promise.resolve({ ok: true });
   }
 }
