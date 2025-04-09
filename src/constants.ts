@@ -28,7 +28,6 @@ export enum LocalStorageItem {
   platform = 'platform',
   castInfo = 'castInfo',
   name = 'device_name',
-  branchLink = 'branchLink',
   metricEvents = 'metricEvents',
   primaryAddress = 'primaryAddress',
   displaySettings = 'displaySettings',

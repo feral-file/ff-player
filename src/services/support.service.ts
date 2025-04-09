@@ -1,5 +1,4 @@
 import { supportAxiosInstance } from './axiosService';
-import createBranchLink from '@/utils/createBranchLink';
 
 export enum SupportRequestReason {
   Lagging = 'Lagging',
@@ -29,25 +28,6 @@ export class SupportService {
         '[API] Failed to submit support request:',
         JSON.stringify(error)
       );
-    }
-  }
-
-  public async generateSupportConnectionLink(
-    reportId: string
-  ): Promise<string | null> {
-    try {
-      const data = {
-        source: 'feralfile_display',
-        reportId,
-      };
-
-      return await createBranchLink(data);
-    } catch (error) {
-      console.error(
-        '[DEVICE] Error generate support connection link: ',
-        JSON.stringify(error)
-      );
-      return null;
     }
   }
 }
