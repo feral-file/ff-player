@@ -1,7 +1,5 @@
 export enum LocalStorageItem {
   deviceId = 'device_id',
-  locationID = 'locationID',
-  topicID = 'topicID',
   platform = 'platform',
   castInfo = 'castInfo',
   name = 'device_name',
