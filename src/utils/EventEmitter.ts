@@ -2,8 +2,6 @@
 type EventHandler = (...args: unknown[]) => void;
 
 export enum Event {
-  escape,
-  keyDown,
   toggleQrCode,
   updateCurrentDisplaySetting,
 }

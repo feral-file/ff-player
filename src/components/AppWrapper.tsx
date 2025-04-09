@@ -3,7 +3,6 @@
 import { AppSettings } from '@/constants';
 import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
-import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { CastCommand } from '@/utils/types';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
@@ -69,23 +68,6 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       window.location.reload();
     }
   };
-
-  useEffect(() => {
-    const handleEscapeKey = () => {
-      router.back();
-      canvasService.disconnect({}).catch((error: unknown) => {
-        console.log(error);
-      });
-    };
-
-    EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
-    EventEmitter.subscribe(Event.escape, handleEscapeKey);
-
-    // Cleanup the event listener on component unmount
-    return () => {
-      EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
-    };
-  }, [router]);
 
   useEffect(() => {
     const fetchMessages = async () => {
