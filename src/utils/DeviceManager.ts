@@ -1,5 +1,4 @@
 import { v4 as uuidv4 } from 'uuid';
-import createBranchLink from './createBranchLink';
 import {
   FfDeviceConfigService,
   GoogleConfigService,
@@ -211,60 +210,6 @@ class DeviceManager {
   private async keyWithDevice(key: string): Promise<string> {
     const device = await this.getDeviceInfo();
     return `${key}_${device?.locationId ?? ''}_${device?.topicId ?? ''}`;
-  }
-
-  public async setBranchLink(branchLink: string): Promise<void> {
-    const key = await this.keyWithDevice(LocalStorageItem.branchLink);
-    this.setToLocalStorage(key, branchLink);
-  }
-
-  public async getBranchLink(): Promise<string | null> {
-    const key = await this.keyWithDevice(LocalStorageItem.branchLink);
-    return await this.getFromLocalStorage(key);
-  }
-
-  public async getOrGenerateBranchLink(): Promise<string | null> {
-    let branchLink = await this.getBranchLink();
-    if (!branchLink) {
-      branchLink = await this.generateBranchLink();
-      if (branchLink) {
-        await this.setBranchLink(branchLink);
-      }
-    }
-    Sentry.addBreadcrumb({
-      data: { branchLink },
-      category: 'DeviceManager',
-      message: 'Generated branch link',
-    });
-    return branchLink;
-  }
-
-  public async generateBranchLink(): Promise<string | null> {
-    try {
-      const deviceInfo = await this.getDeviceInfo();
-      if (!deviceInfo) {
-        return null;
-      }
-      console.log(
-        '[DEVICE] Generating branch link with device info: ',
-        JSON.stringify(deviceInfo)
-      );
-      Sentry.addBreadcrumb({
-        data: deviceInfo,
-        category: 'DeviceManager',
-        message: 'Generating branch link',
-      });
-
-      const data = {
-        source: 'feralfile_display',
-        device: deviceInfo,
-      };
-      return await createBranchLink(data);
-    } catch (e) {
-      Sentry.captureException(e);
-      console.error('[DEVICE] Error generate branch link: ', JSON.stringify(e));
-      return null;
-    }
   }
 
   public setDeviceDisplaySettings(
