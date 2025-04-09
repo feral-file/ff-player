@@ -1,17 +1,12 @@
 'use client';
 
-import {
-  AppSettings,
-  SEND_LOG_EVENT_NUMBER,
-  SEND_LOG_INTERVAL,
-} from '@/constants';
+import { AppSettings } from '@/constants';
 import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import { EventEmitter, Event } from '@/utils/EventEmitter';
 import { CastCommand } from '@/utils/types';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useRef, useState } from 'react';
-import DeviceManager from '@/utils/DeviceManager';
+import React, { useEffect, useState } from 'react';
 
 import { AbstractIntlMessages, NextIntlClientProvider } from 'next-intl';
 import { getUserLocale } from '@/utils/locale';
@@ -38,7 +33,6 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   const canvasService = CanvasService.getInstance();
   const castInfo = context.castInfo;
   const [castState, setCastState] = useState<CastState>(CastState.None);
-  const sendLogEventInterval = useRef<NodeJS.Timeout | null>(null);
   const [messages, setMessages] = useState<AbstractIntlMessages>();
   const locale = getUserLocale();
 
@@ -104,64 +98,6 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       console.error(error);
     });
   }, [locale]);
-
-  useEffect(() => {
-    const sendLog = async () => {
-      const primaryAddress = await DeviceManager.getPrimaryAddress();
-      const deviceId = await DeviceManager.getDeviceId();
-      const deviceName = await DeviceManager.getName();
-      const logTitle = `${deviceName}_${deviceId}_${primaryAddress ?? ''}_${new Date().toISOString()}.log`;
-      const tags: string[] = [];
-
-      const data = {
-        userId: primaryAddress ? primaryAddress : deviceId,
-        logTitle,
-        metadata: {
-          primaryAddress,
-          deviceName,
-          deviceId,
-        },
-        tags,
-      };
-
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).Log?.postMessage(
-        JSON.stringify({
-          data: data,
-        })
-      );
-    };
-
-    const handleSendLogEvent = () => {
-      countEvent++;
-      // Send log after reach event number
-      if (countEvent >= SEND_LOG_EVENT_NUMBER) {
-        sendLog().catch((error: unknown) => {
-          console.log('Error when send log', error);
-        });
-      }
-
-      if (sendLogEventInterval.current) {
-        clearInterval(sendLogEventInterval.current);
-      }
-
-      // Reset counter after 10 seconds if not receive another event
-      sendLogEventInterval.current = setInterval(() => {
-        countEvent = 0;
-      }, SEND_LOG_INTERVAL);
-    };
-
-    let countEvent = 0;
-    EventEmitter.unSubscribe(Event.sendLog, handleSendLogEvent);
-    EventEmitter.subscribe(Event.sendLog, handleSendLogEvent);
-
-    return () => {
-      EventEmitter.unSubscribe(Event.sendLog, handleSendLogEvent);
-      if (sendLogEventInterval.current) {
-        clearInterval(sendLogEventInterval.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (!castInfo) return;

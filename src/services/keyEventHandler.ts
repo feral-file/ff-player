@@ -1,5 +1,4 @@
 import { KeyboardEventKey, FlutterKeyEventID } from '@/constants';
-import { EventEmitter, Event } from '@/utils/EventEmitter';
 
 const listHandledKeys = [
   FlutterKeyEventID.goBack,
@@ -40,10 +39,6 @@ export const keyEventHandler = (keyEvent: string) => {
 
       // Dispatch the keyboard event on the desired element
       document.dispatchEvent(keyboardEvent);
-    }
-
-    if (deviceKeyID === FlutterKeyEventID.arrowUp) {
-      EventEmitter.emit(Event.sendLog);
     }
   }
 };
