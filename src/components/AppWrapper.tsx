@@ -3,7 +3,7 @@
 import { AppSettings } from '@/constants';
 import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
-import { CastCommand } from '@/utils/types';
+import { CastCommand } from '@/models';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 

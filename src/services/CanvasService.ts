@@ -1,7 +1,5 @@
 import { calculateStartTime, getArtworkStartTime } from '@/utils/Playlist';
 import {
-  WebSocketMessage,
-  CastCommand,
   Reply,
   ConnectRequestV2,
   ConnectReplyV2,
@@ -35,14 +33,14 @@ import {
   SetCursorOffsetReply,
   KeyboardEventRequest,
   KeyboardEventReply,
-  CastInfo,
   UpdateArtFramingRequest,
   UpdateDisplaySettingsRequest,
-  PlayArtworkV2,
-  ArtFraming,
-} from '../utils/types';
+  DisconnectRequest,
+  PlayArtwork,
+} from '@/models/cast_request_reply.model';
 import { TokenDisplaySettings } from '@/models/display_settings.model';
 import * as Sentry from '@sentry/nextjs';
+import { ArtFraming, CastCommand, CastInfo, WebSocketMessage } from '@/models';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -196,7 +194,7 @@ class CanvasService {
         case CastCommand.connect:
           return await this.connect(requestJson as ConnectRequestV2);
         case CastCommand.disconnect:
-          return await this.disconnect(requestJson);
+          return await this.disconnect(requestJson as DisconnectRequest);
         case CastCommand.checkStatus:
           return await this.status(requestJson as CheckDeviceStatusRequest);
         case CastCommand.castListArtwork:
@@ -279,7 +277,9 @@ class CanvasService {
     return Promise.resolve({ ok: true });
   }
 
-  public async disconnect(request: unknown): Promise<DisconnectReplyV2> {
+  public async disconnect(
+    request: DisconnectRequest
+  ): Promise<DisconnectReplyV2> {
     console.log('[CanvasService] Disconnect: ', JSON.stringify(request));
     this.setCastInfo(null);
     return Promise.resolve({ ok: true });
@@ -460,7 +460,7 @@ class CanvasService {
 
     const playlist = this.castInfo?.artworks ?? [];
     const index = playlist.findIndex(
-      (p: PlayArtworkV2) => p.token?.id === tokenID
+      (p: PlayArtwork) => p.token?.id === tokenID
     );
     if (index < 0) {
       return Promise.resolve({ ok: false });

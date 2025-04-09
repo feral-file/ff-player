@@ -1,4 +1,4 @@
-import { ArtFraming, ViewMode } from '@/utils/types';
+import { ArtFraming, ViewMode } from '@/models';
 import { AssetConfiguration } from './token.model';
 
 export class DisplaySettings {
