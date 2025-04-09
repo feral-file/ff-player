@@ -2,7 +2,6 @@ import { LocalStorageItem } from '@/constants';
 import DeviceManager from './DeviceManager';
 import { v4 as uuidv4 } from 'uuid';
 import { BrowserInfo, detect } from 'detect-browser';
-import { keyEventHandler } from '@/services/keyEventHandler';
 
 interface DeviceInfo {
   modelName: string;
@@ -20,13 +19,6 @@ interface LGSuccessResponse {
 class PlatformEventReceiver {
   static handlePlatformEvent(event: string) {
     console.log(`Handling platform event: ${event}`);
-  }
-}
-
-export class KeyEvent extends PlatformEventReceiver {
-  static override handlePlatformEvent(event: string) {
-    super.handlePlatformEvent(event);
-    keyEventHandler(event);
   }
 }
 
