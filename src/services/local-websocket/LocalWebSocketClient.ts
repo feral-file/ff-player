@@ -1,6 +1,6 @@
-import { WebSocketMessage } from '@/utils/types';
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import CanvasService from '../CanvasService';
+import { WebSocketMessage } from '@/models';
 
 export class LocalWebSocketClient {
   private ws: ReconnectingWebSocket | null = null;

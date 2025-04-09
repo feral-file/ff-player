@@ -1,9 +1,15 @@
 'use client';
 
-import { Exhibition, ExhibitionType, Post, Artwork } from '@/models';
+import {
+  Exhibition,
+  ExhibitionType,
+  Post,
+  Artwork,
+  CastCommand,
+} from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import styles from './exhibition.module.scss';
-import { CastCommand, ExhibitionCatalog, ViewMode } from '@/utils/types';
+import { ExhibitionCatalog, ViewMode } from '@/models';
 import Carousel from './components/carousel/carousel';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
 import { useAppContext } from '@/context/AppContext';

@@ -1,20 +1,4 @@
-import {
-  ArtFraming,
-  FileUseAudio,
-  FileUseIframePDF,
-  FileUseImage,
-  FileUseObject,
-  FileUseVideo,
-  MessageModalType,
-  MIMETypeAudio,
-  MIMETypeImage,
-  MIMETypeObject,
-  MIMETypePdf,
-  MIMETypeUseStream as MIMETypeStreamVideo,
-  MIMETypeVideo,
-  MITETypeIframe,
-  SeriesPreviewHTMLTag,
-} from '@/utils/types';
+import { ArtFraming, MessageModalType } from '@/models';
 import Hls from 'hls.js';
 import { useEffect, useRef, useState } from 'react';
 import * as Sentry from '@sentry/nextjs';
@@ -31,6 +15,21 @@ import {
   useArtworkSettings,
 } from '@/services/useArtworkSettings';
 import { DisplaySettings } from '@/models/display_settings.model';
+import {
+  FileUseAudio,
+  FileUseIframePDF,
+  FileUseImage,
+  FileUseObject,
+  FileUseVideo,
+  MIMETypeAudio,
+  MIMETypeImage,
+  MIMETypeObject,
+  MIMETypePdf,
+  MIMETypeVideo,
+  MIMETypeUseStream as MIMETypeStreamVideo,
+  MITETypeIframe,
+  PreviewHTMLTag,
+} from '@/models';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
 
@@ -85,22 +84,22 @@ const ArtworkPlayer = ({
     type = type.toLowerCase();
 
     if (MIMETypeStreamVideo.includes(type)) {
-      setPreviewType(SeriesPreviewHTMLTag.video);
+      setPreviewType(PreviewHTMLTag.video);
       setIsStreaming(true);
     } else if (MITETypeIframe.includes(type)) {
-      setPreviewType(SeriesPreviewHTMLTag.iframe);
+      setPreviewType(PreviewHTMLTag.iframe);
     } else if (FileUseObject.includes(type) || type.match(MIMETypeObject)) {
-      setPreviewType(SeriesPreviewHTMLTag.object);
+      setPreviewType(PreviewHTMLTag.object);
     } else if (FileUseVideo.includes(type) || type.match(MIMETypeVideo)) {
-      setPreviewType(SeriesPreviewHTMLTag.video);
+      setPreviewType(PreviewHTMLTag.video);
     } else if (FileUseAudio.includes(type) || type.match(MIMETypeAudio)) {
-      setPreviewType(SeriesPreviewHTMLTag.audio);
+      setPreviewType(PreviewHTMLTag.audio);
     } else if (FileUseImage.includes(type) || type.match(MIMETypeImage)) {
-      setPreviewType(SeriesPreviewHTMLTag.image);
+      setPreviewType(PreviewHTMLTag.image);
     } else if (FileUseIframePDF.includes(type) || type.match(MIMETypePdf)) {
-      setPreviewType(SeriesPreviewHTMLTag.iframePDF);
+      setPreviewType(PreviewHTMLTag.iframePDF);
     } else {
-      setPreviewType(SeriesPreviewHTMLTag.iframe);
+      setPreviewType(PreviewHTMLTag.iframe);
     }
   }
 
@@ -115,7 +114,7 @@ const ArtworkPlayer = ({
   };
 
   const unmuteVideo = () => {
-    if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+    if (previewType === PreviewHTMLTag.video && videoRef.current) {
       videoRef.current.muted = false;
       document.removeEventListener('click', unmuteVideo);
     }
@@ -198,7 +197,7 @@ const ArtworkPlayer = ({
           JSON.stringify(error)
         );
         Sentry.captureException(error);
-        setPreviewType(SeriesPreviewHTMLTag.iframe);
+        setPreviewType(PreviewHTMLTag.iframe);
       }
     };
 
@@ -227,12 +226,12 @@ const ArtworkPlayer = ({
 
   useEffect(() => {
     // Unmute video when user click on the screen
-    if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+    if (previewType === PreviewHTMLTag.video && videoRef.current) {
       document.addEventListener('click', unmuteVideo);
     }
 
     return () => {
-      if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+      if (previewType === PreviewHTMLTag.video && videoRef.current) {
         document.removeEventListener('click', unmuteVideo);
       }
     };
@@ -259,7 +258,7 @@ const ArtworkPlayer = ({
   };
 
   useEffect(() => {
-    if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+    if (previewType === PreviewHTMLTag.video && videoRef.current) {
       setOpacity(1);
       if (
         isStreaming &&
@@ -321,7 +320,7 @@ const ArtworkPlayer = ({
 
   useEffect(() => {
     if (context.isOnline) {
-      if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+      if (previewType === PreviewHTMLTag.video && videoRef.current) {
         videoRef.current.play().catch((error: unknown) => {
           console.log(
             '[ArtworkPlayer] Error play video',
@@ -331,7 +330,7 @@ const ArtworkPlayer = ({
         });
       }
     } else {
-      if (previewType === SeriesPreviewHTMLTag.video && videoRef.current) {
+      if (previewType === PreviewHTMLTag.video && videoRef.current) {
         videoRef.current.pause();
       }
     }
@@ -353,7 +352,7 @@ const ArtworkPlayer = ({
   const updateSoftwareURL = (
     displaySettings: TokenDisplaySettingWithChanged
   ) => {
-    if (previewType === SeriesPreviewHTMLTag.iframe) {
+    if (previewType === PreviewHTMLTag.iframe) {
       const displayMode =
         (displaySettings.scaling ?? DisplaySettings.defaultScaling) ===
         ArtFraming.CropToFill
@@ -520,7 +519,7 @@ const ArtworkPlayer = ({
           transformOrigin: 'center 50vh',
         }}>
         {(previewType === null || loading || loadingSettings) && <Loading />}
-        {displayPreviewURL && previewType === SeriesPreviewHTMLTag.image && (
+        {displayPreviewURL && previewType === PreviewHTMLTag.image && (
           <div
             style={{
               width: '100%',
@@ -544,7 +543,7 @@ const ArtworkPlayer = ({
             />
           </div>
         )}
-        {displayPreviewURL && previewType === SeriesPreviewHTMLTag.object && (
+        {displayPreviewURL && previewType === PreviewHTMLTag.object && (
           <object
             style={{ width: '100%', height: '100%' }}
             data={displayPreviewURL}
@@ -553,7 +552,7 @@ const ArtworkPlayer = ({
             Not supported
           </object>
         )}
-        {displayPreviewURL && previewType === SeriesPreviewHTMLTag.video && (
+        {displayPreviewURL && previewType === PreviewHTMLTag.video && (
           <video
             ref={videoRef}
             style={{
@@ -571,7 +570,7 @@ const ArtworkPlayer = ({
             crossOrigin="anonymous"
             onLoad={loadedSource}></video>
         )}
-        {displayPreviewURL && previewType === SeriesPreviewHTMLTag.audio && (
+        {displayPreviewURL && previewType === PreviewHTMLTag.audio && (
           <audio
             autoPlay={displaySettings?.autoPlay ?? true}
             loop={displaySettings?.looping ?? true}>
@@ -581,8 +580,8 @@ const ArtworkPlayer = ({
           </audio>
         )}
         {displaySoftwareURL &&
-          (previewType === SeriesPreviewHTMLTag.iframe ||
-            previewType === SeriesPreviewHTMLTag.iframePDF) && (
+          (previewType === PreviewHTMLTag.iframe ||
+            previewType === PreviewHTMLTag.iframePDF) && (
             <iframe
               key={iframeKey}
               ref={iframeRef}

@@ -6,7 +6,7 @@ import 'swiper/scss/effect-fade';
 import styles from './carousel.module.scss';
 import { formatDateTime } from '@/utils/ui/formatDate';
 import { useEffect, useState } from 'react';
-import { ViewMode } from '@/utils/types';
+import { ViewMode } from '@/models';
 import QueuingImages from '../queuingImages/queuingImages';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { useAppContext } from '@/context/AppContext';

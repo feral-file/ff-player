@@ -1,5 +1,5 @@
 import { AppSettings } from '@/constants';
-import { ViewMode } from '@/utils/types';
+import { ViewMode } from '@/models';
 import { useEffect, useState } from 'react';
 
 export interface DeviceRotation {

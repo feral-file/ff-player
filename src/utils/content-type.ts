@@ -1,11 +1,10 @@
 import {
   FileUseAudio,
   FileUseIframePDF,
+  FileUseImage,
   FileUseStreamVideo,
   FileUseVideo,
-} from './types';
-
-import { FileUseImage } from './types';
+} from '@/models';
 
 /**
  * Attempts to determine the content type of a URL by first making a HEAD request,

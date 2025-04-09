@@ -20,7 +20,7 @@ import { AppSettings, LocalStorageItem } from '@/constants';
 import { useSearchParams } from 'next/navigation';
 import DeviceManager from '@/utils/DeviceManager';
 import useCastInfo from '@/services/useCastInfo';
-import { CastCommand, CastInfo } from '@/utils/types';
+import { CastCommand, CastInfo } from '@/models';
 import { LocalWebSocketClient } from '@/services/local-websocket/LocalWebSocketClient';
 import CanvasService from '@/services/CanvasService';
 import { useDeviceSettings } from '@/services/useDeviceSettings';

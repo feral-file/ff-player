@@ -1,4 +1,4 @@
-import { PlayArtworkV2, PlaylistToken } from './types';
+import { PlayArtwork, PlaylistToken } from '@/models';
 
 export function getIndex(
   playlistTokens: PlaylistToken[],
@@ -29,7 +29,7 @@ export function getIndex(
 }
 
 export function calculateStartTime(
-  artworks: PlayArtworkV2[],
+  artworks: PlayArtwork[],
   index: number,
   elapsedTime?: number
 ): number {
@@ -46,7 +46,7 @@ export function calculateStartTime(
 }
 
 export function getArtworkStartTime(
-  playlist: PlayArtworkV2[],
+  playlist: PlayArtwork[],
   index: number,
   playlistStartTime: number
 ): number {
