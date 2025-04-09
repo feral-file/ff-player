@@ -95,22 +95,6 @@ class DeviceManager {
     this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
   }
 
-  public setLocationId(locationId: string): void {
-    this.setToLocalStorage(LocalStorageItem.locationID, locationId);
-  }
-
-  public async getLocationId(): Promise<string | null> {
-    return await this.getFromLocalStorage(LocalStorageItem.locationID);
-  }
-
-  public setTopicId(topicId: string): void {
-    this.setToLocalStorage(LocalStorageItem.topicID, topicId);
-  }
-
-  public async getTopicId(): Promise<string | null> {
-    return await this.getFromLocalStorage(LocalStorageItem.topicID);
-  }
-
   public setName(name: string): void {
     this.setToLocalStorage(LocalStorageItem.name, name);
   }
@@ -180,8 +164,6 @@ class DeviceManager {
   public async getDeviceInfo(appPlatform?: boolean) {
     try {
       const deviceId = await this.getDeviceId();
-      const locationId = await this.getLocationId();
-      const topicId = await this.getTopicId();
       const name = await this.getName();
 
       let platform = 'web';
@@ -193,8 +175,6 @@ class DeviceManager {
 
       return {
         deviceId,
-        locationId,
-        topicId,
         name: name,
         platform,
       };
@@ -205,11 +185,6 @@ class DeviceManager {
       );
       return null;
     }
-  }
-
-  private async keyWithDevice(key: string): Promise<string> {
-    const device = await this.getDeviceInfo();
-    return `${key}_${device?.locationId ?? ''}_${device?.topicId ?? ''}`;
   }
 
   public setDeviceDisplaySettings(
