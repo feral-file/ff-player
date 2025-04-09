@@ -6,8 +6,6 @@ import {
 } from '@/models/display_settings.model';
 import ArtworkService from './ArtworkService';
 import { useAppContext } from '@/context/AppContext';
-import { LocalWebSocketClient } from './local-websocket/LocalWebSocketClient';
-import { useEffectAfterFirstRender } from '@/utils/custom-hooks/useSkipFirstRender';
 
 export type TokenDisplaySettingWithChanged = TokenDisplaySettings & {
   changed?: boolean;
@@ -23,7 +21,6 @@ export function useArtworkSettings(tokenId: string) {
   // Services
   const artworkService = useRef(new ArtworkService()).current;
   const canvasService = useRef(CanvasService.getInstance()).current;
-  const webSocketClient = useRef(LocalWebSocketClient.getInstance()).current;
 
   // Load token display settings
   useEffect(() => {
@@ -80,23 +77,6 @@ export function useArtworkSettings(tokenId: string) {
       canvasService.removeDisplaySettingsChangedListener(onSettingsChanged);
     };
   }, [tokenId]);
-
-  useEffectAfterFirstRender(() => {
-    console.log(
-      '[useArtworkSettings] Token display settings changed',
-      tokenDisplaySettings
-    );
-
-    if (!tokenDisplaySettings || tokenDisplaySettings.overridable) {
-      // Restore to the device orientation
-      webSocketClient.requestRotateDevice(null);
-    } else {
-      const targetOrientation = tokenDisplaySettings.orientation ?? null;
-      if (targetOrientation !== context.deviceRotation?.viewMode) {
-        webSocketClient.requestRotateDevice(targetOrientation);
-      }
-    }
-  }, [tokenDisplaySettings]);
 
   const displaySettings = useMemo(():
     | TokenDisplaySettingWithChanged

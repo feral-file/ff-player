@@ -1,4 +1,4 @@
-import { ViewMode, WebSocketMessage } from '@/utils/types';
+import { WebSocketMessage } from '@/utils/types';
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import CanvasService from '../CanvasService';
 
@@ -104,16 +104,6 @@ export class LocalWebSocketClient {
     }
 
     this.ws.send(JSON.stringify(message));
-  }
-
-  public requestRotateDevice(orientation: ViewMode | null) {
-    const message: WebSocketMessage = {
-      messageID: 'rotateDevice',
-      message: JSON.stringify({
-        orientation: orientation,
-      }),
-    };
-    this.sendMessage(message);
   }
 
   // Convenience methods
