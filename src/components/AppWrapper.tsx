@@ -7,8 +7,6 @@ import { CastCommand } from '@/utils/types';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 
-import { AbstractIntlMessages, NextIntlClientProvider } from 'next-intl';
-import { getUserLocale } from '@/utils/locale';
 import CanvasService from '@/services/CanvasService';
 
 const enum CastState {
@@ -32,14 +30,12 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   const canvasService = CanvasService.getInstance();
   const castInfo = context.castInfo;
   const [castState, setCastState] = useState<CastState>(CastState.None);
-  const [messages, setMessages] = useState<AbstractIntlMessages>();
-  const locale = getUserLocale();
 
   // Check version update
   useEffect(() => {
     const validateVersion = async () => {
       const duration =
-        context.appRemoteConfig?.duration ||
+        context.appRemoteConfig.duration ||
         AppSettings.VERSION_CHECK_INTERVAL_DURATION;
       await checkVersion();
 
@@ -68,18 +64,6 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       window.location.reload();
     }
   };
-
-  useEffect(() => {
-    const fetchMessages = async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const localeJson = await import(`../../locales/${locale}.json`);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      setMessages(localeJson.default as AbstractIntlMessages);
-    };
-    fetchMessages().catch((error: unknown) => {
-      console.error(error);
-    });
-  }, [locale]);
 
   useEffect(() => {
     if (!castInfo) return;
@@ -156,22 +140,18 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [castInfo, castState, router]);
 
-  return messages != undefined ? (
-    <NextIntlClientProvider locale={locale} messages={messages}>
-      <div
-        style={{
-          width: '100vw',
-          height: '100vh',
-          transformOrigin: 'center 50vh',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}>
-        {children}
-      </div>
-    </NextIntlClientProvider>
-  ) : (
-    <></>
+  return (
+    <div
+      style={{
+        width: '100vw',
+        height: '100vh',
+        transformOrigin: 'center 50vh',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}>
+      {children}
+    </div>
   );
 };
 

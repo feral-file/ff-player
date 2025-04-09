@@ -24,7 +24,6 @@ import styles from './styles.module.scss';
 import { appendMetricEventToLocalStorage } from '@/services/metric.service';
 import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
 import MessageModal from '../MessageModal';
-import { useTranslations } from 'next-intl';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
 import { getContentTypeFromURL } from '@/utils/content-type';
 import {
@@ -51,7 +50,6 @@ const ArtworkPlayer = ({
 }) => {
   const FADE_IN_BUFFER_MS = 50;
   const FADE_IN_OUT_DAILY_MS = 350;
-  const t = useTranslations('ArtworkPlayer');
   const { context } = useAppContext();
   const [opacity, setOpacity] = useState(1);
   const [displayPreviewURL, setDisplayPreviewURL] = useState<string>('');
@@ -372,7 +370,9 @@ const ArtworkPlayer = ({
 
   const handleLoadIframeError = () => {
     setOpacity(1);
-    setMessageModalTitle(t('wrong_artwork'));
+    setMessageModalTitle(
+      'The artwork cannot be displayed correctly on this device.'
+    );
     setShowMessageModal(true);
   };
 
