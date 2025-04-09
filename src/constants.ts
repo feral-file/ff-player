@@ -58,10 +58,6 @@ export const AppSettings = {
 export const TIMESTAMP_PER_MINUTE = 60 * 1000;
 export const TIMESTAMP_PER_HOUR = 60 * 60 * 1000;
 
-export const SEND_LOG_INTERVAL = 10 * 1000;
-
-export const SEND_LOG_EVENT_NUMBER = 8;
-
 export const NO_YEAR_IN_TITLE_SERIES_IDS = [
   // test
   'd0167047-8c50-4f24-b889-58e60258f50b',

@@ -5,7 +5,6 @@ export enum Event {
   escape,
   keyDown,
   toggleQrCode,
-  sendLog,
   updateCurrentDisplaySetting,
 }
 
