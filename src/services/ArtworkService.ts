@@ -99,7 +99,6 @@ class ArtworkService {
                 asset {
                   attributes {
                     configuration {
-                      orientation
                       scaling
                       backgroundColor
                       marginLeft
