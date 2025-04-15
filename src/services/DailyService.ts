@@ -4,6 +4,7 @@ import axiosInstance from './axiosService';
 import { convertToTokenID, IndexerSource } from '@/utils/indexer';
 import { convertToQueryParams } from '@/utils/queryParams';
 import * as Sentry from '@sentry/nextjs';
+import { deepEqual } from '@/utils/helper';
 
 class DailyService {
   private artworkService = new ArtworkService();
@@ -16,7 +17,7 @@ class DailyService {
 
   public async isRefreshDailies(newDailyHour: number): Promise<boolean> {
     const newDailies = await this.callingDailies(newDailyHour);
-    if (newDailies !== this.dailies) {
+    if (!deepEqual(newDailies, this.dailies)) {
       this.dailies = newDailies;
       return true;
     }
