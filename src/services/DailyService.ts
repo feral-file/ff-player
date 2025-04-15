@@ -24,6 +24,20 @@ class DailyService {
     return false;
   }
 
+  public getNextDailyDelay(newDailyHour: number): number {
+    const now = Date.now();
+
+    const nextDailyDisplayTime = new Date();
+    nextDailyDisplayTime.setHours(newDailyHour, 0, 0, 0);
+
+    // If current time has passed today's display time, move to next day
+    if (now > nextDailyDisplayTime.getTime()) {
+      nextDailyDisplayTime.setDate(nextDailyDisplayTime.getDate() + 1);
+    }
+
+    return nextDailyDisplayTime.getTime() - now;
+  }
+
   public async getUpcomingDaily(
     expand: string[],
     pagingParams?: string
