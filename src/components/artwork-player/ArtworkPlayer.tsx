@@ -240,7 +240,7 @@ const ArtworkPlayer = ({
         videoRef.current.pause();
       }
     }
-  }, [context, previewType]);
+  }, [context.isOnline, previewType]);
 
   return (
     <div
