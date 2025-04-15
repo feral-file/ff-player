@@ -9,7 +9,6 @@ import { appendMetricEventToLocalStorage } from '@/services/metric.service';
 import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
 import MessageModal from '../MessageModal';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
-import { getContentTypeFromURL } from '@/utils/content-type';
 import {
   TokenDisplaySettingWithChanged,
   useArtworkSettings,
@@ -30,6 +29,7 @@ import {
   MITETypeIframe,
   PreviewHTMLTag,
 } from '@/models';
+import { getContentTypeFromURL } from '@/utils/helper';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
 
