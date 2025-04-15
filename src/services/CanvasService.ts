@@ -1,4 +1,4 @@
-import { calculateStartTime, getArtworkStartTime } from '@/utils/Playlist';
+import { calculateStartTime, getArtworkStartTime } from '@/utils/playlist';
 import {
   Reply,
   ConnectRequestV2,
