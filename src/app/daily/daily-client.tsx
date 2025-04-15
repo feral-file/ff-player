@@ -7,7 +7,7 @@ import {
   DEFAULT_DELAY,
   LeeMullican_EXHIBITION_CONTRACT,
 } from '@/utils/constants';
-import { Daily } from '@/models';
+import { Daily, ViewMode } from '@/models';
 import { convertToTokenID } from '@/utils/indexer';
 import { SWITCH_TOKEN_INTERVAL, TIMESTAMP_PER_HOUR } from '@/constants';
 import { CastingArtworkType } from '@/models/metric.model';
@@ -41,8 +41,7 @@ export default function DailyClient() {
   const newDailyHour = context.appRemoteConfig.new_daily_hour;
 
   useEffect(() => {
-    // const landScape = artDisplaySetting.rotateRadius % 180 === 0;
-    const landScape = true;
+    const landScape = context.deviceRotation?.viewMode === ViewMode.landscape;
     if (landscapeStaticURL && landScape) {
       setCastPreviewURL(landscapeStaticURL);
       setArtworkPreviewMIMEType('image');
