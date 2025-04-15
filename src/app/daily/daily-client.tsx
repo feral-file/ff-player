@@ -2,7 +2,6 @@
 
 import ArtworkPlayer from '../../components/artwork-player/ArtworkPlayer';
 import DailyService from '@/services/DailyService';
-import { getDelayTime } from '@/services/qrCodePopUpService';
 import { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_DELAY,
@@ -93,7 +92,7 @@ export default function DailyClient() {
             );
           }
 
-          const { delay } = getDelayTime(newDailyHour);
+          const delay = DailyService.getNextDailyDelay(newDailyHour);
           // Reset next token handle
           nextTokenIndex.current = 0;
           if (switchTokenRef.current) {
