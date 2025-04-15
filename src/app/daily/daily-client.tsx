@@ -52,7 +52,7 @@ export default function DailyClient() {
       setCastPreviewURL(portraitStaticURL);
       setArtworkPreviewMIMEType('image');
     }
-  }, [landscapeStaticURL, portraitStaticURL]);
+  }, [landscapeStaticURL, portraitStaticURL, context.deviceRotation?.viewMode]);
 
   const fallbackToDefaultArtwork = () => {
     if (switchTokenRef.current) {

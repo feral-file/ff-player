@@ -334,7 +334,7 @@ const ArtworkPlayer = ({
         videoRef.current.pause();
       }
     }
-  }, [context, previewType]);
+  }, [context.isOnline, previewType]);
 
   useEffect(() => {
     if (!displayPreviewURL || !displaySettings) {
