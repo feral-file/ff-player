@@ -7,7 +7,7 @@ import { CastingArtworkType } from '@/models/metric.model';
 import ArtworkService from '@/services/ArtworkService';
 import CanvasService from '@/services/CanvasService';
 import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
-import { getIndex } from '@/utils/playlist';
+import { getIndex } from '@/utils/playlist-temp';
 import { PlayArtwork, PlaylistToken, CastCommand } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 
