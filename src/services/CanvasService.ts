@@ -151,8 +151,6 @@ class CanvasService {
     );
     try {
       switch (command) {
-        case CastCommand.ping:
-          return { ok: true };
         case CastCommand.connect:
           return await this.connect(requestJson as ConnectRequestV2);
         case CastCommand.disconnect:

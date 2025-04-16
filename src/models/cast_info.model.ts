@@ -28,7 +28,6 @@ export enum CastCommand {
   castDaily = 'castDaily',
   updateArtFraming = 'updateArtFraming',
   updateDisplaySettings = 'updateDisplaySettings',
-  ping = 'ping',
 }
 
 export interface CastInfo {
