@@ -40,7 +40,8 @@ import {
 } from '@/models/cast_request_reply.model';
 import { TokenDisplaySettings } from '@/models/display_settings.model';
 import * as Sentry from '@sentry/nextjs';
-import { ArtFraming, CastCommand, CastInfo, WebSocketMessage } from '@/models';
+import { ArtFraming, CastCommand, CastInfo } from '@/models';
+import DeviceManager from '@/utils/DeviceManager';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -109,40 +110,12 @@ class CanvasService {
     }
   }
 
-  public async processMessage(event: MessageEvent) {
+  public async processMessage(messageData: Record<string, unknown>) {
     console.log(
-      '[CanvasService] Processing message event: ',
-      JSON.stringify(event)
+      '[CanvasService] Processing message: ',
+      JSON.stringify(messageData)
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-    const webSocketMessage = JSON.parse(event.data) as WebSocketMessage | null;
-    if (!webSocketMessage) {
-      console.error('[CAST] Invalid message:', JSON.stringify(event.data));
-      return;
-    }
-    console.log(
-      '[CAST] WebSocket message received:',
-      JSON.stringify(webSocketMessage)
-    );
-
-    if (!webSocketMessage.message) {
-      console.error('[CAST] Invalid message:', JSON.stringify(event.data));
-      return;
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const messageData = JSON.parse(webSocketMessage.message as string);
-
-    if (
-      webSocketMessage.messageID.startsWith('system') ||
-      webSocketMessage.messageID === 'ping'
-    ) {
-      // Handle system messages or ping-pong messages
-      return;
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const commandStr = messageData.command;
     if (!commandStr) {
       console.error(
@@ -160,22 +133,11 @@ class CanvasService {
       message: 'Received command',
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const requestJson = messageData.request;
     console.log('[CanvasService] Request data:', JSON.stringify(requestJson));
-
     const reply = await this.commandHandler(command, requestJson);
-
-    const responseMessage: WebSocketMessage = {
-      messageID: webSocketMessage.messageID,
-      message: reply,
-    };
-    console.log(
-      '[CanvasService] Response message:',
-      JSON.stringify(responseMessage)
-    );
-
-    return responseMessage;
+    console.log('[CanvasService] Response message:', JSON.stringify(reply));
+    return reply;
   }
 
   private async commandHandler(
@@ -269,6 +231,8 @@ class CanvasService {
       castCommand: CastCommand.connect,
       deviceInfo: request.clientDevice,
     });
+
+    DeviceManager.setPrimaryAddress(request.primaryAddress ?? '');
 
     console.log(
       '[CAST] Connected device:',

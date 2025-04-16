@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import {
-  FfDeviceConfigService,
+  FFDeviceConfigService,
   GoogleConfigService,
   LgConfigService,
   PlatformConfigService,
@@ -48,7 +48,7 @@ class DeviceManager {
       case Platform.lg:
         return new LgConfigService();
       case Platform.ffDevice:
-        return new FfDeviceConfigService();
+        return new FFDeviceConfigService();
       default:
         return new WebConfigService();
     }
@@ -77,17 +77,19 @@ class DeviceManager {
     await this.configService.init();
   }
 
-  public async getDeviceId(): Promise<string> {
+  public async getDeviceId(): Promise<string | null> {
     try {
       let deviceId = await this.getFromLocalStorage(LocalStorageItem.deviceId);
-      if (!deviceId) {
+      const platform = localStorage.getItem(LocalStorageItem.platform);
+      if (!deviceId && !platform) {
         deviceId = uuidv4();
         this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
       }
+
       return deviceId;
     } catch (error) {
       console.error('[DEVICE] Error getting device ID', JSON.stringify(error));
-      return '';
+      return null;
     }
   }
 
@@ -99,6 +101,19 @@ class DeviceManager {
     this.setToLocalStorage(LocalStorageItem.name, name);
   }
 
+  public async getName(): Promise<string> {
+    try {
+      const name = await this.getFromLocalStorage(LocalStorageItem.name);
+      return name ?? 'Unknown';
+    } catch (error) {
+      console.error(
+        '[DEVICE] Error getting device name',
+        JSON.stringify(error)
+      );
+      return 'Unknown';
+    }
+  }
+
   public async getDeviceModel(): Promise<string> {
     try {
       const name = await this.getFromLocalStorage(LocalStorageItem.name);
@@ -106,10 +121,7 @@ class DeviceManager {
         return 'Unknown';
       }
 
-      return name
-        .replace(DeviceNamePrefix.google, '')
-        .replace(DeviceNamePrefix.samsung, '')
-        .replace(DeviceNamePrefix.lg, '');
+      return this.stripPrefix(name);
     } catch (error) {
       console.error(
         '[DEVICE] Error getting device name',
@@ -119,38 +131,12 @@ class DeviceManager {
     }
   }
 
-  public async getName(): Promise<string> {
-    try {
-      const model = await this.getDeviceModel();
-      return this.getDeviceName(model);
-    } catch (error) {
-      console.error(
-        '[DEVICE] Error getting device name',
-        JSON.stringify(error)
-      );
-      return 'Unknown';
-    }
-  }
-
-  private getDeviceName(model: string | null): string {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    if (!model || !localStorage) {
-      return 'Unknown';
-    }
-
-    const platform = localStorage.getItem(LocalStorageItem.platform);
-    switch (platform) {
-      case Platform.google:
-        return `${DeviceNamePrefix.google}${model}`;
-      case Platform.tizen:
-        return `${DeviceNamePrefix.samsung}${model}`;
-      case Platform.lg:
-        return `${DeviceNamePrefix.lg}${model}`;
-      case Platform.ffDevice:
-        return `${DeviceNamePrefix.ffDevice}${model}`;
-      default:
-        return model;
-    }
+  private stripPrefix(name: string): string {
+    return name
+      .replace(DeviceNamePrefix.google, '')
+      .replace(DeviceNamePrefix.samsung, '')
+      .replace(DeviceNamePrefix.lg, '')
+      .replace(DeviceNamePrefix.ffDevice, '');
   }
 
   public setPrimaryAddress(primaryAddress: string): void {
@@ -159,32 +145,6 @@ class DeviceManager {
 
   public async getPrimaryAddress(): Promise<string | null> {
     return await this.getFromLocalStorage(LocalStorageItem.primaryAddress);
-  }
-
-  public async getDeviceInfo(appPlatform?: boolean) {
-    try {
-      const deviceId = await this.getDeviceId();
-      const name = await this.getName();
-
-      let platform = 'web';
-      if (appPlatform) {
-        platform = (
-          localStorage.getItem(LocalStorageItem.platform) ?? 'web'
-        ).toLocaleUpperCase();
-      }
-
-      return {
-        deviceId,
-        name: name,
-        platform,
-      };
-    } catch (error) {
-      console.error(
-        '[DEVICE] Error getting device info',
-        JSON.stringify(error)
-      );
-      return null;
-    }
   }
 
   public setDeviceDisplaySettings(

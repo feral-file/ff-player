@@ -127,7 +127,7 @@ function getDeviceInfoBaseOnPlatform(): { vendor: string; platform: string } {
     case Platform.lg:
       return { vendor: 'lg', platform: 'webos' };
     case Platform.ffDevice:
-      return { vendor: 'ffDevice', platform: 'ffDevice' };
+      return { vendor: 'ffPortal', platform: 'ffPortal' };
     default:
       return { vendor: 'web', platform: 'web' };
   }
