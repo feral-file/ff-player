@@ -19,7 +19,7 @@ export enum DeviceNamePrefix {
   google = 'Google-',
   samsung = 'Samsung-',
   lg = 'LG-',
-  ffDevice = 'FF-',
+  ffDevice = 'FF-X1-',
 }
 
 export const AppSettings = {

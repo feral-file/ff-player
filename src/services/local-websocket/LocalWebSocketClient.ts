@@ -1,6 +1,12 @@
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import CanvasService from '../CanvasService';
 import { WebSocketMessage } from '@/models';
+import DeviceManager from '@/utils/DeviceManager';
+import { DeviceNamePrefix, LocalStorageItem, Platform } from '@/constants';
+
+const sendDeviceInfoMessageID = 'sendDeviceInfo';
+const pingMessageID = 'ping';
+const systemMessageIDPrefix = 'system';
 
 export class LocalWebSocketClient {
   private ws: ReconnectingWebSocket | null = null;
@@ -76,11 +82,62 @@ export class LocalWebSocketClient {
 
   private async handleMessage(event: MessageEvent) {
     try {
-      console.log('handleMessage', event);
+      console.log('[WebSocket] Message event received:', JSON.stringify(event));
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      const wsEventData = JSON.parse(event.data) as WebSocketMessage | null;
+      if (!wsEventData?.message) {
+        console.error(
+          '[WebSocket] Invalid message:',
+          JSON.stringify(event.data)
+        );
+        return;
+      }
+
+      console.log('[WebSocket] Event data:', JSON.stringify(wsEventData));
+
+      const messageData = JSON.parse(wsEventData.message as string) as Record<
+        string,
+        unknown
+      >;
+
+      console.log('[WebSocket] Message data:', JSON.stringify(messageData));
+
+      if (
+        wsEventData.messageID.startsWith(systemMessageIDPrefix) ||
+        wsEventData.messageID === pingMessageID
+      ) {
+        console.log('[WebSocket] System message or ping-pong message');
+        return;
+      }
+
+      const platform = localStorage.getItem(LocalStorageItem.platform);
+      if (
+        wsEventData.messageID === sendDeviceInfoMessageID &&
+        platform === Platform.ffDevice
+      ) {
+        const deviceId = messageData.deviceId;
+        if (deviceId) {
+          DeviceManager.setDeviceId(deviceId as string);
+        }
+
+        const version = messageData.version;
+        if (version) {
+          DeviceManager.setName(
+            DeviceNamePrefix.ffDevice + (version as string)
+          );
+        }
+
+        return;
+      }
+
       const responseMessage =
-        await CanvasService.getInstance().processMessage(event);
+        await CanvasService.getInstance().processMessage(messageData);
       if (responseMessage) {
-        this.sendMessage(responseMessage);
+        this.sendMessage({
+          messageID: wsEventData.messageID,
+          message: responseMessage,
+        });
       }
     } catch (error) {
       console.error('Error handling message:', error);
