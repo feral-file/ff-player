@@ -4,9 +4,8 @@ import { WebSocketMessage } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import { DeviceNamePrefix, LocalStorageItem, Platform } from '@/constants';
 
-const sendDeviceInfoMessageID = 'sendDeviceInfo';
-const pingMessageID = 'ping';
-const systemMessageIDPrefix = 'system';
+const sendDeviceInfoCommand = 'sendDeviceInfo';
+const pingCommand = 'ping';
 
 export class LocalWebSocketClient {
   private ws: ReconnectingWebSocket | null = null;
@@ -103,25 +102,37 @@ export class LocalWebSocketClient {
 
       console.log('[WebSocket] Message data:', JSON.stringify(messageData));
 
-      if (
-        wsEventData.messageID.startsWith(systemMessageIDPrefix) ||
-        wsEventData.messageID === pingMessageID
-      ) {
-        console.log('[WebSocket] System message or ping-pong message');
+      const messageCommand = messageData.command as string | null;
+      if (!messageCommand) {
+        console.error('[WebSocket] Command not found in the message:');
+        return;
+      }
+
+      if (messageCommand === pingCommand) {
+        this.sendMessage({
+          messageID: wsEventData.messageID,
+          message: { ok: true },
+        });
         return;
       }
 
       const platform = localStorage.getItem(LocalStorageItem.platform);
       if (
-        wsEventData.messageID === sendDeviceInfoMessageID &&
+        messageCommand === sendDeviceInfoCommand &&
         platform === Platform.ffDevice
       ) {
-        const deviceId = messageData.deviceId;
+        const request = messageData.request as Record<string, unknown> | null;
+        console.log(
+          '[WebSocket] Send device info request:',
+          JSON.stringify(request)
+        );
+
+        const deviceId = request?.deviceId;
         if (deviceId) {
           DeviceManager.setDeviceId(deviceId as string);
         }
 
-        const version = messageData.version;
+        const version = request?.version;
         if (version) {
           DeviceManager.setName(
             DeviceNamePrefix.ffDevice + (version as string)
