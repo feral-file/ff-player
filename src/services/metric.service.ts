@@ -49,6 +49,10 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
   }
 
   console.log('[METRIC]: sending API', JSON.stringify(events));
+  console.log(
+    '[METRIC]: headers',
+    JSON.stringify(accountsRequester.defaults.headers)
+  );
   await accountsRequester.post('/apis/metrics', { metrics: events });
 }
 
