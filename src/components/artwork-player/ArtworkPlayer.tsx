@@ -30,18 +30,21 @@ import {
   PreviewHTMLTag,
 } from '@/models';
 import { getContentTypeFromURL } from '@/utils/helper';
+import { LocalWebSocketClient } from '@/services/local-websocket/LocalWebSocketClient';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
 
 const ArtworkPlayer = ({
   previewURL,
   artworkID,
+  artworkName,
   castingType,
   isCustomView,
   artworkPreviewMIMEType,
 }: {
   previewURL: string;
   artworkID: string;
+  artworkName: string;
   castingType?: CastingArtworkType;
   isCustomView?: boolean;
   keyboardCode?: number;
@@ -413,6 +416,7 @@ const ArtworkPlayer = ({
 
   const startWebGLRecovery = () => {
     console.log('[ArtworkPlayer] startWebGLRecovery');
+    LocalWebSocketClient.getInstance().artworkCrashedNotify(artworkName);
     if (webGLRecoveryIntervalRef.current) {
       clearInterval(webGLRecoveryIntervalRef.current);
     }

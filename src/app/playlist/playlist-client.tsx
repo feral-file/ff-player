@@ -288,6 +288,7 @@ export default function PlaylistClient() {
         <ArtworkPlayer
           previewURL={castPreviewURL ?? ''}
           artworkID={artworkID ?? ''}
+          artworkName={playlist[currentIndex]?.token?.id ?? ''}
           castingType={CastingArtworkType.Playlist}
           isCustomView={isLeeMullicanExhibition}
         />

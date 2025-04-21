@@ -183,6 +183,16 @@ export class LocalWebSocketClient {
     this.sendMessage(message);
   }
 
+  public artworkCrashedNotify(artworkName: string) {
+    const message: WebSocketMessage = {
+      messageID: 'artworkCrashed',
+      message: JSON.stringify({
+        artworkName: artworkName,
+      }),
+    };
+    this.sendMessage(message);
+  }
+
   public disconnect() {
     this.ws?.close();
   }

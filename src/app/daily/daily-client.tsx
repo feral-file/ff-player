@@ -193,6 +193,7 @@ export default function DailyClient() {
         <ArtworkPlayer
           previewURL={castPreviewURL ?? ''}
           artworkID={artworkID ?? ''}
+          artworkName={dailyRef.current?.artwork?.name ?? ''}
           castingType={CastingArtworkType.Daily}
           isCustomView={isLeeMucianExhibition}
           artworkPreviewMIMEType={artworkPreviewMIMEType}

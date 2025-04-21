@@ -256,6 +256,7 @@ const ExhibitionHall = () => {
               key={artwork.id}
               previewURL={artwork.previewURI}
               artworkID={artworkID ?? ''}
+              artworkName={artwork.name ?? ''}
               artworkPreviewMIMEType={artworkPreviewMIMEType}
               castingType={CastingArtworkType.Exhibition}
               isCustomView={
