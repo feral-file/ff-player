@@ -32,7 +32,6 @@ export interface IndexerToken {
 }
 
 export interface AssetConfiguration {
-  orientation?: string;
   scaling?: string;
   backgroundColor?: string;
   marginLeft?: number;

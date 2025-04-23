@@ -1,4 +1,4 @@
-import { MessageModalType } from '@/utils/types';
+import { MessageModalType } from '@/models';
 import { useEffect, useState } from 'react';
 
 const MessageModal = ({

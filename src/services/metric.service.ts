@@ -49,6 +49,10 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
   }
 
   console.log('[METRIC]: sending API', JSON.stringify(events));
+  console.log(
+    '[METRIC]: headers',
+    JSON.stringify(accountsRequester.defaults.headers)
+  );
   await accountsRequester.post('/apis/metrics', { metrics: events });
 }
 
@@ -127,7 +131,7 @@ function getDeviceInfoBaseOnPlatform(): { vendor: string; platform: string } {
     case Platform.lg:
       return { vendor: 'lg', platform: 'webos' };
     case Platform.ffDevice:
-      return { vendor: 'ffDevice', platform: 'ffDevice' };
+      return { vendor: 'ffPortal', platform: 'ffPortal' };
     default:
       return { vendor: 'web', platform: 'web' };
   }

@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import CanvasService from './CanvasService';
-import { CastCommand, CastInfo, WebSocketMessage } from '@/utils/types';
+import { CastCommand, CastInfo } from '@/models';
 import { LocalStorageItem } from '@/constants';
 import { LocalWebSocketClient } from './local-websocket/LocalWebSocketClient';
+import { WebSocketMessage } from '@/models';
 
 const useCastInfo = () => {
   const [castInfo, setCastInfo] = useState<CastInfo | null>(null);

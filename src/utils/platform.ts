@@ -1,8 +1,7 @@
-import { LocalStorageItem } from '@/constants';
+import { DeviceNamePrefix, LocalStorageItem } from '@/constants';
 import DeviceManager from './DeviceManager';
 import { v4 as uuidv4 } from 'uuid';
 import { BrowserInfo, detect } from 'detect-browser';
-import { keyEventHandler } from '@/services/keyEventHandler';
 
 interface DeviceInfo {
   modelName: string;
@@ -20,13 +19,6 @@ interface LGSuccessResponse {
 class PlatformEventReceiver {
   static handlePlatformEvent(event: string) {
     console.log(`Handling platform event: ${event}`);
-  }
-}
-
-export class KeyEvent extends PlatformEventReceiver {
-  static override handlePlatformEvent(event: string) {
-    super.handlePlatformEvent(event);
-    keyEventHandler(event);
   }
 }
 
@@ -173,54 +165,6 @@ export class TizenConfigService implements PlatformConfigService {
 }
 
 export class GoogleConfigService extends TizenConfigService {}
-
-export class WebConfigService implements PlatformConfigService {
-  // eslint-disable-next-line @typescript-eslint/require-await
-  async init() {
-    const deviceName = this.getOrCreateDeviceName();
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    localStorage?.setItem(LocalStorageItem.name, deviceName);
-  }
-
-  generateRandomString(length: number): string {
-    const characters =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    const charactersLength = characters.length;
-    for (let i = 0; i < length; i++) {
-      result += characters.charAt(Math.floor(Math.random() * charactersLength));
-    }
-    return result;
-  }
-
-  getOrCreateDeviceName() {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    if (!localStorage) {
-      return 'Unknown';
-    }
-
-    let deviceName = localStorage.getItem(LocalStorageItem.name);
-    if (!deviceName) {
-      const platform = navigator.platform;
-      const browser = detect() as BrowserInfo;
-      const randomString = this.generateRandomString(4);
-
-      deviceName = `${platform}-${browser.name}-${randomString}`;
-    }
-    return deviceName;
-  }
-  // eslint-disable-next-line @typescript-eslint/require-await
-  async getString(key: string): Promise<string | null> {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    return localStorage?.getItem(key);
-  }
-
-  // eslint-disable-next-line @typescript-eslint/require-await
-  async setString(key: string, value: string): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    localStorage?.setItem(key, value);
-  }
-}
 
 export class LgConfigService implements PlatformConfigService {
   async init() {
@@ -401,8 +345,80 @@ export class LgConfigService implements PlatformConfigService {
   }
 }
 
-export class FfDeviceConfigService extends WebConfigService {
+export class WebConfigService implements PlatformConfigService {
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async init() {
+    this.setDeviceInfo();
+  }
+
+  setDeviceInfo() {
+    const deviceName = this.getOrCreateDeviceName();
+    DeviceManager.setName(deviceName);
+  }
+
+  generateRandomString(length: number): string {
+    const characters =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    const charactersLength = characters.length;
+    for (let i = 0; i < length; i++) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    }
+    return result;
+  }
+
+  getOrCreateDeviceName() {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (!localStorage) {
+      return 'Unknown';
+    }
+
+    let deviceName = localStorage.getItem(LocalStorageItem.name);
+    if (!deviceName) {
+      const platform = navigator.platform;
+      const browser = detect() as BrowserInfo;
+      const randomString = this.generateRandomString(4);
+
+      deviceName = `${platform}-${browser.name}-${randomString}`;
+    }
+    return deviceName;
+  }
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async getString(key: string): Promise<string | null> {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    return localStorage?.getItem(key);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async setString(key: string, value: string): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    localStorage?.setItem(key, value);
+  }
+}
+
+export class FFDeviceConfigService extends WebConfigService {
   override getOrCreateDeviceName(): string {
-    return 'FFDevice ' + super.getOrCreateDeviceName();
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    let deviceName = localStorage?.getItem(LocalStorageItem.name);
+    if (!deviceName) {
+      deviceName = DeviceNamePrefix.ffDevice + '0.0.0';
+    }
+
+    return deviceName;
+  }
+
+  override setDeviceInfo() {
+    super.setDeviceInfo();
+    DeviceManager.setDeviceId(this.getDeviceID());
+  }
+
+  getDeviceID(): string {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    let deviceID = localStorage?.getItem(LocalStorageItem.deviceId);
+    if (!deviceID) {
+      deviceID = 'unknown-id';
+    }
+
+    return deviceID;
   }
 }

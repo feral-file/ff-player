@@ -1,19 +1,42 @@
 import {
   FileUseAudio,
   FileUseIframePDF,
+  FileUseImage,
   FileUseStreamVideo,
   FileUseVideo,
-} from './types';
+} from '@/models';
 
-import { FileUseImage } from './types';
+export function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
 
-/**
- * Attempts to determine the content type of a URL by first making a HEAD request,
- * and if that fails, inferring from the file extension.
- *
- * @param previewURL The URL to check
- * @returns A string representing the content type
- */
+  if (typeof a !== typeof b) return false;
+
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    return a.every((val, idx) => deepEqual(val, b[idx]));
+  }
+
+  if (
+    typeof a === 'object' &&
+    a !== null &&
+    typeof b === 'object' &&
+    b !== null
+  ) {
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) return false;
+
+    return aKeys.every(key =>
+      deepEqual(
+        (a as Record<string, unknown>)[key],
+        (b as Record<string, unknown>)[key]
+      )
+    );
+  }
+
+  return false;
+}
+
 export async function getContentTypeFromURL(
   previewURL: string
 ): Promise<string> {
@@ -61,6 +84,6 @@ export async function getContentTypeFromURL(
       }
     }
 
-    throw new Error(`Failed to determine content type: ${error}`);
+    throw new Error(`Failed to determine content type: ${String(error)}`);
   }
 }

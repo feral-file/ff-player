@@ -4,7 +4,6 @@ import axios from 'axios';
 class AppService {
   private static instance: AppService | null = null;
   private static currentVersion: string;
-  private static isFirstOpen?: boolean = undefined;
 
   public static getInstance(): AppService {
     if (!AppService.instance) {
@@ -30,18 +29,6 @@ class AppService {
     this.currentVersion = response.data['version'] as string;
     // eslint-disable-next-line @typescript-eslint/dot-notation, @typescript-eslint/no-unsafe-member-access
     return response.data['version'] as string;
-  }
-
-  public static getIsFirstOpen(path?: string) {
-    if (this.isFirstOpen === undefined && path === '/') {
-      this.isFirstOpen = true;
-    }
-
-    return this.isFirstOpen;
-  }
-
-  public static setIsFirstOpen(value: boolean) {
-    this.isFirstOpen = value;
   }
 }
 

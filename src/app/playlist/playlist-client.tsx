@@ -7,8 +7,8 @@ import { CastingArtworkType } from '@/models/metric.model';
 import ArtworkService from '@/services/ArtworkService';
 import CanvasService from '@/services/CanvasService';
 import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
-import { getIndex } from '@/utils/Playlist';
-import { CastCommand, PlayArtworkV2, PlaylistToken } from '@/utils/types';
+import { getIndex } from '@/utils/playlist';
+import { PlayArtwork, PlaylistToken, CastCommand } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 
 export default function PlaylistClient() {
@@ -71,9 +71,9 @@ export default function PlaylistClient() {
     }
   }, [currentIndex, playlist]);
 
-  const handleUpdateDuration = (artworks: PlayArtworkV2[]) => {
+  const handleUpdateDuration = (artworks: PlayArtwork[]) => {
     const durationMap = new Map<string, number>();
-    artworks.forEach((a: PlayArtworkV2) => {
+    artworks.forEach((a: PlayArtwork) => {
       if (a.token) {
         durationMap.set(a.token.id, a.duration);
       }
@@ -173,11 +173,11 @@ export default function PlaylistClient() {
   };
 
   const getNftTokens = async (
-    artworks: PlayArtworkV2[]
+    artworks: PlayArtwork[]
   ): Promise<PlaylistToken[]> => {
     try {
       const assetIds = artworks.map(
-        (artwork: PlayArtworkV2) => artwork.token?.id ?? ''
+        (artwork: PlayArtwork) => artwork.token?.id ?? ''
       );
       const tokens = await artworkService.current.queryTokens(assetIds);
       const previewData = new Map<string, string>();
@@ -191,7 +191,7 @@ export default function PlaylistClient() {
         contractAddress.set(token.indexID, token.contractAddress);
         mapTokens.set(token.indexID, token);
       });
-      const updatedArtworks = artworks.map((artwork: PlayArtworkV2) => {
+      const updatedArtworks = artworks.map((artwork: PlayArtwork) => {
         const aw: PlaylistToken = {
           duration: artwork.duration,
           previewURL: previewData.get(artwork.token?.id ?? '') ?? '',

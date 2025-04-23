@@ -1,6 +1,11 @@
-import { WebSocketMessage } from '@/utils/types';
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import CanvasService from '../CanvasService';
+import { WebSocketMessage } from '@/models';
+import DeviceManager from '@/utils/DeviceManager';
+import { DeviceNamePrefix, LocalStorageItem, Platform } from '@/constants';
+
+const sendDeviceInfoCommand = 'sendDeviceInfo';
+const pingCommand = 'ping';
 
 export class LocalWebSocketClient {
   private ws: ReconnectingWebSocket | null = null;
@@ -76,11 +81,74 @@ export class LocalWebSocketClient {
 
   private async handleMessage(event: MessageEvent) {
     try {
-      console.log('handleMessage', event);
+      console.log('[WebSocket] Message event received:', JSON.stringify(event));
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      const wsEventData = JSON.parse(event.data) as WebSocketMessage | null;
+      if (!wsEventData?.message) {
+        console.error(
+          '[WebSocket] Invalid message:',
+          JSON.stringify(event.data)
+        );
+        return;
+      }
+
+      console.log('[WebSocket] Event data:', JSON.stringify(wsEventData));
+
+      const messageData = JSON.parse(wsEventData.message as string) as Record<
+        string,
+        unknown
+      >;
+
+      console.log('[WebSocket] Message data:', JSON.stringify(messageData));
+
+      const messageCommand = messageData.command as string | null;
+      if (!messageCommand) {
+        console.error('[WebSocket] Command not found in the message:');
+        return;
+      }
+
+      if (messageCommand === pingCommand) {
+        this.sendMessage({
+          messageID: wsEventData.messageID,
+          message: { ok: true },
+        });
+        return;
+      }
+
+      const platform = localStorage.getItem(LocalStorageItem.platform);
+      if (
+        messageCommand === sendDeviceInfoCommand &&
+        platform === Platform.ffDevice
+      ) {
+        const request = messageData.request as Record<string, unknown> | null;
+        console.log(
+          '[WebSocket] Send device info request:',
+          JSON.stringify(request)
+        );
+
+        const deviceId = request?.deviceId;
+        if (deviceId) {
+          DeviceManager.setDeviceId(deviceId as string);
+        }
+
+        const version = request?.version;
+        if (version) {
+          DeviceManager.setName(
+            DeviceNamePrefix.ffDevice + (version as string)
+          );
+        }
+
+        return;
+      }
+
       const responseMessage =
-        await CanvasService.getInstance().processMessage(event);
+        await CanvasService.getInstance().processMessage(messageData);
       if (responseMessage) {
-        this.sendMessage(responseMessage);
+        this.sendMessage({
+          messageID: wsEventData.messageID,
+          message: responseMessage,
+        });
       }
     } catch (error) {
       console.error('Error handling message:', error);

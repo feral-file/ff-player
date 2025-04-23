@@ -1,20 +1,12 @@
 'use client';
 
-import {
-  AppSettings,
-  SEND_LOG_EVENT_NUMBER,
-  SEND_LOG_INTERVAL,
-} from '@/constants';
+import { AppSettings } from '@/constants';
 import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
-import { EventEmitter, Event } from '@/utils/EventEmitter';
-import { CastCommand } from '@/utils/types';
+import { CastCommand } from '@/models';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useRef, useState } from 'react';
-import DeviceManager from '@/utils/DeviceManager';
+import React, { useEffect, useState } from 'react';
 
-import { AbstractIntlMessages, NextIntlClientProvider } from 'next-intl';
-import { getUserLocale } from '@/utils/locale';
 import CanvasService from '@/services/CanvasService';
 
 const enum CastState {
@@ -38,16 +30,14 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   const canvasService = CanvasService.getInstance();
   const castInfo = context.castInfo;
   const [castState, setCastState] = useState<CastState>(CastState.None);
-  const sendLogEventInterval = useRef<NodeJS.Timeout | null>(null);
-  const [messages, setMessages] = useState<AbstractIntlMessages>();
-  const locale = getUserLocale();
 
   // Check version update
   useEffect(() => {
+    const duration =
+      context.appRemoteConfig.duration ||
+      AppSettings.VERSION_CHECK_INTERVAL_DURATION;
+
     const validateVersion = async () => {
-      const duration =
-        context.appRemoteConfig?.duration ||
-        AppSettings.VERSION_CHECK_INTERVAL_DURATION;
       await checkVersion();
 
       const intervalID = setInterval(() => {
@@ -64,104 +54,19 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
     validateVersion().catch((error: unknown) => {
       console.error(error);
     });
-  }, [context.appRemoteConfig]);
+  }, [context.appRemoteConfig.duration]);
 
   const checkVersion = async () => {
-    const currentVersion = await AppService.getCurrentVersion();
-    const newVersion = await AppService.getVersion();
+    const [currentVersion, newVersion] = await Promise.all([
+      AppService.getCurrentVersion(),
+      AppService.getVersion(),
+    ]);
     console.log('[INFO] Current Version:', currentVersion);
     console.log('[INFO] New Version:', newVersion);
     if (newVersion !== currentVersion) {
       window.location.reload();
     }
   };
-
-  useEffect(() => {
-    const handleEscapeKey = () => {
-      router.back();
-      canvasService.disconnect({}).catch((error: unknown) => {
-        console.log(error);
-      });
-    };
-
-    EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
-    EventEmitter.subscribe(Event.escape, handleEscapeKey);
-
-    // Cleanup the event listener on component unmount
-    return () => {
-      EventEmitter.unSubscribe(Event.escape, handleEscapeKey);
-    };
-  }, [router]);
-
-  useEffect(() => {
-    const fetchMessages = async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const localeJson = await import(`../../locales/${locale}.json`);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      setMessages(localeJson.default as AbstractIntlMessages);
-    };
-    fetchMessages().catch((error: unknown) => {
-      console.error(error);
-    });
-  }, [locale]);
-
-  useEffect(() => {
-    const sendLog = async () => {
-      const primaryAddress = await DeviceManager.getPrimaryAddress();
-      const deviceId = await DeviceManager.getDeviceId();
-      const deviceName = await DeviceManager.getName();
-      const logTitle = `${deviceName}_${deviceId}_${primaryAddress ?? ''}_${new Date().toISOString()}.log`;
-      const tags: string[] = [];
-
-      const data = {
-        userId: primaryAddress ? primaryAddress : deviceId,
-        logTitle,
-        metadata: {
-          primaryAddress,
-          deviceName,
-          deviceId,
-        },
-        tags,
-      };
-
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).Log?.postMessage(
-        JSON.stringify({
-          data: data,
-        })
-      );
-    };
-
-    const handleSendLogEvent = () => {
-      countEvent++;
-      // Send log after reach event number
-      if (countEvent >= SEND_LOG_EVENT_NUMBER) {
-        sendLog().catch((error: unknown) => {
-          console.log('Error when send log', error);
-        });
-      }
-
-      if (sendLogEventInterval.current) {
-        clearInterval(sendLogEventInterval.current);
-      }
-
-      // Reset counter after 10 seconds if not receive another event
-      sendLogEventInterval.current = setInterval(() => {
-        countEvent = 0;
-      }, SEND_LOG_INTERVAL);
-    };
-
-    let countEvent = 0;
-    EventEmitter.unSubscribe(Event.sendLog, handleSendLogEvent);
-    EventEmitter.subscribe(Event.sendLog, handleSendLogEvent);
-
-    return () => {
-      EventEmitter.unSubscribe(Event.sendLog, handleSendLogEvent);
-      if (sendLogEventInterval.current) {
-        clearInterval(sendLogEventInterval.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (!castInfo) return;
@@ -238,22 +143,18 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [castInfo, castState, router]);
 
-  return messages != undefined ? (
-    <NextIntlClientProvider locale={locale} messages={messages}>
-      <div
-        style={{
-          width: '100vw',
-          height: '100vh',
-          transformOrigin: 'center 50vh',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}>
-        {children}
-      </div>
-    </NextIntlClientProvider>
-  ) : (
-    <></>
+  return (
+    <div
+      style={{
+        width: '100vw',
+        height: '100vh',
+        transformOrigin: 'center 50vh',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}>
+      {children}
+    </div>
   );
 };
 

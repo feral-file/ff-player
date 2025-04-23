@@ -2,13 +2,12 @@
 
 import ArtworkPlayer from '../../components/artwork-player/ArtworkPlayer';
 import DailyService from '@/services/DailyService';
-import { getDelayTime } from '@/services/qrCodePopUpService';
 import { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_DELAY,
   LeeMullican_EXHIBITION_CONTRACT,
 } from '@/utils/constants';
-import { Daily } from '@/models';
+import { Daily, ViewMode } from '@/models';
 import { convertToTokenID } from '@/utils/indexer';
 import { SWITCH_TOKEN_INTERVAL, TIMESTAMP_PER_HOUR } from '@/constants';
 import { CastingArtworkType } from '@/models/metric.model';
@@ -42,8 +41,7 @@ export default function DailyClient() {
   const newDailyHour = context.appRemoteConfig.new_daily_hour;
 
   useEffect(() => {
-    // const landScape = artDisplaySetting.rotateRadius % 180 === 0;
-    const landScape = true;
+    const landScape = context.deviceRotation?.viewMode === ViewMode.landscape;
     if (landscapeStaticURL && landScape) {
       setCastPreviewURL(landscapeStaticURL);
       setArtworkPreviewMIMEType('image');
@@ -54,7 +52,7 @@ export default function DailyClient() {
       setCastPreviewURL(portraitStaticURL);
       setArtworkPreviewMIMEType('image');
     }
-  }, [landscapeStaticURL, portraitStaticURL]);
+  }, [landscapeStaticURL, portraitStaticURL, context.deviceRotation?.viewMode]);
 
   const fallbackToDefaultArtwork = () => {
     if (switchTokenRef.current) {
@@ -93,7 +91,7 @@ export default function DailyClient() {
             );
           }
 
-          const { delay } = getDelayTime(newDailyHour);
+          const delay = DailyService.getNextDailyDelay(newDailyHour);
           // Reset next token handle
           nextTokenIndex.current = 0;
           if (switchTokenRef.current) {

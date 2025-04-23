@@ -16,11 +16,11 @@ import useDeviceRotation, {
 import RemoteConfigService, {
   AppRemoteConfig,
 } from '@/services/remoteConfigService';
-import { AppSettings, LocalStorageItem } from '@/constants';
+import { AppSettings, LocalStorageItem, Platform } from '@/constants';
 import { useSearchParams } from 'next/navigation';
 import DeviceManager from '@/utils/DeviceManager';
 import useCastInfo from '@/services/useCastInfo';
-import { CastCommand, CastInfo } from '@/utils/types';
+import { CastCommand, CastInfo } from '@/models';
 import { LocalWebSocketClient } from '@/services/local-websocket/LocalWebSocketClient';
 import CanvasService from '@/services/CanvasService';
 import { useDeviceSettings } from '@/services/useDeviceSettings';
@@ -197,15 +197,14 @@ export const AppProvider = ({ children }: AppContextProps) => {
   // Initialize platform events
   useEffect(() => {
     let websocket: LocalWebSocketClient | null = null;
-    const platform = searchParams?.get('platform') ?? '';
+    const platform = searchParams.get('platform') ?? '';
     if (platform) {
       localStorage.setItem(LocalStorageItem.platform, platform);
-      // if (platform === Platform.ffDevice.toString()) {
-      //   websocket = new LocalWebSocketClient();
-      // }
+      if (platform === Platform.ffDevice.toString()) {
+        websocket = new LocalWebSocketClient();
+      }
     }
 
-    websocket = LocalWebSocketClient.getInstance();
     setPlatformInitialized(true);
     return () => {
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
