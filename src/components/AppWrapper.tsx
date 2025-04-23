@@ -33,10 +33,11 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
 
   // Check version update
   useEffect(() => {
+    const duration =
+      context.appRemoteConfig.duration ||
+      AppSettings.VERSION_CHECK_INTERVAL_DURATION;
+
     const validateVersion = async () => {
-      const duration =
-        context.appRemoteConfig.duration ||
-        AppSettings.VERSION_CHECK_INTERVAL_DURATION;
       await checkVersion();
 
       const intervalID = setInterval(() => {
@@ -53,11 +54,13 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
     validateVersion().catch((error: unknown) => {
       console.error(error);
     });
-  }, [context.appRemoteConfig]);
+  }, [context.appRemoteConfig.duration]);
 
   const checkVersion = async () => {
-    const currentVersion = await AppService.getCurrentVersion();
-    const newVersion = await AppService.getVersion();
+    const [currentVersion, newVersion] = await Promise.all([
+      AppService.getCurrentVersion(),
+      AppService.getVersion(),
+    ]);
     console.log('[INFO] Current Version:', currentVersion);
     console.log('[INFO] New Version:', newVersion);
     if (newVersion !== currentVersion) {
