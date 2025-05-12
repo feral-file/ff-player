@@ -38,12 +38,8 @@ export default function DailyClient() {
     // Handle cast daily
     async function handleCastDaily() {
       try {
-        const isRefreshDaily =
-          await DailyService.isRefreshDailies(newDailyHour);
-        if (isRefreshDaily) {
-          dailies = DailyService.getDailies();
-        }
-
+        await DailyService.refreshDailies(newDailyHour);
+        dailies = DailyService.getDailies();
         if (dailies.length > 0) {
           // Set metric metadata
           if (dailyRef.current !== dailies[0]) {
