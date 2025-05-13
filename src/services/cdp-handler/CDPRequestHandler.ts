@@ -30,7 +30,7 @@ export class CDPRequestHandler {
     (window as any).handleCDPRequest = this.handleCDPRequest.bind(this);
   }
 
-  private handleCDPRequest(event: WebSocketMessage): WebSocketMessage {
+  private handleCDPRequest(event: WebSocketMessage): string {
     try {
       console.log('[CDP] Request received:', event);
       if (!event.message) {
@@ -98,13 +98,13 @@ export class CDPRequestHandler {
         }
       }
 
-      return reply;
+      return JSON.stringify(reply);
     } catch (error) {
       console.error('Error handling CDP request:', error);
-      return {
+      return JSON.stringify({
         messageID: event.messageID,
         message: { ok: false, error: (error as Error).message },
-      };
+      });
     }
   }
 
