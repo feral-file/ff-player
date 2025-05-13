@@ -21,10 +21,11 @@ import { useSearchParams } from 'next/navigation';
 import DeviceManager from '@/utils/DeviceManager';
 import useCastInfo from '@/services/useCastInfo';
 import { CastCommand, CastInfo } from '@/models';
-import { LocalWebSocketClient } from '@/services/local-websocket/LocalWebSocketClient';
 import CanvasService from '@/services/CanvasService';
 import { useDeviceSettings } from '@/services/useDeviceSettings';
 import { DisplaySettings } from '@/models/display_settings.model';
+import { CDPRequestHandler } from '@/services/cdp-handler/CDPRequestHandler';
+import { LocalWebSocketClient } from '@/services/local-websocket/LocalWebSocketClient';
 
 interface AppContextProps {
   children: ReactNode;
@@ -168,21 +169,17 @@ export const AppProvider = ({ children }: AppContextProps) => {
         messageID: 'statusChanged',
         message: JSON.stringify({
           connectedDevice: castInfo.deviceInfo,
-
           exhibitionId: castInfo.exhibitionId,
           catalog: castInfo.catalog,
           catalogId: castInfo.catalogId,
-
           artworks: castInfo.artworks ?? [],
           startTime: castInfo.startTime,
           index: castInfo.index,
           isPaused: castInfo.isPaused,
-
           displayKey: castInfo.displayKey,
         }),
       });
     };
-
     if (websocket.isConnected()) {
       sendCastInfo();
     } else {
@@ -197,6 +194,8 @@ export const AppProvider = ({ children }: AppContextProps) => {
   // Initialize platform events
   useEffect(() => {
     let websocket: LocalWebSocketClient | null = null;
+    const cdpRequestHandler = CDPRequestHandler.getInstance();
+
     const platform = searchParams.get('platform') ?? '';
     if (platform) {
       localStorage.setItem(LocalStorageItem.platform, platform);
@@ -207,8 +206,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
     setPlatformInitialized(true);
     return () => {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      websocket?.disconnect();
+      cdpRequestHandler.cleanup();
     };
   }, []);
 
