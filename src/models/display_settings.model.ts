@@ -34,7 +34,6 @@ export class TokenDisplaySettings extends DisplaySettings {
 
   constructor(
     scaling?: ArtFraming,
-    orientation?: ViewMode,
     backgroundColor?: string,
     marginLeft?: number,
     marginRight?: number,
@@ -45,7 +44,7 @@ export class TokenDisplaySettings extends DisplaySettings {
     interactable?: boolean,
     overridable?: boolean
   ) {
-    super(scaling, orientation);
+    super(scaling);
     this.backgroundColor = backgroundColor;
     this.marginLeft = marginLeft;
     this.marginRight = marginRight;
@@ -60,7 +59,6 @@ export class TokenDisplaySettings extends DisplaySettings {
   static fromAssetConfiguration(assetConfiguration: AssetConfiguration) {
     return new TokenDisplaySettings(
       assetConfiguration.scaling as ArtFraming,
-      assetConfiguration.orientation as ViewMode,
       assetConfiguration.backgroundColor,
       assetConfiguration.marginLeft,
       assetConfiguration.marginRight,
