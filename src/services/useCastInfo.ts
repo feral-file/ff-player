@@ -4,8 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import CanvasService from './CanvasService';
 import { CastCommand, CastInfo } from '@/models';
 import { LocalStorageItem } from '@/constants';
-import { LocalWebSocketClient } from './local-websocket/LocalWebSocketClient';
-import { WebSocketMessage } from '@/models';
 
 const useCastInfo = () => {
   const [castInfo, setCastInfo] = useState<CastInfo | null>(null);
@@ -13,7 +11,6 @@ const useCastInfo = () => {
 
   // Services
   const canvasService = useRef(CanvasService.getInstance());
-  const webSocketClient = useRef(LocalWebSocketClient.getInstance());
 
   const isPlaylistControlCommand = (castInfo: CastInfo) => {
     return (
@@ -52,14 +49,7 @@ const useCastInfo = () => {
     }
 
     if (castInfo?.castCommand === CastCommand.updateIndex) {
-      // Send message to WebSocket
-      const message: WebSocketMessage = {
-        messageID: 'statusChanged',
-        message: JSON.stringify({
-          index: castInfo.index,
-        }),
-      };
-      webSocketClient.current.sendMessage(message);
+      // TODO: Send cast info to app
     }
 
     const castInfoToStore = castInfo;

@@ -16,7 +16,7 @@ import useDeviceRotation, {
 import RemoteConfigService, {
   AppRemoteConfig,
 } from '@/services/remoteConfigService';
-import { AppSettings, LocalStorageItem, Platform } from '@/constants';
+import { AppSettings, LocalStorageItem } from '@/constants';
 import { useSearchParams } from 'next/navigation';
 import DeviceManager from '@/utils/DeviceManager';
 import useCastInfo from '@/services/useCastInfo';
@@ -25,7 +25,6 @@ import CanvasService from '@/services/CanvasService';
 import { useDeviceSettings } from '@/services/useDeviceSettings';
 import { DisplaySettings } from '@/models/display_settings.model';
 import { CDPRequestHandler } from '@/services/cdp-handler/CDPRequestHandler';
-import { LocalWebSocketClient } from '@/services/local-websocket/LocalWebSocketClient';
 
 interface AppContextProps {
   children: ReactNode;
@@ -134,14 +133,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
       setCastInfo(castInfo);
       canvasService.current.setCastInfo(castInfo, false);
-      sendCastInfoToWebSocket(castInfo);
+      // TODO: Send cast info to app
     } else {
       console.log('CastInfo is null, send cast daily message');
-
-      sendCastInfoToWebSocket({
-        castCommand: CastCommand.castDaily,
-        displayKey: 'daily_work',
-      });
+      // TODO: Send cast info to app
     }
   };
 
@@ -160,48 +155,13 @@ export const AppProvider = ({ children }: AppContextProps) => {
     return null;
   };
 
-  const sendCastInfoToWebSocket = (castInfo: CastInfo) => {
-    const websocket = LocalWebSocketClient.getInstance();
-
-    const sendCastInfo = () => {
-      console.log('AppContext send cast info', JSON.stringify(castInfo));
-      websocket.sendMessage({
-        messageID: 'statusChanged',
-        message: JSON.stringify({
-          connectedDevice: castInfo.deviceInfo,
-          exhibitionId: castInfo.exhibitionId,
-          catalog: castInfo.catalog,
-          catalogId: castInfo.catalogId,
-          artworks: castInfo.artworks ?? [],
-          startTime: castInfo.startTime,
-          index: castInfo.index,
-          isPaused: castInfo.isPaused,
-          displayKey: castInfo.displayKey,
-        }),
-      });
-    };
-    if (websocket.isConnected()) {
-      sendCastInfo();
-    } else {
-      const onConnectedCallback = () => {
-        sendCastInfo();
-        websocket.removeOnConnected(onConnectedCallback);
-      };
-      websocket.onConnected(onConnectedCallback);
-    }
-  };
-
   // Initialize platform events
   useEffect(() => {
-    let websocket: LocalWebSocketClient | null = null;
     const cdpRequestHandler = CDPRequestHandler.getInstance();
 
     const platform = searchParams.get('platform') ?? '';
     if (platform) {
       localStorage.setItem(LocalStorageItem.platform, platform);
-      if (platform === Platform.ffDevice.toString()) {
-        websocket = new LocalWebSocketClient();
-      }
     }
 
     setPlatformInitialized(true);
@@ -254,7 +214,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
     if (isOnline) {
       const castInfo = getCastInfoFromLocalStorage();
       if (castInfo) {
-        sendCastInfoToWebSocket(castInfo);
+        // TODO: Send cast info to app
       }
     }
   }, [isOnline]);
