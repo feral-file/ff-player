@@ -3,22 +3,6 @@ import axiosInstance from './axiosService';
 import * as Sentry from '@sentry/nextjs';
 
 export class SeriesService {
-  public async getArtworkOfSeries(seriesID: string): Promise<Artwork[]> {
-    try {
-      const response = await axiosInstance.get<{ result: Artwork[] }>(
-        `/api/artworks?seriesID=${seriesID}`
-      );
-      return response.data.result;
-    } catch (error) {
-      console.log(
-        '[API] Failed to load artworks of series:',
-        JSON.stringify(error)
-      );
-      Sentry.captureException(error);
-      return [];
-    }
-  }
-
   public async getArtwork(
     id: string,
     exhibition?: Exhibition
