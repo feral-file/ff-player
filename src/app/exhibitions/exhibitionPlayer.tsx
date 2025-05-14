@@ -121,7 +121,7 @@ const ExhibitionHall = () => {
     };
 
     const fetchPosts = async (exhibition: Exhibition) => {
-      const posts = await postService.current.getPostExhibition(exhibition);
+      const posts = await postService.current.getExhibitionPosts(exhibition);
       setPosts(posts);
     };
 

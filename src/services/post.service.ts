@@ -17,7 +17,7 @@ const YOUTUBE_THUMBNAIL_URL =
 const YOUTUBE_VIDEO_URL = 'https://www.youtube.com/embed/{video-id}';
 
 export class PostService {
-  public async getPostExhibition(exhibition: Exhibition): Promise<Post[]> {
+  public async getExhibitionPosts(exhibition: Exhibition): Promise<Post[]> {
     try {
       const isJG043Show = exhibition.id === AppSettings.JG_043_EXHIBITION_ID;
       const isEF046Exhibition =
