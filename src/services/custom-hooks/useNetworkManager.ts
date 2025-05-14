@@ -2,22 +2,25 @@
 
 import { useEffect, useState } from 'react';
 
+export interface ConnectivityEventDetail {
+  isOnline: boolean;
+}
+
 const useNetworkManger = () => {
   const [isOnline, setIsOnline] = useState<boolean>(true);
 
   useEffect(() => {
-    function updateNetworkStatus() {
-      setIsOnline(navigator.onLine);
-    }
+    const updateNetworkStatus = (event: Event) => {
+      const customEvent = event as CustomEvent<ConnectivityEventDetail>;
+      setIsOnline(customEvent.detail.isOnline);
+    };
 
-    window.addEventListener('online', updateNetworkStatus);
-    window.addEventListener('offline', updateNetworkStatus);
+    window.addEventListener('connectivityChange', updateNetworkStatus);
 
     return () => {
-      window.removeEventListener('online', updateNetworkStatus);
-      window.removeEventListener('offline', updateNetworkStatus);
+      window.removeEventListener('connectivityChange', updateNetworkStatus);
     };
-  });
+  }, []);
 
   return isOnline;
 };
