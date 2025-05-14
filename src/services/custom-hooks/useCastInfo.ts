@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import CanvasService from './CanvasService';
+import CanvasService from '../CanvasService';
 import { CastCommand, CastInfo } from '@/models';
 import { LocalStorageItem } from '@/constants';
 

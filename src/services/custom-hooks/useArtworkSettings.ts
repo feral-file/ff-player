@@ -1,10 +1,12 @@
+'use client';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
-import CanvasService from './CanvasService';
+import CanvasService from '../CanvasService';
 import {
   DisplaySettings,
   TokenDisplaySettings,
 } from '@/models/display_settings.model';
-import ArtworkService from './ArtworkService';
+import ArtworkService from '../ArtworkService';
 import { useAppContext } from '@/context/AppContext';
 
 export type TokenDisplaySettingWithChanged = TokenDisplaySettings & {
