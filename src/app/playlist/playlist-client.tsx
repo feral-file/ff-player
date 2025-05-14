@@ -6,10 +6,10 @@ import { IndexerToken } from '@/models';
 import { CastingArtworkType } from '@/models/metric.model';
 import ArtworkService from '@/services/ArtworkService';
 import CanvasService from '@/services/CanvasService';
-import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
 import { getIndex } from '@/utils/playlist';
 import { PlayArtwork, PlaylistToken, CastCommand } from '@/models';
 import { useEffect, useRef, useState } from 'react';
+import { LEE_MULLICAN_EXHIBITION_CONTRACT } from '@/constants';
 
 export default function PlaylistClient() {
   const { context } = useAppContext();
@@ -63,7 +63,7 @@ export default function PlaylistClient() {
     }
     setCastPreviewURL(currentPlaylist.previewURL);
     setIsLeeMullicanExhibition(
-      currentPlaylist.contractAddress === LeeMullican_EXHIBITION_CONTRACT
+      currentPlaylist.contractAddress === LEE_MULLICAN_EXHIBITION_CONTRACT
     );
 
     if (!castInfo?.isPaused) {
