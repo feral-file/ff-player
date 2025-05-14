@@ -1,9 +1,9 @@
-import { SOURCE_EXHIBITION_ID } from '@/utils/constants';
 import { Exhibition, Series } from '@/models';
 import axiosInstance from './axiosService';
 import axios from 'axios';
 import { removeArtistAliasSuffixes } from '@/utils/ui/formatAlias';
 import * as Sentry from '@sentry/nextjs';
+import { SOURCE_EXHIBITION_ID } from '@/constants';
 
 export class ExhibitionService {
   public async getExhibition(id: string) {
