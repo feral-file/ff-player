@@ -8,21 +8,20 @@ import {
   useRef,
   useState,
 } from 'react';
-import useNetworkManger from '@/services/NetworkManager';
+import useNetworkManger from '@/services/custom-hooks/useNetworkManager';
 import useDeviceRotation, {
   DeviceRotation,
-  defaultRotation,
-} from '@/services/DeviceRotation';
+} from '@/services/custom-hooks/useDeviceRotation';
 import RemoteConfigService, {
   AppRemoteConfig,
 } from '@/services/remoteConfigService';
 import { AppSettings, LocalStorageItem } from '@/constants';
 import { useSearchParams } from 'next/navigation';
 import DeviceManager from '@/utils/DeviceManager';
-import useCastInfo from '@/services/useCastInfo';
+import useCastInfo from '@/services/custom-hooks/useCastInfo';
 import { CastCommand, CastInfo } from '@/models';
 import CanvasService from '@/services/CanvasService';
-import { useDeviceSettings } from '@/services/useDeviceSettings';
+import { useDeviceSettings } from '@/services/custom-hooks/useDeviceSettings';
 import { DisplaySettings } from '@/models/display_settings.model';
 import { CDPRequestHandler } from '@/services/cdp-handler/CDPRequestHandler';
 
@@ -57,10 +56,6 @@ export const useAppContext = () => {
 export const AppProvider = ({ children }: AppContextProps) => {
   const [appRemoteConfig, setAppConfig] = useState({} as AppRemoteConfig);
   const remoteConfigService = useRef(new RemoteConfigService());
-  const [, setContextConfig] = useState<AppConfigContext>(
-    {} as AppConfigContext
-  );
-  const [rotation, setRotation] = useState<DeviceRotation | null>(null);
   const [platformInitialized, setPlatformInitialized] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -69,22 +64,12 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const isOnline = useNetworkManger();
   const isFirstRender = useRef(true);
 
-  const deviceRotation = useDeviceRotation(rotation);
+  const deviceRotation = useDeviceRotation();
   const searchParams = useSearchParams();
   const canvasService = useRef(CanvasService.getInstance());
 
-  const contextConfig = {
-    isInitialized,
-    isOnline,
-    deviceRotation,
-    appRemoteConfig,
-    castInfo,
-    displaySettings,
-  };
-
   const initContext = async () => {
     try {
-      setContextConfig(contextConfig);
       await initDeviceConfigService();
       setIsInitialized(true);
     } catch (error) {
@@ -95,7 +80,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const initDeviceConfigService = async () => {
     try {
       await DeviceManager.init();
-      initialOrientation();
       initialDisplaySettings().catch((error: unknown) => {
         console.log('Error initial display settings', error);
       });
@@ -103,10 +87,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
     } catch (error) {
       console.log('Error init device manager', error);
     }
-  };
-
-  const initialOrientation = () => {
-    setRotation(defaultRotation());
   };
 
   const initialDisplaySettings = async () => {
@@ -197,13 +177,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
       console.log('Error init context', error);
     });
   }, [platformInitialized]);
-
-  useEffect(() => {
-    setContextConfig({
-      ...contextConfig,
-      deviceRotation: rotation,
-    });
-  }, [rotation]);
 
   useEffect(() => {
     if (isFirstRender.current) {
