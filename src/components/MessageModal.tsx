@@ -58,9 +58,6 @@ const MessageModal = ({
           columnGap: screenRatio * 20,
           justifyContent: 'center',
         }}>
-        {messageModalType === MessageModalType.error && (
-          <img src="/images/close-white.svg" alt="close"></img>
-        )}
         <div
           style={{
             display: 'flex',
