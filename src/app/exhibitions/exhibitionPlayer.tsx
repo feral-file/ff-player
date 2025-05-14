@@ -9,7 +9,7 @@ import Carousel from './components/carousel/carousel';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
 import { useAppContext } from '@/context/AppContext';
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
-import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
+import { LEE_MULLICAN_EXHIBITION_CONTRACT } from '@/constants';
 import { formatArtworkIndexID } from '@/utils/indexer';
 import {
   CastingArtworkType,
@@ -329,7 +329,7 @@ const ExhibitionHall = () => {
               isCustomView={
                 exhibitionDetail.contracts &&
                 exhibitionDetail.contracts[0]?.address ===
-                  LeeMullican_EXHIBITION_CONTRACT
+                  LEE_MULLICAN_EXHIBITION_CONTRACT
               }
             />
           )}
