@@ -2,6 +2,7 @@ import CanvasService from '../CanvasService';
 import { WebSocketMessage } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import { DeviceNamePrefix } from '@/constants';
+import { ConnectivityEventDetail } from '../custom-hooks/useNetworkManager';
 
 const sendDeviceInfoCommand = 'sendDeviceInfo';
 const pingCommand = 'ping';
@@ -28,6 +29,10 @@ export class CDPRequestHandler {
     this.isInitialized = true;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleCDPRequest = this.handleCDPRequest.bind(this);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).handleConnectivityChange =
+      this.handleConnectivityChange.bind(this);
   }
 
   private handleCDPRequest(event: WebSocketMessage): string {
@@ -108,9 +113,19 @@ export class CDPRequestHandler {
     }
   }
 
+  private handleConnectivityChange(isOnline: boolean) {
+    window.dispatchEvent(
+      new CustomEvent<ConnectivityEventDetail>('connectivityChange', {
+        detail: { isOnline },
+      })
+    );
+  }
+
   public cleanup() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleCDPRequest = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).handleConnectivityChange = null;
     this.isInitialized = false;
   }
 }
