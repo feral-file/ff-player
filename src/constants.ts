@@ -9,16 +9,10 @@ export enum LocalStorageItem {
 }
 
 export enum Platform {
-  google = 'google',
-  tizen = 'tizen',
-  lg = 'lg',
   ffDevice = 'ff-device',
 }
 
 export enum DeviceNamePrefix {
-  google = 'Google-',
-  samsung = 'Samsung-',
-  lg = 'LG-',
   ffDevice = 'FF-X1-',
 }
 
@@ -45,3 +39,8 @@ export const NO_YEAR_IN_TITLE_SERIES_IDS = [
 export const CLIENT_BANDWIDTH_HINT = 16; // Mbps
 
 export const SWITCH_TOKEN_INTERVAL = 15 * 60 * 1000;
+
+export const SOURCE_EXHIBITION_ID = 'source';
+export const DEFAULT_DELAY = 24 * 60 * 60 * 1000;
+export const LEE_MULLICAN_EXHIBITION_CONTRACT =
+  'KT1CtDPiLjHiU1LVLrhshDry8jkR9h29tXNo';

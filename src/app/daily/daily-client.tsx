@@ -3,13 +3,14 @@
 import ArtworkPlayer from '../../components/artwork-player/ArtworkPlayer';
 import DailyService from '@/services/DailyService';
 import { useEffect, useRef, useState } from 'react';
-import {
-  DEFAULT_DELAY,
-  LeeMullican_EXHIBITION_CONTRACT,
-} from '@/utils/constants';
 import { Daily, ViewMode } from '@/models';
 import { convertToTokenID } from '@/utils/indexer';
-import { SWITCH_TOKEN_INTERVAL, TIMESTAMP_PER_HOUR } from '@/constants';
+import {
+  DEFAULT_DELAY,
+  LEE_MULLICAN_EXHIBITION_CONTRACT,
+  SWITCH_TOKEN_INTERVAL,
+  TIMESTAMP_PER_HOUR,
+} from '@/constants';
 import { CastingArtworkType } from '@/models/metric.model';
 import { useAppContext } from '@/context/AppContext';
 import * as Sentry from '@sentry/nextjs';
@@ -69,12 +70,8 @@ export default function DailyClient() {
     // Handle cast daily
     async function handleCastDaily() {
       try {
-        const isRefreshDaily =
-          await DailyService.isRefreshDailies(newDailyHour);
-        if (isRefreshDaily) {
-          dailies = DailyService.getDailies();
-        }
-
+        await DailyService.refreshDailies(newDailyHour);
+        dailies = DailyService.getDailies();
         if (dailies.length > 0) {
           // Set metric metadata
           if (dailyRef.current !== dailies[0]) {
@@ -136,7 +133,7 @@ export default function DailyClient() {
           } else if (dailyRef.current.previewURL) {
             setCastPreviewURL(dailyRef.current.previewURL);
             setIsLeeMucianExhibition(
-              dailies[0].contractAddress === LeeMullican_EXHIBITION_CONTRACT
+              dailies[0].contractAddress === LEE_MULLICAN_EXHIBITION_CONTRACT
             );
           }
 

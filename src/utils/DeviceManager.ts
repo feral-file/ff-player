@@ -1,10 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import {
   FFDeviceConfigService,
-  GoogleConfigService,
-  LgConfigService,
   PlatformConfigService,
-  TizenConfigService,
   WebConfigService,
 } from './platform';
 import * as Sentry from '@sentry/nextjs';
@@ -40,18 +37,11 @@ class DeviceManager {
     console.log(
       `[DEVICE] creating PlatformConfigService instance for platform: ${platform ?? 'Web'}`
     );
-    switch (platform) {
-      case Platform.google:
-        return new GoogleConfigService();
-      case Platform.tizen:
-        return new TizenConfigService();
-      case Platform.lg:
-        return new LgConfigService();
-      case Platform.ffDevice:
-        return new FFDeviceConfigService();
-      default:
-        return new WebConfigService();
+    if (platform === Platform.ffDevice) {
+      return new FFDeviceConfigService();
     }
+
+    return new WebConfigService();
   }
 
   private async getFromLocalStorage(key: string): Promise<string | null> {
@@ -97,10 +87,6 @@ class DeviceManager {
     this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
   }
 
-  public setName(name: string): void {
-    this.setToLocalStorage(LocalStorageItem.name, name);
-  }
-
   public async getName(): Promise<string> {
     try {
       const name = await this.getFromLocalStorage(LocalStorageItem.name);
@@ -112,6 +98,10 @@ class DeviceManager {
       );
       return 'Unknown';
     }
+  }
+
+  public setName(name: string): void {
+    this.setToLocalStorage(LocalStorageItem.name, name);
   }
 
   public async getDeviceModel(): Promise<string> {
@@ -132,19 +122,22 @@ class DeviceManager {
   }
 
   private stripPrefix(name: string): string {
-    return name
-      .replace(DeviceNamePrefix.google, '')
-      .replace(DeviceNamePrefix.samsung, '')
-      .replace(DeviceNamePrefix.lg, '')
-      .replace(DeviceNamePrefix.ffDevice, '');
+    return name.replace(DeviceNamePrefix.ffDevice, '');
+  }
+
+  public async getPrimaryAddress(): Promise<string | null> {
+    return await this.getFromLocalStorage(LocalStorageItem.primaryAddress);
   }
 
   public setPrimaryAddress(primaryAddress: string): void {
     this.setToLocalStorage(LocalStorageItem.primaryAddress, primaryAddress);
   }
 
-  public async getPrimaryAddress(): Promise<string | null> {
-    return await this.getFromLocalStorage(LocalStorageItem.primaryAddress);
+  public async getDeviceDisplaySettings(): Promise<DisplaySettings | null> {
+    const config = await this.getFromLocalStorage(
+      LocalStorageItem.displaySettings
+    );
+    return config ? (JSON.parse(config) as DisplaySettings) : null;
   }
 
   public setDeviceDisplaySettings(
@@ -154,13 +147,6 @@ class DeviceManager {
       LocalStorageItem.displaySettings,
       displaySettings ? JSON.stringify(displaySettings) : '{}'
     );
-  }
-
-  public async getDeviceDisplaySettings(): Promise<DisplaySettings | null> {
-    const config = await this.getFromLocalStorage(
-      LocalStorageItem.displaySettings
-    );
-    return config ? (JSON.parse(config) as DisplaySettings) : null;
   }
 }
 

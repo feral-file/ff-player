@@ -123,16 +123,9 @@ export function uploadMetricEventsFromLocalStorage() {
 
 function getDeviceInfoBaseOnPlatform(): { vendor: string; platform: string } {
   const platform = localStorage.getItem(LocalStorageItem.platform);
-  switch (platform) {
-    case Platform.google:
-      return { vendor: 'google', platform: 'googletv' };
-    case Platform.tizen:
-      return { vendor: 'samsung', platform: 'tizen' };
-    case Platform.lg:
-      return { vendor: 'lg', platform: 'webos' };
-    case Platform.ffDevice:
-      return { vendor: 'ffPortal', platform: 'ffPortal' };
-    default:
-      return { vendor: 'web', platform: 'web' };
+  if (platform === Platform.ffDevice) {
+    return { vendor: 'ffPortal', platform: 'ffPortal' };
   }
+
+  return { vendor: 'web', platform: 'web' };
 }

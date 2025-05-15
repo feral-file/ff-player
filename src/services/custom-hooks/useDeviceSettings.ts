@@ -1,5 +1,7 @@
+'use client';
+
 import { useEffect, useState } from 'react';
-import CanvasService from './CanvasService';
+import CanvasService from '../CanvasService';
 import DeviceManager from '@/utils/DeviceManager';
 import { DisplaySettings } from '@/models/display_settings.model';
 

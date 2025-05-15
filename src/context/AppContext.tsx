@@ -8,23 +8,22 @@ import {
   useRef,
   useState,
 } from 'react';
-import useNetworkManger from '@/services/NetworkManager';
+import useNetworkManger from '@/services/custom-hooks/useNetworkManager';
 import useDeviceRotation, {
   DeviceRotation,
-  defaultRotation,
-} from '@/services/DeviceRotation';
+} from '@/services/custom-hooks/useDeviceRotation';
 import RemoteConfigService, {
   AppRemoteConfig,
 } from '@/services/remoteConfigService';
-import { AppSettings, LocalStorageItem, Platform } from '@/constants';
+import { AppSettings, LocalStorageItem } from '@/constants';
 import { useSearchParams } from 'next/navigation';
 import DeviceManager from '@/utils/DeviceManager';
-import useCastInfo from '@/services/useCastInfo';
+import useCastInfo from '@/services/custom-hooks/useCastInfo';
 import { CastCommand, CastInfo } from '@/models';
-import { LocalWebSocketClient } from '@/services/local-websocket/LocalWebSocketClient';
 import CanvasService from '@/services/CanvasService';
-import { useDeviceSettings } from '@/services/useDeviceSettings';
+import { useDeviceSettings } from '@/services/custom-hooks/useDeviceSettings';
 import { DisplaySettings } from '@/models/display_settings.model';
+import { CDPRequestHandler } from '@/services/cdp-handler/CDPRequestHandler';
 
 interface AppContextProps {
   children: ReactNode;
@@ -57,10 +56,6 @@ export const useAppContext = () => {
 export const AppProvider = ({ children }: AppContextProps) => {
   const [appRemoteConfig, setAppConfig] = useState({} as AppRemoteConfig);
   const remoteConfigService = useRef(new RemoteConfigService());
-  const [, setContextConfig] = useState<AppConfigContext>(
-    {} as AppConfigContext
-  );
-  const [rotation, setRotation] = useState<DeviceRotation | null>(null);
   const [platformInitialized, setPlatformInitialized] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -69,22 +64,12 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const isOnline = useNetworkManger();
   const isFirstRender = useRef(true);
 
-  const deviceRotation = useDeviceRotation(rotation);
+  const deviceRotation = useDeviceRotation();
   const searchParams = useSearchParams();
   const canvasService = useRef(CanvasService.getInstance());
 
-  const contextConfig = {
-    isInitialized,
-    isOnline,
-    deviceRotation,
-    appRemoteConfig,
-    castInfo,
-    displaySettings,
-  };
-
   const initContext = async () => {
     try {
-      setContextConfig(contextConfig);
       await initDeviceConfigService();
       setIsInitialized(true);
     } catch (error) {
@@ -95,7 +80,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const initDeviceConfigService = async () => {
     try {
       await DeviceManager.init();
-      initialOrientation();
       initialDisplaySettings().catch((error: unknown) => {
         console.log('Error initial display settings', error);
       });
@@ -103,10 +87,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
     } catch (error) {
       console.log('Error init device manager', error);
     }
-  };
-
-  const initialOrientation = () => {
-    setRotation(defaultRotation());
   };
 
   const initialDisplaySettings = async () => {
@@ -133,14 +113,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
       setCastInfo(castInfo);
       canvasService.current.setCastInfo(castInfo, false);
-      sendCastInfoToWebSocket(castInfo);
+      // TODO: Send cast info to app
     } else {
       console.log('CastInfo is null, send cast daily message');
-
-      sendCastInfoToWebSocket({
-        castCommand: CastCommand.castDaily,
-        displayKey: 'daily_work',
-      });
+      // TODO: Send cast info to app
     }
   };
 
@@ -159,56 +135,18 @@ export const AppProvider = ({ children }: AppContextProps) => {
     return null;
   };
 
-  const sendCastInfoToWebSocket = (castInfo: CastInfo) => {
-    const websocket = LocalWebSocketClient.getInstance();
-
-    const sendCastInfo = () => {
-      console.log('AppContext send cast info', JSON.stringify(castInfo));
-      websocket.sendMessage({
-        messageID: 'statusChanged',
-        message: JSON.stringify({
-          connectedDevice: castInfo.deviceInfo,
-
-          exhibitionId: castInfo.exhibitionId,
-          catalog: castInfo.catalog,
-          catalogId: castInfo.catalogId,
-
-          artworks: castInfo.artworks ?? [],
-          startTime: castInfo.startTime,
-          index: castInfo.index,
-          isPaused: castInfo.isPaused,
-
-          displayKey: castInfo.displayKey,
-        }),
-      });
-    };
-
-    if (websocket.isConnected()) {
-      sendCastInfo();
-    } else {
-      const onConnectedCallback = () => {
-        sendCastInfo();
-        websocket.removeOnConnected(onConnectedCallback);
-      };
-      websocket.onConnected(onConnectedCallback);
-    }
-  };
-
   // Initialize platform events
   useEffect(() => {
-    let websocket: LocalWebSocketClient | null = null;
+    const cdpRequestHandler = CDPRequestHandler.getInstance();
+
     const platform = searchParams.get('platform') ?? '';
     if (platform) {
       localStorage.setItem(LocalStorageItem.platform, platform);
-      if (platform === Platform.ffDevice.toString()) {
-        websocket = new LocalWebSocketClient();
-      }
     }
 
     setPlatformInitialized(true);
     return () => {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      websocket?.disconnect();
+      cdpRequestHandler.cleanup();
     };
   }, []);
 
@@ -241,13 +179,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
   }, [platformInitialized]);
 
   useEffect(() => {
-    setContextConfig({
-      ...contextConfig,
-      deviceRotation: rotation,
-    });
-  }, [rotation]);
-
-  useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
@@ -256,7 +187,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
     if (isOnline) {
       const castInfo = getCastInfoFromLocalStorage();
       if (castInfo) {
-        sendCastInfoToWebSocket(castInfo);
+        // TODO: Send cast info to app
       }
     }
   }, [isOnline]);

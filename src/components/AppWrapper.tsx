@@ -137,9 +137,11 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       setCastState(CastState.None);
       router.back();
     } else {
-      canvasService.castDaily({}).catch((error: unknown) => {
+      try {
+        canvasService.castDaily({});
+      } catch (error) {
         console.log('[AppWrapper] Error Cast daily', error);
-      });
+      }
     }
   }, [castInfo, castState, router]);
 

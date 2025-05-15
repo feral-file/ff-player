@@ -12,7 +12,7 @@ import { CLIENT_BANDWIDTH_HINT } from '@/constants';
 import {
   TokenDisplaySettingWithChanged,
   useArtworkSettings,
-} from '@/services/useArtworkSettings';
+} from '@/services/custom-hooks/useArtworkSettings';
 import { DisplaySettings } from '@/models/display_settings.model';
 import {
   FileUseAudio,
