@@ -26,7 +26,6 @@ const useDeviceRotation = () => {
 
         setScreenRatio(minSize / AppSettings.STANDARD_HEIGHT);
         if (newViewMode !== viewMode) {
-          console.log('setViewMode', newViewMode);
           setViewMode(newViewMode);
         }
       };

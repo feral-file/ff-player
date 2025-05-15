@@ -55,7 +55,6 @@ class ArtworkService {
   }
 
   public async queryTokens(ids: string[]): Promise<IndexerToken[]> {
-    console.log('this.artworkService.queryTokens');
     try {
       const client = createApolloClient();
       let tokens: IndexerToken[] = [];
