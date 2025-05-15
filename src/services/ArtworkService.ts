@@ -1,6 +1,6 @@
 import { ApolloClient, gql, NormalizedCacheObject } from '@apollo/client';
 import createApolloClient from '@/utils/ApolloClient';
-import { Artwork, IndexerToken, Alumni, AssetConfiguration } from '@/models';
+import { Artwork, IndexerToken, AssetConfiguration } from '@/models';
 import axiosInstance from './axiosService';
 import * as Sentry from '@sentry/nextjs';
 
@@ -29,15 +29,7 @@ class ArtworkService {
       const fullPath = queryString ? `${path}?${queryString}` : path;
       const response = await axiosInstance.get(fullPath);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const artwork = response.data.result as Artwork;
-
-      // FIXME: Remove this after the backend support full artist info on artwork detail
-      if (artwork.series) {
-        artwork.series.artistAlumni = await this.fetchArtist(
-          artwork.series.artistAlumniAccountID
-        );
-      }
-      return artwork;
+      return response.data.result as Artwork;
     } catch (error) {
       console.log('[API] Error getting artwork detail:', JSON.stringify(error));
     }
@@ -63,6 +55,7 @@ class ArtworkService {
   }
 
   public async queryTokens(ids: string[]): Promise<IndexerToken[]> {
+    console.log('this.artworkService.queryTokens');
     try {
       const client = createApolloClient();
       let tokens: IndexerToken[] = [];
@@ -178,12 +171,6 @@ class ArtworkService {
         });
     });
   }
-
-  private fetchArtist = async (artistID?: string): Promise<Alumni> => {
-    const response = await axiosInstance.get(`/api/alumni/${artistID ?? ''}`);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    return response.data.result as Alumni;
-  };
 
   private transformPreviewSrc(src: string): string {
     if (src.startsWith('https')) {
