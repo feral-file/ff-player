@@ -1,6 +1,5 @@
 'use client';
 
-import { AppSettings } from '@/constants';
 import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import { CastCommand } from '@/models';
@@ -33,27 +32,23 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
 
   // Check version update
   useEffect(() => {
-    const duration =
-      context.appRemoteConfig.duration ||
-      AppSettings.VERSION_CHECK_INTERVAL_DURATION;
+    if (!context.appRemoteConfig.duration) {
+      return;
+    }
 
-    const validateVersion = async () => {
-      await checkVersion();
-
-      const intervalID = setInterval(() => {
-        checkVersion().catch((error: unknown) => {
-          console.error(error);
-        });
-      }, duration);
-
-      return () => {
-        clearInterval(intervalID);
-      };
-    };
-
-    validateVersion().catch((error: unknown) => {
+    checkVersion().catch((error: unknown) => {
       console.error(error);
     });
+
+    const intervalID = setInterval(() => {
+      checkVersion().catch((error: unknown) => {
+        console.error(error);
+      });
+    }, context.appRemoteConfig.duration);
+
+    return () => {
+      clearInterval(intervalID);
+    };
   }, [context.appRemoteConfig.duration]);
 
   const checkVersion = async () => {
