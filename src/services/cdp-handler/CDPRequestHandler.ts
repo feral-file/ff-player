@@ -33,6 +33,10 @@ export class CDPRequestHandler {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleConnectivityChange =
       this.handleConnectivityChange.bind(this);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).getCurrentOrientation =
+      this.getCurrentOrientation.bind(this);
   }
 
   private handleCDPRequest(event: WebSocketMessage): string {
@@ -119,6 +123,14 @@ export class CDPRequestHandler {
         detail: { isOnline },
       })
     );
+  }
+
+  public getCurrentOrientation(): string {
+    const displaySettings = CanvasService.getInstance().getDisplaySettings();
+
+    return JSON.stringify({
+      isLandscape: (displaySettings?.rotationAngle ?? 0) % 180 === 0,
+    });
   }
 
   public cleanup() {

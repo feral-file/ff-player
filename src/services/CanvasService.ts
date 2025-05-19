@@ -57,6 +57,7 @@ class CanvasService {
   private castInfo: CastInfo | null = null;
   private static instance: CanvasService | null;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
+  private currentDisplaySettings: TokenDisplaySettings | null = null;
 
   // Cursor positions
   private cursorPositionsListeners: CursorPositionListener[] = [];
@@ -121,6 +122,7 @@ class CanvasService {
     isSaveToDevice: boolean,
     displaySettings: TokenDisplaySettings
   ) {
+    this.currentDisplaySettings = displaySettings;
     this.displaySettingsChangedListeners.forEach(listener => {
       try {
         listener(isSaveToDevice, displaySettings);
@@ -558,6 +560,10 @@ class CanvasService {
 
     this.notifyDisplaySettingsChanged(request.isSaved, request);
     return { ok: true };
+  }
+
+  public getDisplaySettings(): TokenDisplaySettings | null {
+    return this.currentDisplaySettings;
   }
 }
 
