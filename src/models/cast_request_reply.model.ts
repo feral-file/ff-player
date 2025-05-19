@@ -1,3 +1,4 @@
+import { CursorPosition } from '@/services/custom-hooks/useCursorPositions';
 import { TokenDisplaySettings } from './display_settings.model';
 
 export interface DeviceInfo {
@@ -125,3 +126,8 @@ export interface UpdateDisplaySettingsRequest extends TokenDisplaySettings {
   tokenId?: string;
   isSaved: boolean;
 }
+
+export interface UpdateCursorPositionsRequest extends Request {
+  positions: CursorPosition[];
+}
+export type UpdateCursorPositionsReply = Reply;

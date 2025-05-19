@@ -24,7 +24,9 @@ import CanvasService from '@/services/CanvasService';
 import { useDeviceSettings } from '@/services/custom-hooks/useDeviceSettings';
 import { DisplaySettings } from '@/models/display_settings.model';
 import { CDPRequestHandler } from '@/services/cdp-handler/CDPRequestHandler';
-
+import useCursorPositions, {
+  CursorPosition,
+} from '@/services/custom-hooks/useCursorPositions';
 interface AppContextProps {
   children: ReactNode;
 }
@@ -40,6 +42,7 @@ interface AppConfigContext {
   appRemoteConfig: AppRemoteConfig;
   castInfo: CastInfo | null;
   displaySettings: DisplaySettings | null;
+  cursorPositions: CursorPosition[] | null;
 }
 
 export const AppContext = createContext<AppContextValue | undefined>(undefined);
@@ -61,6 +64,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
   const { castInfo, setCastInfo } = useCastInfo();
   const { displaySettings, setDisplaySettings } = useDeviceSettings();
+  const { cursorPositions } = useCursorPositions();
   const isOnline = useNetworkManger();
   const isFirstRender = useRef(true);
 
@@ -202,6 +206,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
           appRemoteConfig,
           castInfo,
           displaySettings,
+          cursorPositions,
         },
       }}>
       {children}
