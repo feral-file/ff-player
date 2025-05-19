@@ -14,7 +14,7 @@ export interface CursorLayerHandle {
 }
 
 const CURSOR_SIZE = 18;
-const SPEED = 1200; // pixels per second
+const SPEED = 2500; // pixels per second
 const HIDE_DELAY = 5000; // ms
 
 const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
@@ -109,13 +109,16 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
       positionsRef.current = arr;
       targetIdx.current = 0;
 
-      const cx = box.clientWidth / 2;
-      const cy = box.clientHeight / 2;
-      currentPos.current = { x: cx, y: cy };
-      cursor.style.transform = `translate3d(${(cx - CURSOR_SIZE / 2).toString()}px,${(
-        cy -
-        CURSOR_SIZE / 2
-      ).toString()}px,0)`;
+      // Start from current position instead of center
+      if (!currentPos.current) {
+        const cx = box.clientWidth / 2;
+        const cy = box.clientHeight / 2;
+        currentPos.current = { x: cx, y: cy };
+        cursor.style.transform = `translate3d(${(cx - CURSOR_SIZE / 2).toString()}px,${(
+          cy -
+          CURSOR_SIZE / 2
+        ).toString()}px,0)`;
+      }
 
       resetHide();
       startAnim();
