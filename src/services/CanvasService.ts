@@ -46,6 +46,7 @@ import {
   CastInfo,
   UpdateCursorPositionsReply,
   UpdateCursorPositionsRequest,
+  DisplaySettings,
 } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import {
@@ -277,6 +278,7 @@ class CanvasService {
 
   private status(request: CheckDeviceStatusRequest): CheckDeviceStatusReply {
     console.log('[CanvasService] Check status:', JSON.stringify(request));
+    const deviceSettings = DeviceManager.getDeviceDisplaySettings();
     return {
       ok: true,
       connectedDevice: this.castInfo?.deviceInfo,
@@ -291,6 +293,15 @@ class CanvasService {
       isPaused: this.castInfo?.isPaused,
 
       displayKey: this.castInfo?.displayKey,
+
+      deviceSettings: deviceSettings
+        ? {
+            scaling: deviceSettings.scaling ?? DisplaySettings.defaultScaling,
+            orientation: DisplaySettings.getOrientation(
+              deviceSettings.rotationAngle
+            ),
+          }
+        : undefined,
     };
   }
 
@@ -489,7 +500,10 @@ class CanvasService {
     this.notifyDisplaySettingsChanged(true, {
       rotationAngle,
     });
-    return { ok: true, degree: 0 };
+    return {
+      ok: true,
+      orientation: DisplaySettings.getOrientation(rotationAngle),
+    };
   }
 
   public updateCursorPositions(

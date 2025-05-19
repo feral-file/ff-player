@@ -1,4 +1,4 @@
-import { ArtFraming } from '@/models';
+import { ArtFraming, DisplayOrientation, ViewMode } from '@/models';
 import { AssetConfiguration } from './token.model';
 
 export class DisplaySettings {
@@ -18,6 +18,50 @@ export class DisplaySettings {
       DisplaySettings.defaultScaling,
       DisplaySettings.defaultRotationAngle
     );
+  }
+
+  static getOrientation(
+    rotationAngle?: number,
+    viewMode?: ViewMode
+  ): DisplayOrientation {
+    if (!viewMode) {
+      viewMode = ViewMode.landscape;
+    }
+
+    const angle = (rotationAngle ?? 0) % 360;
+    switch (viewMode) {
+      case ViewMode.landscape: {
+        if (angle === 0) {
+          return DisplayOrientation.Landscape;
+        } else if (angle === 90) {
+          return DisplayOrientation.PortraitReverse;
+        } else if (angle === 180) {
+          return DisplayOrientation.LandscapeReverse;
+        } else if (angle === 270) {
+          return DisplayOrientation.Portrait;
+        }
+
+        return DisplayOrientation.Landscape;
+      }
+
+      case ViewMode.portrait: {
+        if (angle === 0) {
+          return DisplayOrientation.Portrait;
+        } else if (angle === 90) {
+          return DisplayOrientation.LandscapeReverse;
+        } else if (angle === 180) {
+          return DisplayOrientation.PortraitReverse;
+        } else if (angle === 270) {
+          return DisplayOrientation.Landscape;
+        }
+
+        return DisplayOrientation.Portrait;
+      }
+
+      default: {
+        return DisplayOrientation.Landscape;
+      }
+    }
   }
 }
 
