@@ -5,7 +5,6 @@ import AppService from '@/services/app.service';
 import { CastCommand } from '@/models';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
-
 import CanvasService from '@/services/CanvasService';
 
 const enum CastState {
@@ -29,6 +28,8 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   const canvasService = CanvasService.getInstance();
   const castInfo = context.castInfo;
   const [castState, setCastState] = useState<CastState>(CastState.None);
+
+  const displaySettings = context.displaySettings;
 
   // Check version update
   useEffect(() => {
@@ -143,12 +144,19 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   return (
     <div
       style={{
-        width: '100vw',
-        height: '100vh',
-        transformOrigin: 'center 50vh',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
+        width:
+          (displaySettings?.rotationAngle ?? 0) % 180 === 0 ? '100vw' : '100vh',
+        height:
+          (displaySettings?.rotationAngle ?? 0) % 180 === 0 ? '100vh' : '100vw',
+        transition: `transform 0.2s`,
+        transform: `rotate(${(displaySettings?.rotationAngle ?? 0).toString()}deg) `,
+        transformOrigin:
+          (displaySettings?.rotationAngle ?? 0) % 360 === 90
+            ? '50vw center'
+            : 'center 50vh',
       }}>
       {children}
     </div>

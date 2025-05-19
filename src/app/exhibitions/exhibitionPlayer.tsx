@@ -18,14 +18,18 @@ import { LEE_MULLICAN_EXHIBITION_CONTRACT } from '@/constants';
 import { formatArtworkIndexID } from '@/utils/indexer';
 import { CastingArtworkType } from '@/models/metric.model';
 import ArtworkService from '@/services/ArtworkService';
+import clsx from 'clsx';
 
 const ExhibitionHall = () => {
   const { context } = useAppContext();
-  const castInfo = context.castInfo;
+  const { castInfo, displaySettings } = context;
   const { screenRatio, viewMode } = context.deviceRotation ?? {
     screenRatio: 1,
     viewMode: ViewMode.landscape,
   };
+  const [isLandscape, setIsLandscape] = useState(
+    viewMode === ViewMode.landscape
+  );
 
   const [exhibitionID, setExhibitionID] = useState<string | undefined>();
   const [catalogID, setCatalogID] = useState<string | undefined>();
@@ -170,14 +174,20 @@ const ExhibitionHall = () => {
     }
   }, [screen, catalogID, exhibitionDetail, posts]);
 
+  useEffect(() => {
+    setIsLandscape(
+      (viewMode === ViewMode.landscape &&
+        (displaySettings?.rotationAngle ?? 0) % 180 === 0) ||
+        (viewMode === ViewMode.portrait &&
+          (displaySettings?.rotationAngle ?? 0) % 180 === 90)
+    );
+  }, [viewMode, displaySettings]);
+
   return (
-    <div
-      className={
-        viewMode === ViewMode.landscape ? styles.landscape : styles.portrait
-      }>
+    <div className={isLandscape ? styles.landscape : styles.portrait}>
       {exhibitionDetail && pageSection === ExhibitionCatalog.home && (
         <div
-          className={[styles.exhCard].join(' ')}
+          className={clsx(styles.exhCard, styles.home)}
           style={{ fontSize: 22 * screenRatio }}>
           <div
             className={styles.leftSection}

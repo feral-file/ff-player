@@ -511,12 +511,15 @@ const ArtworkPlayer = ({
           backgroundColor: displaySettings?.backgroundColor ?? '#000000',
           justifyContent: 'center',
           position: 'relative',
-          transition: `transform 0.2s, opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.2s ease`,
+          transition: `opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.2s ease`,
           opacity: opacity,
-          padding: `${String((displaySettings?.marginTop ?? 0) * 100)}vh ${String((displaySettings?.marginRight ?? 0) * 100)}vw ${String((displaySettings?.marginBottom ?? 0) * 100)}vh ${String((displaySettings?.marginLeft ?? 0) * 100)}vw`,
-          width: '100vw',
-          height: '100vh',
-          transformOrigin: 'center 50vh',
+          padding:
+            (displaySettings?.scaling ?? DisplaySettings.defaultScaling) ===
+            ArtFraming.FitToScreen
+              ? `${String(displaySettings?.marginTop ?? 0 * 100)}vh ${String(displaySettings?.marginRight ?? 0 * 100)}vw ${String(displaySettings?.marginBottom ?? 0 * 100)}vh ${String(displaySettings?.marginLeft ?? 0 * 100)}vw`
+              : '0',
+          width: '100%',
+          height: '100%',
         }}>
         {(previewType === null || loading || loadingSettings) && <Loading />}
         {displayPreviewURL && previewType === PreviewHTMLTag.image && (
