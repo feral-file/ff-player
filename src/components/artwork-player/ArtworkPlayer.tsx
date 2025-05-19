@@ -30,6 +30,7 @@ import {
   PreviewHTMLTag,
 } from '@/models';
 import { getContentTypeFromURL } from '@/utils/helper';
+import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
 
@@ -76,6 +77,9 @@ const ArtworkPlayer = ({
   const isWebGLContextLost = useRef<boolean>(false);
   const { loadingSettings, displaySettings } = useArtworkSettings(artworkID);
 
+  // Cursor layer handle
+  const cursorRef = useRef<CursorLayerHandle>(null);
+
   function compareToGetFileType(type: string) {
     setIsStreaming(false);
     if (!type) {
@@ -119,6 +123,13 @@ const ArtworkPlayer = ({
       document.removeEventListener('click', unmuteVideo);
     }
   };
+
+  // Update cursor positions when they change in context
+  useEffect(() => {
+    if (context.cursorPositions && context.cursorPositions.length > 0) {
+      cursorRef.current?.setPositions(context.cursorPositions);
+    }
+  }, [context.cursorPositions]);
 
   // Metric
   useEffect(() => {
@@ -521,6 +532,7 @@ const ArtworkPlayer = ({
           width: '100%',
           height: '100%',
         }}>
+        <CursorLayer ref={cursorRef} />
         {(previewType === null || loading || loadingSettings) && <Loading />}
         {displayPreviewURL && previewType === PreviewHTMLTag.image && (
           <div
