@@ -237,7 +237,7 @@ class CanvasService {
           return this.updateDisplaySettings(
             requestJson as UpdateDisplaySettingsRequest
           );
-        case CastCommand.updateCursorPositions:
+        case CastCommand.cursorUpdate:
           return this.updateCursorPositions(
             requestJson as UpdateCursorPositionsRequest
           );

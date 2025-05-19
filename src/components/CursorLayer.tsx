@@ -14,7 +14,7 @@ export interface CursorLayerHandle {
 }
 
 const CURSOR_SIZE = 18;
-const SPEED = 1000; // pixels per second
+const SPEED = 1200; // pixels per second
 const HIDE_DELAY = 5000; // ms
 
 const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
@@ -144,8 +144,8 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
         ref={cursorRef}
         style={{
           position: 'absolute',
-          width: CURSOR_SIZE,
-          height: CURSOR_SIZE,
+          width: `${(Math.min(window.innerWidth, window.innerHeight) * 0.012).toString()}px`,
+          height: `${(Math.min(window.innerWidth, window.innerHeight) * 0.012).toString()}px`,
           background: '#ff0',
           borderRadius: '50%',
           boxShadow: '0 2px 8px #0007',

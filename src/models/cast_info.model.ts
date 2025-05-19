@@ -28,7 +28,7 @@ export enum CastCommand {
   castDaily = 'castDaily',
   updateArtFraming = 'updateArtFraming',
   updateDisplaySettings = 'updateDisplaySettings',
-  updateCursorPositions = 'cursorUpdate',
+  cursorUpdate = 'cursorUpdate',
 }
 
 export interface CastInfo {
