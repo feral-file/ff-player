@@ -126,7 +126,7 @@ export class CDPRequestHandler {
   }
 
   public getCurrentOrientation(): string {
-    const displaySettings = CanvasService.getInstance().getDisplaySettings();
+    const displaySettings = DeviceManager.getDeviceDisplaySettings();
 
     return JSON.stringify({
       isLandscape: (displaySettings?.rotationAngle ?? 0) % 180 === 0,
