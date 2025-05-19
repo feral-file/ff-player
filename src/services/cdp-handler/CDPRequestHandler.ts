@@ -138,6 +138,8 @@ export class CDPRequestHandler {
     (window as any).handleCDPRequest = null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleConnectivityChange = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).getCurrentOrientation = null;
     this.isInitialized = false;
   }
 }
