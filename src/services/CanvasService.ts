@@ -437,6 +437,11 @@ class CanvasService {
 
   private rotate(request: RotateRequest): RotateReply {
     console.log('[CanvasService] rotate:', request);
+    const deviceSettings = DeviceManager.getDeviceDisplaySettings();
+    const rotationAngle = (deviceSettings?.rotationAngle ?? 0) + 90;
+    this.notifyDisplaySettingsChanged(true, {
+      rotationAngle,
+    });
     return { ok: true, degree: 0 };
   }
 

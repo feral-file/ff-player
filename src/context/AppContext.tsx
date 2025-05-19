@@ -80,18 +80,18 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const initDeviceConfigService = async () => {
     try {
       await DeviceManager.init();
-      initialDisplaySettings().catch((error: unknown) => {
-        console.log('Error initial display settings', error);
-      });
+      initialDisplaySettings();
       initCastInfo();
     } catch (error) {
       console.log('Error init device manager', error);
     }
   };
 
-  const initialDisplaySettings = async () => {
-    const displaySettings = await DeviceManager.getDeviceDisplaySettings();
+  const initialDisplaySettings = () => {
+    const displaySettings = DeviceManager.getDeviceDisplaySettings();
     if (displaySettings) {
+      displaySettings.rotationAngle =
+        (displaySettings.rotationAngle ?? 0) % 360;
       setDisplaySettings(displaySettings);
     }
   };
