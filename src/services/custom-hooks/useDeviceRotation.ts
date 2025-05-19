@@ -4,12 +4,12 @@ import { useEffect, useState } from 'react';
 
 export interface DeviceRotation {
   screenRatio: number;
-  viewMode: ViewMode | null;
+  viewMode?: ViewMode;
 }
 
 const useDeviceRotation = () => {
   const [screenRatio, setScreenRatio] = useState<number>(1);
-  const [viewMode, setViewMode] = useState<ViewMode | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {

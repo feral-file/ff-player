@@ -38,7 +38,7 @@ interface AppContextValue {
 interface AppConfigContext {
   isInitialized: boolean;
   isOnline: boolean;
-  deviceRotation: DeviceRotation | null;
+  deviceRotation?: DeviceRotation;
   appRemoteConfig: AppRemoteConfig;
   castInfo: CastInfo | null;
   displaySettings: DisplaySettings | null;

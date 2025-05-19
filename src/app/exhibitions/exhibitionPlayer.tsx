@@ -6,6 +6,8 @@ import {
   Post,
   Artwork,
   CastCommand,
+  DisplayOrientation,
+  DisplaySettings,
 } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import styles from './exhibition.module.scss';
@@ -175,11 +177,16 @@ const ExhibitionHall = () => {
   }, [screen, catalogID, exhibitionDetail, posts]);
 
   useEffect(() => {
+    const displayOrientation = DisplaySettings.getOrientation(
+      displaySettings?.rotationAngle,
+      viewMode
+    );
+
     setIsLandscape(
-      (viewMode === ViewMode.landscape &&
-        (displaySettings?.rotationAngle ?? 0) % 180 === 0) ||
-        (viewMode === ViewMode.portrait &&
-          (displaySettings?.rotationAngle ?? 0) % 180 === 90)
+      [
+        DisplayOrientation.Landscape,
+        DisplayOrientation.LandscapeReverse,
+      ].includes(displayOrientation)
     );
   }, [viewMode, displaySettings]);
 
