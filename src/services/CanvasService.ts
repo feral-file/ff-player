@@ -297,9 +297,7 @@ class CanvasService {
       deviceSettings: deviceSettings
         ? {
             scaling: deviceSettings.scaling ?? DisplaySettings.defaultScaling,
-            orientation: DisplaySettings.getOrientation(
-              deviceSettings.rotationAngle
-            ),
+            orientation: DeviceManager.getDisplayOrientation(),
           }
         : undefined,
     };
@@ -502,7 +500,7 @@ class CanvasService {
     });
     return {
       ok: true,
-      orientation: DisplaySettings.getOrientation(rotationAngle),
+      orientation: DeviceManager.getDisplayOrientation(rotationAngle),
     };
   }
 
