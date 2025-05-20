@@ -348,7 +348,11 @@ const ArtworkPlayer = ({
   }, [context.isOnline, previewType]);
 
   useEffect(() => {
-    if (!displayPreviewURL || !displaySettings) {
+    if (
+      !displayPreviewURL ||
+      !displaySettings ||
+      !context.deviceRotation?.viewMode
+    ) {
       return;
     }
 
@@ -358,7 +362,7 @@ const ArtworkPlayer = ({
     );
     // Update URL when settings first load or when scaling changes
     updateSoftwareURL(displaySettings);
-  }, [displayPreviewURL, displaySettings]);
+  }, [displayPreviewURL, displaySettings, context.deviceRotation?.viewMode]);
 
   const updateSoftwareURL = (
     displaySettings: TokenDisplaySettingWithChanged
