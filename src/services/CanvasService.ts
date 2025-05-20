@@ -294,12 +294,10 @@ class CanvasService {
 
       displayKey: this.castInfo?.displayKey,
 
-      deviceSettings: deviceSettings
-        ? {
-            scaling: deviceSettings.scaling ?? DisplaySettings.defaultScaling,
-            orientation: DeviceManager.getDisplayOrientation(),
-          }
-        : undefined,
+      deviceSettings: {
+        scaling: deviceSettings?.scaling ?? DisplaySettings.defaultScaling,
+        orientation: DeviceManager.getDisplayOrientation(),
+      },
     };
   }
 
