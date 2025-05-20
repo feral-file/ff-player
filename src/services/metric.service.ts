@@ -18,7 +18,7 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
 
   // Add x-device-id to headers if not exists
   if (!accountsRequester.defaults.headers['x-device-id']) {
-    const deviceID = await DeviceManager.getDeviceId();
+    const deviceID = DeviceManager.getDeviceId();
     if (!deviceID) {
       throw new Error('Device ID not found');
     }
@@ -38,13 +38,13 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
 
   // Add x-device-model to headers if not exists
   if (!accountsRequester.defaults.headers['x-device-model']) {
-    const model = await DeviceManager.getDeviceModel();
+    const model = DeviceManager.getDeviceModel();
     accountsRequester.defaults.headers['x-device-model'] = model;
   }
 
   // Add x-device-name to headers if not exists
   if (!accountsRequester.defaults.headers['x-device-name']) {
-    const name = await DeviceManager.getName();
+    const name = DeviceManager.getName();
     accountsRequester.defaults.headers['x-device-name'] = name;
   }
 
