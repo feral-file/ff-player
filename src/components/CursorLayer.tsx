@@ -14,8 +14,10 @@ export interface CursorLayerHandle {
 }
 
 const CURSOR_SIZE = 18;
-const SPEED = 2500; // pixels per second
 const HIDE_DELAY = 5000; // ms
+const SPEED_FACTOR = 10; // tune responsiveness
+const MIN_SPEED = 2500; // px / s   (too slow feels lag)
+const MAX_SPEED = 4000; // px / s   (cap for long jumps)
 
 const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -28,6 +30,8 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   const hideTimer = useRef<NodeJS.Timeout | null>(null);
   const [visible, setVisible] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [w, setW] = useState(0);
+  const [h, setH] = useState(0);
 
   const resetHide = () => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
@@ -36,6 +40,13 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
     hideTimer.current = setTimeout(() => {
       setVisible(false);
     }, HIDE_DELAY);
+  };
+
+  const updateContainerSize = () => {
+    const box = containerRef.current;
+    if (!box) return;
+    setW(box.clientWidth);
+    setH(box.clientHeight);
   };
 
   const stopAnim = () => {
@@ -48,8 +59,6 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
     const box = containerRef.current;
     const cursor = cursorRef.current;
     if (!box || !cursor) return;
-    const w = box.clientWidth;
-    const h = box.clientHeight;
     setIsAnimating(true);
 
     let prev = performance.now();
@@ -81,7 +90,11 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
         currentPos.current = { x: tx, y: ty };
         targetIdx.current += 1;
       } else {
-        const move = Math.min(dist, SPEED * dt);
+        /* ---------- dynamic speed ---------- */
+        const rawSpeed = dist * SPEED_FACTOR; // proportional to gap
+        const dynamicSpeed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, rawSpeed));
+
+        const move = Math.min(dist, dynamicSpeed * dt);
         const nx = cx + (dx / dist) * move;
         const ny = cy + (dy / dist) * move;
         currentPos.current = { x: nx, y: ny };
@@ -98,6 +111,20 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
     animId.current = requestAnimationFrame(step);
   };
 
+  const initCursorFirstPosition = () => {
+    const box = containerRef.current;
+    const cursor = cursorRef.current;
+    if (!box || !cursor) return;
+
+    const cx = box.clientWidth / 2;
+    const cy = box.clientHeight / 2;
+    currentPos.current = { x: cx, y: cy };
+    cursor.style.transform = `translate3d(${(cx - CURSOR_SIZE / 2).toString()}px,${(
+      cy -
+      CURSOR_SIZE / 2
+    ).toString()}px,0)`;
+  };
+
   // Expose handle
   useImperativeHandle(ref, () => ({
     setPositions: (arr: CursorPosition[]) => {
@@ -111,15 +138,10 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
 
       // Start from current position instead of center
       if (!currentPos.current) {
-        const cx = box.clientWidth / 2;
-        const cy = box.clientHeight / 2;
-        currentPos.current = { x: cx, y: cy };
-        cursor.style.transform = `translate3d(${(cx - CURSOR_SIZE / 2).toString()}px,${(
-          cy -
-          CURSOR_SIZE / 2
-        ).toString()}px,0)`;
+        initCursorFirstPosition();
       }
 
+      updateContainerSize();
       resetHide();
       startAnim();
       setIsAnimating(true);
@@ -133,6 +155,12 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
     },
     []
   );
+
+  useEffect(() => {
+    setVisible(false);
+    updateContainerSize();
+    initCursorFirstPosition();
+  }, [containerRef.current]);
 
   // Render
   return (
@@ -152,7 +180,6 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
           background: '#ff0',
           borderRadius: '50%',
           boxShadow: '0 2px 8px #0007',
-          transform: 'translate3d(-9999px,-9999px,0)',
           opacity: visible || isAnimating ? 1 : 0,
           transition: 'opacity 0.3s ease',
           willChange: 'transform',
