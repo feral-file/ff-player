@@ -1,5 +1,6 @@
 import { AppSettings } from '@/constants';
 import { ViewMode } from '@/models';
+import DeviceManager from '@/utils/DeviceManager';
 import { useEffect, useState } from 'react';
 
 export interface DeviceRotation {
@@ -37,6 +38,12 @@ const useDeviceRotation = () => {
       return () => {
         window.removeEventListener('resize', resizeHandler);
       };
+    }
+  }, []);
+
+  useEffect(() => {
+    if (viewMode) {
+      DeviceManager.setViewMode(viewMode);
     }
   }, [viewMode]);
 

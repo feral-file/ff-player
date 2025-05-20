@@ -6,6 +6,7 @@ export enum LocalStorageItem {
   metricEvents = 'metricEvents',
   primaryAddress = 'primaryAddress',
   displaySettings = 'displaySettings',
+  viewMode = 'viewMode',
 }
 
 export enum Platform {

@@ -7,7 +7,6 @@ import {
   Artwork,
   CastCommand,
   DisplayOrientation,
-  DisplaySettings,
 } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import styles from './exhibition.module.scss';
@@ -21,6 +20,7 @@ import { formatArtworkIndexID } from '@/utils/indexer';
 import { CastingArtworkType } from '@/models/metric.model';
 import ArtworkService from '@/services/ArtworkService';
 import clsx from 'clsx';
+import DeviceManager from '@/utils/DeviceManager';
 
 const ExhibitionHall = () => {
   const { context } = useAppContext();
@@ -177,10 +177,7 @@ const ExhibitionHall = () => {
   }, [screen, catalogID, exhibitionDetail, posts]);
 
   useEffect(() => {
-    const displayOrientation = DisplaySettings.getOrientation(
-      displaySettings?.rotationAngle,
-      viewMode
-    );
+    const displayOrientation = DeviceManager.getDisplayOrientation();
 
     setIsLandscape(
       [
