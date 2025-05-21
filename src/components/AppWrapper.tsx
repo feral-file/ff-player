@@ -2,7 +2,7 @@
 
 import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
-import { CastCommand } from '@/models';
+import { CastCommand, ViewMode } from '@/models';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import CanvasService from '@/services/CanvasService';
@@ -30,7 +30,9 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   const [castState, setCastState] = useState<CastState>(CastState.None);
 
   const displaySettings = context.displaySettings;
-
+  const { viewMode } = context.deviceRotation ?? {
+    viewMode: ViewMode.landscape,
+  };
   // Check version update
   useEffect(() => {
     if (!context.appRemoteConfig.duration) {
@@ -159,6 +161,18 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
             : 'center 50vh',
       }}>
       {children}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: 'red',
+          color: 'white',
+        }}>
+        Rotation Angle: {displaySettings?.rotationAngle ?? 0} - View Mode:{' '}
+        {viewMode}
+      </div>
     </div>
   );
 };
