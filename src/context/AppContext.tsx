@@ -94,8 +94,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const initialDisplaySettings = () => {
     const displaySettings = DeviceManager.getDeviceDisplaySettings();
     if (displaySettings) {
-      displaySettings.rotationAngle =
-        (displaySettings.rotationAngle ?? 0) % 360;
       setDisplaySettings(displaySettings);
     }
   };

@@ -1,5 +1,5 @@
 import { CursorPosition } from '@/services/custom-hooks/useCursorPositions';
-import { ArtFraming, DisplayOrientation } from './common.model';
+import { ArtFraming, ViewMode } from './common.model';
 import { TokenDisplaySettings } from './display_settings.model';
 
 export interface DeviceInfo {
@@ -60,7 +60,7 @@ export interface CheckDeviceStatusReply extends Reply {
 
   deviceSettings?: {
     scaling: ArtFraming;
-    orientation: DisplayOrientation;
+    orientation: ViewMode;
   };
 }
 
@@ -95,13 +95,6 @@ export interface UpdateDurationRequest extends Request {
 export interface UpdateDurationReply extends Reply {
   startTime: number;
   artworks: PlayArtwork[];
-}
-
-export interface RotateRequest extends Request {
-  clockwise: boolean;
-}
-export interface RotateReply extends Reply {
-  orientation?: DisplayOrientation;
 }
 
 export type TapGestureRequest = Request;
