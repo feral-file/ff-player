@@ -1,11 +1,7 @@
 import { Daily, IndexerToken } from '@/models';
 import ArtworkService from './ArtworkService';
 import axiosInstance from './axiosService';
-import {
-  convertToTokenID,
-  getIndexerTokenName,
-  IndexerSource,
-} from '@/utils/indexer';
+import { convertToTokenID, IndexerSource } from '@/utils/indexer';
 import { convertToQueryParams } from '@/utils/queryParams';
 import * as Sentry from '@sentry/nextjs';
 
@@ -18,14 +14,23 @@ class DailyService {
     return this.dailies;
   }
 
-  public async isRefreshDailies(newDailyHour: number): Promise<boolean> {
+  public async refreshDailies(newDailyHour: number): Promise<void> {
     const newDailies = await this.callingDailies(newDailyHour);
-    if (newDailies !== this.dailies) {
-      this.dailies = newDailies;
-      return true;
+    this.dailies = newDailies;
+  }
+
+  public getNextDailyDelay(newDailyHour: number): number {
+    const now = Date.now();
+
+    const nextDailyDisplayTime = new Date();
+    nextDailyDisplayTime.setHours(newDailyHour, 0, 0, 0);
+
+    // If current time has passed today's display time, move to next day
+    if (now > nextDailyDisplayTime.getTime()) {
+      nextDailyDisplayTime.setDate(nextDailyDisplayTime.getDate() + 1);
     }
 
-    return false;
+    return nextDailyDisplayTime.getTime() - now;
   }
 
   public async getUpcomingDaily(
@@ -94,7 +99,7 @@ class DailyService {
       data.forEach((token: IndexerToken) => {
         previewData.set(
           token.id,
-          token.asset.metadata.project.latest.previewURL
+          token.asset?.metadata.project.latest.previewURL ?? ''
         );
       });
 
@@ -104,15 +109,11 @@ class DailyService {
       });
 
       const convertDailies = dailies.map((d: Daily) => {
-        let tokenName = '';
         let tokenID = d.tokenID;
         if (d.artwork?.swap) {
           tokenID = d.artwork.swap.token;
         }
         const token = indexerData.get(tokenID);
-        if (token) {
-          tokenName = getIndexerTokenName(token);
-        }
 
         const previewURL =
           token?.source === IndexerSource.feral_file && d.artwork
@@ -123,7 +124,6 @@ class DailyService {
           ...d,
           previewURL,
           token,
-          tokenName,
         };
       });
 
@@ -166,6 +166,10 @@ class DailyService {
     const token = await this.artworkService.queryIndexerToken(id);
     if (!token) {
       throw new Error('Token not found');
+    }
+
+    if (!token.asset) {
+      return null;
     }
 
     return token.asset.staticPreviewURLLandscape &&

@@ -9,7 +9,7 @@ export interface Daily {
   note: string;
   tokenID: string;
   tokenIDs: string[];
-  tokenName: string;
+  tokenName?: string;
   previewURL?: string;
   token?: IndexerToken;
   artwork?: Artwork;

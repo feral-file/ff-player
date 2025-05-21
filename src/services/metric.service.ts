@@ -18,7 +18,7 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
 
   // Add x-device-id to headers if not exists
   if (!accountsRequester.defaults.headers['x-device-id']) {
-    const deviceID = await DeviceManager.getDeviceId();
+    const deviceID = DeviceManager.getDeviceId();
     if (!deviceID) {
       throw new Error('Device ID not found');
     }
@@ -38,17 +38,21 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
 
   // Add x-device-model to headers if not exists
   if (!accountsRequester.defaults.headers['x-device-model']) {
-    const model = await DeviceManager.getDeviceModel();
+    const model = DeviceManager.getDeviceModel();
     accountsRequester.defaults.headers['x-device-model'] = model;
   }
 
   // Add x-device-name to headers if not exists
   if (!accountsRequester.defaults.headers['x-device-name']) {
-    const name = await DeviceManager.getName();
+    const name = DeviceManager.getName();
     accountsRequester.defaults.headers['x-device-name'] = name;
   }
 
   console.log('[METRIC]: sending API', JSON.stringify(events));
+  console.log(
+    '[METRIC]: headers',
+    JSON.stringify(accountsRequester.defaults.headers)
+  );
   await accountsRequester.post('/apis/metrics', { metrics: events });
 }
 
@@ -119,14 +123,9 @@ export function uploadMetricEventsFromLocalStorage() {
 
 function getDeviceInfoBaseOnPlatform(): { vendor: string; platform: string } {
   const platform = localStorage.getItem(LocalStorageItem.platform);
-  switch (platform) {
-    case Platform.google:
-      return { vendor: 'google', platform: 'googletv' };
-    case Platform.tizen:
-      return { vendor: 'samsung', platform: 'tizen' };
-    case Platform.lg:
-      return { vendor: 'lg', platform: 'webos' };
-    default:
-      return { vendor: 'web', platform: 'web' };
+  if (platform === Platform.ffDevice) {
+    return { vendor: 'ffPortal', platform: 'ffPortal' };
   }
+
+  return { vendor: 'web', platform: 'web' };
 }

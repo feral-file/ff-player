@@ -1,28 +1,37 @@
 'use client';
 
-import { Exhibition, ExhibitionType, Post, Artwork } from '@/models';
+import {
+  Exhibition,
+  ExhibitionType,
+  Post,
+  Artwork,
+  CastCommand,
+  DisplayOrientation,
+} from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import styles from './exhibition.module.scss';
-import { CastCommand, ExhibitionCatalog, ViewMode } from '@/utils/types';
+import { ExhibitionCatalog, ViewMode } from '@/models';
 import Carousel from './components/carousel/carousel';
 import { ExhibitionService, SeriesService, PostService } from '@/services';
 import { useAppContext } from '@/context/AppContext';
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
-import { LeeMullican_EXHIBITION_CONTRACT } from '@/utils/constants';
+import { LEE_MULLICAN_EXHIBITION_CONTRACT } from '@/constants';
 import { formatArtworkIndexID } from '@/utils/indexer';
 import { CastingArtworkType } from '@/models/metric.model';
-import { usePopUpContext } from '@/context/PopUpContext';
 import ArtworkService from '@/services/ArtworkService';
+import clsx from 'clsx';
+import DeviceManager from '@/utils/DeviceManager';
 
 const ExhibitionHall = () => {
   const { context } = useAppContext();
-  const { castInfo } = context.websocketData;
+  const { castInfo, displaySettings } = context;
   const { screenRatio, viewMode } = context.deviceRotation ?? {
     screenRatio: 1,
     viewMode: ViewMode.landscape,
   };
-
-  const { setDisplayInfo } = usePopUpContext();
+  const [isLandscape, setIsLandscape] = useState(
+    viewMode === ViewMode.landscape
+  );
 
   const [exhibitionID, setExhibitionID] = useState<string | undefined>();
   const [catalogID, setCatalogID] = useState<string | undefined>();
@@ -79,13 +88,6 @@ const ExhibitionHall = () => {
 
       setArtworkPreviewMIMEType(artworkRef.current.previewMIMEType);
     }
-
-    const indexID = formatArtworkIndexID(artworkRef.current, exhibition ?? {});
-    setDisplayInfo({
-      token: undefined,
-      indexID,
-      ffArtworkID: artwork.id,
-    });
   };
 
   useEffect(() => {
@@ -125,7 +127,7 @@ const ExhibitionHall = () => {
     };
 
     const fetchPosts = async (exhibition: Exhibition) => {
-      const posts = await postService.current.getPostExhibition(exhibition);
+      const posts = await postService.current.getExhibitionPosts(exhibition);
       setPosts(posts);
     };
 
@@ -152,15 +154,12 @@ const ExhibitionHall = () => {
       switch (screen) {
         case ExhibitionCatalog.home:
           setArtwork(undefined);
-          setDisplayInfo(undefined);
           break;
         case ExhibitionCatalog.curatorNote:
           setPostIndex(0);
-          setDisplayInfo(undefined);
           break;
         case ExhibitionCatalog.resource:
           if (catalogID) getPostIndexByID(catalogID);
-          setDisplayInfo(undefined);
           break;
         case ExhibitionCatalog.artwork:
           if (catalogID && exhibitionDetail) {
@@ -177,14 +176,22 @@ const ExhibitionHall = () => {
     }
   }, [screen, catalogID, exhibitionDetail, posts]);
 
+  useEffect(() => {
+    const displayOrientation = DeviceManager.getDisplayOrientation();
+
+    setIsLandscape(
+      [
+        DisplayOrientation.Landscape,
+        DisplayOrientation.LandscapeReverse,
+      ].includes(displayOrientation)
+    );
+  }, [viewMode, displaySettings]);
+
   return (
-    <div
-      className={
-        viewMode === ViewMode.landscape ? styles.landscape : styles.portrait
-      }>
+    <div className={isLandscape ? styles.landscape : styles.portrait}>
       {exhibitionDetail && pageSection === ExhibitionCatalog.home && (
         <div
-          className={[styles.exhCard].join(' ')}
+          className={clsx(styles.exhCard, styles.home)}
           style={{ fontSize: 22 * screenRatio }}>
           <div
             className={styles.leftSection}
@@ -268,7 +275,7 @@ const ExhibitionHall = () => {
               isCustomView={
                 exhibitionDetail.contracts &&
                 exhibitionDetail.contracts[0]?.address ===
-                  LeeMullican_EXHIBITION_CONTRACT
+                  LEE_MULLICAN_EXHIBITION_CONTRACT
               }
             />
           )}

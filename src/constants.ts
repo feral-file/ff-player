@@ -1,50 +1,20 @@
-export enum FlutterKeyEventID {
-  escape = 0x0010000001b,
-  goBack = 4294971397,
-  enter = 0x0010000000d,
-  select = 4294968588,
-  arrowDown = 0x00100000301,
-  arrowLeft = 0x00100000302,
-  arrowRight = 0x00100000303,
-  arrowUp = 0x00100000304,
-}
-
-export enum KeyboardEventKey {
-  Escape = 'Escape',
-  ArrowUp = 'ArrowUp',
-  ArrowLeft = 'ArrowLeft',
-  ArrowRight = 'ArrowRight',
-  ArrowDown = 'ArrowDown',
-  Enter = 'Enter',
-  Backspace = 'Backspace',
-  GoBack = 'GoBack',
-  Unidentified = 'Unidentified',
-}
-
 export enum LocalStorageItem {
   deviceId = 'device_id',
-  locationID = 'locationID',
-  topicID = 'topicID',
   platform = 'platform',
   castInfo = 'castInfo',
   name = 'device_name',
-  branchLink = 'branchLink',
   metricEvents = 'metricEvents',
   primaryAddress = 'primaryAddress',
-  orientation = 'orientation',
-  artFraming = 'artFraming',
+  displaySettings = 'displaySettings',
+  viewMode = 'viewMode',
 }
 
 export enum Platform {
-  google = 'google',
-  tizen = 'tizen',
-  lg = 'lg',
+  ffDevice = 'ff-device',
 }
 
 export enum DeviceNamePrefix {
-  google = 'Google-',
-  samsung = 'Samsung-',
-  lg = 'LG-',
+  ffDevice = 'FF-X1-',
 }
 
 export const AppSettings = {
@@ -58,12 +28,6 @@ export const AppSettings = {
 export const TIMESTAMP_PER_MINUTE = 60 * 1000;
 export const TIMESTAMP_PER_HOUR = 60 * 60 * 1000;
 
-export const PUSH_METRIC_INTERVAL = 60 * 1000;
-
-export const SEND_LOG_INTERVAL = 10 * 1000;
-
-export const SEND_LOG_EVENT_NUMBER = 8;
-
 export const NO_YEAR_IN_TITLE_SERIES_IDS = [
   // test
   'd0167047-8c50-4f24-b889-58e60258f50b',
@@ -76,3 +40,8 @@ export const NO_YEAR_IN_TITLE_SERIES_IDS = [
 export const CLIENT_BANDWIDTH_HINT = 16; // Mbps
 
 export const SWITCH_TOKEN_INTERVAL = 15 * 60 * 1000;
+
+export const SOURCE_EXHIBITION_ID = 'source';
+export const DEFAULT_DELAY = 24 * 60 * 60 * 1000;
+export const LEE_MULLICAN_EXHIBITION_CONTRACT =
+  'KT1CtDPiLjHiU1LVLrhshDry8jkR9h29tXNo';

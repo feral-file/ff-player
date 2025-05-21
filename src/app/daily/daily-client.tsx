@@ -2,24 +2,21 @@
 
 import ArtworkPlayer from '../../components/artwork-player/ArtworkPlayer';
 import DailyService from '@/services/DailyService';
-import { getDelayTime } from '@/services/qrCodePopUpService';
 import { useEffect, useRef, useState } from 'react';
+import { Daily, ViewMode } from '@/models';
+import { convertToTokenID } from '@/utils/indexer';
 import {
   DEFAULT_DELAY,
-  LeeMullican_EXHIBITION_CONTRACT,
-} from '@/utils/constants';
-import { Daily } from '@/models';
-import { convertToTokenID } from '@/utils/indexer';
-import { SWITCH_TOKEN_INTERVAL, TIMESTAMP_PER_HOUR } from '@/constants';
+  LEE_MULLICAN_EXHIBITION_CONTRACT,
+  SWITCH_TOKEN_INTERVAL,
+  TIMESTAMP_PER_HOUR,
+} from '@/constants';
 import { CastingArtworkType } from '@/models/metric.model';
 import { useAppContext } from '@/context/AppContext';
-import { usePopUpContext } from '@/context/PopUpContext';
 import * as Sentry from '@sentry/nextjs';
-import { ViewMode } from '@/utils/types';
 
 export default function DailyClient() {
   const { context } = useAppContext();
-  const { setDisplayInfo, artDisplaySetting } = usePopUpContext();
   const [landscapeStaticURL, setLandscapeStaticURL] = useState<string | null>();
   const [portraitStaticURL, setPortraitStaticURL] = useState<string | null>();
   const dailyRef = useRef<Daily>();
@@ -45,34 +42,18 @@ export default function DailyClient() {
   const newDailyHour = context.appRemoteConfig.new_daily_hour;
 
   useEffect(() => {
-    const { viewMode } = context.deviceRotation ?? {};
-    const artworkRotateAngle = artDisplaySetting?.rotateRadius;
-    if (
-      artworkRotateAngle === undefined ||
-      !viewMode ||
-      (!landscapeStaticURL && !portraitStaticURL)
-    ) {
+    const landScape = context.deviceRotation?.viewMode === ViewMode.landscape;
+    if (landscapeStaticURL && landScape) {
+      setCastPreviewURL(landscapeStaticURL);
+      setArtworkPreviewMIMEType('image');
       return;
     }
 
-    const isArtworkLandscape =
-      viewMode === ViewMode.landscape
-        ? artworkRotateAngle % 180 === 0
-        : artworkRotateAngle % 180 !== 0;
-    const staticURL = isArtworkLandscape
-      ? landscapeStaticURL
-      : portraitStaticURL;
-
-    if (staticURL) {
-      setCastPreviewURL(staticURL);
+    if (portraitStaticURL && !landScape) {
+      setCastPreviewURL(portraitStaticURL);
       setArtworkPreviewMIMEType('image');
     }
-  }, [
-    landscapeStaticURL,
-    portraitStaticURL,
-    artDisplaySetting?.rotateRadius,
-    context.deviceRotation,
-  ]);
+  }, [landscapeStaticURL, portraitStaticURL, context.deviceRotation?.viewMode]);
 
   const fallbackToDefaultArtwork = () => {
     if (switchTokenRef.current) {
@@ -89,12 +70,8 @@ export default function DailyClient() {
     // Handle cast daily
     async function handleCastDaily() {
       try {
-        const isRefreshDaily =
-          await DailyService.isRefreshDailies(newDailyHour);
-        if (isRefreshDaily) {
-          dailies = DailyService.getDailies();
-        }
-
+        await DailyService.refreshDailies(newDailyHour);
+        dailies = DailyService.getDailies();
         if (dailies.length > 0) {
           // Set metric metadata
           if (dailyRef.current !== dailies[0]) {
@@ -109,16 +86,9 @@ export default function DailyClient() {
             setArtworkPreviewMIMEType(
               dailyRef.current.artwork?.previewMIMEType
             );
-
-            // Set display info into PopUpContext
-            setDisplayInfo({
-              token: dailyRef.current.token,
-              ffArtworkID: dailyRef.current.artwork?.id, // Assume that daily should be FF artwork
-              dailyNote: dailyRef.current.note,
-            });
           }
 
-          const { delay } = getDelayTime(newDailyHour);
+          const delay = DailyService.getNextDailyDelay(newDailyHour);
           // Reset next token handle
           nextTokenIndex.current = 0;
           if (switchTokenRef.current) {
@@ -163,7 +133,7 @@ export default function DailyClient() {
           } else if (dailyRef.current.previewURL) {
             setCastPreviewURL(dailyRef.current.previewURL);
             setIsLeeMucianExhibition(
-              dailies[0].contractAddress === LeeMullican_EXHIBITION_CONTRACT
+              dailies[0].contractAddress === LEE_MULLICAN_EXHIBITION_CONTRACT
             );
           }
 

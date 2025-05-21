@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  MutableRefObject,
   ReactNode,
   createContext,
   useContext,
@@ -9,28 +8,25 @@ import {
   useRef,
   useState,
 } from 'react';
-import CanvasService from '../services/CanvasService';
-import useWebSocket from '../services/WebSocketManager';
-import { CastInfo } from '@/utils/types';
-import useNetworkManger from '@/services/NetworkManager';
+import useNetworkManger from '@/services/custom-hooks/useNetworkManager';
 import useDeviceRotation, {
   DeviceRotation,
-  cacheStringToRotation,
-  defaultRotation,
-} from '@/services/DeviceRotation';
+} from '@/services/custom-hooks/useDeviceRotation';
 import RemoteConfigService, {
   AppRemoteConfig,
 } from '@/services/remoteConfigService';
-import { AppSettings, LocalStorageItem, Platform } from '@/constants';
+import { AppSettings, LocalStorageItem } from '@/constants';
 import { useSearchParams } from 'next/navigation';
-import { Config, DeviceName, KeyEvent } from '@/utils/platform';
 import DeviceManager from '@/utils/DeviceManager';
-import useLoadScript from '@/services/LoadScripts';
-import useAppControls, {
-  AppControls,
-  ArtFraming,
-} from '@/services/AppControls';
-
+import useCastInfo from '@/services/custom-hooks/useCastInfo';
+import { CastCommand, CastInfo } from '@/models';
+import CanvasService from '@/services/CanvasService';
+import { useDeviceSettings } from '@/services/custom-hooks/useDeviceSettings';
+import { DisplaySettings } from '@/models/display_settings.model';
+import { CDPRequestHandler } from '@/services/cdp-handler/CDPRequestHandler';
+import useCursorPositions, {
+  CursorPosition,
+} from '@/services/custom-hooks/useCursorPositions';
 interface AppContextProps {
   children: ReactNode;
 }
@@ -40,21 +36,13 @@ interface AppContextValue {
 }
 
 interface AppConfigContext {
-  websocketData: WebSocketMessage;
-  appControl: AppControls;
+  isInitialized: boolean;
   isOnline: boolean;
-  deviceRotation: DeviceRotation | null;
+  deviceRotation?: DeviceRotation;
   appRemoteConfig: AppRemoteConfig;
-  isWebOSTVLoaded: boolean;
-  isWebOSTVDevLoaded: boolean;
-}
-
-interface WebSocketMessage {
-  locationID: string | null;
-  topicID: string | null;
   castInfo: CastInfo | null;
-  canvasService: MutableRefObject<CanvasService>;
-  isDisconnected: boolean;
+  displaySettings: DisplaySettings | null;
+  cursorPositions: CursorPosition[] | null;
 }
 
 export const AppContext = createContext<AppContextValue | undefined>(undefined);
@@ -71,51 +59,23 @@ export const useAppContext = () => {
 export const AppProvider = ({ children }: AppContextProps) => {
   const [appRemoteConfig, setAppConfig] = useState({} as AppRemoteConfig);
   const remoteConfigService = useRef(new RemoteConfigService());
-  const [, setContextConfig] = useState<AppConfigContext>(
-    {} as AppConfigContext
-  );
-  const [rotation, setRotation] = useState<DeviceRotation | null>(null);
   const [platformInitialized, setPlatformInitialized] = useState(false);
-  const [platform, setPlatform] = useState<Platform | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  const isWebOSTVLoaded = useLoadScript('/webOSTVjs-1.2.11/webOSTV.js');
-  const isWebOSTVDevLoaded = useLoadScript('/webOSTVjs-1.2.11/webOSTV-dev.js');
-  const websocketData = useWebSocket(
-    `${process.env.NEXT_PUBLIC_WEBSOCKET_URL ?? ''}/api/connection`,
-    process.env.NEXT_PUBLIC_API_KEY ?? ''
-  );
+  const { castInfo, setCastInfo } = useCastInfo();
+  const { displaySettings, setDisplaySettings } = useDeviceSettings();
+  const { cursorPositions } = useCursorPositions();
   const isOnline = useNetworkManger();
-  const appControl = useAppControls(); // Received setting changes from Popup
+  const isFirstRender = useRef(true);
 
-  const deviceRotation = useDeviceRotation(
-    websocketData.castInfo,
-    rotation,
-    appControl.rotated
-  );
+  const deviceRotation = useDeviceRotation();
   const searchParams = useSearchParams();
-
-  const contextConfig = {
-    websocketData,
-    appControl,
-    isOnline,
-    deviceRotation,
-    appRemoteConfig,
-    isWebOSTVLoaded,
-    isWebOSTVDevLoaded,
-  };
+  const canvasService = useRef(CanvasService.getInstance());
 
   const initContext = async () => {
     try {
-      setContextConfig(contextConfig);
-
-      if (platform === Platform.lg) {
-        // If LG platform, wait for both webOS TV and webOS TV dev to be loaded
-        if (isWebOSTVLoaded && isWebOSTVDevLoaded) {
-          await initDeviceConfigService();
-        }
-      } else {
-        await initDeviceConfigService();
-      }
+      await initDeviceConfigService();
+      setIsInitialized(true);
     } catch (error) {
       console.log('Error init context', error);
     }
@@ -124,94 +84,75 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const initDeviceConfigService = async () => {
     try {
       await DeviceManager.init();
-      initialOrientation().catch((error: unknown) => {
-        console.log('Error initial orientation', error);
-      });
-
-      initialArtFrameConfig().catch((error: unknown) => {
-        console.log('Error initial art frame config', error);
-      });
+      initialDisplaySettings();
+      initCastInfo();
     } catch (error) {
       console.log('Error init device manager', error);
     }
   };
 
-  const initialOrientation = async () => {
-    try {
-      const data = await DeviceManager.getOrientation();
-      if (!data) {
-        setRotation(defaultRotation());
-        return;
-      }
-
-      const orientation = cacheStringToRotation(data);
-      setRotation(orientation);
-    } catch (error) {
-      console.log('Error initial orientation', error);
-      setRotation(defaultRotation());
+  const initialDisplaySettings = () => {
+    const displaySettings = DeviceManager.getDeviceDisplaySettings();
+    if (displaySettings) {
+      displaySettings.rotationAngle =
+        (displaySettings.rotationAngle ?? 0) % 360;
+      setDisplaySettings(displaySettings);
     }
   };
 
-  const initialArtFrameConfig = async () => {
-    try {
-      const data = await DeviceManager.getArtFrameConfig();
-      if (data === undefined) {
-        appControl.setFrameConfig(ArtFraming.FitToScreen);
-        return;
+  const initCastInfo = () => {
+    let castInfo = getCastInfoFromLocalStorage();
+
+    if (castInfo) {
+      const path = window.location.pathname;
+      const isDaily = path.includes('daily');
+      if (isDaily) {
+        // Reset to daily cast info
+        castInfo = {
+          castCommand: CastCommand.castDaily,
+          deviceInfo: castInfo.deviceInfo,
+          displayKey: 'daily_work',
+        };
       }
 
-      appControl.setFrameConfig(data);
-    } catch (error) {
-      console.log('Error initial art frame config', error);
-      appControl.setFrameConfig(ArtFraming.FitToScreen);
+      setCastInfo(castInfo);
+      canvasService.current.setCastInfo(castInfo, false);
+      // TODO: Send cast info to app
+    } else {
+      console.log('CastInfo is null, send cast daily message');
+      // TODO: Send cast info to app
     }
+  };
+
+  const getCastInfoFromLocalStorage = () => {
+    const castInfoString = localStorage.getItem(LocalStorageItem.castInfo);
+    console.log('LocalStorage castInfo', castInfoString);
+    if (castInfoString != null) {
+      try {
+        const castInfo = JSON.parse(castInfoString) as CastInfo;
+        return castInfo;
+      } catch (error) {
+        console.log('Error init cast info', error);
+      }
+    }
+
+    return null;
   };
 
   // Initialize platform events
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).KeyEvent = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: KeyEvent.handlePlatformEvent,
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).DeviceName = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: DeviceName.handlePlatformEvent,
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      (window as any).Config = {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        handlePlatformEvent: Config.handlePlatformEvent,
-      };
+    const cdpRequestHandler = CDPRequestHandler.getInstance();
 
-      const pl = searchParams?.get('platform') ?? '';
-      if (pl) {
-        localStorage.setItem(LocalStorageItem.platform, pl);
-        setPlatform(pl as Platform);
-      }
-      setPlatformInitialized(true);
+    const platform = searchParams.get('platform') ?? '';
+    if (platform) {
+      localStorage.setItem(LocalStorageItem.platform, platform);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    setPlatformInitialized(true);
+    return () => {
+      cdpRequestHandler.cleanup();
+    };
   }, []);
-
-  useEffect(() => {
-    if (!platformInitialized) return;
-
-    initContext().catch((error: unknown) => {
-      console.log('Error init context', error);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platformInitialized, isWebOSTVLoaded, isWebOSTVDevLoaded]);
-
-  useEffect(() => {
-    setContextConfig({
-      ...contextConfig,
-      deviceRotation: rotation,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rotation]);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -233,17 +174,39 @@ export const AppProvider = ({ children }: AppContextProps) => {
     });
   }, []);
 
+  useEffect(() => {
+    if (!platformInitialized) return;
+
+    initContext().catch((error: unknown) => {
+      console.log('Error init context', error);
+    });
+  }, [platformInitialized]);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    if (isOnline) {
+      const castInfo = getCastInfoFromLocalStorage();
+      if (castInfo) {
+        // TODO: Send cast info to app
+      }
+    }
+  }, [isOnline]);
+
   return (
     <AppContext.Provider
       value={{
         context: {
-          websocketData,
-          appControl,
+          isInitialized,
           isOnline,
           deviceRotation,
           appRemoteConfig,
-          isWebOSTVLoaded,
-          isWebOSTVDevLoaded,
+          castInfo,
+          displaySettings,
+          cursorPositions,
         },
       }}>
       {children}

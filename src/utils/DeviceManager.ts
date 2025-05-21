@@ -1,16 +1,14 @@
 import { v4 as uuidv4 } from 'uuid';
-import createBranchLink from './createBranchLink';
 import {
-  GoogleConfigService,
-  LgConfigService,
+  FFDeviceConfigService,
   PlatformConfigService,
-  TizenConfigService,
   WebConfigService,
 } from './platform';
 import * as Sentry from '@sentry/nextjs';
 import { DeviceNamePrefix, LocalStorageItem, Platform } from '@/constants';
 import { BrowserInfo, detect } from 'detect-browser';
-import { ArtFraming } from '@/services/AppControls';
+import { DisplaySettings } from '@/models/display_settings.model';
+import { DisplayOrientation, ViewMode } from '@/models';
 
 class DeviceManager {
   static instance = new DeviceManager();
@@ -40,25 +38,15 @@ class DeviceManager {
     console.log(
       `[DEVICE] creating PlatformConfigService instance for platform: ${platform ?? 'Web'}`
     );
-    switch (platform) {
-      case Platform.google:
-        return new GoogleConfigService();
-      case Platform.tizen:
-        return new TizenConfigService();
-      case Platform.lg:
-        return new LgConfigService();
-      default:
-        return new WebConfigService();
+    if (platform === Platform.ffDevice) {
+      return new FFDeviceConfigService();
     }
+
+    return new WebConfigService();
   }
 
-  private async getFromLocalStorage(key: string): Promise<string | null> {
-    try {
-      return await this.configService.getString(key);
-    } catch (error) {
-      Sentry.captureException(error);
-      return null;
-    }
+  private getFromLocalStorage(key: string): string | null {
+    return this.configService.getString(key);
   }
 
   private setToLocalStorage(key: string, value: string): void {
@@ -75,210 +63,117 @@ class DeviceManager {
     await this.configService.init();
   }
 
-  public async getDeviceId(): Promise<string> {
-    try {
-      let deviceId = await this.getFromLocalStorage(LocalStorageItem.deviceId);
-      if (!deviceId) {
-        deviceId = uuidv4();
-        this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
-      }
-      return deviceId;
-    } catch (error) {
-      console.error('[DEVICE] Error getting device ID', JSON.stringify(error));
-      return '';
+  public getDeviceId(): string | null {
+    let deviceId = this.getFromLocalStorage(LocalStorageItem.deviceId);
+    const platform = localStorage.getItem(LocalStorageItem.platform);
+    if (!deviceId && !platform) {
+      deviceId = uuidv4();
+      this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
     }
+
+    return deviceId;
   }
 
   public setDeviceId(deviceId: string): void {
     this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
   }
 
-  public setLocationId(locationId: string): void {
-    this.setToLocalStorage(LocalStorageItem.locationID, locationId);
-  }
-
-  public async getLocationId(): Promise<string | null> {
-    return await this.getFromLocalStorage(LocalStorageItem.locationID);
-  }
-
-  public setTopicId(topicId: string): void {
-    this.setToLocalStorage(LocalStorageItem.topicID, topicId);
-  }
-
-  public async getTopicId(): Promise<string | null> {
-    return await this.getFromLocalStorage(LocalStorageItem.topicID);
+  public getName(): string {
+    const name = this.getFromLocalStorage(LocalStorageItem.name);
+    return name ?? 'Unknown';
   }
 
   public setName(name: string): void {
     this.setToLocalStorage(LocalStorageItem.name, name);
   }
 
-  public async getDeviceModel(): Promise<string> {
-    try {
-      const name = await this.getFromLocalStorage(LocalStorageItem.name);
-      if (!name) {
-        return 'Unknown';
-      }
-
-      return name
-        .replace(DeviceNamePrefix.google, '')
-        .replace(DeviceNamePrefix.samsung, '')
-        .replace(DeviceNamePrefix.lg, '');
-    } catch (error) {
-      console.error(
-        '[DEVICE] Error getting device name',
-        JSON.stringify(error)
-      );
+  public getDeviceModel(): string {
+    const name = this.getFromLocalStorage(LocalStorageItem.name);
+    if (!name) {
       return 'Unknown';
     }
+
+    return this.stripPrefix(name);
   }
 
-  public async getName(): Promise<string> {
-    try {
-      const model = await this.getDeviceModel();
-      return this.getDeviceName(model);
-    } catch (error) {
-      console.error(
-        '[DEVICE] Error getting device name',
-        JSON.stringify(error)
-      );
-      return 'Unknown';
-    }
+  private stripPrefix(name: string): string {
+    return name.replace(DeviceNamePrefix.ffDevice, '');
   }
 
-  private getDeviceName(model: string | null): string {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    if (!model || !localStorage) {
-      return 'Unknown';
-    }
-
-    const platform = localStorage.getItem(LocalStorageItem.platform);
-    switch (platform) {
-      case Platform.google:
-        return `${DeviceNamePrefix.google}${model}`;
-      case Platform.tizen:
-        return `${DeviceNamePrefix.samsung}${model}`;
-      case Platform.lg:
-        return `${DeviceNamePrefix.lg}${model}`;
-      default:
-        return model;
-    }
+  public getPrimaryAddress(): string | null {
+    return this.getFromLocalStorage(LocalStorageItem.primaryAddress);
   }
 
   public setPrimaryAddress(primaryAddress: string): void {
     this.setToLocalStorage(LocalStorageItem.primaryAddress, primaryAddress);
   }
 
-  public async getPrimaryAddress(): Promise<string | null> {
-    return await this.getFromLocalStorage(LocalStorageItem.primaryAddress);
+  public getDeviceDisplaySettings(): DisplaySettings | null {
+    const config = this.getFromLocalStorage(LocalStorageItem.displaySettings);
+    return config ? (JSON.parse(config) as DisplaySettings) : null;
   }
 
-  public setOrientation(orientation: string): void {
-    this.setToLocalStorage(LocalStorageItem.orientation, orientation);
-  }
-
-  public async getOrientation(): Promise<string | null> {
-    return await this.getFromLocalStorage(LocalStorageItem.orientation);
-  }
-
-  public setArtFrameConfig(artFrameConfig: ArtFraming): void {
+  public setDeviceDisplaySettings(
+    displaySettings: DisplaySettings | null
+  ): void {
     this.setToLocalStorage(
-      LocalStorageItem.artFraming,
-      artFrameConfig.toString()
+      LocalStorageItem.displaySettings,
+      displaySettings ? JSON.stringify(displaySettings) : '{}'
     );
   }
 
-  public async getArtFrameConfig(): Promise<ArtFraming | undefined> {
-    const config = await this.getFromLocalStorage(LocalStorageItem.artFraming);
-    return config ? (parseInt(config) as ArtFraming) : undefined;
+  public getViewMode(): ViewMode | null {
+    const config = this.getFromLocalStorage(LocalStorageItem.viewMode);
+    return config ? (config as ViewMode) : null;
   }
 
-  public async getDeviceInfo(appPlatform?: boolean) {
-    try {
-      const deviceId = await this.getDeviceId();
-      const locationId = await this.getLocationId();
-      const topicId = await this.getTopicId();
-      const name = await this.getName();
+  public setViewMode(viewMode: ViewMode): void {
+    this.setToLocalStorage(LocalStorageItem.viewMode, viewMode);
+  }
 
-      let platform = 'web';
-      if (appPlatform) {
-        platform = (
-          localStorage.getItem(LocalStorageItem.platform) ?? 'web'
-        ).toLocaleUpperCase();
-      }
-
-      return {
-        deviceId,
-        locationId,
-        topicId,
-        name: name,
-        platform,
-      };
-    } catch (error) {
-      console.error(
-        '[DEVICE] Error getting device info',
-        JSON.stringify(error)
-      );
-      return null;
+  public getDisplayOrientation(rotationAngle?: number): DisplayOrientation {
+    if (!rotationAngle) {
+      rotationAngle = this.getDeviceDisplaySettings()?.rotationAngle;
     }
-  }
 
-  private async keyWithDevice(key: string): Promise<string> {
-    const device = await this.getDeviceInfo();
-    return `${key}_${device?.locationId ?? ''}_${device?.topicId ?? ''}`;
-  }
-
-  public async setBranchLink(branchLink: string): Promise<void> {
-    const key = await this.keyWithDevice(LocalStorageItem.branchLink);
-    this.setToLocalStorage(key, branchLink);
-  }
-
-  public async getBranchLink(): Promise<string | null> {
-    const key = await this.keyWithDevice(LocalStorageItem.branchLink);
-    return await this.getFromLocalStorage(key);
-  }
-
-  public async getOrGenerateBranchLink(): Promise<string | null> {
-    let branchLink = await this.getBranchLink();
-    if (!branchLink) {
-      branchLink = await this.generateBranchLink();
-      if (branchLink) {
-        await this.setBranchLink(branchLink);
-      }
+    let viewMode = this.getViewMode();
+    if (!viewMode) {
+      viewMode = ViewMode.landscape;
     }
-    Sentry.addBreadcrumb({
-      data: { branchLink },
-      category: 'DeviceManager',
-      message: 'Generated branch link',
-    });
-    return branchLink;
-  }
 
-  public async generateBranchLink(): Promise<string | null> {
-    try {
-      const deviceInfo = await this.getDeviceInfo();
-      if (!deviceInfo) {
-        return null;
+    const angle = (rotationAngle ?? 0) % 360;
+    switch (viewMode) {
+      case ViewMode.landscape: {
+        if (angle === 0) {
+          return DisplayOrientation.Landscape;
+        } else if (angle === 90) {
+          return DisplayOrientation.PortraitReverse;
+        } else if (angle === 180) {
+          return DisplayOrientation.LandscapeReverse;
+        } else if (angle === 270) {
+          return DisplayOrientation.Portrait;
+        }
+
+        return DisplayOrientation.Landscape;
       }
-      console.log(
-        '[DEVICE] Generating branch link with device info: ',
-        JSON.stringify(deviceInfo)
-      );
-      Sentry.addBreadcrumb({
-        data: deviceInfo,
-        category: 'DeviceManager',
-        message: 'Generating branch link',
-      });
 
-      const data = {
-        source: 'feralfile_display',
-        device: deviceInfo,
-      };
-      return await createBranchLink(data);
-    } catch (e) {
-      Sentry.captureException(e);
-      console.error('[DEVICE] Error generate branch link: ', JSON.stringify(e));
-      return null;
+      case ViewMode.portrait: {
+        if (angle === 0) {
+          return DisplayOrientation.Portrait;
+        } else if (angle === 90) {
+          return DisplayOrientation.LandscapeReverse;
+        } else if (angle === 180) {
+          return DisplayOrientation.PortraitReverse;
+        } else if (angle === 270) {
+          return DisplayOrientation.Landscape;
+        }
+
+        return DisplayOrientation.Portrait;
+      }
+
+      default: {
+        return DisplayOrientation.Landscape;
+      }
     }
   }
 }

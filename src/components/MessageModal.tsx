@@ -1,14 +1,16 @@
-import { MessageModalType } from '@/utils/types';
+import { MessageModalType } from '@/models';
 import { useEffect, useState } from 'react';
 
 const MessageModal = ({
   screenRatio,
   message,
   messageModalType,
+  title,
 }: {
   screenRatio: number;
-  message: string;
+  message?: string;
   messageModalType?: MessageModalType;
+  title?: string;
 }) => {
   const [backgroundColor, setBackgroundColor] = useState('#2E2E2E');
 
@@ -56,12 +58,23 @@ const MessageModal = ({
           columnGap: screenRatio * 20,
           justifyContent: 'center',
         }}>
-        {messageModalType === MessageModalType.error && (
-          <img src="/images/close-white.svg" alt="close"></img>
-        )}
-        <p style={{ fontSize: screenRatio * 36, color: '#ffffff' }}>
-          {message}
-        </p>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: screenRatio * 30,
+            color: '#ffffff',
+          }}>
+          {title && <p style={{ fontSize: screenRatio * 36 }}>{title}</p>}
+          {message && (
+            <p
+              style={{
+                fontSize: screenRatio * 24,
+                textAlign: 'left',
+              }}
+              dangerouslySetInnerHTML={{ __html: message }}></p>
+          )}
+        </div>
       </div>
     </div>
   );
