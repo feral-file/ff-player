@@ -66,6 +66,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   };
 
   useEffect(() => {
+    console.log('[AppWrapper] castInfo', castInfo);
     if (!castInfo) return;
 
     console.log('[AppWrapper] process cast info:', JSON.stringify(castInfo));
@@ -119,6 +120,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
         }
 
         default: {
+          console.log('[AppWrapper] Default');
           break;
         }
       }
@@ -127,7 +129,11 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   }, [castInfo]);
 
   useEffect(() => {
+    console.log('[AppWrapper] castInfo', castInfo);
+
     if (castInfo) return;
+
+    console.log('[AppWrapper] castState', castState);
 
     if (castState !== CastState.None && castState !== CastState.Daily) {
       // Disconnect
@@ -135,6 +141,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       router.back();
     } else {
       try {
+        console.log('[AppWrapper] Cast daily', canvasService);
         canvasService.castDaily({});
       } catch (error) {
         console.log('[AppWrapper] Error Cast daily', error);
