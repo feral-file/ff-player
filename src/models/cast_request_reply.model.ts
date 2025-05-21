@@ -1,3 +1,5 @@
+import { CursorPosition } from '@/services/custom-hooks/useCursorPositions';
+import { ArtFraming, DisplayOrientation } from './common.model';
 import { TokenDisplaySettings } from './display_settings.model';
 
 export interface DeviceInfo {
@@ -55,6 +57,11 @@ export interface CheckDeviceStatusReply extends Reply {
   isPaused?: boolean;
 
   displayKey?: string;
+
+  deviceSettings?: {
+    scaling: ArtFraming;
+    orientation: DisplayOrientation;
+  };
 }
 
 export interface CastExhibitionRequest {
@@ -94,7 +101,7 @@ export interface RotateRequest extends Request {
   clockwise: boolean;
 }
 export interface RotateReply extends Reply {
-  degree: number;
+  orientation?: DisplayOrientation;
 }
 
 export type TapGestureRequest = Request;
@@ -125,3 +132,8 @@ export interface UpdateDisplaySettingsRequest extends TokenDisplaySettings {
   tokenId?: string;
   isSaved: boolean;
 }
+
+export interface UpdateCursorPositionsRequest extends Request {
+  positions: CursorPosition[];
+}
+export type UpdateCursorPositionsReply = Reply;

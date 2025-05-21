@@ -4,7 +4,7 @@ import { BrowserInfo, detect } from 'detect-browser';
 
 export interface PlatformConfigService {
   init(): Promise<void>;
-  getString(key: string): Promise<string | null>;
+  getString(key: string): string | null;
 
   setString(key: string, value: string): Promise<void>;
 }
@@ -48,7 +48,7 @@ export class WebConfigService implements PlatformConfigService {
     return deviceName;
   }
   // eslint-disable-next-line @typescript-eslint/require-await
-  async getString(key: string): Promise<string | null> {
+  getString(key: string): string | null {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     return localStorage?.getItem(key);
   }

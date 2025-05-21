@@ -30,6 +30,7 @@ import {
   PreviewHTMLTag,
 } from '@/models';
 import { getContentTypeFromURL } from '@/utils/helper';
+import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
 
@@ -76,6 +77,9 @@ const ArtworkPlayer = ({
   const isWebGLContextLost = useRef<boolean>(false);
   const { loadingSettings, displaySettings } = useArtworkSettings(artworkID);
 
+  // Cursor layer handle
+  const cursorRef = useRef<CursorLayerHandle>(null);
+
   function compareToGetFileType(type: string) {
     setIsStreaming(false);
     if (!type) {
@@ -119,6 +123,13 @@ const ArtworkPlayer = ({
       document.removeEventListener('click', unmuteVideo);
     }
   };
+
+  // Update cursor positions when they change in context
+  useEffect(() => {
+    if (context.cursorPositions && context.cursorPositions.length > 0) {
+      cursorRef.current?.setPositions(context.cursorPositions);
+    }
+  }, [context.cursorPositions]);
 
   // Metric
   useEffect(() => {
@@ -337,7 +348,11 @@ const ArtworkPlayer = ({
   }, [context.isOnline, previewType]);
 
   useEffect(() => {
-    if (!displayPreviewURL || !displaySettings) {
+    if (
+      !displayPreviewURL ||
+      !displaySettings ||
+      !context.deviceRotation?.viewMode
+    ) {
       return;
     }
 
@@ -347,7 +362,7 @@ const ArtworkPlayer = ({
     );
     // Update URL when settings first load or when scaling changes
     updateSoftwareURL(displaySettings);
-  }, [displayPreviewURL, displaySettings]);
+  }, [displayPreviewURL, displaySettings, context.deviceRotation?.viewMode]);
 
   const updateSoftwareURL = (
     displaySettings: TokenDisplaySettingWithChanged
@@ -511,13 +526,17 @@ const ArtworkPlayer = ({
           backgroundColor: displaySettings?.backgroundColor ?? '#000000',
           justifyContent: 'center',
           position: 'relative',
-          transition: `transform 0.2s, opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.2s ease`,
+          transition: `opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.2s ease`,
           opacity: opacity,
-          padding: `${String((displaySettings?.marginTop ?? 0) * 100)}vh ${String((displaySettings?.marginRight ?? 0) * 100)}vw ${String((displaySettings?.marginBottom ?? 0) * 100)}vh ${String((displaySettings?.marginLeft ?? 0) * 100)}vw`,
-          width: '100vw',
-          height: '100vh',
-          transformOrigin: 'center 50vh',
+          padding:
+            (displaySettings?.scaling ?? DisplaySettings.defaultScaling) ===
+            ArtFraming.FitToScreen
+              ? `${String(displaySettings?.marginTop ?? 0 * 100)}vh ${String(displaySettings?.marginRight ?? 0 * 100)}vw ${String(displaySettings?.marginBottom ?? 0 * 100)}vh ${String(displaySettings?.marginLeft ?? 0 * 100)}vw`
+              : '0',
+          width: '100%',
+          height: '100%',
         }}>
+        <CursorLayer ref={cursorRef} />
         {(previewType === null || loading || loadingSettings) && <Loading />}
         {displayPreviewURL && previewType === PreviewHTMLTag.image && (
           <div

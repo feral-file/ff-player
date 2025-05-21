@@ -40,14 +40,58 @@ import {
 } from '@/models/cast_request_reply.model';
 import { TokenDisplaySettings } from '@/models/display_settings.model';
 import * as Sentry from '@sentry/nextjs';
-import { ArtFraming, CastCommand, CastInfo } from '@/models';
+import {
+  ArtFraming,
+  CastCommand,
+  CastInfo,
+  UpdateCursorPositionsReply,
+  UpdateCursorPositionsRequest,
+  DisplaySettings,
+} from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
+import {
+  CursorPositionListener,
+  CursorPosition,
+} from './custom-hooks/useCursorPositions';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
   private static instance: CanvasService | null;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
 
+  // Cursor positions
+  private cursorPositionsListeners: CursorPositionListener[] = [];
+  private currentCursorPositions: CursorPosition[] = [];
+
+  public addCursorPositionsListener(callback: CursorPositionListener) {
+    this.cursorPositionsListeners.push(callback);
+    if (this.currentCursorPositions.length > 0) {
+      callback(this.currentCursorPositions);
+    }
+  }
+
+  public removeCursorPositionsListener(callback: CursorPositionListener) {
+    this.cursorPositionsListeners = this.cursorPositionsListeners.filter(
+      listener => listener !== callback
+    );
+  }
+
+  private notifyCursorPositionsChanged(positions: CursorPosition[]) {
+    this.currentCursorPositions = positions;
+    this.cursorPositionsListeners.forEach(listener => {
+      try {
+        listener(positions);
+      } catch (error) {
+        console.error(
+          '[CanvasService] Error in cursor positions listener:',
+          error
+        );
+      }
+    });
+  }
+  // End cursor positions Service Update Listener
+
+  // Display settings
   private displaySettingsChangedListeners: ((
     isSaveToDevice: boolean,
     displaySettings: TokenDisplaySettings
@@ -194,6 +238,10 @@ class CanvasService {
           return this.updateDisplaySettings(
             requestJson as UpdateDisplaySettingsRequest
           );
+        case CastCommand.cursorUpdate:
+          return this.updateCursorPositions(
+            requestJson as UpdateCursorPositionsRequest
+          );
         default:
           console.error(`[CAST] Unknown command: ${command}`);
           return { ok: false };
@@ -230,6 +278,7 @@ class CanvasService {
 
   private status(request: CheckDeviceStatusRequest): CheckDeviceStatusReply {
     console.log('[CanvasService] Check status:', JSON.stringify(request));
+    const deviceSettings = DeviceManager.getDeviceDisplaySettings();
     return {
       ok: true,
       connectedDevice: this.castInfo?.deviceInfo,
@@ -244,6 +293,11 @@ class CanvasService {
       isPaused: this.castInfo?.isPaused,
 
       displayKey: this.castInfo?.displayKey,
+
+      deviceSettings: {
+        scaling: deviceSettings?.scaling ?? DisplaySettings.defaultScaling,
+        orientation: DeviceManager.getDisplayOrientation(),
+      },
     };
   }
 
@@ -437,7 +491,27 @@ class CanvasService {
 
   private rotate(request: RotateRequest): RotateReply {
     console.log('[CanvasService] rotate:', request);
-    return { ok: true, degree: 0 };
+    const deviceSettings = DeviceManager.getDeviceDisplaySettings();
+    const rotationAngle = (deviceSettings?.rotationAngle ?? 0) + 90;
+    this.notifyDisplaySettingsChanged(true, {
+      rotationAngle,
+    });
+    return {
+      ok: true,
+      orientation: DeviceManager.getDisplayOrientation(rotationAngle),
+    };
+  }
+
+  public updateCursorPositions(
+    request: UpdateCursorPositionsRequest
+  ): UpdateCursorPositionsReply {
+    console.log('[CanvasService] updateCursorPositions: ', request);
+
+    if (request.positions.length > 0) {
+      this.notifyCursorPositionsChanged(request.positions);
+    }
+
+    return { ok: true };
   }
 
   private tapGesture(request: TapGestureRequest): GestureReply {

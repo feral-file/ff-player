@@ -13,3 +13,10 @@ export enum ArtFraming {
   FitToScreen = 'fit',
   CropToFill = 'fill',
 }
+
+export enum DisplayOrientation {
+  Landscape = 'landscape',
+  Portrait = 'portrait',
+  LandscapeReverse = 'landscapeReverse',
+  PortraitReverse = 'portraitReverse',
+}

@@ -1,12 +1,10 @@
 'use client';
 
-import { AppSettings } from '@/constants';
 import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
-import { CastCommand } from '@/models';
+import { CastCommand, ViewMode } from '@/models';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
-
 import CanvasService from '@/services/CanvasService';
 
 const enum CastState {
@@ -31,29 +29,29 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   const castInfo = context.castInfo;
   const [castState, setCastState] = useState<CastState>(CastState.None);
 
+  const displaySettings = context.displaySettings;
+  const { viewMode } = context.deviceRotation ?? {
+    viewMode: ViewMode.landscape,
+  };
   // Check version update
   useEffect(() => {
-    const duration =
-      context.appRemoteConfig.duration ||
-      AppSettings.VERSION_CHECK_INTERVAL_DURATION;
+    if (!context.appRemoteConfig.duration) {
+      return;
+    }
 
-    const validateVersion = async () => {
-      await checkVersion();
-
-      const intervalID = setInterval(() => {
-        checkVersion().catch((error: unknown) => {
-          console.error(error);
-        });
-      }, duration);
-
-      return () => {
-        clearInterval(intervalID);
-      };
-    };
-
-    validateVersion().catch((error: unknown) => {
+    checkVersion().catch((error: unknown) => {
       console.error(error);
     });
+
+    const intervalID = setInterval(() => {
+      checkVersion().catch((error: unknown) => {
+        console.error(error);
+      });
+    }, context.appRemoteConfig.duration);
+
+    return () => {
+      clearInterval(intervalID);
+    };
   }, [context.appRemoteConfig.duration]);
 
   const checkVersion = async () => {
@@ -148,14 +146,33 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   return (
     <div
       style={{
-        width: '100vw',
-        height: '100vh',
-        transformOrigin: 'center 50vh',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
+        width:
+          (displaySettings?.rotationAngle ?? 0) % 180 === 0 ? '100vw' : '100vh',
+        height:
+          (displaySettings?.rotationAngle ?? 0) % 180 === 0 ? '100vh' : '100vw',
+        transition: `transform 0.2s`,
+        transform: `rotate(${(displaySettings?.rotationAngle ?? 0).toString()}deg) `,
+        transformOrigin:
+          (displaySettings?.rotationAngle ?? 0) % 360 === 90
+            ? '50vw center'
+            : 'center 50vh',
       }}>
       {children}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: 'red',
+          color: 'white',
+        }}>
+        Rotation Angle: {displaySettings?.rotationAngle ?? 0} - View Mode:{' '}
+        {viewMode}
+      </div>
     </div>
   );
 };

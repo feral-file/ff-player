@@ -1,5 +1,5 @@
 import CanvasService from '../CanvasService';
-import { WebSocketMessage } from '@/models';
+import { DisplayOrientation, WebSocketMessage } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import { DeviceNamePrefix } from '@/constants';
 import { ConnectivityEventDetail } from '../custom-hooks/useNetworkManager';
@@ -33,6 +33,10 @@ export class CDPRequestHandler {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleConnectivityChange =
       this.handleConnectivityChange.bind(this);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).getCurrentOrientation =
+      this.getCurrentOrientation.bind(this);
   }
 
   private handleCDPRequest(event: WebSocketMessage): string {
@@ -121,11 +125,23 @@ export class CDPRequestHandler {
     );
   }
 
+  public getCurrentOrientation(): string {
+    const displayOrientation = DeviceManager.getDisplayOrientation();
+    return JSON.stringify({
+      isLandscape: [
+        DisplayOrientation.Landscape,
+        DisplayOrientation.LandscapeReverse,
+      ].includes(displayOrientation),
+    });
+  }
+
   public cleanup() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleCDPRequest = null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleConnectivityChange = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).getCurrentOrientation = null;
     this.isInitialized = false;
   }
 }

@@ -1,22 +1,22 @@
-import { ArtFraming, ViewMode } from '@/models';
+import { ArtFraming } from '@/models';
 import { AssetConfiguration } from './token.model';
 
 export class DisplaySettings {
   scaling?: ArtFraming;
-  orientation?: ViewMode;
+  rotationAngle?: number;
 
-  constructor(scaling?: ArtFraming, orientation?: ViewMode) {
+  constructor(scaling?: ArtFraming, rotationAngle?: number) {
     this.scaling = scaling;
-    this.orientation = orientation;
+    this.rotationAngle = rotationAngle;
   }
 
   static defaultScaling: ArtFraming = ArtFraming.FitToScreen;
-  static defaultOrientation: ViewMode = ViewMode.landscape;
+  static defaultRotationAngle = 0;
 
   static defaultSettings() {
     return new DisplaySettings(
       DisplaySettings.defaultScaling,
-      DisplaySettings.defaultOrientation
+      DisplaySettings.defaultRotationAngle
     );
   }
 }
