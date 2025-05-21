@@ -106,12 +106,7 @@ export function useArtworkSettings(tokenId: string) {
       };
     }
 
-    return {
-      ...tokenDisplaySettings,
-      rotationAngle:
-        context.displaySettings?.rotationAngle ??
-        DisplaySettings.defaultRotationAngle,
-    };
+    return tokenDisplaySettings;
   }, [tokenDisplaySettings, context.displaySettings]);
 
   return {

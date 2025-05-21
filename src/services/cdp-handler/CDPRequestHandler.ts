@@ -1,5 +1,5 @@
 import CanvasService from '../CanvasService';
-import { DisplayOrientation, WebSocketMessage } from '@/models';
+import { ViewMode, WebSocketMessage } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import { DeviceNamePrefix } from '@/constants';
 import { ConnectivityEventDetail } from '../custom-hooks/useNetworkManager';
@@ -126,12 +126,9 @@ export class CDPRequestHandler {
   }
 
   public getCurrentOrientation(): string {
-    const displayOrientation = DeviceManager.getDisplayOrientation();
+    const viewMode = DeviceManager.getViewMode();
     return JSON.stringify({
-      isLandscape: [
-        DisplayOrientation.Landscape,
-        DisplayOrientation.LandscapeReverse,
-      ].includes(displayOrientation),
+      isLandscape: viewMode === ViewMode.landscape,
     });
   }
 

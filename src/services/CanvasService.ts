@@ -22,8 +22,6 @@ import {
   MoveToArtworkReply,
   UpdateDurationRequest,
   UpdateDurationReply,
-  RotateRequest,
-  RotateReply,
   TapGestureRequest,
   GestureReply,
   DragGestureRequest,
@@ -47,6 +45,7 @@ import {
   UpdateCursorPositionsReply,
   UpdateCursorPositionsRequest,
   DisplaySettings,
+  ViewMode,
 } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import {
@@ -218,8 +217,6 @@ class CanvasService {
           return this.updateDuration(requestJson as UpdateDurationRequest);
         case CastCommand.castExhibition:
           return this.castExhibition(requestJson as CastExhibitionRequest);
-        case CastCommand.rotate:
-          return this.rotate(requestJson as RotateRequest);
         case CastCommand.tapGesture:
           return this.tapGesture(requestJson as TapGestureRequest);
         case CastCommand.dragGesture:
@@ -296,7 +293,7 @@ class CanvasService {
 
       deviceSettings: {
         scaling: deviceSettings?.scaling ?? DisplaySettings.defaultScaling,
-        orientation: DeviceManager.getDisplayOrientation(),
+        orientation: DeviceManager.getViewMode() ?? ViewMode.landscape,
       },
     };
   }
@@ -488,19 +485,6 @@ class CanvasService {
   }
 
   // ---------------------------- End Playlist controls ----------------------------
-
-  private rotate(request: RotateRequest): RotateReply {
-    console.log('[CanvasService] rotate:', request);
-    const deviceSettings = DeviceManager.getDeviceDisplaySettings();
-    const rotationAngle = (deviceSettings?.rotationAngle ?? 0) + 90;
-    this.notifyDisplaySettingsChanged(true, {
-      rotationAngle,
-    });
-    return {
-      ok: true,
-      orientation: DeviceManager.getDisplayOrientation(rotationAngle),
-    };
-  }
 
   public updateCursorPositions(
     request: UpdateCursorPositionsRequest

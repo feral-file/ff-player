@@ -6,7 +6,6 @@ import {
   Post,
   Artwork,
   CastCommand,
-  DisplayOrientation,
 } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import styles from './exhibition.module.scss';
@@ -20,18 +19,14 @@ import { formatArtworkIndexID } from '@/utils/indexer';
 import { CastingArtworkType } from '@/models/metric.model';
 import ArtworkService from '@/services/ArtworkService';
 import clsx from 'clsx';
-import DeviceManager from '@/utils/DeviceManager';
 
 const ExhibitionHall = () => {
   const { context } = useAppContext();
-  const { castInfo, displaySettings } = context;
+  const castInfo = context.castInfo;
   const { screenRatio, viewMode } = context.deviceRotation ?? {
     screenRatio: 1,
     viewMode: ViewMode.landscape,
   };
-  const [isLandscape, setIsLandscape] = useState(
-    viewMode === ViewMode.landscape
-  );
 
   const [exhibitionID, setExhibitionID] = useState<string | undefined>();
   const [catalogID, setCatalogID] = useState<string | undefined>();
@@ -176,19 +171,11 @@ const ExhibitionHall = () => {
     }
   }, [screen, catalogID, exhibitionDetail, posts]);
 
-  useEffect(() => {
-    const displayOrientation = DeviceManager.getDisplayOrientation();
-
-    setIsLandscape(
-      [
-        DisplayOrientation.Landscape,
-        DisplayOrientation.LandscapeReverse,
-      ].includes(displayOrientation)
-    );
-  }, [viewMode, displaySettings]);
-
   return (
-    <div className={isLandscape ? styles.landscape : styles.portrait}>
+    <div
+      className={
+        viewMode === ViewMode.landscape ? styles.landscape : styles.portrait
+      }>
       {exhibitionDetail && pageSection === ExhibitionCatalog.home && (
         <div
           className={clsx(styles.exhCard, styles.home)}

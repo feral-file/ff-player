@@ -533,8 +533,8 @@ const ArtworkPlayer = ({
             ArtFraming.FitToScreen
               ? `${String(displaySettings?.marginTop ?? 0 * 100)}vh ${String(displaySettings?.marginRight ?? 0 * 100)}vw ${String(displaySettings?.marginBottom ?? 0 * 100)}vh ${String(displaySettings?.marginLeft ?? 0 * 100)}vw`
               : '0',
-          width: '100%',
-          height: '100%',
+          width: '100vw',
+          height: '100vh',
         }}>
         <CursorLayer ref={cursorRef} />
         {(previewType === null || loading || loadingSettings) && <Loading />}
