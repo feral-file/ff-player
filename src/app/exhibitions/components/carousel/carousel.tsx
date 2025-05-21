@@ -1,5 +1,6 @@
 import { Post, PostType } from '@/models';
 import { Swiper as SwiperType } from 'swiper/types';
+import { EffectCoverflow } from 'swiper/modules';
 import 'swiper/scss';
 import 'swiper/scss/effect-coverflow';
 import 'swiper/scss/effect-fade';
@@ -68,9 +69,10 @@ const Carousel: React.FC<CarouselProps> = ({ items, index, screenRatio }) => {
         depth: 250,
         modifier: 1,
         slideShadows: false,
-        scale: 0.5,
+        scale: 0.7,
       }}
       loop={false}
+      modules={[EffectCoverflow]}
       style={{ height: '100%' }}>
       {items.map(item => {
         return (
