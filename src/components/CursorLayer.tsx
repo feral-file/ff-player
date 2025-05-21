@@ -15,9 +15,9 @@ export interface CursorLayerHandle {
 
 const CURSOR_SIZE = 18;
 const HIDE_DELAY = 5000; // ms
-const SPEED_FACTOR = 10; // tune responsiveness
-const MIN_SPEED = 2500; // px / s   (too slow feels lag)
-const MAX_SPEED = 4000; // px / s   (cap for long jumps)
+const SPEED_FACTOR = 15; // tune responsiveness
+const MIN_SPEED = 3000; // px / s
+const MAX_SPEED = 5500; // px / s
 
 const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
