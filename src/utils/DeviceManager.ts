@@ -60,6 +60,7 @@ class DeviceManager {
   }
 
   public async init(): Promise<void> {
+    console.log('[DeviceManager] init', this.configService);
     await this.configService.init();
   }
 
