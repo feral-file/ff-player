@@ -537,6 +537,18 @@ const ArtworkPlayer = ({
           height: '100vh',
         }}>
         <CursorLayer ref={cursorRef} />
+        <p
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: 'red',
+            color: 'white',
+          }}>
+          previewType: {previewType} loading: {loading.toString()}
+          loadingSettings: {JSON.stringify(loadingSettings)}
+        </p>
         {(previewType === null || loading || loadingSettings) && <Loading />}
         {displayPreviewURL && previewType === PreviewHTMLTag.image && (
           <div
