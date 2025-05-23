@@ -518,6 +518,10 @@ const ArtworkPlayer = ({
     };
   }, [previewURL]);
 
+  useEffect(() => {
+    console.log('[ArtworkPlayer] loadingSettings', loadingSettings);
+  }, [loadingSettings]);
+
   return (
     <>
       <div
@@ -545,6 +549,7 @@ const ArtworkPlayer = ({
             right: 0,
             backgroundColor: 'red',
             color: 'white',
+            zIndex: 1000,
           }}>
           previewType: {previewType} loading: {loading.toString()}
           loadingSettings: {JSON.stringify(loadingSettings)}
