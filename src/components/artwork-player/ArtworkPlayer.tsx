@@ -522,6 +522,14 @@ const ArtworkPlayer = ({
     console.log('[ArtworkPlayer] loadingSettings', loadingSettings);
   }, [loadingSettings]);
 
+  useEffect(() => {
+    console.log('[ArtworkPlayer] loading', loading);
+  }, [loading]);
+
+  useEffect(() => {
+    console.log('[ArtworkPlayer] previewType', previewType);
+  }, [previewType]);
+
   return (
     <>
       <div
@@ -541,19 +549,6 @@ const ArtworkPlayer = ({
           height: '100vh',
         }}>
         <CursorLayer ref={cursorRef} />
-        <p
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: 'red',
-            color: 'white',
-            zIndex: 1000,
-          }}>
-          previewType: {previewType} loading: {loading.toString()}
-          loadingSettings: {JSON.stringify(loadingSettings)}
-        </p>
         {(previewType === null || loading || loadingSettings) && <Loading />}
         {displayPreviewURL && previewType === PreviewHTMLTag.image && (
           <div
