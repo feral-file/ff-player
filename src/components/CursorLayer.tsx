@@ -27,19 +27,22 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   const currentPos = useRef<CursorPosition | null>(null);
   const targetIdx = useRef(0);
   const animId = useRef<number | null>(null);
-  const hideTimer = useRef<NodeJS.Timeout | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [visible, setVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [w, setW] = useState(0);
   const [h, setH] = useState(0);
 
   const resetHide = () => {
+    console.log('resetHide');
+    console.log('hideTimer 1', hideTimer.current);
+
     if (hideTimer.current) clearTimeout(hideTimer.current);
     setVisible(true);
-    setIsAnimating(false);
     hideTimer.current = setTimeout(() => {
       setVisible(false);
     }, HIDE_DELAY);
+    console.log('hideTimer2', hideTimer.current);
   };
 
   const updateContainerSize = () => {
