@@ -28,7 +28,7 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   const targetIdx = useRef(0);
   const animId = useRef<number | null>(null);
   const hideTimer = useRef<NodeJS.Timeout | null>(null);
-  const [visible, setVisible] = useState(true);
+  const [visible, setVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [w, setW] = useState(0);
   const [h, setH] = useState(0);
@@ -111,34 +111,25 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
     animId.current = requestAnimationFrame(step);
   };
 
-  const initCursorFirstPosition = () => {
-    const box = containerRef.current;
-    const cursor = cursorRef.current;
-    if (!box || !cursor) return;
-
-    const cx = box.clientWidth / 2;
-    const cy = box.clientHeight / 2;
-    currentPos.current = { x: cx, y: cy };
-    cursor.style.transform = `translate3d(${(cx - CURSOR_SIZE / 2).toString()}px,${(
-      cy -
-      CURSOR_SIZE / 2
-    ).toString()}px,0)`;
-  };
-
   // Expose handle
   useImperativeHandle(ref, () => ({
     setPositions: (arr: CursorPosition[]) => {
       const box = containerRef.current;
       const cursor = cursorRef.current;
-      if (!box || !cursor) return;
+      if (!box || !cursor || arr.length === 0) return;
 
       stopAnim();
       positionsRef.current = arr;
       targetIdx.current = 0;
 
-      // Start from current position instead of center
-      if (!currentPos.current) {
-        initCursorFirstPosition();
+      // Set initial position to first coordinate if we don't have a position yet
+      if (!currentPos.current && arr.length > 0) {
+        const { x, y } = arr[0];
+        currentPos.current = { x, y };
+        cursor.style.transform = `translate3d(${(x - CURSOR_SIZE / 2).toString()}px,${(
+          y -
+          CURSOR_SIZE / 2
+        ).toString()}px,0)`;
       }
 
       updateContainerSize();
@@ -157,9 +148,7 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   );
 
   useEffect(() => {
-    setVisible(false);
     updateContainerSize();
-    initCursorFirstPosition();
   }, [containerRef.current]);
 
   // Render
