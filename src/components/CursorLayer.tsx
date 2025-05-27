@@ -58,7 +58,7 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   const startAnim = () => {
     const box = containerRef.current;
     const cursor = cursorRef.current;
-    if (!box || !cursor) return;
+    if (!box || !cursor || !w || !h) return;
     setIsAnimating(true);
 
     let prev = performance.now();
@@ -77,10 +77,16 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
       }
 
       const { x: cx, y: cy } = currentPos.current;
+      console.log('cx:', cx);
+      console.log('cy:', cy);
       const { x: txRaw, y: tyRaw } = positionsRef.current[targetIdx.current];
+      console.log('txRaw:', txRaw);
+      console.log('tyRaw:', tyRaw);
       // clamp
       const tx = Math.max(0, Math.min(txRaw, w));
       const ty = Math.max(0, Math.min(tyRaw, h));
+      console.log('tx:', tx);
+      console.log('ty:', ty);
 
       const dx = tx - cx;
       const dy = ty - cy;
