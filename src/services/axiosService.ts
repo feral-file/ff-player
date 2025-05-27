@@ -2,6 +2,8 @@ import axios, { AxiosError } from 'axios';
 
 // Error handler for axios instances
 const handleAxiosError = (error: AxiosError) => {
+  console.log('[Axios Error] Error:', JSON.stringify(error));
+
   if (error.response) {
     // The request was made and the server responded with a status code
     // that falls out of the range of 2xx
@@ -17,6 +19,11 @@ const handleAxiosError = (error: AxiosError) => {
     // Something happened in setting up the request that triggered an Error
     console.error('[Axios Error] Message:', error.message);
   }
+
+  if (error.code === 'ERR_NETWORK') {
+    alert('[Axios Error] Network error: ' + error.message);
+  }
+
   return Promise.reject(error);
 };
 
