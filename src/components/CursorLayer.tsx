@@ -14,7 +14,7 @@ export interface CursorLayerHandle {
 }
 
 const CURSOR_SIZE = 18;
-const HIDE_DELAY = 5000; // ms
+const HIDE_DELAY = 3000; // ms
 const SPEED_FACTOR = 15; // tune responsiveness
 const MIN_SPEED = 3000; // px / s
 const MAX_SPEED = 5500; // px / s
@@ -77,16 +77,10 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
       }
 
       const { x: cx, y: cy } = currentPos.current;
-      console.log('cx:', cx);
-      console.log('cy:', cy);
       const { x: txRaw, y: tyRaw } = positionsRef.current[targetIdx.current];
-      console.log('txRaw:', txRaw);
-      console.log('tyRaw:', tyRaw);
       // clamp
       const tx = Math.max(0, Math.min(txRaw, w));
       const ty = Math.max(0, Math.min(tyRaw, h));
-      console.log('tx:', tx);
-      console.log('ty:', ty);
 
       const dx = tx - cx;
       const dy = ty - cy;
@@ -106,15 +100,6 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
         currentPos.current = { x: nx, y: ny };
       }
       const { x, y } = currentPos.current;
-      console.log('animId:', animId.current);
-      console.log('targetIdx:', targetIdx.current);
-
-      console.log(
-        `Step: translate3d(${(x - CURSOR_SIZE / 2).toString()}px,${(
-          y -
-          CURSOR_SIZE / 2
-        ).toString()}px,0)`
-      );
 
       cursor.style.transform = `translate3d(${(x - CURSOR_SIZE / 2).toString()}px,${(
         y -
@@ -141,24 +126,17 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
       if (!currentPos.current && arr.length > 0) {
         const { x, y } = arr[0];
         currentPos.current = { x, y };
-        console.log(
-          `Init: translate3d(${(x - CURSOR_SIZE / 2).toString()}px,${(
-            y -
-            CURSOR_SIZE / 2
-          ).toString()}px,0)`
-        );
-
         cursor.style.transform = `translate3d(${(x - CURSOR_SIZE / 2).toString()}px,${(
           y -
           CURSOR_SIZE / 2
         ).toString()}px,0)`;
         targetIdx.current = 1; // Start animating from second position
+        setVisible(false);
       } else {
         targetIdx.current = 0; // For subsequent arrays, animate all positions
       }
 
       updateContainerSize();
-      resetHide();
       startAnim();
       setIsAnimating(true);
     },
