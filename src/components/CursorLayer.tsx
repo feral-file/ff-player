@@ -34,15 +34,11 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   const [h, setH] = useState(0);
 
   const resetHide = () => {
-    console.log('resetHide');
-    console.log('hideTimer 1', hideTimer.current);
-
     if (hideTimer.current) clearTimeout(hideTimer.current);
     setVisible(true);
     hideTimer.current = setTimeout(() => {
       setVisible(false);
     }, HIDE_DELAY);
-    console.log('hideTimer2', hideTimer.current);
   };
 
   const updateContainerSize = () => {
@@ -75,6 +71,7 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
         return;
       }
       if (targetIdx.current >= positionsRef.current.length) {
+        stopAnim();
         resetHide();
         return;
       }
@@ -141,7 +138,6 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
 
       updateContainerSize();
       startAnim();
-      setIsAnimating(true);
     },
   }));
 
