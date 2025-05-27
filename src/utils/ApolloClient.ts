@@ -20,7 +20,7 @@ const errorLink = onError(({ graphQLErrors, networkError }) => {
 
   if (networkError) {
     console.error(`[Network error]: ${networkError.message}`);
-    alert('[Apollo Client] Network error: ' + networkError.message);
+    window.location.reload();
   }
 });
 

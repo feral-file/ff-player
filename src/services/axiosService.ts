@@ -21,7 +21,8 @@ const handleAxiosError = (error: AxiosError) => {
   }
 
   if (error.code === 'ERR_NETWORK') {
-    alert('[Axios Error] Network error: ' + error.message);
+    console.log('[Axios Error] Network error: ' + error.message);
+    window.location.reload();
   }
 
   return Promise.reject(error);
