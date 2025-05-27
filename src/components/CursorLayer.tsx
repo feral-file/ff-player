@@ -56,7 +56,6 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   };
 
   const startAnim = () => {
-    console.log('startAnim');
     const box = containerRef.current;
     const cursor = cursorRef.current;
     if (!box || !cursor) return;
@@ -101,6 +100,16 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
         currentPos.current = { x: nx, y: ny };
       }
       const { x, y } = currentPos.current;
+      console.log('animId:', animId.current);
+      console.log('targetIdx:', targetIdx.current);
+
+      console.log(
+        `Step: translate3d(${(x - CURSOR_SIZE / 2).toString()}px,${(
+          y -
+          CURSOR_SIZE / 2
+        ).toString()}px,0)`
+      );
+
       cursor.style.transform = `translate3d(${(x - CURSOR_SIZE / 2).toString()}px,${(
         y -
         CURSOR_SIZE / 2
@@ -115,12 +124,6 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   // Expose handle
   useImperativeHandle(ref, () => ({
     setPositions: (arr: CursorPosition[]) => {
-      console.log('setPositions', JSON.stringify(arr));
-      console.log(
-        'setPositions positions:',
-        arr.map(pos => `(${pos.x.toString()}, ${pos.y.toString()})`)
-      );
-
       const box = containerRef.current;
       const cursor = cursorRef.current;
       if (!box || !cursor || arr.length === 0) return;
@@ -132,6 +135,13 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
       if (!currentPos.current && arr.length > 0) {
         const { x, y } = arr[0];
         currentPos.current = { x, y };
+        console.log(
+          `Init: translate3d(${(x - CURSOR_SIZE / 2).toString()}px,${(
+            y -
+            CURSOR_SIZE / 2
+          ).toString()}px,0)`
+        );
+
         cursor.style.transform = `translate3d(${(x - CURSOR_SIZE / 2).toString()}px,${(
           y -
           CURSOR_SIZE / 2
