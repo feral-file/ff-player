@@ -56,6 +56,7 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   };
 
   const startAnim = () => {
+    console.log('startAnim');
     const box = containerRef.current;
     const cursor = cursorRef.current;
     if (!box || !cursor) return;
@@ -114,6 +115,7 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   // Expose handle
   useImperativeHandle(ref, () => ({
     setPositions: (arr: CursorPosition[]) => {
+      console.log('setPositions', arr);
       const box = containerRef.current;
       const cursor = cursorRef.current;
       if (!box || !cursor || arr.length === 0) return;
