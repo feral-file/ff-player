@@ -115,16 +115,20 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   // Expose handle
   useImperativeHandle(ref, () => ({
     setPositions: (arr: CursorPosition[]) => {
-      console.log('setPositions', arr);
+      console.log('setPositions', JSON.stringify(arr));
+      console.log(
+        'setPositions positions:',
+        arr.map(pos => `(${pos.x.toString()}, ${pos.y.toString()})`)
+      );
+
       const box = containerRef.current;
       const cursor = cursorRef.current;
       if (!box || !cursor || arr.length === 0) return;
 
       stopAnim();
       positionsRef.current = arr;
-      targetIdx.current = 0;
 
-      // Set initial position to first coordinate if we don't have a position yet
+      // For the very first positions array, jump to first position and animate from second
       if (!currentPos.current && arr.length > 0) {
         const { x, y } = arr[0];
         currentPos.current = { x, y };
@@ -132,6 +136,9 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
           y -
           CURSOR_SIZE / 2
         ).toString()}px,0)`;
+        targetIdx.current = 1; // Start animating from second position
+      } else {
+        targetIdx.current = 0; // For subsequent arrays, animate all positions
       }
 
       updateContainerSize();
