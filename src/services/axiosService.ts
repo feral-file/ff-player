@@ -1,7 +1,14 @@
-import axios, { AxiosError } from 'axios';
+import {
+  NETWORK_ERROR_RETRY_COUNT,
+  NETWORK_ERROR_RETRY_DELAY,
+} from '@/constants';
+import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
+
+// Sleep function for delays
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Error handler for axios instances
-const handleAxiosError = (error: AxiosError) => {
+const handleAxiosError = async (error: AxiosError): Promise<AxiosResponse> => {
   console.log('[Axios Error] Error:', JSON.stringify(error));
 
   if (error.response) {
@@ -22,7 +29,30 @@ const handleAxiosError = (error: AxiosError) => {
 
   if (error.code === 'ERR_NETWORK') {
     console.log('[Axios Error] Network error: ' + error.message);
-    window.location.reload();
+
+    // Get retry count from config (initialize if not exists)
+    const config = error.config as AxiosRequestConfig & {
+      __retryCount?: number;
+    };
+    config.__retryCount = config.__retryCount ?? 0;
+
+    // Retry if under max retries
+    if (config.__retryCount < NETWORK_ERROR_RETRY_COUNT) {
+      config.__retryCount++;
+      const delayTime =
+        NETWORK_ERROR_RETRY_DELAY * Math.pow(2, config.__retryCount - 1); // Exponential backoff
+
+      console.log(
+        `[Axios Retry] Attempt ${String(config.__retryCount)}/${String(NETWORK_ERROR_RETRY_COUNT)} after ${String(delayTime)}ms`
+      );
+
+      await sleep(delayTime);
+
+      // Retry the request
+      return axios.request(config);
+    } else {
+      console.error('[Axios Error] Max retries exceeded, giving up');
+    }
   }
 
   return Promise.reject(error);
