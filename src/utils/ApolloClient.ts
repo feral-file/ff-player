@@ -1,5 +1,10 @@
+import {
+  NETWORK_ERROR_RETRY_COUNT,
+  NETWORK_ERROR_RETRY_DELAY,
+} from '@/constants';
 import { ApolloClient, InMemoryCache, from, HttpLink } from '@apollo/client';
 import { onError } from '@apollo/client/link/error';
+import { RetryLink } from '@apollo/client/link/retry';
 import { GraphQLFormattedError } from 'graphql';
 
 const errorLink = onError(({ graphQLErrors, networkError }) => {
@@ -20,8 +25,20 @@ const errorLink = onError(({ graphQLErrors, networkError }) => {
 
   if (networkError) {
     console.error(`[Network error]: ${networkError.message}`);
-    window.location.reload();
   }
+});
+
+const retryLink = new RetryLink({
+  delay: {
+    initial: NETWORK_ERROR_RETRY_DELAY,
+  },
+  attempts: {
+    max: NETWORK_ERROR_RETRY_COUNT,
+    retryIf: (error: Error) => {
+      // Retry on network errors
+      return 'networkError' in error && error.networkError != null;
+    },
+  },
 });
 
 const httpLink = new HttpLink({
@@ -30,7 +47,7 @@ const httpLink = new HttpLink({
 
 const createApolloClient = () => {
   return new ApolloClient({
-    link: from([errorLink, httpLink]),
+    link: from([errorLink, retryLink, httpLink]),
     cache: new InMemoryCache(),
     defaultOptions: {
       watchQuery: {

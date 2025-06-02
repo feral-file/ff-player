@@ -45,3 +45,8 @@ export const SOURCE_EXHIBITION_ID = 'source';
 export const DEFAULT_DELAY = 24 * 60 * 60 * 1000;
 export const LEE_MULLICAN_EXHIBITION_CONTRACT =
   'KT1CtDPiLjHiU1LVLrhshDry8jkR9h29tXNo';
+
+// Network error
+export const NETWORK_ERROR_MESSAGE = 'Network error';
+export const NETWORK_ERROR_RETRY_COUNT = 3;
+export const NETWORK_ERROR_RETRY_DELAY = 1000;
