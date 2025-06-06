@@ -58,6 +58,8 @@ class DailyService {
       `/api/dailies/date/${date}?${expandParams}`
     );
 
+    console.log('[DAILY] getDailiesByDate', JSON.stringify(response.data));
+
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     return response.data.result as Daily[];
   }
