@@ -69,9 +69,8 @@ class ArtworkService {
     } catch (error) {
       console.log('[API] Error querying tokens:', JSON.stringify(error));
       Sentry.captureException(error);
+      return [];
     }
-
-    return [];
   }
 
   public async queryTokenConfiguration(
