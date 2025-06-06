@@ -24,7 +24,7 @@ const errorLink = onError(({ graphQLErrors, networkError }) => {
   }
 
   if (networkError) {
-    console.error(`[Network error]: ${networkError.message}`);
+    console.error(`[Network error]: ${JSON.stringify(networkError)}`);
   }
 });
 
@@ -32,12 +32,14 @@ const retryLink = new RetryLink({
   delay: {
     initial: NETWORK_ERROR_RETRY_DELAY,
     max: Infinity,
-    jitter: true,
   },
   attempts: {
     max: NETWORK_ERROR_RETRY_COUNT,
     retryIf: error => {
-      console.log('[Apollo Retry] Checking if should retry error:', error);
+      console.log(
+        '[Apollo Retry] Checking if should retry error:',
+        JSON.stringify(error)
+      );
 
       // Check for network errors - safely check if error has networkError property
       const shouldRetry = Boolean(
