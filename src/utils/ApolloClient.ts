@@ -41,6 +41,14 @@ const retryLink = new RetryLink({
         JSON.stringify(error)
       );
 
+      // Check for TypeError: Failed to fetch
+      if (
+        error instanceof TypeError &&
+        error.message.includes('Failed to fetch')
+      ) {
+        return true;
+      }
+
       // Check for network errors - safely check if error has networkError property
       const shouldRetry = Boolean(
         error &&
