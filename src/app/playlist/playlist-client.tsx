@@ -183,14 +183,15 @@ export default function PlaylistClient() {
       const previewData = new Map<string, string>();
       const contractAddress = new Map<string, string>();
       const mapTokens = new Map<string, IndexerToken>();
-      tokens.forEach((token: IndexerToken) => {
-        previewData.set(
-          token.indexID,
-          token.asset?.metadata.project.latest.previewURL ?? ''
-        );
-        contractAddress.set(token.indexID, token.contractAddress);
-        mapTokens.set(token.indexID, token);
-      });
+      await Promise.all(
+        tokens.map(async (token: IndexerToken) => {
+          const previewURL =
+            await artworkService.current.getIndexerTokenPreview(token);
+          previewData.set(token.indexID, previewURL);
+          contractAddress.set(token.indexID, token.contractAddress);
+          mapTokens.set(token.indexID, token);
+        })
+      );
       const updatedArtworks = artworks.map((artwork: PlayArtwork) => {
         const aw: PlaylistToken = {
           duration: artwork.duration,

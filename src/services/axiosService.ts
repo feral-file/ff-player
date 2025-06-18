@@ -114,4 +114,12 @@ supportAxiosInstance.interceptors.response.use(
   handleAxiosError
 );
 
+export const infuraAxiosInstance = axios.create({
+  // baseURL: process.env.NEXT_PUBLIC_INFURA_ENDPOINT,
+  baseURL: 'https://mainnet.infura.io/v3/daf723d77ae54edf8b2abaf59f629cd1',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
 export default axiosInstance;
