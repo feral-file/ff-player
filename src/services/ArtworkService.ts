@@ -1,8 +1,10 @@
 import { ApolloClient, gql, NormalizedCacheObject } from '@apollo/client';
 import createApolloClient from '@/utils/ApolloClient';
-import { Artwork, IndexerToken, AssetConfiguration } from '@/models';
+import { Artwork, IndexerToken, AssetConfiguration, Series } from '@/models';
 import axiosInstance from './axiosService';
 import * as Sentry from '@sentry/nextjs';
+import { customPreviewFromTokenMetadata } from '@/utils/helper';
+import { SeriesService } from './series.service';
 
 const LIMIT_PER_PAGE = 50;
 const cloudFlareHostingDomain = 'imagedelivery.net';
@@ -37,7 +39,26 @@ class ArtworkService {
     return null;
   }
 
-  public getArtworkPreview(artwork: Artwork): string {
+  public async getArtworkPreview(
+    artwork: Artwork,
+    series?: Series
+  ): Promise<string> {
+    if (!series) {
+      series = await new SeriesService().getSeries(artwork.seriesID ?? '');
+    }
+
+    if (series.metadata?.onchainRenderer && artwork.id) {
+      return (
+        (await customPreviewFromTokenMetadata(
+          series.exhibition?.contracts?.find(
+            contract =>
+              contract.blockchainType === series.exhibition?.mintBlockchain
+          ),
+          artwork.id
+        )) ?? ''
+      );
+    }
+
     const previewUrl =
       artwork.metadata?.alternativePreviewURI ??
       artwork.metadata?.previewCloudFlareURL ??
@@ -45,6 +66,24 @@ class ArtworkService {
       artwork.previewURI;
 
     return previewUrl ? this.transformPreviewSrc(previewUrl) : '';
+  }
+
+  public async getIndexerTokenPreview(token: IndexerToken): Promise<string> {
+    if (
+      token.asset?.metadata.project.latest.artworkMetadata?.isFeralfileFrame
+    ) {
+      return (
+        (await customPreviewFromTokenMetadata(
+          {
+            address: token.contractAddress,
+            blockchainType: token.blockchain,
+          },
+          token.id
+        )) ?? ''
+      );
+    }
+
+    return token.asset?.metadata.project.latest.previewURL ?? '';
   }
 
   public async queryIndexerToken(id: string): Promise<IndexerToken | null> {

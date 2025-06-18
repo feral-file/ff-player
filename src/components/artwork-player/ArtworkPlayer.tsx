@@ -367,7 +367,10 @@ const ArtworkPlayer = ({
   const updateSoftwareURL = (
     displaySettings: TokenDisplaySettingWithChanged
   ) => {
-    if (previewType === PreviewHTMLTag.iframe) {
+    if (
+      previewType === PreviewHTMLTag.iframe &&
+      !displayPreviewURL.includes('base64')
+    ) {
       const displayMode =
         (displaySettings.scaling ?? DisplaySettings.defaultScaling) ===
         ArtFraming.CropToFill

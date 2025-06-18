@@ -1,10 +1,17 @@
+import { Blockchain } from './exhibition.model';
+
 interface AssetAttributes {
   configuration?: AssetConfiguration;
+}
+
+interface ArtworkMetadata {
+  isFeralfileFrame: boolean;
 }
 
 interface IndexerArtwork {
   medium: string;
   previewURL: string;
+  artworkMetadata?: ArtworkMetadata;
 }
 
 interface ProjectMetadata {
@@ -29,6 +36,7 @@ export interface IndexerToken {
   indexID: string;
   source: string;
   asset?: Asset;
+  blockchain?: Blockchain;
 }
 
 export interface AssetConfiguration {

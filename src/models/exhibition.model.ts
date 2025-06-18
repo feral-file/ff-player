@@ -30,6 +30,7 @@ export interface Exhibition {
   contracts?: ExhibitionContract[];
 }
 
-interface ExhibitionContract {
+export interface ExhibitionContract {
   address: string;
+  blockchainType?: Blockchain;
 }

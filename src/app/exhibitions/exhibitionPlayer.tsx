@@ -68,7 +68,8 @@ const ExhibitionHall = () => {
       return;
     }
 
-    artwork.previewURI = artworkService.current.getArtworkPreview(artwork);
+    artwork.previewURI =
+      await artworkService.current.getArtworkPreview(artwork);
     setArtwork(artwork);
 
     // Set mixpanel metadata

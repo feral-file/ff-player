@@ -26,7 +26,8 @@
     "reconnecting-websocket": "^4.4.0",
     "sass": "^1.77.8",
     "swiper": "^11.1.9",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "web3": "^1.10.0"
   },
   "devDependencies": {
     "@eslint/compat": "^1.1.1",
