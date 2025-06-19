@@ -44,6 +44,7 @@ jobs:
           echo "NEXT_PUBLIC_ENVIRONMENT=${{ vars.ENVIRONMENT }}" >> .env.local
           echo "NEXT_PUBLIC_SENTRY_DSN=${{ vars.SENTRY_DSN }}" >> .env.local
           echo "NEXT_PUBLIC_SUPPORT_API_URL=${{ vars.SUPPORT_API_URL }}" >> .env.local
+          echo "NEXT_PUBLIC_INFURA_ENDPOINT=${{ vars.INFURA_ENDPOINT }}" >> .env.local
           echo "NEXT_PUBLIC_SUPPORT_API_KEY=${{ secrets.SUPPORT_API_KEY }}" >> .env.local
 
       - name: Build Next.js app
