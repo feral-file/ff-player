@@ -1,5 +1,5 @@
 import CanvasService from '../CanvasService';
-import { ViewMode, WebSocketMessage } from '@/models';
+import { WebSocketMessage } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import { DeviceNamePrefix } from '@/constants';
 import {
@@ -38,13 +38,16 @@ export class CDPRequestHandler {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleConnectivityChange =
       this.handleConnectivityChange.bind(this);
+  }
 
+  public cleanup() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    (window as any).getCurrentOrientation =
-      this.getCurrentOrientation.bind(this);
-
+    (window as any).handleCDPRequest = null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    (window as any).handleWatchdogEvent = this.handleWatchdogEvent.bind(this);
+    (window as any).handleConnectivityChange = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).handleWatchdogEvent = null;
+    this.isInitialized = false;
   }
 
   private handleCDPRequest(event: WebSocketMessage): string {
@@ -136,13 +139,6 @@ export class CDPRequestHandler {
     );
   }
 
-  public getCurrentOrientation(): string {
-    const viewMode = DeviceManager.getViewMode();
-    return JSON.stringify({
-      isLandscape: viewMode === ViewMode.landscape,
-    });
-  }
-
   public handleWatchdogEvent(event: string) {
     try {
       console.log('[CDP] Watchdog event received:', event);
@@ -167,17 +163,5 @@ export class CDPRequestHandler {
     }
 
     return false;
-  }
-
-  public cleanup() {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    (window as any).handleCDPRequest = null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    (window as any).handleConnectivityChange = null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    (window as any).getCurrentOrientation = null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    (window as any).handleWatchdogEvent = null;
-    this.isInitialized = false;
   }
 }
