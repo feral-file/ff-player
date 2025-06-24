@@ -1,24 +1,21 @@
-import { PlayArtwork, PlaylistToken } from '@/models';
+import { DP1Item } from '@/models/dp1.model';
 
-export function getIndex(
-  playlistTokens: PlaylistToken[],
-  startTime: number
-): number {
+export function getIndex(playlistItems: DP1Item[], startTime: number): number {
   // Return first artwork if duration is 0
   let index = 0;
   const currentTime = Date.now();
   let elapsedTime = currentTime - startTime;
 
-  const totalDuration = playlistTokens.reduce(
-    (acc, artwork) => acc + artwork.duration || 0,
+  const totalDuration = playlistItems.reduce(
+    (acc, artwork) => acc + (artwork.duration || 0) * 1000,
     0
   );
 
   elapsedTime = elapsedTime % totalDuration;
 
-  for (let i = 0; i < playlistTokens.length; i++) {
-    const artwork = playlistTokens[i];
-    elapsedTime -= artwork.duration || 0;
+  for (let i = 0; i < playlistItems.length; i++) {
+    const artwork = playlistItems[i];
+    elapsedTime -= (artwork.duration || 0) * 1000;
     if (elapsedTime < 0) {
       index = i;
       break;
@@ -29,13 +26,13 @@ export function getIndex(
 }
 
 export function calculateStartTime(
-  artworks: PlayArtwork[],
+  dp1Items: DP1Item[],
   index: number,
   elapsedTime?: number
 ): number {
   let startTime = new Date().setMilliseconds(0);
   for (let i = 0; i < index; i++) {
-    startTime -= artworks[i].duration || 0;
+    startTime -= (dp1Items[i].duration || 0) * 1000;
   }
 
   if (elapsedTime) {
@@ -46,7 +43,7 @@ export function calculateStartTime(
 }
 
 export function getArtworkStartTime(
-  playlist: PlayArtwork[],
+  dp1Items: DP1Item[],
   index: number,
   playlistStartTime: number
 ): number {
@@ -55,7 +52,7 @@ export function getArtworkStartTime(
 
   // Add the duration of all previous artworks
   for (let i = 0; i < index; i++) {
-    artworkStartTime += playlist[i].duration || 0;
+    artworkStartTime += (dp1Items[i].duration || 0) * 1000;
   }
 
   return artworkStartTime;

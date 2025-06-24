@@ -53,6 +53,7 @@ import {
 } from './custom-hooks/useCursorPositions';
 import { LocalStorageItem } from '@/constants';
 import { ErrorType } from '@/models/error.model';
+import { DP1Call } from '@/models/dp1.model';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -184,6 +185,24 @@ class CanvasService {
     return reply;
   }
 
+  public processDP1Message(dp1Call: DP1Call) {
+    console.log('[CanvasService] Processing DP1 message');
+
+    const command = CastCommand.castListArtwork;
+
+    Sentry.addBreadcrumb({
+      data: { command },
+      category: 'CanvasService',
+      message: 'Received command',
+    });
+
+    const items = dp1Call.items;
+    console.log('[CanvasService] Items:', JSON.stringify(items));
+    const reply = this.commandHandler(command, { items });
+    console.log('[CanvasService] Response message:', JSON.stringify(reply));
+    return reply;
+  }
+
   private commandHandler(command: CastCommand, requestJson: unknown): Reply {
     console.log(
       '[CAST] commandHandler:',
@@ -294,7 +313,6 @@ class CanvasService {
       catalogId: this.castInfo?.catalogId,
 
       artworks: this.castInfo?.artworks ?? [],
-      startTime: this.castInfo?.startTime,
       index: this.castInfo?.index,
       isPaused: this.castInfo?.isPaused,
 
@@ -332,8 +350,8 @@ class CanvasService {
     this.setCastInfo({
       castCommand: CastCommand.castListArtwork,
       deviceInfo: this.castInfo?.deviceInfo,
-      artworks: request.artworks,
-      startTime: request.startTime ?? Date.now(),
+      items: request.items,
+      startTime: Date.now(),
       index: 0,
       isPaused: false,
     });
@@ -358,14 +376,14 @@ class CanvasService {
 
     const now = Date.now();
     const currentIndex = this.castInfo?.index ?? 0;
-    const playlist = this.castInfo?.artworks ?? [];
+    const playlist = this.castInfo?.items ?? [];
     const startPlayArtworkTime = getArtworkStartTime(
       playlist,
       currentIndex,
       this.castInfo?.startTime ?? Date.now()
     );
     const elapsedTime = now - startPlayArtworkTime;
-    const remainTime = playlist[currentIndex].duration - elapsedTime;
+    const remainTime = playlist[currentIndex].duration * 1000 - elapsedTime;
 
     this.setCastInfo({
       ...this.castInfo,
@@ -381,7 +399,7 @@ class CanvasService {
     console.log('[CanvasService] resume casting:', request);
 
     const startTime = calculateStartTime(
-      this.castInfo?.artworks ?? [],
+      this.castInfo?.items ?? [],
       this.castInfo?.index ?? 0,
       this.castInfo?.elapsedTime
         ? new Date(this.castInfo.elapsedTime).setMilliseconds(0)
@@ -401,7 +419,7 @@ class CanvasService {
     console.log('[CanvasService] next artwork: ', request);
 
     const currentIndex = this.castInfo?.index ?? 0;
-    const playlist = this.castInfo?.artworks ?? [];
+    const playlist = this.castInfo?.items ?? [];
 
     const index = (currentIndex + 1) % playlist.length;
     const startTime = calculateStartTime(playlist, index);
@@ -422,7 +440,7 @@ class CanvasService {
     console.log('[CanvasService] previous artwork', request);
 
     const currentIndex = this.castInfo?.index ?? 0;
-    const playlist = this.castInfo?.artworks ?? [];
+    const playlist = this.castInfo?.items ?? [];
 
     let index: number;
     if (currentIndex === 0) {
@@ -451,7 +469,7 @@ class CanvasService {
       return { ok: false };
     }
 
-    const playlist = this.castInfo?.artworks ?? [];
+    const playlist = this.castInfo?.items ?? [];
     const index = playlist.findIndex(
       (p: PlayArtwork) => p.token?.id === tokenID
     );
@@ -476,7 +494,7 @@ class CanvasService {
     console.log('[CanvasService] update duration', request);
 
     const currentIndex = this.castInfo?.index ?? 0;
-    const playlist = request.artworks;
+    const playlist = this.castInfo?.items ?? [];
     const startTime = calculateStartTime(playlist, currentIndex);
 
     this.setCastInfo({
