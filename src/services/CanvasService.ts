@@ -4,7 +4,6 @@ import {
   ConnectRequestV2,
   ConnectReplyV2,
   DisconnectReplyV2,
-  CheckDeviceStatusRequest,
   CheckDeviceStatusReply,
   CastExhibitionRequest,
   CastExhibitionReply,
@@ -53,7 +52,7 @@ import {
 } from './custom-hooks/useCursorPositions';
 import { LocalStorageItem } from '@/constants';
 import { ErrorType } from '@/models/error.model';
-import { DP1Call } from '@/models/dp1.model';
+import { DP1, DP1Action } from '@/models/dp1.model';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -185,22 +184,61 @@ class CanvasService {
     return reply;
   }
 
-  public processDP1Message(dp1Call: DP1Call) {
-    console.log('[CanvasService] Processing DP1 message');
+  public processDP1Message(dp1Message: DP1) {
+    const dp1Intent = dp1Message.intent;
+    const dp1Call = dp1Message.dp1_call;
+    const action = dp1Intent.action;
 
-    const command = CastCommand.castListArtwork;
-
+    console.log('[CanvasService] Processing DP1 message: ', action);
     Sentry.addBreadcrumb({
-      data: { command },
+      data: { action },
       category: 'CanvasService',
-      message: 'Received command',
+      message: 'Received DP1 command',
     });
 
-    const items = dp1Call.items;
-    console.log('[CanvasService] Items:', JSON.stringify(items));
-    const reply = this.commandHandler(command, { items });
-    console.log('[CanvasService] Response message:', JSON.stringify(reply));
-    return reply;
+    switch (action) {
+      case DP1Action.NowDisplay: {
+        const reply = this.castListArtwork({ items: dp1Call.items });
+        console.log('[CanvasService] Response message:', JSON.stringify(reply));
+        return reply;
+      }
+
+      case DP1Action.SchedulePlay: {
+        // dp1Intent.schedule_time = "2025-06-24T23:00:00.000Z"
+
+        const scheduleTime = new Date(dp1Intent.schedule_time ?? '');
+        const now = new Date();
+        const diff = scheduleTime.getTime() - now.getTime();
+
+        setTimeout(() => {
+          this.castListArtwork({ items: dp1Call.items });
+        }, diff);
+        return { ok: true };
+      }
+
+      case DP1Action.GetCurrentPlaylist: {
+        return this.status();
+      }
+
+      default:
+        return { ok: false };
+    }
+  }
+
+  private dp1CommandHandler(command: CastCommand, requestJson: unknown): Reply {
+    try {
+      switch (command) {
+        case CastCommand.checkStatus:
+          return this.status();
+        case CastCommand.castListArtwork:
+          return this.castListArtwork(requestJson as CastListArtworkRequest);
+        default:
+          return { ok: false };
+      }
+    } catch (error) {
+      console.error('[CAST] Error handling command:', error);
+      return { ok: false };
+    }
   }
 
   private commandHandler(command: CastCommand, requestJson: unknown): Reply {
@@ -216,7 +254,7 @@ class CanvasService {
         case CastCommand.disconnect:
           return this.disconnect();
         case CastCommand.checkStatus:
-          return this.status(requestJson as CheckDeviceStatusRequest);
+          return this.status();
         case CastCommand.castListArtwork:
           return this.castListArtwork(requestJson as CastListArtworkRequest);
         // case CastCommand.cancelCasting:
@@ -293,8 +331,8 @@ class CanvasService {
     return { ok: true };
   }
 
-  private status(request: CheckDeviceStatusRequest): CheckDeviceStatusReply {
-    console.log('[CanvasService] Check status:', JSON.stringify(request));
+  private status(): CheckDeviceStatusReply {
+    console.log('[CanvasService] Check status');
 
     const isOverheating =
       localStorage.getItem(LocalStorageItem.criticalTemp) === 'true';
@@ -322,6 +360,8 @@ class CanvasService {
         scaling: deviceSettings?.scaling ?? DisplaySettings.defaultScaling,
         orientation: DeviceManager.getViewMode() ?? ViewMode.landscape,
       },
+
+      items: this.castInfo?.items,
     };
   }
 

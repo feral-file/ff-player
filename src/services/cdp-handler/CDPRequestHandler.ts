@@ -8,7 +8,7 @@ import {
   WatchdogEvent,
 } from '@/models/custom_event';
 import { handleOverheatingError } from '@/utils/ErrorNavigation';
-import { DP1, DP1Action } from '@/models/dp1.model';
+import { DP1 } from '@/models/dp1.model';
 
 const sendDeviceInfoCommand = 'sendDeviceInfo';
 const pingCommand = 'ping';
@@ -177,37 +177,12 @@ export class CDPRequestHandler {
     try {
       console.log('[CDP] DP1 request received:', JSON.stringify(dp1Object));
 
-      const action = dp1Object.intent.action;
-
-      let reply: WebSocketMessage | null = null;
-      switch (action) {
-        case DP1Action.NowDisplay: {
-          const responseMessage = CanvasService.getInstance().processDP1Message(
-            dp1Object.dp1_call
-          );
-          reply = {
-            messageID,
-            message: responseMessage,
-          };
-          break;
-        }
-
-        case DP1Action.NowPlay: {
-          reply = {
-            messageID,
-            message: { ok: true },
-          };
-          break;
-        }
-
-        case DP1Action.GetCurrentPlaylist: {
-          break;
-        }
-
-        default: {
-          break;
-        }
-      }
+      const responseMessage =
+        CanvasService.getInstance().processDP1Message(dp1Object);
+      const reply = {
+        messageID,
+        message: responseMessage,
+      };
 
       return JSON.stringify(reply);
     } catch (error) {

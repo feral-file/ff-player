@@ -64,6 +64,8 @@ export interface CheckDeviceStatusReply extends Reply {
     scaling: ArtFraming;
     orientation: ViewMode;
   };
+
+  items?: DP1Item[];
 }
 
 export interface CastExhibitionRequest {

@@ -19,7 +19,7 @@ export interface DP1Call {
 
 export enum DP1Action {
   NowDisplay = 'now_display',
-  NowPlay = 'schedule_play',
+  SchedulePlay = 'schedule_play',
   GetCurrentPlaylist = 'get_current_playlist',
 }
 
