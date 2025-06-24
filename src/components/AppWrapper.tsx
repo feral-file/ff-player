@@ -10,6 +10,7 @@ import {
   NavigateToErrorEventDetail,
 } from '@/models/custom_event';
 import { LocalStorageItem } from '@/constants';
+import DP1ScheduleService from '@/services/DP1ScheduleService';
 
 const enum CastState {
   None, // Not casting
@@ -72,6 +73,19 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       clearInterval(intervalID);
     };
   }, [context.appRemoteConfig.duration]);
+
+  // Check for scheduled DP1 tasks
+  useEffect(() => {
+    const dp1ScheduleService = DP1ScheduleService.getInstance();
+    dp1ScheduleService.checkAndExecuteScheduledTasks();
+    const scheduledTasksInterval = setInterval(() => {
+      dp1ScheduleService.checkAndExecuteScheduledTasks();
+    }, 60000);
+
+    return () => {
+      clearInterval(scheduledTasksInterval);
+    };
+  }, []);
 
   const checkVersion = async () => {
     const [currentVersion, newVersion] = await Promise.all([

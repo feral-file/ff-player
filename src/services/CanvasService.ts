@@ -52,7 +52,8 @@ import {
 } from './custom-hooks/useCursorPositions';
 import { LocalStorageItem } from '@/constants';
 import { ErrorType } from '@/models/error.model';
-import { DP1, DP1Action } from '@/models/dp1.model';
+import { DP1, DP1Action, DP1Item } from '@/models/dp1.model';
+import DP1ScheduleService from './DP1ScheduleService';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -204,15 +205,7 @@ class CanvasService {
       }
 
       case DP1Action.SchedulePlay: {
-        // dp1Intent.schedule_time = "2025-06-24T23:00:00.000Z"
-
-        const scheduleTime = new Date(dp1Intent.schedule_time ?? '');
-        const now = new Date();
-        const diff = scheduleTime.getTime() - now.getTime();
-
-        setTimeout(() => {
-          this.castListArtwork({ items: dp1Call.items });
-        }, diff);
+        DP1ScheduleService.getInstance().storeScheduledTask(dp1Message);
         return { ok: true };
       }
 
@@ -222,22 +215,6 @@ class CanvasService {
 
       default:
         return { ok: false };
-    }
-  }
-
-  private dp1CommandHandler(command: CastCommand, requestJson: unknown): Reply {
-    try {
-      switch (command) {
-        case CastCommand.checkStatus:
-          return this.status();
-        case CastCommand.castListArtwork:
-          return this.castListArtwork(requestJson as CastListArtworkRequest);
-        default:
-          return { ok: false };
-      }
-    } catch (error) {
-      console.error('[CAST] Error handling command:', error);
-      return { ok: false };
     }
   }
 
@@ -619,6 +596,14 @@ class CanvasService {
 
     this.notifyDisplaySettingsChanged(request.isSaved, request);
     return { ok: true };
+  }
+
+  public executeScheduledDP1Task(items: DP1Item[]): void {
+    console.log(
+      '[CanvasService] Executing scheduled DP1 task with items:',
+      items
+    );
+    this.castListArtwork({ items });
   }
 }
 

@@ -7,6 +7,7 @@ export enum LocalStorageItem {
   displaySettings = 'displaySettings',
   viewMode = 'viewMode',
   criticalTemp = 'criticalTemp',
+  dp1ScheduledTask = 'dp1_scheduled_tasks',
 }
 
 export enum Platform {
