@@ -16,7 +16,6 @@ import RemoteConfigService, {
   AppRemoteConfig,
 } from '@/services/remoteConfigService';
 import { AppSettings, LocalStorageItem } from '@/constants';
-import { useSearchParams } from 'next/navigation';
 import DeviceManager from '@/utils/DeviceManager';
 import useCastInfo from '@/services/custom-hooks/useCastInfo';
 import { CastCommand, CastInfo } from '@/models';
@@ -59,7 +58,6 @@ export const useAppContext = () => {
 export const AppProvider = ({ children }: AppContextProps) => {
   const [appRemoteConfig, setAppConfig] = useState({} as AppRemoteConfig);
   const remoteConfigService = useRef(new RemoteConfigService());
-  const [platformInitialized, setPlatformInitialized] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
   const { castInfo, setCastInfo } = useCastInfo();
@@ -69,7 +67,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const isFirstRender = useRef(true);
 
   const deviceRotation = useDeviceRotation();
-  const searchParams = useSearchParams();
   const canvasService = useRef(CanvasService.getInstance());
 
   const initContext = async () => {
@@ -140,16 +137,8 @@ export const AppProvider = ({ children }: AppContextProps) => {
     return null;
   };
 
-  // Initialize platform events
   useEffect(() => {
     const cdpRequestHandler = CDPRequestHandler.getInstance();
-
-    const platform = searchParams.get('platform') ?? '';
-    if (platform) {
-      localStorage.setItem(LocalStorageItem.platform, platform);
-    }
-
-    setPlatformInitialized(true);
     return () => {
       cdpRequestHandler.cleanup();
     };
@@ -176,12 +165,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
   }, []);
 
   useEffect(() => {
-    if (!platformInitialized) return;
-
     initContext().catch((error: unknown) => {
       console.log('Error init context', error);
     });
-  }, [platformInitialized]);
+  }, []);
 
   useEffect(() => {
     if (isFirstRender.current) {

@@ -186,7 +186,6 @@ const ArtworkPlayer = ({
       };
     }
   }, [castingType, artworkID, exhibitionID, section]);
-  // Metric handling END.
 
   useEffect(() => {
     const detectPreviewType = async (previewURL: string) => {

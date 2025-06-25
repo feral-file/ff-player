@@ -1,4 +1,4 @@
-import { LocalStorageItem, Platform } from '@/constants';
+import { LocalStorageItem, PLATFORM, VENDOR } from '@/constants';
 import { ExhibitionDisplaySection, MetricEvent } from '@/models/metric.model';
 import DeviceManager from '@/utils/DeviceManager';
 import axios, { AxiosInstance } from 'axios';
@@ -121,12 +121,7 @@ export function uploadMetricEventsFromLocalStorage() {
 }
 
 function getDeviceInfoBaseOnPlatform(): { vendor: string; platform: string } {
-  const platform = localStorage.getItem(LocalStorageItem.platform);
-  if (platform === Platform.ffDevice) {
-    return { vendor: 'ffPortal', platform: 'ffPortal' };
-  }
-
-  return { vendor: 'web', platform: 'web' };
+  return { vendor: VENDOR, platform: PLATFORM };
 }
 
 export function mappingExhibitionCatalogToExhibitionDisplaySection(

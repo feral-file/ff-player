@@ -1,6 +1,5 @@
 export enum LocalStorageItem {
   deviceId = 'device_id',
-  platform = 'platform',
   castInfo = 'castInfo',
   name = 'device_name',
   metricEvents = 'metricEvents',
@@ -50,3 +49,6 @@ export const LEE_MULLICAN_EXHIBITION_CONTRACT =
 export const NETWORK_ERROR_MESSAGE = 'Network error';
 export const NETWORK_ERROR_RETRY_COUNT = 3;
 export const NETWORK_ERROR_RETRY_DELAY = 1000;
+
+export const VENDOR = 'ffPortal';
+export const PLATFORM = 'ffPortal';

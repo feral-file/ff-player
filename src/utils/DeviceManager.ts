@@ -1,11 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
-import {
-  FFDeviceConfigService,
-  PlatformConfigService,
-  WebConfigService,
-} from './platform';
+import { FFDeviceConfigService, PlatformConfigService } from './platform';
 import * as Sentry from '@sentry/nextjs';
-import { DeviceNamePrefix, LocalStorageItem, Platform } from '@/constants';
+import { DeviceNamePrefix, LocalStorageItem, PLATFORM } from '@/constants';
 import { BrowserInfo, detect } from 'detect-browser';
 import { DisplaySettings } from '@/models/display_settings.model';
 import { ViewMode } from '@/models';
@@ -22,27 +18,19 @@ class DeviceManager {
   }
 
   private createConfigService(): PlatformConfigService {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    const platform = localStorage?.getItem(LocalStorageItem.platform);
     const browser = detect() as BrowserInfo;
 
     Sentry.addBreadcrumb({
       data: {
-        platform,
+        PLATFORM,
         ...browser,
       },
       category: 'DeviceManager',
       message: 'Creating PlatformConfigService instance',
     });
 
-    console.log(
-      `[DEVICE] creating PlatformConfigService instance for platform: ${platform ?? 'Web'}`
-    );
-    if (platform === Platform.ffDevice) {
-      return new FFDeviceConfigService();
-    }
-
-    return new WebConfigService();
+    console.log('[DEVICE] creating PlatformConfigService instance ');
+    return new FFDeviceConfigService();
   }
 
   private getFromLocalStorage(key: string): string | null {
@@ -66,8 +54,7 @@ class DeviceManager {
 
   public getDeviceId(): string | null {
     let deviceId = this.getFromLocalStorage(LocalStorageItem.deviceId);
-    const platform = localStorage.getItem(LocalStorageItem.platform);
-    if (!deviceId && !platform) {
+    if (!deviceId) {
       deviceId = uuidv4();
       this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
     }
