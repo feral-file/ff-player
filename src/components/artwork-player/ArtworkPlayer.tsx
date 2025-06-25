@@ -6,7 +6,6 @@ import Loading from '../loading/loading';
 import { useAppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
 import { appendMetricEventToLocalStorage } from '@/services/metric.service';
-import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
 import MessageModal from '../MessageModal';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
 import {
@@ -29,6 +28,12 @@ import {
   MITETypeIframe,
   PreviewHTMLTag,
 } from '@/models';
+import {
+  CastingArtworkType,
+  ExhibitionDisplaySection,
+  MetricEvent,
+} from '@/models/metric.model';
+
 import { getContentTypeFromURL } from '@/utils/helper';
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
 
@@ -37,12 +42,16 @@ const MAX_RECOVERY_TIME = 60000 * 10;
 const ArtworkPlayer = ({
   previewURL,
   artworkID,
+  section,
+  exhibitionID,
   castingType,
   isCustomView,
   artworkPreviewMIMEType,
 }: {
   previewURL: string;
   artworkID: string;
+  section?: ExhibitionDisplaySection; // For exhibition casting only
+  exhibitionID?: string; // For exhibition casting only
   castingType?: CastingArtworkType;
   isCustomView?: boolean;
   keyboardCode?: number;
@@ -143,7 +152,9 @@ const ArtworkPlayer = ({
           event: castingType,
           timestamp: new Date().toISOString(),
           parameters: {
+            section,
             tokenID: artworkID,
+            exhibitionID,
           },
         };
 
@@ -162,7 +173,7 @@ const ArtworkPlayer = ({
           }, delay);
         };
 
-        appendMetricEventToLocalStorage(event);
+        appendMetricEventToLocalStorage([event], true);
         checkNewDay();
       };
 
@@ -174,7 +185,7 @@ const ArtworkPlayer = ({
         }
       };
     }
-  }, [castingType, artworkID]);
+  }, [castingType, artworkID, exhibitionID, section]);
 
   useEffect(() => {
     const detectPreviewType = async (previewURL: string) => {

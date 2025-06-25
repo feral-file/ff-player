@@ -1,8 +1,9 @@
-import { LocalStorageItem, Platform } from '@/constants';
-import { MetricEvent } from '@/models/metric.model';
+import { LocalStorageItem, PLATFORM, VENDOR } from '@/constants';
+import { ExhibitionDisplaySection, MetricEvent } from '@/models/metric.model';
 import DeviceManager from '@/utils/DeviceManager';
 import axios, { AxiosInstance } from 'axios';
 import * as Sentry from '@sentry/nextjs';
+import { ExhibitionCatalog } from '@/models';
 
 const accountsRequester: AxiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_ACCOUNTS_URL,
@@ -56,12 +57,10 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
   await accountsRequester.post('/apis/metrics', { metrics: events });
 }
 
-export function appendMetricEventToLocalStorage(event: MetricEvent) {
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  if (!localStorage) {
-    return;
-  }
-
+export function appendMetricEventToLocalStorage(
+  event: MetricEvent[],
+  uploadAfterAppend = false
+) {
   console.log('[METRIC]: append event to localStorage', JSON.stringify(event));
   const metricEvents = localStorage.getItem(LocalStorageItem.metricEvents);
   let events: MetricEvent[] = [];
@@ -78,9 +77,11 @@ export function appendMetricEventToLocalStorage(event: MetricEvent) {
     }
   }
 
-  events.push(event);
+  events.push(...event);
   localStorage.setItem(LocalStorageItem.metricEvents, JSON.stringify(events));
-  uploadMetricEventsFromLocalStorage();
+  if (uploadAfterAppend) {
+    uploadMetricEventsFromLocalStorage();
+  }
 }
 
 export function uploadMetricEventsFromLocalStorage() {
@@ -107,25 +108,33 @@ export function uploadMetricEventsFromLocalStorage() {
   }
 
   if (events.length > 0) {
-    uploadNewMetric(events)
-      .then(() => {
-        localStorage.removeItem(LocalStorageItem.metricEvents);
-      })
-      .catch((error: unknown) => {
-        console.error(
-          '[METRIC] Error uploading metric events',
-          JSON.stringify(error)
-        );
-        Sentry.captureException(error);
-      });
+    localStorage.removeItem(LocalStorageItem.metricEvents);
+    uploadNewMetric(events).catch((error: unknown) => {
+      appendMetricEventToLocalStorage(events);
+
+      console.error(
+        '[METRIC] Error uploading metric events',
+        JSON.stringify(error)
+      );
+    });
   }
 }
 
 function getDeviceInfoBaseOnPlatform(): { vendor: string; platform: string } {
-  const platform = localStorage.getItem(LocalStorageItem.platform);
-  if (platform === Platform.ffDevice) {
-    return { vendor: 'ffPortal', platform: 'ffPortal' };
-  }
+  return { vendor: VENDOR, platform: PLATFORM };
+}
 
-  return { vendor: 'web', platform: 'web' };
+export function mappingExhibitionCatalogToExhibitionDisplaySection(
+  castingSection: ExhibitionCatalog
+): ExhibitionDisplaySection {
+  switch (castingSection) {
+    case ExhibitionCatalog.home:
+      return ExhibitionDisplaySection.Home;
+    case ExhibitionCatalog.curatorNote:
+    case ExhibitionCatalog.resource:
+    case ExhibitionCatalog.resourceDetail:
+      return ExhibitionDisplaySection.CuratorNote;
+    case ExhibitionCatalog.artwork:
+      return ExhibitionDisplaySection.Artworks;
+  }
 }
