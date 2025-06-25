@@ -76,15 +76,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
 
   // Check for scheduled DP1 tasks
   useEffect(() => {
-    const dp1ScheduleService = DP1ScheduleService.getInstance();
-    dp1ScheduleService.checkAndExecuteScheduledTasks();
-    const scheduledTasksInterval = setInterval(() => {
-      dp1ScheduleService.checkAndExecuteScheduledTasks();
-    }, 60000);
-
-    return () => {
-      clearInterval(scheduledTasksInterval);
-    };
+    DP1ScheduleService.getInstance().checkScheduledTask();
   }, []);
 
   const checkVersion = async () => {

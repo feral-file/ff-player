@@ -10,6 +10,7 @@ export interface ScheduledDP1Task {
 
 class DP1ScheduleService {
   private static instance: DP1ScheduleService | null = null;
+  private timeoutId: NodeJS.Timeout | null = null;
 
   public static getInstance(): DP1ScheduleService {
     if (!DP1ScheduleService.instance) {
@@ -21,6 +22,9 @@ class DP1ScheduleService {
   public storeScheduledTask(dp1Data: DP1): void {
     try {
       if (!dp1Data.intent.schedule_time) {
+        console.log(
+          '[DP1ScheduleService] No schedule time found, skipping task'
+        );
         return;
       }
 
@@ -35,15 +39,25 @@ class DP1ScheduleService {
         JSON.stringify(newTask)
       );
 
-      console.log(
-        '[DP1ScheduleService] Stored scheduled task (overriding previous):',
-        newTask
-      );
+      console.log('[DP1ScheduleService] Stored scheduled task:', newTask);
+      this.scheduleTask(newTask);
     } catch (error) {
       console.error(
         '[DP1ScheduleService] Error storing scheduled task:',
         error
       );
+    }
+  }
+
+  public removeTask(taskId: string): void {
+    try {
+      const scheduledTask = this.getScheduledTask();
+      if (scheduledTask && scheduledTask.id === taskId) {
+        localStorage.removeItem(LocalStorageItem.dp1ScheduledTask);
+        console.log('[DP1ScheduleService] Removed task:', taskId);
+      }
+    } catch (error) {
+      console.error('[DP1ScheduleService] Error removing task:', error);
     }
   }
 
@@ -60,37 +74,18 @@ class DP1ScheduleService {
     }
   }
 
-  public getTasksDueNow(): ScheduledDP1Task | null {
-    const now = new Date();
-    const scheduledTask = this.getScheduledTask();
-
-    if (!scheduledTask) {
-      return null;
-    }
-
+  public checkScheduledTask(): void {
     try {
-      const scheduleTime = new Date(scheduledTask.scheduleTime);
-      return scheduleTime <= now ? scheduledTask : null;
-    } catch (error) {
-      console.error('[DP1ScheduleService] Error parsing schedule time:', error);
-      return null;
-    }
-  }
+      const scheduledTask = this.getScheduledTask();
+      if (!scheduledTask) {
+        console.log('[DP1ScheduleService] No existing scheduled tasks found');
+        return;
+      }
 
-  public checkAndExecuteScheduledTasks(): void {
-    try {
-      const tasksDueNow = this.getTasksDueNow();
-      if (tasksDueNow) {
-        console.log(
-          '[DP1ScheduleService] Executing scheduled task:',
-          tasksDueNow.id
-        );
-
-        CanvasService.getInstance().executeScheduledDP1Task(
-          tasksDueNow.dp1CallData.items
-        );
-
-        this.removeTask(tasksDueNow.id);
+      if (this.isTaskDueNow(scheduledTask)) {
+        this.executeScheduledTask(scheduledTask);
+      } else {
+        this.scheduleTask(scheduledTask);
       }
     } catch (error) {
       console.error(
@@ -100,15 +95,55 @@ class DP1ScheduleService {
     }
   }
 
-  public removeTask(taskId: string): void {
+  private scheduleTask(task: ScheduledDP1Task): void {
     try {
-      const scheduledTask = this.getScheduledTask();
-      if (scheduledTask && scheduledTask.id === taskId) {
-        localStorage.removeItem(LocalStorageItem.dp1ScheduledTask);
-        console.log('[DP1ScheduleService] Removed task:', taskId);
+      this.clearTimeoutIfExists();
+
+      const now = new Date();
+      const scheduleTime = new Date(task.scheduleTime);
+      const timeDiff = scheduleTime.getTime() - now.getTime();
+
+      console.log(
+        `[DP1ScheduleService] Next task scheduled for: ${scheduleTime.toISOString()}`
+      );
+      console.log(
+        `[DP1ScheduleService] Time until execution: ${Math.round(timeDiff / 1000).toString()} seconds`
+      );
+
+      if (this.isTaskDueNow(task)) {
+        this.executeScheduledTask(task);
+      } else {
+        // Schedule check at exact time with a small buffer (1 second)
+        const executionTime = timeDiff - 1000;
+        this.timeoutId = setTimeout(() => {
+          this.executeScheduledTask(task);
+        }, executionTime);
       }
     } catch (error) {
-      console.error('[DP1ScheduleService] Error removing task:', error);
+      console.error('[DP1ScheduleService] Error in scheduling logic:', error);
+    }
+  }
+
+  private isTaskDueNow(task: ScheduledDP1Task): boolean {
+    return new Date(task.scheduleTime) <= new Date();
+  }
+
+  private executeScheduledTask(scheduledTask: ScheduledDP1Task): void {
+    console.log(
+      '[DP1ScheduleService] Executing scheduled task:',
+      scheduledTask.id
+    );
+    CanvasService.getInstance().executeScheduledDP1Task(
+      scheduledTask.dp1CallData.items
+    );
+    this.removeTask(scheduledTask.id);
+    this.clearTimeoutIfExists();
+  }
+
+  private clearTimeoutIfExists(): void {
+    if (this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = null;
     }
   }
 }
