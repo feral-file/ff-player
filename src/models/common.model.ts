@@ -20,3 +20,10 @@ export enum DisplayOrientation {
   LandscapeReverse = 'landscapeReverse',
   PortraitReverse = 'portraitReverse',
 }
+
+export interface TokenMetadata {
+  name: string;
+  artwork_id: string;
+  image: string;
+  animation_url: string;
+}

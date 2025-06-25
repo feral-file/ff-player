@@ -58,6 +58,8 @@ class DailyService {
       `/api/dailies/date/${date}?${expandParams}`
     );
 
+    console.log('[DAILY] getDailiesByDate', JSON.stringify(response.data));
+
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     return response.data.result as Daily[];
   }
@@ -96,36 +98,39 @@ class DailyService {
 
       const data = await this.artworkService.queryTokens(ids);
       const previewData = new Map<string, string>();
-      data.forEach((token: IndexerToken) => {
-        previewData.set(
-          token.id,
-          token.asset?.metadata.project.latest.previewURL ?? ''
-        );
-      });
+      await Promise.all(
+        data.map(async (token: IndexerToken) => {
+          const previewURL =
+            await this.artworkService.getIndexerTokenPreview(token);
+          previewData.set(token.id, previewURL);
+        })
+      );
 
       const indexerData = new Map<string, IndexerToken>();
       data.forEach((token: IndexerToken) => {
         indexerData.set(token.id, token);
       });
 
-      const convertDailies = dailies.map((d: Daily) => {
-        let tokenID = d.tokenID;
-        if (d.artwork?.swap) {
-          tokenID = d.artwork.swap.token;
-        }
-        const token = indexerData.get(tokenID);
+      const convertDailies = await Promise.all(
+        dailies.map(async (d: Daily) => {
+          let tokenID = d.tokenID;
+          if (d.artwork?.swap) {
+            tokenID = d.artwork.swap.token;
+          }
+          const token = indexerData.get(tokenID);
 
-        const previewURL =
-          token?.source === IndexerSource.feral_file && d.artwork
-            ? this.artworkService.getArtworkPreview(d.artwork)
-            : previewData.get(tokenID);
+          const previewURL =
+            token?.source === IndexerSource.feral_file && d.artwork
+              ? await this.artworkService.getArtworkPreview(d.artwork)
+              : previewData.get(tokenID);
 
-        return {
-          ...d,
-          previewURL,
-          token,
-        };
-      });
+          return {
+            ...d,
+            previewURL,
+            token,
+          };
+        })
+      );
 
       return convertDailies;
     } catch (error) {

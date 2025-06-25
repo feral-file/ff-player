@@ -1,3 +1,4 @@
+import { SOURCE_EXHIBITION_ID } from '@/constants';
 import { Artwork, Blockchain, Exhibition } from '@/models';
 
 export enum IndexerSource {
@@ -32,6 +33,11 @@ export function formatArtworkIndexID(artwork: Artwork, exhibition: Exhibition) {
   let contractAddress: string;
   let blockchain: string;
   let tokenID = artwork.id ?? '';
+
+  if (exhibition.id === SOURCE_EXHIBITION_ID) {
+    return tokenID;
+  }
+
   if (exhibition.mintBlockchain === Blockchain.Bitmark && artwork.swap) {
     contractAddress = artwork.swap.contractAddress;
     blockchain = artwork.swap.blockchainType;

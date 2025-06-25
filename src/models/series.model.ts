@@ -1,4 +1,5 @@
 import { Artwork, ArtworkModel } from './artwork.model';
+import { Exhibition } from './exhibition.model';
 import { Alumni } from './user.model';
 
 export enum SaleModel {
@@ -29,6 +30,9 @@ export interface Series {
   metadata?: SeriesMetadata;
   artistAlumni: Alumni;
 
+  // Series detail
+  exhibition?: Exhibition;
+
   // Custom fields
   firstArtwork?: Artwork;
 }
@@ -47,4 +51,5 @@ export interface FileInfo {
 
 interface SeriesMetadata {
   mediumDescription: string[];
+  onchainRenderer?: boolean;
 }

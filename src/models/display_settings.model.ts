@@ -3,21 +3,15 @@ import { AssetConfiguration } from './token.model';
 
 export class DisplaySettings {
   scaling?: ArtFraming;
-  rotationAngle?: number;
 
-  constructor(scaling?: ArtFraming, rotationAngle?: number) {
+  constructor(scaling?: ArtFraming) {
     this.scaling = scaling;
-    this.rotationAngle = rotationAngle;
   }
 
   static defaultScaling: ArtFraming = ArtFraming.FitToScreen;
-  static defaultRotationAngle = 0;
 
   static defaultSettings() {
-    return new DisplaySettings(
-      DisplaySettings.defaultScaling,
-      DisplaySettings.defaultRotationAngle
-    );
+    return new DisplaySettings(DisplaySettings.defaultScaling);
   }
 }
 

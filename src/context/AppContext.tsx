@@ -83,6 +83,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
   const initDeviceConfigService = async () => {
     try {
+      console.log('[AppContext] initDeviceConfigService');
       await DeviceManager.init();
       initialDisplaySettings();
       initCastInfo();
@@ -92,15 +93,15 @@ export const AppProvider = ({ children }: AppContextProps) => {
   };
 
   const initialDisplaySettings = () => {
+    console.log('[AppContext] initialDisplaySettings');
     const displaySettings = DeviceManager.getDeviceDisplaySettings();
     if (displaySettings) {
-      displaySettings.rotationAngle =
-        (displaySettings.rotationAngle ?? 0) % 360;
       setDisplaySettings(displaySettings);
     }
   };
 
   const initCastInfo = () => {
+    console.log('[AppContext] initCastInfo');
     let castInfo = getCastInfoFromLocalStorage();
 
     if (castInfo) {

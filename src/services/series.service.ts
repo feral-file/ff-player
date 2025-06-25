@@ -1,8 +1,15 @@
-import { Artwork, Exhibition } from '@/models';
+import { Artwork, Exhibition, Series } from '@/models';
 import axiosInstance from './axiosService';
 import * as Sentry from '@sentry/nextjs';
 
 export class SeriesService {
+  public async getSeries(id: string): Promise<Series> {
+    const response = await axiosInstance.get<{ result: Series }>(
+      `/api/series/${id}`
+    );
+    return response.data.result;
+  }
+
   public async getArtwork(
     id: string,
     exhibition?: Exhibition

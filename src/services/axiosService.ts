@@ -1,4 +1,94 @@
-import axios from 'axios';
+import {
+  NETWORK_ERROR_RETRY_COUNT,
+  NETWORK_ERROR_RETRY_DELAY,
+} from '@/constants';
+import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
+
+// Sleep function for delays
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Make request with retry logic
+const makeRequestWithRetry = async (
+  config: AxiosRequestConfig
+): Promise<AxiosResponse> => {
+  let lastError: AxiosError | null = null;
+
+  for (let attempt = 0; attempt <= NETWORK_ERROR_RETRY_COUNT; attempt++) {
+    try {
+      console.log(
+        `[Axios Retry] Making request attempt ${String(attempt + 1)}`
+      );
+      // Use the base axios without interceptors to avoid recursion
+      return await axios.request(config);
+    } catch (error) {
+      lastError = error as AxiosError;
+      console.log(
+        `[Axios Retry] Request attempt ${String(attempt + 1)} failed:`,
+        lastError.code
+      );
+
+      // Only retry on network errors and if we haven't exceeded max attempts
+      if (
+        lastError.code === 'ERR_NETWORK' &&
+        attempt < NETWORK_ERROR_RETRY_COUNT
+      ) {
+        const delayTime = NETWORK_ERROR_RETRY_DELAY * Math.pow(2, attempt); // Exponential backoff
+
+        console.log(
+          `[Axios Retry] Attempt ${String(attempt + 1)}/${String(NETWORK_ERROR_RETRY_COUNT)} failed, waiting ${String(delayTime)}ms before retry...`
+        );
+
+        await sleep(delayTime);
+        console.log(`[Axios Retry] Wait completed, retrying now...`);
+        continue;
+      }
+
+      // If not a network error or max retries exceeded, throw the error
+      console.log(
+        `[Axios Retry] Not retrying - error code: ${lastError.code ?? 'unknown'}, attempt: ${String(attempt + 1)}`
+      );
+      break;
+    }
+  }
+
+  if (lastError?.code === 'ERR_NETWORK') {
+    console.error('[Axios Error] Max retries exceeded, giving up');
+  }
+
+  console.log(
+    '[Axios Retry] Throwing final error:',
+    lastError?.code ?? 'unknown'
+  );
+  throw lastError ?? new Error('Unknown error occurred');
+};
+
+// Error handler for axios instances
+const handleAxiosError = async (error: AxiosError): Promise<AxiosResponse> => {
+  console.log('[Axios Error] Error:', JSON.stringify(error));
+
+  if (error.response) {
+    // The request was made and the server responded with a status code
+    // that falls out of the range of 2xx
+    console.error('[Axios Error] Response:', {
+      status: error.response.status,
+      data: error.response.data,
+      headers: error.response.headers,
+    });
+  } else if (error.request) {
+    // The request was made but no response was received
+    console.error('[Axios Error] Request:', error.request);
+  } else {
+    // Something happened in setting up the request that triggered an Error
+    console.error('[Axios Error] Message:', error.message);
+  }
+
+  if (error.code === 'ERR_NETWORK' && error.config) {
+    // Use the retry mechanism for network errors
+    return makeRequestWithRetry(error.config);
+  }
+
+  return Promise.reject(error);
+};
 
 const axiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL,
@@ -7,11 +97,27 @@ const axiosInstance = axios.create({
   },
 });
 
+// Add error interceptor to main axios instance
+axiosInstance.interceptors.response.use(response => response, handleAxiosError);
+
 export const supportAxiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_SUPPORT_API_URL,
   headers: {
     'Content-Type': 'application/json',
     'x-api-key': process.env.NEXT_PUBLIC_SUPPORT_API_KEY,
+  },
+});
+
+// Add error interceptor to support axios instance
+supportAxiosInstance.interceptors.response.use(
+  response => response,
+  handleAxiosError
+);
+
+export const infuraAxiosInstance = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_INFURA_ENDPOINT,
+  headers: {
+    'Content-Type': 'application/json',
   },
 });
 

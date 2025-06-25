@@ -367,7 +367,10 @@ const ArtworkPlayer = ({
   const updateSoftwareURL = (
     displaySettings: TokenDisplaySettingWithChanged
   ) => {
-    if (previewType === PreviewHTMLTag.iframe) {
+    if (
+      previewType === PreviewHTMLTag.iframe &&
+      !displayPreviewURL.includes('base64')
+    ) {
       const displayMode =
         (displaySettings.scaling ?? DisplaySettings.defaultScaling) ===
         ArtFraming.CropToFill
@@ -518,6 +521,22 @@ const ArtworkPlayer = ({
     };
   }, [previewURL]);
 
+  useEffect(() => {
+    console.log('[ArtworkPlayer] loadingSettings', loadingSettings);
+  }, [loadingSettings]);
+
+  useEffect(() => {
+    console.log('[ArtworkPlayer] loading', loading);
+  }, [loading]);
+
+  useEffect(() => {
+    console.log('[ArtworkPlayer] previewType', previewType);
+  }, [previewType]);
+
+  useEffect(() => {
+    console.log('[ArtworkPlayer] artworkID', artworkID);
+  }, [artworkID]);
+
   return (
     <>
       <div
@@ -531,10 +550,10 @@ const ArtworkPlayer = ({
           padding:
             (displaySettings?.scaling ?? DisplaySettings.defaultScaling) ===
             ArtFraming.FitToScreen
-              ? `${String(displaySettings?.marginTop ?? 0 * 100)}vh ${String(displaySettings?.marginRight ?? 0 * 100)}vw ${String(displaySettings?.marginBottom ?? 0 * 100)}vh ${String(displaySettings?.marginLeft ?? 0 * 100)}vw`
+              ? `${String((displaySettings?.marginTop ?? 0) * 100)}vh ${String((displaySettings?.marginRight ?? 0) * 100)}vw ${String((displaySettings?.marginBottom ?? 0) * 100)}vh ${String((displaySettings?.marginLeft ?? 0) * 100)}vw`
               : '0',
-          width: '100%',
-          height: '100%',
+          width: '100vw',
+          height: '100vh',
         }}>
         <CursorLayer ref={cursorRef} />
         {(previewType === null || loading || loadingSettings) && <Loading />}

@@ -14,7 +14,7 @@ export interface CursorLayerHandle {
 }
 
 const CURSOR_SIZE = 18;
-const HIDE_DELAY = 5000; // ms
+const HIDE_DELAY = 3000; // ms
 const SPEED_FACTOR = 15; // tune responsiveness
 const MIN_SPEED = 3000; // px / s
 const MAX_SPEED = 5500; // px / s
@@ -27,8 +27,8 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   const currentPos = useRef<CursorPosition | null>(null);
   const targetIdx = useRef(0);
   const animId = useRef<number | null>(null);
-  const hideTimer = useRef<NodeJS.Timeout | null>(null);
-  const [visible, setVisible] = useState(true);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [visible, setVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [w, setW] = useState(0);
   const [h, setH] = useState(0);
@@ -36,7 +36,6 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   const resetHide = () => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
     setVisible(true);
-    setIsAnimating(false);
     hideTimer.current = setTimeout(() => {
       setVisible(false);
     }, HIDE_DELAY);
@@ -58,7 +57,7 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   const startAnim = () => {
     const box = containerRef.current;
     const cursor = cursorRef.current;
-    if (!box || !cursor) return;
+    if (!box || !cursor || !w || !h) return;
     setIsAnimating(true);
 
     let prev = performance.now();
@@ -72,6 +71,7 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
         return;
       }
       if (targetIdx.current >= positionsRef.current.length) {
+        stopAnim();
         resetHide();
         return;
       }
@@ -100,6 +100,7 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
         currentPos.current = { x: nx, y: ny };
       }
       const { x, y } = currentPos.current;
+
       cursor.style.transform = `translate3d(${(x - CURSOR_SIZE / 2).toString()}px,${(
         y -
         CURSOR_SIZE / 2
@@ -111,40 +112,32 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
     animId.current = requestAnimationFrame(step);
   };
 
-  const initCursorFirstPosition = () => {
-    const box = containerRef.current;
-    const cursor = cursorRef.current;
-    if (!box || !cursor) return;
-
-    const cx = box.clientWidth / 2;
-    const cy = box.clientHeight / 2;
-    currentPos.current = { x: cx, y: cy };
-    cursor.style.transform = `translate3d(${(cx - CURSOR_SIZE / 2).toString()}px,${(
-      cy -
-      CURSOR_SIZE / 2
-    ).toString()}px,0)`;
-  };
-
   // Expose handle
   useImperativeHandle(ref, () => ({
     setPositions: (arr: CursorPosition[]) => {
       const box = containerRef.current;
       const cursor = cursorRef.current;
-      if (!box || !cursor) return;
+      if (!box || !cursor || arr.length === 0) return;
 
       stopAnim();
       positionsRef.current = arr;
-      targetIdx.current = 0;
 
-      // Start from current position instead of center
-      if (!currentPos.current) {
-        initCursorFirstPosition();
+      // For the very first positions array, jump to first position and animate from second
+      if (!currentPos.current && arr.length > 0) {
+        const { x, y } = arr[0];
+        currentPos.current = { x, y };
+        cursor.style.transform = `translate3d(${(x - CURSOR_SIZE / 2).toString()}px,${(
+          y -
+          CURSOR_SIZE / 2
+        ).toString()}px,0)`;
+        targetIdx.current = 1; // Start animating from second position
+        setVisible(false);
+      } else {
+        targetIdx.current = 0; // For subsequent arrays, animate all positions
       }
 
       updateContainerSize();
-      resetHide();
       startAnim();
-      setIsAnimating(true);
     },
   }));
 
@@ -157,9 +150,7 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
   );
 
   useEffect(() => {
-    setVisible(false);
     updateContainerSize();
-    initCursorFirstPosition();
   }, [containerRef.current]);
 
   // Render

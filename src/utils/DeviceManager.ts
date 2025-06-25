@@ -8,7 +8,7 @@ import * as Sentry from '@sentry/nextjs';
 import { DeviceNamePrefix, LocalStorageItem, Platform } from '@/constants';
 import { BrowserInfo, detect } from 'detect-browser';
 import { DisplaySettings } from '@/models/display_settings.model';
-import { DisplayOrientation, ViewMode } from '@/models';
+import { ViewMode } from '@/models';
 
 class DeviceManager {
   static instance = new DeviceManager();
@@ -60,6 +60,7 @@ class DeviceManager {
   }
 
   public async init(): Promise<void> {
+    console.log('[DeviceManager] init', this.configService);
     await this.configService.init();
   }
 
@@ -129,52 +130,6 @@ class DeviceManager {
 
   public setViewMode(viewMode: ViewMode): void {
     this.setToLocalStorage(LocalStorageItem.viewMode, viewMode);
-  }
-
-  public getDisplayOrientation(rotationAngle?: number): DisplayOrientation {
-    if (!rotationAngle) {
-      rotationAngle = this.getDeviceDisplaySettings()?.rotationAngle;
-    }
-
-    let viewMode = this.getViewMode();
-    if (!viewMode) {
-      viewMode = ViewMode.landscape;
-    }
-
-    const angle = (rotationAngle ?? 0) % 360;
-    switch (viewMode) {
-      case ViewMode.landscape: {
-        if (angle === 0) {
-          return DisplayOrientation.Landscape;
-        } else if (angle === 90) {
-          return DisplayOrientation.PortraitReverse;
-        } else if (angle === 180) {
-          return DisplayOrientation.LandscapeReverse;
-        } else if (angle === 270) {
-          return DisplayOrientation.Portrait;
-        }
-
-        return DisplayOrientation.Landscape;
-      }
-
-      case ViewMode.portrait: {
-        if (angle === 0) {
-          return DisplayOrientation.Portrait;
-        } else if (angle === 90) {
-          return DisplayOrientation.LandscapeReverse;
-        } else if (angle === 180) {
-          return DisplayOrientation.PortraitReverse;
-        } else if (angle === 270) {
-          return DisplayOrientation.Landscape;
-        }
-
-        return DisplayOrientation.Portrait;
-      }
-
-      default: {
-        return DisplayOrientation.Landscape;
-      }
-    }
   }
 }
 

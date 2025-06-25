@@ -19,7 +19,6 @@ export enum CastCommand {
   updateIndex = 'updateIndex',
   updateDuration = 'updateDuration',
   castExhibition = 'castExhibition',
-  rotate = 'rotate',
   tapGesture = 'tapGesture',
   dragGesture = 'dragGesture',
   setCursorOffset = 'setCursorOffset',
