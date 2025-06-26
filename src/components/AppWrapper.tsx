@@ -11,6 +11,7 @@ import {
 } from '@/models/custom_event';
 import { LocalStorageItem } from '@/constants';
 import DP1ScheduleService from '@/services/DP1ScheduleService';
+import ScheduleDisplay from './ScheduleDisplay';
 
 const enum CastState {
   None, // Not casting
@@ -178,6 +179,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
         height: '100vh',
       }}>
       {children}
+      <ScheduleDisplay />
     </div>
   );
 };
