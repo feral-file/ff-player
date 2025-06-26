@@ -197,25 +197,32 @@ class CanvasService {
       message: 'Received DP1 command',
     });
 
+    let reply: Reply;
     switch (action) {
       case DP1Action.NowDisplay: {
-        const reply = this.castListArtwork({ items: dp1Call.items });
-        console.log('[CanvasService] Response message:', JSON.stringify(reply));
-        return reply;
+        reply = this.castListArtwork({ items: dp1Call.items });
+        break;
       }
 
       case DP1Action.SchedulePlay: {
         DP1ScheduleService.getInstance().storeScheduledTask(dp1Message);
-        return { ok: true };
+        reply = { ok: true };
+        break;
       }
 
       case DP1Action.GetCurrentPlaylist: {
-        return this.status();
+        reply = this.status();
+        break;
       }
 
-      default:
-        return { ok: false };
+      default: {
+        reply = { ok: false };
+        break;
+      }
     }
+
+    console.log('[CanvasService] DP1 reply:', JSON.stringify(reply));
+    return reply;
   }
 
   private commandHandler(command: CastCommand, requestJson: unknown): Reply {
