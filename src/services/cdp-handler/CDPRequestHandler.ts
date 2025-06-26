@@ -53,9 +53,8 @@ export class CDPRequestHandler {
 
   private handleCDPRequest(event: WebSocketMessage): string {
     try {
-      console.log('[CDP] Request received:', event);
+      console.log('[CDP] Request received');
       if (!event.message) {
-        console.error('[CDP] Empty message');
         throw Error('Empty message');
       }
 
@@ -64,8 +63,6 @@ export class CDPRequestHandler {
           ? (JSON.parse(event.message) as Record<string, unknown>)
           : (event.message as Record<string, unknown>);
 
-      console.log('[CDP] WS Message:', JSON.stringify(wsMessage));
-
       if (wsMessage.dp1_call) {
         return this.handleDP1Request(
           event.messageID,
@@ -73,67 +70,69 @@ export class CDPRequestHandler {
         );
       }
 
-      const messageCommand = wsMessage.command as string | null;
-      if (!messageCommand) {
-        console.error('[CDP] Command not found in the message');
-        throw Error('Command not found in the message');
+      if (wsMessage.command) {
+        return this.handleCommandRequest(event.messageID, wsMessage);
       }
 
-      let reply: WebSocketMessage | null = null;
-      switch (messageCommand) {
-        case pingCommand: {
-          reply = {
-            messageID: event.messageID,
-            message: { ok: true },
-          };
-          break;
-        }
-
-        case sendDeviceInfoCommand: {
-          const request = wsMessage.request as Record<string, unknown> | null;
-          console.log(
-            '[CDP] Send device info request:',
-            JSON.stringify(request)
-          );
-
-          const deviceId = request?.deviceId;
-          if (deviceId) {
-            DeviceManager.setDeviceId(deviceId as string);
-          }
-
-          const version = request?.version;
-          if (version) {
-            DeviceManager.setName(
-              DeviceNamePrefix.ffDevice + (version as string)
-            );
-          }
-
-          reply = {
-            messageID: event.messageID,
-            message: { ok: true },
-          };
-          break;
-        }
-
-        default: {
-          const responseMessage =
-            CanvasService.getInstance().processMessage(wsMessage);
-          reply = {
-            messageID: event.messageID,
-            message: responseMessage,
-          };
-          break;
-        }
-      }
-
-      return JSON.stringify(reply);
+      throw Error(`Invalid message: ${JSON.stringify(wsMessage)}`);
     } catch (error) {
-      console.error('Error handling CDP request:', error);
+      console.error('[CDP] Error handling CDP request:', error);
       return JSON.stringify({
         messageID: event.messageID,
         message: { ok: false, error: (error as Error).message },
       });
     }
+  }
+
+  private handleCommandRequest(
+    messageID: string,
+    wsMessage: Record<string, unknown>
+  ) {
+    console.log('[CDP] Command request received:', JSON.stringify(wsMessage));
+    const command = wsMessage.command as string;
+    let reply: WebSocketMessage | null = null;
+    switch (command) {
+      case pingCommand: {
+        reply = {
+          messageID,
+          message: { ok: true },
+        };
+        break;
+      }
+
+      case sendDeviceInfoCommand: {
+        const request = wsMessage.request as Record<string, unknown> | null;
+        const deviceId = request?.deviceId;
+        if (deviceId) {
+          DeviceManager.setDeviceId(deviceId as string);
+        }
+
+        const version = request?.version;
+        if (version) {
+          DeviceManager.setName(
+            DeviceNamePrefix.ffDevice + (version as string)
+          );
+        }
+
+        reply = {
+          messageID,
+          message: { ok: true },
+        };
+        break;
+      }
+
+      default: {
+        const responseMessage =
+          CanvasService.getInstance().processMessage(wsMessage);
+        reply = {
+          messageID,
+          message: responseMessage,
+        };
+        break;
+      }
+    }
+
+    return JSON.stringify(reply);
   }
 
   private handleConnectivityChange(isOnline: boolean) {
