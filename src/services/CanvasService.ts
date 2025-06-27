@@ -200,13 +200,21 @@ class CanvasService {
     let reply: Reply;
     switch (action) {
       case DP1Action.NowDisplay: {
-        reply = this.castListArtwork({ items: dp1Call.items });
+        if (dp1Call.items.length > 0) {
+          reply = this.castListArtwork({ items: dp1Call.items });
+        } else {
+          reply = { ok: false };
+        }
         break;
       }
 
       case DP1Action.SchedulePlay: {
-        DP1ScheduleService.getInstance().storeScheduledTask(dp1Message);
-        reply = { ok: true };
+        if (dp1Call.items.length > 0) {
+          DP1ScheduleService.getInstance().storeScheduledTask(dp1Message);
+          reply = { ok: true };
+        } else {
+          reply = { ok: false };
+        }
         break;
       }
 
