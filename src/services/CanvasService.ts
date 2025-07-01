@@ -33,6 +33,10 @@ import {
   UpdateArtFramingRequest,
   UpdateDisplaySettingsRequest,
   PlayArtwork,
+  NowDisplayRequest,
+  NowDisplayReply,
+  SchedulePlaylistRequest,
+  SchedulePlaylistReply,
 } from '@/models/cast_request_reply.model';
 import { TokenDisplaySettings } from '@/models/display_settings.model';
 import * as Sentry from '@sentry/nextjs';
@@ -52,7 +56,7 @@ import {
 } from './custom-hooks/useCursorPositions';
 import { LocalStorageItem } from '@/constants';
 import { ErrorType } from '@/models/error.model';
-import { DP1, DP1Action, DP1Item } from '@/models/dp1.model';
+import { DP1, DP1Action, DP1Call } from '@/models/dp1.model';
 import DP1ScheduleService from './DP1ScheduleService';
 
 class CanvasService {
@@ -187,7 +191,7 @@ class CanvasService {
 
   public processDP1Message(dp1Message: DP1) {
     const dp1Intent = dp1Message.intent;
-    const dp1Call = dp1Message.dp1_call;
+    const dp1CallData = dp1Message.dp1_call;
     const action = dp1Intent.action;
 
     console.log('[CanvasService] Processing DP1 message: ', action);
@@ -200,22 +204,14 @@ class CanvasService {
     let reply: Reply;
     switch (action) {
       case DP1Action.NowDisplay: {
-        if (dp1Call.items.length > 0) {
-          reply = this.castListArtwork({ items: dp1Call.items });
-        } else {
-          reply = { ok: false };
-        }
-        break;
+        return this.displayPlaylist({ dp1CallData });
       }
 
       case DP1Action.SchedulePlay: {
-        if (dp1Call.items.length > 0) {
-          DP1ScheduleService.getInstance().storeScheduledTask(dp1Message);
-          reply = { ok: true };
-        } else {
-          reply = { ok: false };
-        }
-        break;
+        return this.schedulePlaylist({
+          dp1CallData,
+          scheduleTime: dp1Intent.schedule_time,
+        });
       }
 
       case DP1Action.GetCurrentPlaylist: {
@@ -224,6 +220,7 @@ class CanvasService {
       }
 
       default: {
+        console.error('[CanvasService] Unknown DP1 action:', action);
         reply = { ok: false };
         break;
       }
@@ -382,8 +379,8 @@ class CanvasService {
     this.setCastInfo({
       castCommand: CastCommand.castListArtwork,
       deviceInfo: this.castInfo?.deviceInfo,
-      items: request.items,
-      startTime: Date.now(),
+      artworks: request.artworks,
+      startTime: request.startTime ?? Date.now(),
       index: 0,
       isPaused: false,
     });
@@ -613,12 +610,55 @@ class CanvasService {
     return { ok: true };
   }
 
-  public executeScheduledDP1Task(items: DP1Item[]): void {
+  private displayPlaylist(request: NowDisplayRequest): NowDisplayReply {
+    if (!request.dp1CallData.items.length) {
+      console.error('[CanvasService] No items to display');
+      return { ok: false };
+    }
+
+    console.log('[CanvasService] Display playlist: ', JSON.stringify(request));
+    this.setCastInfo({
+      castCommand: CastCommand.castListArtwork,
+      deviceInfo: this.castInfo?.deviceInfo,
+      items: request.dp1CallData.items,
+      startTime: Date.now(),
+      index: 0,
+      isPaused: false,
+    });
+    return { ok: true };
+  }
+
+  private schedulePlaylist(
+    request: SchedulePlaylistRequest
+  ): SchedulePlaylistReply {
+    if (!request.dp1CallData.items.length) {
+      console.error('[CanvasService] No items to schedule');
+      return { ok: false };
+    }
+
+    if (!request.scheduleTime) {
+      console.error('[CanvasService] No schedule time found');
+      return { ok: false };
+    }
+
     console.log(
-      '[CanvasService] Executing scheduled DP1 task with items:',
-      items
+      '[CanvasService] Schedule playlist: ',
+      JSON.stringify({ request })
     );
-    this.castListArtwork({ items });
+    DP1ScheduleService.getInstance().storeScheduledTask(
+      request.dp1CallData,
+      request.scheduleTime.replace('Z', '')
+    );
+
+    return { ok: true };
+  }
+
+  public executeScheduledDP1Task(dp1CallData: DP1Call): void {
+    console.log(
+      '[CanvasService] Executing scheduled DP1 task with data:',
+      JSON.stringify(dp1CallData)
+    );
+    this.displayPlaylist({ dp1CallData });
   }
 }
 

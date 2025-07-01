@@ -2,7 +2,7 @@ import { CursorPosition } from '@/services/custom-hooks/useCursorPositions';
 import { ArtFraming, ViewMode } from './common.model';
 import { TokenDisplaySettings } from './display_settings.model';
 import { ErrorType } from './error.model';
-import { DP1Item } from './dp1.model';
+import { DP1Call, DP1Item } from './dp1.model';
 
 export interface DeviceInfo {
   device_name: string;
@@ -46,6 +46,17 @@ export type ConnectReplyV2 = Reply;
 export type DisconnectRequest = Request;
 export type DisconnectReplyV2 = Reply;
 
+export interface NowDisplayRequest {
+  dp1CallData: DP1Call;
+}
+export type NowDisplayReply = Reply;
+
+export interface SchedulePlaylistRequest {
+  dp1CallData: DP1Call;
+  scheduleTime?: string;
+}
+export type SchedulePlaylistReply = Reply;
+
 export type CheckDeviceStatusRequest = Request;
 export interface CheckDeviceStatusReply extends Reply {
   connectedDevice?: DeviceInfo;
@@ -75,11 +86,9 @@ export interface CastExhibitionRequest {
 }
 export type CastExhibitionReply = Reply;
 
-// export interface CastListArtworkRequest {
-//   artworks: PlayArtwork[];
-// }
 export interface CastListArtworkRequest {
-  items: DP1Item[];
+  artworks: PlayArtwork[];
+  startTime?: number;
 }
 export type CastListArtworkReply = Reply;
 

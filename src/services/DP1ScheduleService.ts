@@ -1,4 +1,4 @@
-import { DP1, DP1Call } from '@/models/dp1.model';
+import { DP1Call } from '@/models/dp1.model';
 import CanvasService from './CanvasService';
 import { LocalStorageItem } from '@/constants';
 
@@ -19,19 +19,12 @@ class DP1ScheduleService {
     return DP1ScheduleService.instance;
   }
 
-  public storeScheduledTask(dp1Data: DP1): void {
+  public storeScheduledTask(dp1CallData: DP1Call, scheduleTime: string): void {
     try {
-      if (!dp1Data.intent.schedule_time) {
-        console.log(
-          '[DP1ScheduleService] No schedule time found, skipping task'
-        );
-        return;
-      }
-
       const newTask: ScheduledDP1Task = {
-        id: dp1Data.dp1_call.id,
-        scheduleTime: dp1Data.intent.schedule_time.replace('Z', ''),
-        dp1CallData: dp1Data.dp1_call,
+        id: dp1CallData.id,
+        scheduleTime,
+        dp1CallData,
       };
 
       localStorage.setItem(
@@ -140,7 +133,7 @@ class DP1ScheduleService {
       scheduledTask.id
     );
     CanvasService.getInstance().executeScheduledDP1Task(
-      scheduledTask.dp1CallData.items
+      scheduledTask.dp1CallData
     );
     this.removeTask(scheduledTask.id);
     this.clearTimeoutIfExists();
