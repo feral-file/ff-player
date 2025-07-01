@@ -80,8 +80,7 @@ export interface DP1Repro {
 }
 
 export interface DP1Provenance {
-  type?: string; // or series-reg / offchain
-
+  type?: DP1ProvenanceType;
   contract?: {
     chain?: DP1Chain;
     standard?: string;
