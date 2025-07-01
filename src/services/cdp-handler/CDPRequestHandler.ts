@@ -1,7 +1,5 @@
 import CanvasService from '../CanvasService';
 import { WebSocketMessage } from '@/models';
-import DeviceManager from '@/utils/DeviceManager';
-import { DeviceNamePrefix } from '@/constants';
 import {
   ConnectivityEventDetail,
   CustomEventName,
@@ -9,9 +7,6 @@ import {
 } from '@/models/custom_event';
 import { handleOverheatingError } from '@/utils/ErrorNavigation';
 import { DP1 } from '@/models/dp1.model';
-
-const sendDeviceInfoCommand = 'sendDeviceInfo';
-const pingCommand = 'ping';
 
 export class CDPRequestHandler {
   private static instance: CDPRequestHandler | null = null;
@@ -70,10 +65,6 @@ export class CDPRequestHandler {
         );
       }
 
-      if (wsMessage.command) {
-        return this.handleCommandRequest(event.messageID, wsMessage);
-      }
-
       throw Error(`Invalid message: ${JSON.stringify(wsMessage)}`);
     } catch (error) {
       console.error('[CDP] Error handling CDP request:', error);
@@ -82,57 +73,6 @@ export class CDPRequestHandler {
         message: { ok: false, error: (error as Error).message },
       });
     }
-  }
-
-  private handleCommandRequest(
-    messageID: string,
-    wsMessage: Record<string, unknown>
-  ) {
-    console.log('[CDP] Command request received:', JSON.stringify(wsMessage));
-    const command = wsMessage.command as string;
-    let reply: WebSocketMessage | null = null;
-    switch (command) {
-      case pingCommand: {
-        reply = {
-          messageID,
-          message: { ok: true },
-        };
-        break;
-      }
-
-      case sendDeviceInfoCommand: {
-        const request = wsMessage.request as Record<string, unknown> | null;
-        const deviceId = request?.deviceId;
-        if (deviceId) {
-          DeviceManager.setDeviceId(deviceId as string);
-        }
-
-        const version = request?.version;
-        if (version) {
-          DeviceManager.setName(
-            DeviceNamePrefix.ffDevice + (version as string)
-          );
-        }
-
-        reply = {
-          messageID,
-          message: { ok: true },
-        };
-        break;
-      }
-
-      default: {
-        const responseMessage =
-          CanvasService.getInstance().processMessage(wsMessage);
-        reply = {
-          messageID,
-          message: responseMessage,
-        };
-        break;
-      }
-    }
-
-    return JSON.stringify(reply);
   }
 
   private handleConnectivityChange(isOnline: boolean) {

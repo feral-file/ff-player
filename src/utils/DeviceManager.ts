@@ -88,14 +88,6 @@ class DeviceManager {
     return name.replace(DeviceNamePrefix.ffDevice, '');
   }
 
-  public getPrimaryAddress(): string | null {
-    return this.getFromLocalStorage(LocalStorageItem.primaryAddress);
-  }
-
-  public setPrimaryAddress(primaryAddress: string): void {
-    this.setToLocalStorage(LocalStorageItem.primaryAddress, primaryAddress);
-  }
-
   public getDeviceDisplaySettings(): DisplaySettings | null {
     const config = this.getFromLocalStorage(LocalStorageItem.displaySettings);
     return config ? (JSON.parse(config) as DisplaySettings) : null;
