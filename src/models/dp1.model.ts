@@ -80,9 +80,23 @@ export interface DP1Repro {
 }
 
 export interface DP1Provenance {
-  scheme?: string; // or series-reg / offchain
-  ref?: string; // template-encoded pointer: $namespace:$chainId:$container:$identifier
-  metaHash?: string; // SHA256 hash of the metadata (optional)
+  type?: string; // or series-reg / offchain
+
+  contract?: {
+    chain?: DP1Chain;
+    standard?: string;
+    address?: string;
+    seriesId?: number;
+    tokenId?: string;
+    uri?: string;
+    metaHash?: string;
+  };
+
+  dependencies?: {
+    chain?: DP1Chain;
+    standard?: string;
+    uri?: string;
+  }[];
 }
 
 export enum DP1License {
@@ -100,6 +114,12 @@ export enum DP1Chain {
 export enum DP1Type {
   SeriesRegistry = 'seriesRegistry',
   OnChainURI = 'onChainURI',
+  OffChainURI = 'offChainURI',
+}
+
+export enum DP1ProvenanceType {
+  OnChain = 'onChain',
+  SeriesRegistry = 'seriesRegistry',
   OffChainURI = 'offChainURI',
 }
 
