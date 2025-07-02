@@ -8,6 +8,8 @@ import { getIndex } from '@/utils/playlist';
 import { CastCommand } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import { defaultDP1DisplayPreference, DP1Item } from '@/models/dp1.model';
+import { LEE_MULLICAN_EXHIBITION_CONTRACT } from '@/constants';
+import { convertToTokenID } from '@/utils/indexer';
 
 export default function PlaylistClient() {
   const { context } = useAppContext();
@@ -56,12 +58,22 @@ export default function PlaylistClient() {
     const currentPlaylist = playlist[index];
     if (currentPlaylist !== currentPlaylistRef.current) {
       currentPlaylistRef.current = currentPlaylist;
-      // TODO: Convert to token ID
-      setArtworkID(currentPlaylist.id);
+      if (currentPlaylist.provenance?.contract) {
+        const tokenID = convertToTokenID(
+          currentPlaylist.provenance.contract.chain,
+          currentPlaylist.provenance.contract.address,
+          currentPlaylist.provenance.contract.tokenId
+        );
+        setArtworkID(tokenID);
+      } else {
+        setArtworkID(currentPlaylist.id);
+      }
     }
     setCastPreviewURL(currentPlaylist.source);
-    // TODO: Check if the artwork is from Lee Mullican exhibition
-    setIsLeeMullicanExhibition(currentPlaylist.title.startsWith('LM'));
+    setIsLeeMullicanExhibition(
+      currentPlaylist.provenance?.contract?.address ===
+        LEE_MULLICAN_EXHIBITION_CONTRACT
+    );
 
     if (!castInfo?.isPaused) {
       startInterval(currentPlaylist.duration);
