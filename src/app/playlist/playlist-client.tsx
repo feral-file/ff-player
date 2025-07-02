@@ -7,7 +7,7 @@ import CanvasService from '@/services/CanvasService';
 import { getIndex } from '@/utils/playlist';
 import { CastCommand } from '@/models';
 import { useEffect, useRef, useState } from 'react';
-import { DP1Item } from '@/models/dp1.model';
+import { defaultDP1DisplayPreference, DP1Item } from '@/models/dp1.model';
 
 export default function PlaylistClient() {
   const { context } = useAppContext();
@@ -17,9 +17,9 @@ export default function PlaylistClient() {
   const [isLeeMullicanExhibition, setIsLeeMullicanExhibition] =
     useState<boolean>(false);
 
+  const [playlist, setPlaylist] = useState<DP1Item[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const indexRef = useRef<number>(-1);
-  const [playlist, setPlaylist] = useState<DP1Item[]>([]);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [startTime, setStartTime] = useState<number>(0);
 
@@ -187,26 +187,6 @@ export default function PlaylistClient() {
               }
             }
 
-            // if (castInfo.artworks?.length) {
-            //   getNftTokens(castInfo.artworks)
-            //     .then((updatedArtworks: PlaylistToken[]) => {
-            //       setPlaylist(updatedArtworks);
-
-            //       if (castInfo.startTime) {
-            //         setStartTime(castInfo.startTime);
-            //         const i = getIndex(updatedArtworks, castInfo.startTime);
-            //         setCurrentIndex(i);
-            //       }
-
-            //       if (castInfo.isPaused) {
-            //         handlePauseCasting();
-            //       }
-            //     })
-            //     .catch((error: unknown) => {
-            //       console.error(error);
-            //     });
-            // }
-
             break;
           }
           case CastCommand.nextArtwork: {
@@ -261,6 +241,10 @@ export default function PlaylistClient() {
           artworkID={artworkID ?? ''}
           castingType={CastingArtworkType.Playlist}
           isCustomView={isLeeMullicanExhibition}
+          displayPreferences={{
+            ...(currentPlaylistRef.current?.display ?? {}),
+            ...defaultDP1DisplayPreference,
+          }}
         />
       </div>
     </>

@@ -9,11 +9,6 @@ export enum MessageModalType {
   info = 'info',
 }
 
-export enum ArtFraming {
-  FitToScreen = 'fit',
-  CropToFill = 'fill',
-}
-
 export enum DisplayOrientation {
   Landscape = 'landscape',
   Portrait = 'portrait',

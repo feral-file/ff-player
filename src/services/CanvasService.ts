@@ -6,7 +6,6 @@ import {
   SchedulePlaylistRequest,
   SchedulePlaylistReply,
 } from '@/models/cast_request_reply.model';
-import { TokenDisplaySettings } from '@/models/display_settings.model';
 import * as Sentry from '@sentry/nextjs';
 import { CastCommand, CastInfo, DisplaySettings, ViewMode } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
@@ -16,7 +15,12 @@ import {
 } from './custom-hooks/useCursorPositions';
 import { LocalStorageItem } from '@/constants';
 import { ErrorType } from '@/models/error.model';
-import { DP1, DP1Action, DP1Call } from '@/models/dp1.model';
+import {
+  DP1,
+  DP1Action,
+  DP1Call,
+  DP1DisplayPreference,
+} from '@/models/dp1.model';
 import DP1ScheduleService from './DP1ScheduleService';
 
 class CanvasService {
@@ -44,13 +48,13 @@ class CanvasService {
 
   private displaySettingsChangedListeners: ((
     isSaveToDevice: boolean,
-    displaySettings: TokenDisplaySettings
+    displaySettings: DP1DisplayPreference
   ) => void)[] = [];
 
   public addDisplaySettingsChangedListener(
     callback: (
       isSaveToDevice: boolean,
-      displaySettings: TokenDisplaySettings
+      displaySettings: DP1DisplayPreference
     ) => void
   ) {
     this.displaySettingsChangedListeners.push(callback);
@@ -59,7 +63,7 @@ class CanvasService {
   public removeDisplaySettingsChangedListener(
     callback: (
       isSaveToDevice: boolean,
-      displaySettings: TokenDisplaySettings
+      displaySettings: DP1DisplayPreference
     ) => void
   ) {
     this.displaySettingsChangedListeners =

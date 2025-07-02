@@ -27,6 +27,7 @@ import {
   appendMetricEventToLocalStorage,
   mappingExhibitionCatalogToExhibitionDisplaySection,
 } from '@/services/metric.service';
+import { defaultDP1DisplayPreference } from '@/models/dp1.model';
 
 const ExhibitionHall = () => {
   const { context } = useAppContext();
@@ -332,6 +333,7 @@ const ExhibitionHall = () => {
               key={artwork.id}
               previewURL={artwork.previewURI}
               artworkID={artworkID ?? ''}
+              displayPreferences={defaultDP1DisplayPreference}
               artworkPreviewMIMEType={artworkPreviewMIMEType}
               section={metricSection}
               exhibitionID={exhibitionID}

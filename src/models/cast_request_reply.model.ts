@@ -1,8 +1,8 @@
 import { CursorPosition } from '@/services/custom-hooks/useCursorPositions';
-import { ArtFraming, ViewMode } from './common.model';
+import { ViewMode } from './common.model';
 import { TokenDisplaySettings } from './display_settings.model';
 import { ErrorType } from './error.model';
-import { DP1Call, DP1Item } from './dp1.model';
+import { DP1Call, DP1Item, Scaling } from './dp1.model';
 
 export interface DeviceInfo {
   device_name: string;
@@ -72,7 +72,7 @@ export interface CheckDeviceStatusReply extends Reply {
   displayKey?: string;
 
   deviceSettings?: {
-    scaling: ArtFraming;
+    scaling: Scaling;
     orientation: ViewMode;
   };
 

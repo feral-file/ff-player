@@ -25,6 +25,8 @@ export enum DP1Action {
 
 export interface DP1Defaults {
   display: DP1DisplayPreference;
+  license: DP1License;
+  duration: number;
 }
 
 export interface DP1Item {
@@ -55,7 +57,7 @@ export interface DP1DisplayPreference {
   background?: string;
   autoPlay?: boolean;
   loop?: boolean;
-  interaction: {
+  interaction?: {
     keyboard?: string[];
     mouse?: {
       click?: boolean;
@@ -82,11 +84,11 @@ export interface DP1Repro {
 export interface DP1Provenance {
   type?: DP1ProvenanceType;
   contract?: {
-    chain?: DP1Chain;
+    chain: DP1Chain;
     standard?: string;
-    address?: string;
+    address: string;
     seriesId?: number;
-    tokenId?: string;
+    tokenId: string;
     uri?: string;
     metaHash?: string;
   };
