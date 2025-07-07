@@ -1,10 +1,7 @@
 'use client';
 
+import { ConnectivityEventDetail } from '@/models/custom_event';
 import { useEffect, useState } from 'react';
-
-export interface ConnectivityEventDetail {
-  isOnline: boolean;
-}
 
 const useNetworkManger = () => {
   const [isOnline, setIsOnline] = useState<boolean>(true);

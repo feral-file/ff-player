@@ -27,3 +27,11 @@ export interface TokenMetadata {
   image: string;
   animation_url: string;
 }
+
+export enum WatchdogEvent {
+  CriticalCPUTemperature = 'CriticalCPUTemperature',
+}
+
+export interface WatchdogEventDetail {
+  event: WatchdogEvent;
+}

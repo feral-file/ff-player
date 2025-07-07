@@ -1,8 +1,11 @@
 import CanvasService from '../CanvasService';
-import { ViewMode, WebSocketMessage } from '@/models';
+import { ViewMode, WatchdogEvent, WebSocketMessage } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import { DeviceNamePrefix } from '@/constants';
-import { ConnectivityEventDetail } from '../custom-hooks/useNetworkManager';
+import {
+  ConnectivityEventDetail,
+  WatchdogEventDetail,
+} from '@/models/custom_event';
 
 const sendDeviceInfoCommand = 'sendDeviceInfo';
 const pingCommand = 'ping';
@@ -37,6 +40,9 @@ export class CDPRequestHandler {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).getCurrentOrientation =
       this.getCurrentOrientation.bind(this);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).handleWatchdogEvent = this.handleWatchdogEvent.bind(this);
   }
 
   private handleCDPRequest(event: WebSocketMessage): string {
@@ -132,6 +138,18 @@ export class CDPRequestHandler {
     });
   }
 
+  public handleWatchdogEvent(event: string) {
+    try {
+      window.dispatchEvent(
+        new CustomEvent<WatchdogEventDetail>('watchdogEvent', {
+          detail: { event: event as WatchdogEvent },
+        })
+      );
+    } catch (error) {
+      console.error('[CDP] Error handling watchdog event:', error);
+    }
+  }
+
   public cleanup() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleCDPRequest = null;
@@ -139,6 +157,8 @@ export class CDPRequestHandler {
     (window as any).handleConnectivityChange = null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).getCurrentOrientation = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).handleWatchdogEvent = null;
     this.isInitialized = false;
   }
 }
