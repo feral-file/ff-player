@@ -1,4 +1,9 @@
-import { ArtFraming, MessageModalType } from '@/models';
+import {
+  ArtFraming,
+  MessageModalType,
+  WatchdogEvent,
+  WatchdogEventDetail,
+} from '@/models';
 import Hls from 'hls.js';
 import { useEffect, useRef, useState } from 'react';
 import * as Sentry from '@sentry/nextjs';
@@ -85,6 +90,7 @@ const ArtworkPlayer = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isWebGLContextLost = useRef<boolean>(false);
   const { loadingSettings, displaySettings } = useArtworkSettings(artworkID);
+  const [pauseArtwork, setPauseArtwork] = useState<boolean>(false);
 
   // Cursor layer handle
   const cursorRef = useRef<CursorLayerHandle>(null);
@@ -132,6 +138,21 @@ const ArtworkPlayer = ({
       document.removeEventListener('click', unmuteVideo);
     }
   };
+
+  useEffect(() => {
+    const onWatchdogEvent = (event: Event) => {
+      const watchdogEvent = event as CustomEvent<WatchdogEventDetail>;
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      if (watchdogEvent.detail.event === WatchdogEvent.CriticalCPUTemperature) {
+        setPauseArtwork(true);
+      }
+    };
+
+    window.addEventListener('watchdogEvent', onWatchdogEvent);
+    return () => {
+      window.removeEventListener('watchdogEvent', onWatchdogEvent);
+    };
+  }, []);
 
   // Update cursor positions when they change in context
   useEffect(() => {
@@ -547,6 +568,10 @@ const ArtworkPlayer = ({
   useEffect(() => {
     console.log('[ArtworkPlayer] artworkID', artworkID);
   }, [artworkID]);
+
+  if (pauseArtwork) {
+    return <></>;
+  }
 
   return (
     <>

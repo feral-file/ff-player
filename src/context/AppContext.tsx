@@ -104,7 +104,9 @@ export const AppProvider = ({ children }: AppContextProps) => {
     if (castInfo) {
       const path = window.location.pathname;
       const isDaily = path.includes('daily');
-      if (isDaily) {
+      const hasCriticalTemp =
+        localStorage.getItem(LocalStorageItem.criticalTemp) === 'true';
+      if (isDaily || hasCriticalTemp) {
         // Reset to daily cast info
         castInfo = {
           castCommand: CastCommand.castDaily,

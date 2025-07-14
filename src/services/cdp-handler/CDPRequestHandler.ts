@@ -145,6 +145,7 @@ export class CDPRequestHandler {
           detail: { event: event as WatchdogEvent },
         })
       );
+      return true;
     } catch (error) {
       console.error('[CDP] Error handling watchdog event:', error);
     }

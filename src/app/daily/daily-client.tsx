@@ -8,6 +8,7 @@ import { convertToTokenID } from '@/utils/indexer';
 import {
   DEFAULT_DELAY,
   LEE_MULLICAN_EXHIBITION_CONTRACT,
+  LocalStorageItem,
   SWITCH_TOKEN_INTERVAL,
   TIMESTAMP_PER_HOUR,
 } from '@/constants';
@@ -40,6 +41,10 @@ export default function DailyClient() {
     useState<boolean>(false);
 
   const newDailyHour = context.appRemoteConfig.new_daily_hour;
+
+  useEffect(() => {
+    localStorage.removeItem(LocalStorageItem.criticalTemp);
+  }, []);
 
   useEffect(() => {
     const landScape = context.deviceRotation?.viewMode === ViewMode.landscape;

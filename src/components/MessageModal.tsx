@@ -70,7 +70,7 @@ const MessageModal = ({
             <p
               style={{
                 fontSize: screenRatio * 24,
-                textAlign: 'left',
+                textAlign: 'center',
               }}
               dangerouslySetInnerHTML={{ __html: message }}></p>
           )}
