@@ -23,7 +23,6 @@ export function navigateToErrorPageAction(errorType: string) {
 }
 
 export function handleOverheatingError() {
-  console.error('Overheating detected, redirecting to error page');
   localStorage.setItem(LocalStorageItem.criticalTemp, 'true');
   navigateToErrorPageAction(ErrorType.Overheating);
 }
