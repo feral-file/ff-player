@@ -7,7 +7,7 @@ import {
   CustomEventName,
   WatchdogEvent,
 } from '@/models/custom_event';
-import { handleOverheatingError } from '@/utils/test';
+import { handleOverheatingError } from '@/utils/ErrorNavigation';
 
 const sendDeviceInfoCommand = 'sendDeviceInfo';
 const pingCommand = 'ping';
