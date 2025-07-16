@@ -1,11 +1,13 @@
 import CanvasService from '../CanvasService';
-import { ViewMode, WatchdogEvent, WebSocketMessage } from '@/models';
+import { ViewMode, WebSocketMessage } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import { DeviceNamePrefix } from '@/constants';
 import {
   ConnectivityEventDetail,
-  WatchdogEventDetail,
+  CustomEventName,
+  WatchdogEvent,
 } from '@/models/custom_event';
+import { handleOverheatingError } from '@/utils/ErrorNavigation';
 
 const sendDeviceInfoCommand = 'sendDeviceInfo';
 const pingCommand = 'ping';
@@ -125,9 +127,12 @@ export class CDPRequestHandler {
 
   private handleConnectivityChange(isOnline: boolean) {
     window.dispatchEvent(
-      new CustomEvent<ConnectivityEventDetail>('connectivityChange', {
-        detail: { isOnline },
-      })
+      new CustomEvent<ConnectivityEventDetail>(
+        CustomEventName.ConnectivityChange,
+        {
+          detail: { isOnline },
+        }
+      )
     );
   }
 
@@ -140,15 +145,24 @@ export class CDPRequestHandler {
 
   public handleWatchdogEvent(event: string) {
     try {
-      window.dispatchEvent(
-        new CustomEvent<WatchdogEventDetail>('watchdogEvent', {
-          detail: { event: event as WatchdogEvent },
-        })
-      );
-      return true;
+      console.log('[CDP] Watchdog event received:', event);
+
+      switch (event as WatchdogEvent) {
+        case WatchdogEvent.CriticalCPUTemperature: {
+          handleOverheatingError();
+          return true;
+        }
+
+        default: {
+          console.error('[CDP] Unknown watchdog event');
+          return false;
+        }
+      }
     } catch (error) {
       console.error('[CDP] Error handling watchdog event:', error);
     }
+
+    return false;
   }
 
   public cleanup() {

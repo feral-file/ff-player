@@ -6,6 +6,10 @@ import { CastCommand } from '@/models';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import CanvasService from '@/services/CanvasService';
+import {
+  CustomEventName,
+  NavigateToErrorEventDetail,
+} from '@/models/custom_event';
 
 const enum CastState {
   None, // Not casting
@@ -28,6 +32,25 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   const canvasService = CanvasService.getInstance();
   const castInfo = context.castInfo;
   const [castState, setCastState] = useState<CastState>(CastState.None);
+
+  useEffect(() => {
+    const navigateToError = (event: Event) => {
+      const { path } = (event as CustomEvent<NavigateToErrorEventDetail>)
+        .detail;
+      if (path) {
+        router.replace(path);
+      }
+    };
+
+    window.addEventListener(CustomEventName.NavigateToError, navigateToError);
+
+    return () => {
+      window.removeEventListener(
+        CustomEventName.NavigateToError,
+        navigateToError
+      );
+    };
+  }, []);
 
   // Check version update
   useEffect(() => {
