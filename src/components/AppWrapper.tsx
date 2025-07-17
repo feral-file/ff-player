@@ -3,7 +3,7 @@
 import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import { CastCommand } from '@/models';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import CanvasService from '@/services/CanvasService';
 import {
@@ -29,6 +29,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const { context } = useAppContext();
   const router = useRouter();
+  const pathname = usePathname();
   const canvasService = CanvasService.getInstance();
   const castInfo = context.castInfo;
   const [castState, setCastState] = useState<CastState>(CastState.None);
@@ -94,7 +95,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
     const handleCastCommand = () => {
       switch (castInfo.castCommand) {
         case CastCommand.castListArtwork: {
-          if (castState === CastState.Artwork) {
+          if (pathname === '/playlist') {
             return;
           }
 
@@ -108,7 +109,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
         }
 
         case CastCommand.castExhibition: {
-          if (castState === CastState.Exhibition) {
+          if (pathname === '/exhibitions') {
             return;
           }
 
@@ -123,7 +124,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
         }
 
         case CastCommand.castDaily: {
-          if (castState === CastState.Daily) {
+          if (pathname === '/daily') {
             return;
           }
 
@@ -142,7 +143,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       }
     };
     handleCastCommand();
-  }, [castInfo]);
+  }, [castInfo, pathname]);
 
   useEffect(() => {
     if (castInfo) return;
