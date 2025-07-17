@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { defaultDP1DisplayPreference, DP1Item } from '@/models/dp1.model';
 import { LEE_MULLICAN_EXHIBITION_CONTRACT } from '@/constants';
 import { convertToTokenID } from '@/utils/indexer';
+import { DP1Service } from '@/services/DP1Service';
 
 export default function PlaylistClient() {
   const { context } = useAppContext();
@@ -69,7 +70,11 @@ export default function PlaylistClient() {
         setArtworkID(currentPlaylist.id);
       }
     }
-    setCastPreviewURL(currentPlaylist.source);
+
+    fetchItemPreviewURL(currentPlaylist).catch((error: unknown) => {
+      console.log('[PlaylistClient] Error fetching item preview URL:', error);
+    });
+
     setIsLeeMullicanExhibition(
       currentPlaylist.provenance?.contract?.address ===
         LEE_MULLICAN_EXHIBITION_CONTRACT
@@ -79,6 +84,11 @@ export default function PlaylistClient() {
       startInterval(currentPlaylist.duration);
     }
   }, [currentIndex, playlist]);
+
+  const fetchItemPreviewURL = async (item: DP1Item) => {
+    const itemPreview = await DP1Service.getItemPreviewURL(item);
+    setCastPreviewURL(itemPreview);
+  };
 
   const handleUpdateDuration = (dp1Items: DP1Item[]) => {
     const durationMap = new Map<string, number>();

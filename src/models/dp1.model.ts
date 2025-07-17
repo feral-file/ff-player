@@ -11,6 +11,8 @@ export interface DP1Intent {
 export interface DP1Call {
   dpVersion: string;
   id: string;
+  title: string;
+  slug: string;
   created: string;
   defaults: DP1Defaults;
   items: DP1Item[];
@@ -31,8 +33,9 @@ export interface DP1Defaults {
 
 export interface DP1Item {
   id: string;
-  title: string;
-  source: string;
+  title?: string;
+  slug?: string;
+  source?: string;
   duration: number;
   license: DP1License;
   ref: string;
