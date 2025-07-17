@@ -10,6 +10,7 @@ import {
   CustomEventName,
   NavigateToErrorEventDetail,
 } from '@/models/custom_event';
+import { LocalStorageItem } from '@/constants';
 
 const enum CastState {
   None, // Not casting
@@ -92,6 +93,19 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
     console.log('[AppWrapper] process cast info:', JSON.stringify(castInfo));
     console.log('AppWrapper castState', castState);
 
+    const checkRemoveCriticalTemp = () => {
+      if (
+        castInfo.castCommand &&
+        [
+          CastCommand.castDaily,
+          CastCommand.castListArtwork,
+          CastCommand.castExhibition,
+        ].includes(castInfo.castCommand)
+      ) {
+        localStorage.removeItem(LocalStorageItem.criticalTemp);
+      }
+    };
+
     const handleCastCommand = () => {
       switch (castInfo.castCommand) {
         case CastCommand.castListArtwork: {
@@ -142,6 +156,8 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
         }
       }
     };
+
+    checkRemoveCriticalTemp();
     handleCastCommand();
   }, [castInfo, pathname]);
 
