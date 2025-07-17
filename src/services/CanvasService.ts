@@ -52,6 +52,8 @@ import {
   CursorPositionListener,
   CursorPosition,
 } from './custom-hooks/useCursorPositions';
+import { LocalStorageItem } from '@/constants';
+import { ErrorType } from '@/models/error.model';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -275,6 +277,14 @@ class CanvasService {
 
   private status(request: CheckDeviceStatusRequest): CheckDeviceStatusReply {
     console.log('[CanvasService] Check status:', JSON.stringify(request));
+
+    const isOverheating =
+      localStorage.getItem(LocalStorageItem.criticalTemp) === 'true';
+
+    if (isOverheating) {
+      return { ok: false, error: ErrorType.Overheating };
+    }
+
     const deviceSettings = DeviceManager.getDeviceDisplaySettings();
     return {
       ok: true,

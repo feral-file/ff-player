@@ -1,6 +1,7 @@
 import { CursorPosition } from '@/services/custom-hooks/useCursorPositions';
 import { ArtFraming, ViewMode } from './common.model';
 import { TokenDisplaySettings } from './display_settings.model';
+import { ErrorType } from './error.model';
 
 export interface DeviceInfo {
   device_name: string;
@@ -33,6 +34,7 @@ export interface CursorOffset {
 export type Request = object;
 export interface Reply {
   ok: boolean;
+  error?: ErrorType;
 }
 
 export interface ConnectRequestV2 {
