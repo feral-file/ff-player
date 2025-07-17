@@ -95,6 +95,31 @@ class CanvasService {
     }
   }
 
+  public processMessage(messageData: Record<string, unknown>) {
+    const commandStr = messageData.command;
+    if (!commandStr) {
+      console.error(
+        '[CAST] Command not found in the message:',
+        JSON.stringify(messageData)
+      );
+      return;
+    }
+
+    const command = CastCommand[commandStr as keyof typeof CastCommand];
+
+    Sentry.addBreadcrumb({
+      data: { command },
+      category: 'CanvasService',
+      message: 'Received command',
+    });
+
+    const requestJson = messageData.request;
+    console.log('[CanvasService] Request data:', JSON.stringify(requestJson));
+    const reply = this.commandHandler(command, requestJson);
+    console.log('[CanvasService] Response message:', JSON.stringify(reply));
+    return reply;
+  }
+
   public processDP1Message(dp1Message: DP1) {
     const dp1Intent = dp1Message.intent;
     const dp1CallData = dp1Message.dp1_call;
@@ -136,7 +161,29 @@ class CanvasService {
     return reply;
   }
 
-  private getStatus(): CheckDeviceStatusReply {
+  private commandHandler(command: CastCommand, requestJson: unknown): Reply {
+    console.log(
+      '[CAST] commandHandler:',
+      JSON.stringify(command),
+      JSON.stringify(requestJson)
+    );
+    try {
+      switch (command) {
+        case CastCommand.checkStatus:
+          return this.getStatus();
+        case CastCommand.castDaily:
+          return this.castDaily(requestJson as object);
+        default:
+          console.error(`[CAST] Unknown command: ${command}`);
+          return { ok: false };
+      }
+    } catch (error) {
+      console.error('[CAST] Error handling command:', error);
+      return { ok: false };
+    }
+  }
+
+  public getStatus(): CheckDeviceStatusReply {
     console.log('[CanvasService] Check status');
 
     const isOverheating =
