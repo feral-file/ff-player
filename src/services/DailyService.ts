@@ -4,6 +4,7 @@ import axiosInstance from './axiosService';
 import { convertToTokenID, IndexerSource } from '@/utils/indexer';
 import { convertToQueryParams } from '@/utils/queryParams';
 import * as Sentry from '@sentry/nextjs';
+import { IndexerService } from './IndexerService';
 
 class DailyService {
   private artworkService = new ArtworkService();
@@ -96,12 +97,11 @@ class DailyService {
         return [];
       }
 
-      const data = await this.artworkService.queryTokens(ids);
+      const data = await IndexerService.queryTokens(ids);
       const previewData = new Map<string, string>();
       await Promise.all(
         data.map(async (token: IndexerToken) => {
-          const previewURL =
-            await this.artworkService.getIndexerTokenPreview(token);
+          const previewURL = await IndexerService.getIndexerTokenPreview(token);
           previewData.set(token.id, previewURL);
         })
       );
@@ -168,7 +168,7 @@ class DailyService {
     }
 
     const id = convertToTokenID(blockchain, contractAddress, tokenID);
-    const token = await this.artworkService.queryIndexerToken(id);
+    const token = await IndexerService.queryIndexerToken(id);
     if (!token) {
       throw new Error('Token not found');
     }
