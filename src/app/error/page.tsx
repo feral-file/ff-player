@@ -27,12 +27,6 @@ const ErrorPage = () => {
         break;
       }
     }
-
-    return () => {
-      if (errorType === ErrorType.Overheating) {
-        localStorage.removeItem(LocalStorageItem.criticalTemp);
-      }
-    };
   }, [searchParams]);
 
   return (
