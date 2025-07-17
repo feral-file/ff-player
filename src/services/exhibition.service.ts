@@ -5,7 +5,7 @@ import { removeArtistAliasSuffixes } from '@/utils/ui/formatAlias';
 import * as Sentry from '@sentry/nextjs';
 import { SOURCE_EXHIBITION_ID } from '@/constants';
 
-export class ExhibitionService {
+class ExhibitionService {
   public async getExhibition(id: string) {
     try {
       if (id == SOURCE_EXHIBITION_ID) {
@@ -72,3 +72,5 @@ export class ExhibitionService {
     }
   }
 }
+
+export const exhibitionService = new ExhibitionService();

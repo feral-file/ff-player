@@ -77,7 +77,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
 
   // Check for scheduled DP1 tasks
   useEffect(() => {
-    DP1ScheduleService.getInstance().checkScheduledTask();
+    DP1ScheduleService.checkScheduledTask();
   }, []);
 
   const checkVersion = async () => {

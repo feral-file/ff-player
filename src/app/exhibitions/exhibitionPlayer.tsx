@@ -11,12 +11,11 @@ import { useEffect, useRef, useState } from 'react';
 import styles from './exhibition.module.scss';
 import { ExhibitionCatalog, ViewMode } from '@/models';
 import Carousel from './components/carousel/carousel';
-import { ExhibitionService, SeriesService, PostService } from '@/services';
+import { exhibitionService, postService, seriesService } from '@/services';
 import { useAppContext } from '@/context/AppContext';
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { LEE_MULLICAN_EXHIBITION_CONTRACT } from '@/constants';
 import { formatArtworkIndexID } from '@/utils/indexer';
-import ArtworkService from '@/services/ArtworkService';
 import clsx from 'clsx';
 import {
   CastingArtworkType,
@@ -28,6 +27,7 @@ import {
   mappingExhibitionCatalogToExhibitionDisplaySection,
 } from '@/services/metric.service';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
+import { artworkService } from '@/services/ArtworkService';
 
 const ExhibitionHall = () => {
   const { context } = useAppContext();
@@ -62,12 +62,6 @@ const ExhibitionHall = () => {
     NodeJS.Timeout | string | number | undefined
   >(undefined);
 
-  // Services
-  const exhibitionService = useRef(new ExhibitionService());
-  const seriesService = useRef(new SeriesService());
-  const artworkService = useRef(new ArtworkService());
-  const postService = useRef(new PostService());
-
   const FERAL_FILE_ASSET_URL =
     (process.env.NEXT_PUBLIC_FERAL_FILE_ASSET_URL ?? '') + '/';
 
@@ -75,15 +69,12 @@ const ExhibitionHall = () => {
     artworkID: string,
     exhibition?: Exhibition
   ) => {
-    const artwork = await seriesService.current.getArtwork(
-      artworkID,
-      exhibition
-    );
+    const artwork = await seriesService.getArtwork(artworkID, exhibition);
     if (!artwork) {
       return;
     }
 
-    artwork.previewURI = await artworkService.current.getArtworkPreview(
+    artwork.previewURI = await artworkService.getArtworkPreview(
       artwork,
       artwork.series
     );
@@ -126,8 +117,7 @@ const ExhibitionHall = () => {
         return;
       }
 
-      const exhibition =
-        await exhibitionService.current.getExhibition(exhibitionID);
+      const exhibition = await exhibitionService.getExhibition(exhibitionID);
 
       if (!exhibition) {
         return;
@@ -140,7 +130,7 @@ const ExhibitionHall = () => {
     };
 
     const fetchPosts = async (exhibition: Exhibition) => {
-      const posts = await postService.current.getExhibitionPosts(exhibition);
+      const posts = await postService.getExhibitionPosts(exhibition);
       setPosts(posts);
     };
 

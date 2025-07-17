@@ -132,9 +132,7 @@ class DP1ScheduleService {
       '[DP1ScheduleService] Executing scheduled task:',
       scheduledTask.id
     );
-    CanvasService.getInstance().executeScheduledDP1Task(
-      scheduledTask.dp1CallData
-    );
+    CanvasService.executeScheduledDP1Task(scheduledTask.dp1CallData);
     this.removeTask(scheduledTask.id);
     this.clearTimeoutIfExists();
   }
@@ -149,4 +147,4 @@ class DP1ScheduleService {
   }
 }
 
-export default DP1ScheduleService;
+export default DP1ScheduleService.getInstance();

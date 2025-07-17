@@ -9,9 +9,6 @@ const useCastInfo = () => {
   const [castInfo, setCastInfo] = useState<CastInfo | null>(null);
   const isFirstRender = useRef(true);
 
-  // Services
-  const canvasService = useRef(CanvasService.getInstance());
-
   const isPlaylistControlCommand = (castInfo: CastInfo) => {
     return (
       castInfo.castCommand &&
@@ -33,12 +30,11 @@ const useCastInfo = () => {
     };
 
     // Subscribe to cast info changes
-    const service = canvasService.current;
-    service.onCastInfoChange = handleCastInfoChange;
+    CanvasService.onCastInfoChange = handleCastInfoChange;
 
     return () => {
       // Cleanup subscription
-      service.onCastInfoChange = null;
+      CanvasService.onCastInfoChange = null;
     };
   }, []);
 

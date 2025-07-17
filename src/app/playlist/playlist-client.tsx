@@ -3,7 +3,6 @@
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { useAppContext } from '@/context/AppContext';
 import { CastingArtworkType } from '@/models/metric.model';
-import CanvasService from '@/services/CanvasService';
 import { getIndex } from '@/utils/playlist';
 import { CastCommand } from '@/models';
 import { useEffect, useRef, useState } from 'react';
@@ -11,6 +10,7 @@ import { defaultDP1DisplayPreference, DP1Item } from '@/models/dp1.model';
 import { LEE_MULLICAN_EXHIBITION_CONTRACT } from '@/constants';
 import { convertToTokenID } from '@/utils/indexer';
 import { DP1Service } from '@/services/DP1Service';
+import CanvasService from '@/services/CanvasService';
 
 export default function PlaylistClient() {
   const { context } = useAppContext();
@@ -30,9 +30,6 @@ export default function PlaylistClient() {
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
   const currentPlaylistRef = useRef<DP1Item>();
-
-  // Services
-  const canvasService = useRef(CanvasService.getInstance());
 
   useEffect(() => {
     return () => {
@@ -172,7 +169,7 @@ export default function PlaylistClient() {
 
     intervalRef.current = setInterval(() => {
       const index = getIndex(playlist, startTime);
-      canvasService.current.setCastInfo({
+      CanvasService.setCastInfo({
         ...castInfo,
         castCommand: CastCommand.updateIndex,
         index,

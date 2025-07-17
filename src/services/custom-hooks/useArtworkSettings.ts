@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import CanvasService from '../CanvasService';
 import { DisplaySettings } from '@/models/display_settings.model';
 import { useAppContext } from '@/context/AppContext';
@@ -15,9 +15,6 @@ export function useArtworkSettings(displayPreferences: DP1DisplayPreference) {
   const [tokenDisplaySettings, setTokenDisplaySettings] = useState<
     TokenDisplaySettingWithChanged | null | undefined
   >(displayPreferences);
-
-  // Services
-  const canvasService = useRef(CanvasService.getInstance()).current;
 
   // Listen to token display settings changes
   useEffect(() => {
@@ -34,9 +31,9 @@ export function useArtworkSettings(displayPreferences: DP1DisplayPreference) {
         changed: true,
       }));
     };
-    canvasService.addDisplaySettingsChangedListener(onSettingsChanged);
+    CanvasService.addDisplaySettingsChangedListener(onSettingsChanged);
     return () => {
-      canvasService.removeDisplaySettingsChangedListener(onSettingsChanged);
+      CanvasService.removeDisplaySettingsChangedListener(onSettingsChanged);
     };
   }, []);
 

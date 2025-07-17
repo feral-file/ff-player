@@ -1,8 +1,8 @@
 import { Artwork, Series } from '@/models';
 import axiosInstance from './axiosService';
 import { customPreviewFromTokenMetadata } from '@/utils/helper';
-import { SeriesService } from './series.service';
-import { ExhibitionService } from './exhibition.service';
+import { seriesService } from './series.service';
+import { exhibitionService } from './exhibition.service';
 
 const cloudFlareHostingDomain = 'imagedelivery.net';
 const ipfsGateway = 'https://ipfs.io/ipfs/';
@@ -41,12 +41,12 @@ class ArtworkService {
     series?: Series
   ): Promise<string> {
     if (!series) {
-      series = await new SeriesService().getSeries(artwork.seriesID ?? '');
+      series = await seriesService.getSeries(artwork.seriesID ?? '');
     }
 
     if (series.metadata?.onchainRenderer && artwork.id) {
       if (!series.exhibition) {
-        const exhibition = await new ExhibitionService().getExhibition(
+        const exhibition = await exhibitionService.getExhibition(
           series.exhibitionID
         );
         series.exhibition = exhibition;
@@ -90,4 +90,4 @@ class ArtworkService {
   }
 }
 
-export default ArtworkService;
+export const artworkService = new ArtworkService();

@@ -263,7 +263,7 @@ class CanvasService {
       '[CanvasService] Schedule playlist: ',
       JSON.stringify({ request })
     );
-    DP1ScheduleService.getInstance().storeScheduledTask(
+    DP1ScheduleService.storeScheduledTask(
       request.dp1CallData,
       request.scheduleTime.replace('Z', '')
     );
@@ -280,4 +280,4 @@ class CanvasService {
   }
 }
 
-export default CanvasService;
+export default CanvasService.getInstance();

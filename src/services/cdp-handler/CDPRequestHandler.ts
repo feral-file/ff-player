@@ -122,8 +122,7 @@ export class CDPRequestHandler {
       }
 
       default: {
-        const responseMessage =
-          CanvasService.getInstance().processMessage(wsMessage);
+        const responseMessage = CanvasService.processMessage(wsMessage);
         reply = {
           messageID,
           message: responseMessage,
@@ -133,6 +132,26 @@ export class CDPRequestHandler {
     }
 
     return JSON.stringify(reply);
+  }
+
+  private handleDP1Request(messageID: string, dp1Object: DP1) {
+    try {
+      console.log('[CDP] DP1 request received:', JSON.stringify(dp1Object));
+
+      const responseMessage = CanvasService.processDP1Message(dp1Object);
+      const reply = {
+        messageID,
+        message: responseMessage,
+      };
+
+      return JSON.stringify(reply);
+    } catch (error) {
+      console.error('Error handling CDP request:', error);
+      return JSON.stringify({
+        messageID,
+        message: { ok: false, error: (error as Error).message },
+      });
+    }
   }
 
   private handleConnectivityChange(isOnline: boolean) {
@@ -170,26 +189,5 @@ export class CDPRequestHandler {
     }
 
     return false;
-  }
-
-  private handleDP1Request(messageID: string, dp1Object: DP1) {
-    try {
-      console.log('[CDP] DP1 request received:', JSON.stringify(dp1Object));
-
-      const responseMessage =
-        CanvasService.getInstance().processDP1Message(dp1Object);
-      const reply = {
-        messageID,
-        message: responseMessage,
-      };
-
-      return JSON.stringify(reply);
-    } catch (error) {
-      console.error('Error handling CDP request:', error);
-      return JSON.stringify({
-        messageID,
-        message: { ok: false, error: (error as Error).message },
-      });
-    }
   }
 }
