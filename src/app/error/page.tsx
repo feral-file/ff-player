@@ -18,7 +18,7 @@ const ErrorPage = () => {
       case ErrorType.Overheating: {
         setTitle('System Overheating Detected');
         setMessage(
-          'The device temperature has exceeded safe operating levels. To prevent damage, playback will be paused. Please reboot the device to continue viewing the artwork.'
+          'The device temperature has exceeded safe operating levels. To prevent damage, playback has been paused. Please reboot the device to continue viewing the artwork.'
         );
         break;
       }
