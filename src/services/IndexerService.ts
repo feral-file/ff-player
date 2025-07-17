@@ -1,7 +1,7 @@
 import { IndexerToken } from '@/models';
-import createApolloClient from '@/utils/ApolloClient';
+import apolloClient from '@/utils/ApolloClient';
 import { customPreviewFromTokenMetadata } from '@/utils/helper';
-import { ApolloClient, gql, NormalizedCacheObject } from '@apollo/client';
+import { gql } from '@apollo/client';
 import * as Sentry from '@sentry/nextjs';
 
 const LIMIT_PER_PAGE = 50;
@@ -26,20 +26,24 @@ export const IndexerService = {
   },
 
   async queryIndexerToken(id: string): Promise<IndexerToken | null> {
-    const client = createApolloClient();
-    const data = await IndexerService.queryTokensChunk(client, [id]);
-    const token = data[0] || null;
-    return token;
+    try {
+      const data = await IndexerService.queryTokensChunk([id]);
+      const token = data[0] || null;
+      return token;
+    } catch (error) {
+      console.log('[API] Error querying indexer token:', JSON.stringify(error));
+      Sentry.captureException(error);
+      return null;
+    }
   },
 
   async queryTokens(ids: string[]): Promise<IndexerToken[]> {
     try {
-      const client = createApolloClient();
       let tokens: IndexerToken[] = [];
 
       for (let i = 0; i < ids.length; i += LIMIT_PER_PAGE) {
         const idsChunk = ids.slice(i, i + LIMIT_PER_PAGE);
-        const data = await IndexerService.queryTokensChunk(client, idsChunk);
+        const data = await IndexerService.queryTokensChunk(idsChunk);
         tokens = tokens.concat(data);
       }
 
@@ -51,12 +55,9 @@ export const IndexerService = {
     }
   },
 
-  async queryTokensChunk(
-    client: ApolloClient<NormalizedCacheObject>,
-    ids: string[]
-  ): Promise<IndexerToken[]> {
+  async queryTokensChunk(ids: string[]): Promise<IndexerToken[]> {
     return new Promise((resolve, reject) => {
-      client
+      apolloClient
         .query({
           query: gql`
             {
