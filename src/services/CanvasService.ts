@@ -196,7 +196,7 @@ class CanvasService {
         case CastCommand.connect:
           return this.connect(requestJson as ConnectRequestV2);
         case CastCommand.disconnect:
-          return this.disconnect(requestJson as DisconnectRequest);
+          return this.disconnect();
         case CastCommand.checkStatus:
           return this.status(requestJson as CheckDeviceStatusRequest);
         case CastCommand.castListArtwork:
@@ -269,8 +269,8 @@ class CanvasService {
     return { ok: true };
   }
 
-  public disconnect(request: DisconnectRequest): DisconnectReplyV2 {
-    console.log('[CanvasService] Disconnect: ', JSON.stringify(request));
+  public disconnect(): DisconnectReplyV2 {
+    console.log('[CanvasService] Disconnect');
     this.setCastInfo(null);
     return { ok: true };
   }

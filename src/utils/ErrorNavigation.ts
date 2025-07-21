@@ -4,6 +4,7 @@ import {
   NavigateToErrorEventDetail,
 } from '@/models/custom_event';
 import { ErrorType } from '@/models/error.model';
+import CanvasService from '@/services/CanvasService';
 
 export function navigateToErrorPageAction(errorType: string) {
   const params = new URLSearchParams({
@@ -24,5 +25,6 @@ export function navigateToErrorPageAction(errorType: string) {
 
 export function handleOverheatingError() {
   localStorage.setItem(LocalStorageItem.criticalTemp, 'true');
+  CanvasService.getInstance().disconnect();
   navigateToErrorPageAction(ErrorType.Overheating);
 }
