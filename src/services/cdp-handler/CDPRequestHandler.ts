@@ -150,12 +150,16 @@ export class CDPRequestHandler {
       switch (event as WatchdogEvent) {
         case WatchdogEvent.CriticalCPUTemperature: {
           handleOverheatingError();
-          return true;
+          return JSON.stringify({
+            message: { ok: true },
+          });
         }
 
         default: {
           console.error('[CDP] Unknown watchdog event');
-          return false;
+          return JSON.stringify({
+            message: { ok: false, error: 'Unknown watchdog event' },
+          });
         }
       }
     } catch (error) {
