@@ -33,7 +33,6 @@ import {
   KeyboardEventReply,
   UpdateArtFramingRequest,
   UpdateDisplaySettingsRequest,
-  DisconnectRequest,
   PlayArtwork,
 } from '@/models/cast_request_reply.model';
 import { TokenDisplaySettings } from '@/models/display_settings.model';

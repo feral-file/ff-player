@@ -5,7 +5,6 @@ import AppService from '@/services/app.service';
 import { CastCommand } from '@/models';
 import { useRouter, usePathname } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
-import CanvasService from '@/services/CanvasService';
 import {
   CustomEventName,
   NavigateToErrorEventDetail,
@@ -31,7 +30,6 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   const { context } = useAppContext();
   const router = useRouter();
   const pathname = usePathname();
-  const canvasService = CanvasService.getInstance();
   const castInfo = context.castInfo;
   const [castState, setCastState] = useState<CastState>(CastState.None);
 
@@ -88,7 +86,10 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   };
 
   useEffect(() => {
-    if (!castInfo) return;
+    if (!castInfo) {
+      setCastState(CastState.None);
+      return;
+    }
 
     console.log('[AppWrapper] process cast info:', JSON.stringify(castInfo));
     console.log('AppWrapper castState', castState);
@@ -160,21 +161,6 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
     checkRemoveCriticalTemp();
     handleCastCommand();
   }, [castInfo, pathname]);
-
-  useEffect(() => {
-    if (castInfo) return;
-    if (castState !== CastState.None && castState !== CastState.Daily) {
-      // Disconnect
-      setCastState(CastState.None);
-      router.back();
-    } else {
-      try {
-        canvasService.castDaily({});
-      } catch (error) {
-        console.log('[AppWrapper] Error Cast daily', error);
-      }
-    }
-  }, [castInfo, castState, router]);
 
   return (
     <div
