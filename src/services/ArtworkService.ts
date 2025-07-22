@@ -5,6 +5,7 @@ import axiosInstance from './axiosService';
 import * as Sentry from '@sentry/nextjs';
 import { customPreviewFromTokenMetadata } from '@/utils/helper';
 import { SeriesService } from './series.service';
+import { ExhibitionService } from './exhibition.service';
 
 const LIMIT_PER_PAGE = 50;
 const cloudFlareHostingDomain = 'imagedelivery.net';
@@ -48,6 +49,13 @@ class ArtworkService {
     }
 
     if (series.metadata?.onchainRenderer && artwork.id) {
+      if (!series.exhibition) {
+        const exhibition = await new ExhibitionService().getExhibition(
+          series.exhibitionID
+        );
+        series.exhibition = exhibition;
+      }
+
       return (
         (await customPreviewFromTokenMetadata(
           series.exhibition?.contracts?.find(
