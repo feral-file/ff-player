@@ -33,7 +33,6 @@ import {
   KeyboardEventReply,
   UpdateArtFramingRequest,
   UpdateDisplaySettingsRequest,
-  DisconnectRequest,
   PlayArtwork,
 } from '@/models/cast_request_reply.model';
 import { TokenDisplaySettings } from '@/models/display_settings.model';
@@ -52,6 +51,8 @@ import {
   CursorPositionListener,
   CursorPosition,
 } from './custom-hooks/useCursorPositions';
+import { LocalStorageItem } from '@/constants';
+import { ErrorType } from '@/models/error.model';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -194,7 +195,7 @@ class CanvasService {
         case CastCommand.connect:
           return this.connect(requestJson as ConnectRequestV2);
         case CastCommand.disconnect:
-          return this.disconnect(requestJson as DisconnectRequest);
+          return this.disconnect();
         case CastCommand.checkStatus:
           return this.status(requestJson as CheckDeviceStatusRequest);
         case CastCommand.castListArtwork:
@@ -267,14 +268,22 @@ class CanvasService {
     return { ok: true };
   }
 
-  public disconnect(request: DisconnectRequest): DisconnectReplyV2 {
-    console.log('[CanvasService] Disconnect: ', JSON.stringify(request));
+  public disconnect(): DisconnectReplyV2 {
+    console.log('[CanvasService] Disconnect');
     this.setCastInfo(null);
     return { ok: true };
   }
 
   private status(request: CheckDeviceStatusRequest): CheckDeviceStatusReply {
     console.log('[CanvasService] Check status:', JSON.stringify(request));
+
+    const isOverheating =
+      localStorage.getItem(LocalStorageItem.criticalTemp) === 'true';
+
+    if (isOverheating) {
+      return { ok: false, error: ErrorType.Overheating };
+    }
+
     const deviceSettings = DeviceManager.getDeviceDisplaySettings();
     return {
       ok: true,

@@ -2,7 +2,12 @@ import CanvasService from '../CanvasService';
 import { ViewMode, WebSocketMessage } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import { DeviceNamePrefix } from '@/constants';
-import { ConnectivityEventDetail } from '../custom-hooks/useNetworkManager';
+import {
+  ConnectivityEventDetail,
+  CustomEventName,
+  WatchdogEvent,
+} from '@/models/custom_event';
+import { handleOverheatingError } from '@/utils/ErrorNavigation';
 
 const sendDeviceInfoCommand = 'sendDeviceInfo';
 const pingCommand = 'ping';
@@ -37,6 +42,9 @@ export class CDPRequestHandler {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).getCurrentOrientation =
       this.getCurrentOrientation.bind(this);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).handleWatchdogEvent = this.handleWatchdogEvent.bind(this);
   }
 
   private handleCDPRequest(event: WebSocketMessage): string {
@@ -119,9 +127,12 @@ export class CDPRequestHandler {
 
   private handleConnectivityChange(isOnline: boolean) {
     window.dispatchEvent(
-      new CustomEvent<ConnectivityEventDetail>('connectivityChange', {
-        detail: { isOnline },
-      })
+      new CustomEvent<ConnectivityEventDetail>(
+        CustomEventName.ConnectivityChange,
+        {
+          detail: { isOnline },
+        }
+      )
     );
   }
 
@@ -132,6 +143,32 @@ export class CDPRequestHandler {
     });
   }
 
+  public handleWatchdogEvent(event: string) {
+    try {
+      console.log('[CDP] Watchdog event received:', event);
+
+      switch (event as WatchdogEvent) {
+        case WatchdogEvent.CriticalCPUTemperature: {
+          handleOverheatingError();
+          return JSON.stringify({
+            message: { ok: true },
+          });
+        }
+
+        default: {
+          console.error('[CDP] Unknown watchdog event');
+          return JSON.stringify({
+            message: { ok: false, error: 'Unknown watchdog event' },
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[CDP] Error handling watchdog event:', error);
+    }
+
+    return false;
+  }
+
   public cleanup() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleCDPRequest = null;
@@ -139,6 +176,8 @@ export class CDPRequestHandler {
     (window as any).handleConnectivityChange = null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).getCurrentOrientation = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).handleWatchdogEvent = null;
     this.isInitialized = false;
   }
 }

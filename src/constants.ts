@@ -6,6 +6,7 @@ export enum LocalStorageItem {
   primaryAddress = 'primaryAddress',
   displaySettings = 'displaySettings',
   viewMode = 'viewMode',
+  criticalTemp = 'criticalTemp',
 }
 
 export enum Platform {

@@ -3,9 +3,13 @@
 import { useAppContext } from '@/context/AppContext';
 import AppService from '@/services/app.service';
 import { CastCommand } from '@/models';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
-import CanvasService from '@/services/CanvasService';
+import {
+  CustomEventName,
+  NavigateToErrorEventDetail,
+} from '@/models/custom_event';
+import { LocalStorageItem } from '@/constants';
 
 const enum CastState {
   None, // Not casting
@@ -25,9 +29,28 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const { context } = useAppContext();
   const router = useRouter();
-  const canvasService = CanvasService.getInstance();
+  const pathname = usePathname();
   const castInfo = context.castInfo;
   const [castState, setCastState] = useState<CastState>(CastState.None);
+
+  useEffect(() => {
+    const navigateToError = (event: Event) => {
+      const { path } = (event as CustomEvent<NavigateToErrorEventDetail>)
+        .detail;
+      if (path) {
+        router.replace(path);
+      }
+    };
+
+    window.addEventListener(CustomEventName.NavigateToError, navigateToError);
+
+    return () => {
+      window.removeEventListener(
+        CustomEventName.NavigateToError,
+        navigateToError
+      );
+    };
+  }, []);
 
   // Check version update
   useEffect(() => {
@@ -63,15 +86,31 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   };
 
   useEffect(() => {
-    if (!castInfo) return;
+    if (!castInfo) {
+      setCastState(CastState.None);
+      return;
+    }
 
     console.log('[AppWrapper] process cast info:', JSON.stringify(castInfo));
     console.log('AppWrapper castState', castState);
 
+    const checkRemoveCriticalTemp = () => {
+      if (
+        castInfo.castCommand &&
+        [
+          CastCommand.castDaily,
+          CastCommand.castListArtwork,
+          CastCommand.castExhibition,
+        ].includes(castInfo.castCommand)
+      ) {
+        localStorage.removeItem(LocalStorageItem.criticalTemp);
+      }
+    };
+
     const handleCastCommand = () => {
       switch (castInfo.castCommand) {
         case CastCommand.castListArtwork: {
-          if (castState === CastState.Artwork) {
+          if (pathname === '/playlist') {
             return;
           }
 
@@ -85,7 +124,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
         }
 
         case CastCommand.castExhibition: {
-          if (castState === CastState.Exhibition) {
+          if (pathname === '/exhibitions') {
             return;
           }
 
@@ -100,7 +139,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
         }
 
         case CastCommand.castDaily: {
-          if (castState === CastState.Daily) {
+          if (pathname === '/daily') {
             return;
           }
 
@@ -118,23 +157,10 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
         }
       }
     };
-    handleCastCommand();
-  }, [castInfo]);
 
-  useEffect(() => {
-    if (castInfo) return;
-    if (castState !== CastState.None && castState !== CastState.Daily) {
-      // Disconnect
-      setCastState(CastState.None);
-      router.back();
-    } else {
-      try {
-        canvasService.castDaily({});
-      } catch (error) {
-        console.log('[AppWrapper] Error Cast daily', error);
-      }
-    }
-  }, [castInfo, castState, router]);
+    checkRemoveCriticalTemp();
+    handleCastCommand();
+  }, [castInfo, pathname]);
 
   return (
     <div

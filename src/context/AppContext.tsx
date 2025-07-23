@@ -104,7 +104,9 @@ export const AppProvider = ({ children }: AppContextProps) => {
     if (castInfo) {
       const path = window.location.pathname;
       const isDaily = path.includes('daily');
-      if (isDaily) {
+      const hasCriticalTemp =
+        localStorage.getItem(LocalStorageItem.criticalTemp) === 'true';
+      if (isDaily || hasCriticalTemp) {
         // Reset to daily cast info
         castInfo = {
           castCommand: CastCommand.castDaily,
@@ -117,6 +119,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
       canvasService.current.setCastInfo(castInfo, false);
       // TODO: Send cast info to app
     } else {
+      canvasService.current.castDaily({});
       console.log('CastInfo is null, send cast daily message');
       // TODO: Send cast info to app
     }

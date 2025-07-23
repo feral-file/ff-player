@@ -1,10 +1,10 @@
 'use client';
 
+import {
+  ConnectivityEventDetail,
+  CustomEventName,
+} from '@/models/custom_event';
 import { useEffect, useState } from 'react';
-
-export interface ConnectivityEventDetail {
-  isOnline: boolean;
-}
 
 const useNetworkManger = () => {
   const [isOnline, setIsOnline] = useState<boolean>(true);
@@ -15,10 +15,16 @@ const useNetworkManger = () => {
       setIsOnline(customEvent.detail.isOnline);
     };
 
-    window.addEventListener('connectivityChange', updateNetworkStatus);
+    window.addEventListener(
+      CustomEventName.ConnectivityChange,
+      updateNetworkStatus
+    );
 
     return () => {
-      window.removeEventListener('connectivityChange', updateNetworkStatus);
+      window.removeEventListener(
+        CustomEventName.ConnectivityChange,
+        updateNetworkStatus
+      );
     };
   }, []);
 
