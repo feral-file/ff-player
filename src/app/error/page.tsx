@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import MessageModal from '@/components/MessageModal';
-import { LocalStorageItem } from '@/constants';
 import { ErrorType } from '@/models/error.model';
 
 const ErrorPage = () => {
