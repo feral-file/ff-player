@@ -196,13 +196,6 @@ class CanvasService {
     const deviceSettings = DeviceManager.getDeviceDisplaySettings();
     return {
       ok: true,
-      connectedDevice: this.castInfo?.deviceInfo,
-
-      exhibitionId: this.castInfo?.exhibitionId,
-      catalog: this.castInfo?.catalog,
-      catalogId: this.castInfo?.catalogId,
-
-      artworks: this.castInfo?.artworks ?? [],
       index: this.castInfo?.index,
       isPaused: this.castInfo?.isPaused,
 

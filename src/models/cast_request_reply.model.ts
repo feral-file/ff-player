@@ -59,13 +59,7 @@ export type SchedulePlaylistReply = Reply;
 
 export type CheckDeviceStatusRequest = Request;
 export interface CheckDeviceStatusReply extends Reply {
-  connectedDevice?: DeviceInfo;
-
-  exhibitionId?: string;
-  catalog?: ExhibitionCatalog;
-  catalogId?: string;
-
-  artworks?: PlayArtwork[];
+  items?: DP1Item[];
   index?: number;
   isPaused?: boolean;
 
@@ -75,8 +69,6 @@ export interface CheckDeviceStatusReply extends Reply {
     scaling: Scaling;
     orientation: ViewMode;
   };
-
-  items?: DP1Item[];
 }
 
 export interface CastExhibitionRequest {
