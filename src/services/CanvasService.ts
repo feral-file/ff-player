@@ -7,7 +7,29 @@ import {
   SchedulePlaylistReply,
 } from '@/models/cast_request_reply.model';
 import * as Sentry from '@sentry/nextjs';
-import { CastCommand, CastInfo, DisplaySettings, ViewMode } from '@/models';
+import {
+  CastCommand,
+  CastInfo,
+  ConnectReplyV2,
+  ConnectRequestV2,
+  DisconnectReplyV2,
+  DisplaySettings,
+  ViewMode,
+  TapGestureRequest,
+  GestureReply,
+  DragGestureRequest,
+  GetCursorOffsetReply,
+  GetCursorOffsetRequest,
+  KeyboardEventReply,
+  KeyboardEventRequest,
+  SetCursorOffsetReply,
+  SetCursorOffsetRequest,
+  UpdateArtFramingRequest,
+  UpdateCursorPositionsRequest,
+  UpdateDisplaySettingsRequest,
+  UpdateCursorPositionsReply,
+  TokenDisplaySettings,
+} from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import {
   CursorPositionListener,
@@ -20,6 +42,7 @@ import {
   DP1Action,
   DP1Call,
   DP1DisplayPreference,
+  Scaling,
 } from '@/models/dp1.model';
 import DP1ScheduleService from './DP1ScheduleService';
 
@@ -44,8 +67,23 @@ class CanvasService {
       listener => listener !== callback
     );
   }
+
+  private notifyCursorPositionsChanged(positions: CursorPosition[]) {
+    this.currentCursorPositions = positions;
+    this.cursorPositionsListeners.forEach(listener => {
+      try {
+        listener(positions);
+      } catch (error) {
+        console.error(
+          '[CanvasService] Error in cursor positions listener:',
+          error
+        );
+      }
+    });
+  }
   // End cursor positions Service Update Listener
 
+  // Display settings
   private displaySettingsChangedListeners: ((
     isSaveToDevice: boolean,
     displaySettings: DP1DisplayPreference
@@ -72,6 +110,19 @@ class CanvasService {
       );
   }
 
+  private notifyDisplaySettingsChanged(
+    isSaveToDevice: boolean,
+    displaySettings: TokenDisplaySettings
+  ) {
+    this.displaySettingsChangedListeners.forEach(listener => {
+      try {
+        listener(isSaveToDevice, displaySettings);
+      } catch (error) {
+        console.error('Error in display settings listener:', error);
+      }
+    });
+  }
+
   public static getInstance() {
     if (!CanvasService.instance) {
       CanvasService.instance = new CanvasService();
@@ -93,6 +144,14 @@ class CanvasService {
     if (notify) {
       this.onCastInfoChange?.(this.castInfo);
     }
+  }
+
+  public executeScheduledDP1Task(dp1CallData: DP1Call): void {
+    console.log(
+      '[CanvasService] Executing scheduled DP1 task with data:',
+      JSON.stringify(dp1CallData)
+    );
+    this.displayPlaylist({ dp1CallData });
   }
 
   public processMessage(messageData: Record<string, unknown>) {
@@ -169,10 +228,34 @@ class CanvasService {
     );
     try {
       switch (command) {
+        case CastCommand.connect:
+          return this.connect(requestJson as ConnectRequestV2);
+        case CastCommand.disconnect:
+          return this.disconnect();
         case CastCommand.checkStatus:
           return this.getStatus();
+        case CastCommand.tapGesture:
+          return this.tapGesture(requestJson as TapGestureRequest);
+        case CastCommand.dragGesture:
+          return this.dragGesture(requestJson as DragGestureRequest);
+        case CastCommand.setCursorOffset:
+          return this.setCursorOffset(requestJson as SetCursorOffsetRequest);
+        case CastCommand.getCursorOffset:
+          return this.getCursorOffset(requestJson as GetCursorOffsetRequest);
+        case CastCommand.sendKeyboardEvent:
+          return this.keyboardEvent(requestJson as KeyboardEventRequest);
         case CastCommand.castDaily:
           return this.castDaily(requestJson as object);
+        case CastCommand.updateArtFraming:
+          return this.updateArtFraming(requestJson as UpdateArtFramingRequest);
+        case CastCommand.updateDisplaySettings:
+          return this.updateDisplaySettings(
+            requestJson as UpdateDisplaySettingsRequest
+          );
+        case CastCommand.cursorUpdate:
+          return this.updateCursorPositions(
+            requestJson as UpdateCursorPositionsRequest
+          );
         default:
           console.error(`[CAST] Unknown command: ${command}`);
           return { ok: false };
@@ -221,6 +304,98 @@ class CanvasService {
     return { ok: true };
   }
 
+  private connect(request: ConnectRequestV2): ConnectReplyV2 {
+    console.log('[CanvasService] Connect request:', JSON.stringify(request));
+
+    this.setCastInfo({
+      ...(this.castInfo ?? {}),
+      castCommand: CastCommand.connect,
+      deviceInfo: request.clientDevice,
+    });
+
+    console.log(
+      '[CAST] Connected device:',
+      JSON.stringify(request.clientDevice)
+    );
+    return { ok: true };
+  }
+
+  public disconnect(): DisconnectReplyV2 {
+    console.log('[CanvasService] Disconnect');
+    this.setCastInfo(null);
+    return { ok: true };
+  }
+
+  // ---------------------------- Interactions ----------------------------
+  public updateCursorPositions(
+    request: UpdateCursorPositionsRequest
+  ): UpdateCursorPositionsReply {
+    console.log('[CanvasService] updateCursorPositions: ', request);
+
+    if (request.positions.length > 0) {
+      this.notifyCursorPositionsChanged(request.positions);
+    }
+
+    return { ok: true };
+  }
+
+  private tapGesture(request: TapGestureRequest): GestureReply {
+    console.log('[CanvasService] tapGesture: ', request);
+    return { ok: true };
+  }
+
+  private dragGesture(request: DragGestureRequest): GestureReply {
+    console.log('[CanvasService] dragGesture: ', request);
+    return { ok: true };
+  }
+
+  private getCursorOffset(
+    request: GetCursorOffsetRequest
+  ): GetCursorOffsetReply {
+    console.log('[CanvasService] getCursorOffset: ', request);
+    return {
+      ok: true,
+      cursorOffset: { dx: 0, dy: 0, coefficientX: 1, coefficientY: 1 },
+    };
+  }
+
+  private setCursorOffset(
+    request: SetCursorOffsetRequest
+  ): SetCursorOffsetReply {
+    console.log('[CanvasService] setCursorOffset: ', request);
+    return { ok: true };
+  }
+
+  private keyboardEvent(request: KeyboardEventRequest): KeyboardEventReply {
+    console.log('[CanvasService] keyboardEvent: ', request);
+    this.setCastInfo({
+      ...this.castInfo,
+      value: request.code,
+    });
+    return { ok: true };
+  }
+
+  // Settings
+  public updateArtFraming(request: UpdateArtFramingRequest): Reply {
+    console.log('Update ArtFraming: ', JSON.stringify(request));
+
+    this.notifyDisplaySettingsChanged(true, {
+      scaling: Object.values(Scaling)[request.frameConfig],
+    });
+
+    return { ok: true };
+  }
+
+  public updateDisplaySettings(request: UpdateDisplaySettingsRequest): Reply {
+    console.log(
+      '[CanvasService] updateDisplaySettings: ',
+      JSON.stringify(request)
+    );
+
+    this.notifyDisplaySettingsChanged(request.isSaved, request);
+    return { ok: true };
+  }
+
   private displayPlaylist(request: NowDisplayRequest): NowDisplayReply {
     if (!request.dp1CallData.items.length) {
       console.error('[CanvasService] No items to display');
@@ -262,14 +437,6 @@ class CanvasService {
     );
 
     return { ok: true };
-  }
-
-  public executeScheduledDP1Task(dp1CallData: DP1Call): void {
-    console.log(
-      '[CanvasService] Executing scheduled DP1 task with data:',
-      JSON.stringify(dp1CallData)
-    );
-    this.displayPlaylist({ dp1CallData });
   }
 }
 
