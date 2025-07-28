@@ -6,7 +6,6 @@ import {
   WatchdogEvent,
 } from '@/models/custom_event';
 import { handleOverheatingError } from '@/utils/ErrorNavigation';
-import { DP1 } from '@/models/dp1.model';
 import DeviceManager from '@/utils/DeviceManager';
 import { DeviceNamePrefix } from '@/constants';
 
@@ -63,13 +62,6 @@ export class CDPRequestHandler {
         typeof event.message === 'string'
           ? (JSON.parse(event.message) as Record<string, unknown>)
           : (event.message as Record<string, unknown>);
-
-      if (wsMessage.dp1_call) {
-        return this.handleDP1Request(
-          event.messageID,
-          wsMessage as unknown as DP1
-        );
-      }
 
       if (wsMessage.command) {
         return this.handleCommandRequest(event.messageID, wsMessage);
@@ -133,26 +125,6 @@ export class CDPRequestHandler {
     }
 
     return JSON.stringify(reply);
-  }
-
-  private handleDP1Request(messageID: string, dp1Object: DP1) {
-    try {
-      console.log('[CDP] DP1 request received:', JSON.stringify(dp1Object));
-
-      const responseMessage = CanvasService.processDP1Message(dp1Object);
-      const reply = {
-        messageID,
-        message: responseMessage,
-      };
-
-      return JSON.stringify(reply);
-    } catch (error) {
-      console.error('Error handling CDP request:', error);
-      return JSON.stringify({
-        messageID,
-        message: { ok: false, error: (error as Error).message },
-      });
-    }
   }
 
   private handleConnectivityChange(isOnline: boolean) {

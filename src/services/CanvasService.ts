@@ -15,13 +15,13 @@ import {
   DisconnectReplyV2,
   DisplaySettings,
   ViewMode,
-  KeyboardEventReply,
-  KeyboardEventRequest,
   UpdateArtFramingRequest,
   UpdateCursorPositionsRequest,
   UpdateDisplaySettingsRequest,
   UpdateCursorPositionsReply,
   TokenDisplaySettings,
+  DisplayPlaylistRequest,
+  DisplayPlaylistReply,
 } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import {
@@ -31,7 +31,6 @@ import {
 import { LocalStorageItem } from '@/constants';
 import { ErrorType } from '@/models/error.model';
 import {
-  DP1,
   DP1Action,
   DP1Call,
   DP1DisplayPreference,
@@ -144,7 +143,7 @@ class CanvasService {
       '[CanvasService] Executing scheduled DP1 task with data:',
       JSON.stringify(dp1CallData)
     );
-    this.displayPlaylist({ dp1CallData });
+    this.nowDisplayPlaylist({ dp1CallData });
   }
 
   public processMessage(messageData: Record<string, unknown>) {
@@ -169,47 +168,6 @@ class CanvasService {
     console.log('[CanvasService] Request data:', JSON.stringify(requestJson));
     const reply = this.commandHandler(command, requestJson);
     console.log('[CanvasService] Response message:', JSON.stringify(reply));
-    return reply;
-  }
-
-  public processDP1Message(dp1Message: DP1) {
-    const dp1Intent = dp1Message.intent;
-    const dp1CallData = dp1Message.dp1_call;
-    const action = dp1Intent.action;
-
-    console.log('[CanvasService] Processing DP1 message: ', action);
-    Sentry.addBreadcrumb({
-      data: { action },
-      category: 'CanvasService',
-      message: 'Received DP1 command',
-    });
-
-    let reply: Reply;
-    switch (action) {
-      case DP1Action.NowDisplay: {
-        return this.displayPlaylist({ dp1CallData });
-      }
-
-      case DP1Action.SchedulePlay: {
-        return this.schedulePlaylist({
-          dp1CallData,
-          scheduleTime: dp1Intent.schedule_time,
-        });
-      }
-
-      case DP1Action.GetCurrentPlaylist: {
-        reply = this.getStatus();
-        break;
-      }
-
-      default: {
-        console.error('[CanvasService] Unknown DP1 action:', action);
-        reply = { ok: false };
-        break;
-      }
-    }
-
-    console.log('[CanvasService] DP1 reply:', JSON.stringify(reply));
     return reply;
   }
 
@@ -239,6 +197,8 @@ class CanvasService {
           return this.updateCursorPositions(
             requestJson as UpdateCursorPositionsRequest
           );
+        case CastCommand.displayPlaylist:
+          return this.displayPlaylist(requestJson as DisplayPlaylistRequest);
         default:
           console.error(`[CAST] Unknown command: ${command}`);
           return { ok: false };
@@ -322,15 +282,6 @@ class CanvasService {
     return { ok: true };
   }
 
-  private keyboardEvent(request: KeyboardEventRequest): KeyboardEventReply {
-    console.log('[CanvasService] keyboardEvent: ', request);
-    this.setCastInfo({
-      ...this.castInfo,
-      value: request.code,
-    });
-    return { ok: true };
-  }
-
   // Settings
   public updateArtFraming(request: UpdateArtFramingRequest): Reply {
     console.log('Update ArtFraming: ', JSON.stringify(request));
@@ -352,7 +303,51 @@ class CanvasService {
     return { ok: true };
   }
 
-  private displayPlaylist(request: NowDisplayRequest): NowDisplayReply {
+  // DP1 Handlers
+
+  private displayPlaylist(
+    request: DisplayPlaylistRequest
+  ): DisplayPlaylistReply {
+    const dp1Intent = request.intent;
+    const dp1CallData = request.dp1_call;
+    const action = dp1Intent.action;
+
+    console.log('[CanvasService] display playlist: ', action);
+    Sentry.addBreadcrumb({
+      data: { action },
+      category: 'CanvasService',
+      message: 'Received DP1 command',
+    });
+
+    let reply: Reply;
+    switch (action) {
+      case DP1Action.NowDisplay: {
+        return this.nowDisplayPlaylist({ dp1CallData });
+      }
+
+      case DP1Action.SchedulePlay: {
+        return this.schedulePlaylist({
+          dp1CallData,
+          scheduleTime: dp1Intent.schedule_time,
+        });
+      }
+
+      case DP1Action.GetCurrentPlaylist: {
+        reply = this.getStatus();
+        break;
+      }
+
+      default: {
+        console.error('[CanvasService] Unknown DP1 action:', action);
+        reply = { ok: false };
+        break;
+      }
+    }
+
+    return reply;
+  }
+
+  private nowDisplayPlaylist(request: NowDisplayRequest): NowDisplayReply {
     if (!request.dp1CallData.items.length) {
       console.error('[CanvasService] No items to display');
       return { ok: false };

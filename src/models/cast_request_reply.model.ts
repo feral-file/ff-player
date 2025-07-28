@@ -2,7 +2,7 @@ import { CursorPosition } from '@/services/custom-hooks/useCursorPositions';
 import { ViewMode } from './common.model';
 import { TokenDisplaySettings } from './display_settings.model';
 import { ErrorType } from './error.model';
-import { DP1Call, DP1Item, Scaling } from './dp1.model';
+import { DP1Call, DP1Intent, DP1Item, Scaling } from './dp1.model';
 
 export interface DeviceInfo {
   device_name: string;
@@ -70,6 +70,12 @@ export interface CheckDeviceStatusReply extends Reply {
     orientation: ViewMode;
   };
 }
+
+export interface DisplayPlaylistRequest {
+  intent: DP1Intent;
+  dp1_call: DP1Call;
+}
+export type DisplayPlaylistReply = Reply;
 
 export interface CastExhibitionRequest {
   exhibitionId: string;
