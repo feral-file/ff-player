@@ -15,15 +15,8 @@ import {
   DisconnectReplyV2,
   DisplaySettings,
   ViewMode,
-  TapGestureRequest,
-  GestureReply,
-  DragGestureRequest,
-  GetCursorOffsetReply,
-  GetCursorOffsetRequest,
   KeyboardEventReply,
   KeyboardEventRequest,
-  SetCursorOffsetReply,
-  SetCursorOffsetRequest,
   UpdateArtFramingRequest,
   UpdateCursorPositionsRequest,
   UpdateDisplaySettingsRequest,
@@ -234,16 +227,6 @@ class CanvasService {
           return this.disconnect();
         case CastCommand.checkStatus:
           return this.getStatus();
-        case CastCommand.tapGesture:
-          return this.tapGesture(requestJson as TapGestureRequest);
-        case CastCommand.dragGesture:
-          return this.dragGesture(requestJson as DragGestureRequest);
-        case CastCommand.setCursorOffset:
-          return this.setCursorOffset(requestJson as SetCursorOffsetRequest);
-        case CastCommand.getCursorOffset:
-          return this.getCursorOffset(requestJson as GetCursorOffsetRequest);
-        case CastCommand.sendKeyboardEvent:
-          return this.keyboardEvent(requestJson as KeyboardEventRequest);
         case CastCommand.castDaily:
           return this.castDaily(requestJson as object);
         case CastCommand.updateArtFraming:
@@ -336,33 +319,6 @@ class CanvasService {
       this.notifyCursorPositionsChanged(request.positions);
     }
 
-    return { ok: true };
-  }
-
-  private tapGesture(request: TapGestureRequest): GestureReply {
-    console.log('[CanvasService] tapGesture: ', request);
-    return { ok: true };
-  }
-
-  private dragGesture(request: DragGestureRequest): GestureReply {
-    console.log('[CanvasService] dragGesture: ', request);
-    return { ok: true };
-  }
-
-  private getCursorOffset(
-    request: GetCursorOffsetRequest
-  ): GetCursorOffsetReply {
-    console.log('[CanvasService] getCursorOffset: ', request);
-    return {
-      ok: true,
-      cursorOffset: { dx: 0, dy: 0, coefficientX: 1, coefficientY: 1 },
-    };
-  }
-
-  private setCursorOffset(
-    request: SetCursorOffsetRequest
-  ): SetCursorOffsetReply {
-    console.log('[CanvasService] setCursorOffset: ', request);
     return { ok: true };
   }
 
