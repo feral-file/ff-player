@@ -35,10 +35,11 @@ export class CDPRequestHandler {
     this.isInitialized = true;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleCDPRequest = this.handleCDPRequest.bind(this);
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleConnectivityChange =
       this.handleConnectivityChange.bind(this);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).handleWatchdogEvent = this.handleWatchdogEvent.bind(this);
   }
 
   public cleanup() {
