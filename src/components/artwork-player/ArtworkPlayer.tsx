@@ -377,7 +377,7 @@ const ArtworkPlayer = ({
     );
     // Update URL when settings first load or when scaling changes
     updateSoftwareURL(displaySettings);
-  }, [displayPreviewURL, displayPreferences, context.deviceRotation?.viewMode]);
+  }, [displayPreviewURL, displaySettings, context.deviceRotation?.viewMode]);
 
   const updateSoftwareURL = (displaySettings: DP1DisplayPreference) => {
     if (
