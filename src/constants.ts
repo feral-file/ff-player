@@ -3,10 +3,10 @@ export enum LocalStorageItem {
   castInfo = 'castInfo',
   name = 'device_name',
   metricEvents = 'metricEvents',
-  primaryAddress = 'primaryAddress',
   displaySettings = 'displaySettings',
   viewMode = 'viewMode',
   criticalTemp = 'criticalTemp',
+  dp1ScheduledTask = 'dp1_scheduled_tasks',
 }
 
 export enum Platform {

@@ -22,10 +22,9 @@ export function useDeviceSettings() {
       }
     };
 
-    const canvasService = CanvasService.getInstance();
-    canvasService.addDisplaySettingsChangedListener(onSettingsChanged);
+    CanvasService.addDisplaySettingsChangedListener(onSettingsChanged);
     return () => {
-      canvasService.removeDisplaySettingsChangedListener(onSettingsChanged);
+      CanvasService.removeDisplaySettingsChangedListener(onSettingsChanged);
     };
   }, []);
 

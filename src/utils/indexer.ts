@@ -11,7 +11,8 @@ export function convertToTokenID(
   tokenID: string
 ): string {
   switch (blockchain) {
-    case 'ethereum': {
+    case 'ethereum':
+    case 'evm': {
       return `eth-${contractAddress}-${tokenID}`;
     }
 

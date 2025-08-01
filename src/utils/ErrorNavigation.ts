@@ -25,6 +25,6 @@ export function navigateToErrorPageAction(errorType: string) {
 
 export function handleOverheatingError() {
   localStorage.setItem(LocalStorageItem.criticalTemp, 'true');
-  CanvasService.getInstance().disconnect();
+  CanvasService.disconnect();
   navigateToErrorPageAction(ErrorType.Overheating);
 }

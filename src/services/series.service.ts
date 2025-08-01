@@ -2,7 +2,7 @@ import { Artwork, Exhibition, Series } from '@/models';
 import axiosInstance from './axiosService';
 import * as Sentry from '@sentry/nextjs';
 
-export class SeriesService {
+class SeriesService {
   public async getSeries(id: string): Promise<Series> {
     const response = await axiosInstance.get<{ result: Series }>(
       `/api/series/${id}`
@@ -45,3 +45,5 @@ export class SeriesService {
     return artwork;
   }
 }
+
+export const seriesService = new SeriesService();

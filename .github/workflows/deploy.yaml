@@ -15,7 +15,7 @@ on:
 jobs:
   deploy:
     name: deploy
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'Production' || 'Development') }}
 
     steps:

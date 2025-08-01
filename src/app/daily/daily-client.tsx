@@ -14,6 +14,7 @@ import {
 import { CastingArtworkType } from '@/models/metric.model';
 import { useAppContext } from '@/context/AppContext';
 import * as Sentry from '@sentry/nextjs';
+import { defaultDP1DisplayPreference } from '@/models/dp1.model';
 
 export default function DailyClient() {
   const { context } = useAppContext();
@@ -193,6 +194,7 @@ export default function DailyClient() {
           castingType={CastingArtworkType.Daily}
           isCustomView={isLeeMucianExhibition}
           artworkPreviewMIMEType={artworkPreviewMIMEType}
+          displayPreferences={defaultDP1DisplayPreference}
         />
       </div>
     </>

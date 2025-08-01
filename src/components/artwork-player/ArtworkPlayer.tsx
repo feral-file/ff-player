@@ -1,4 +1,4 @@
-import { ArtFraming, MessageModalType } from '@/models';
+import { MessageModalType } from '@/models';
 import Hls from 'hls.js';
 import { useEffect, useRef, useState } from 'react';
 import * as Sentry from '@sentry/nextjs';
@@ -8,11 +8,6 @@ import styles from './styles.module.scss';
 import { appendMetricEventToLocalStorage } from '@/services/metric.service';
 import MessageModal from '../MessageModal';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
-import {
-  TokenDisplaySettingWithChanged,
-  useArtworkSettings,
-} from '@/services/custom-hooks/useArtworkSettings';
-import { DisplaySettings } from '@/models/display_settings.model';
 import {
   FileUseAudio,
   FileUseIframePDF,
@@ -34,8 +29,14 @@ import {
   MetricEvent,
 } from '@/models/metric.model';
 
-import { getContentTypeFromURL } from '@/utils/helper';
+import {
+  getContentTypeFromURL,
+  convertScalingToObjectFit,
+  getDP1Margin,
+} from '@/utils/helper';
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
+import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
+import { useArtworkSettings } from '@/services/custom-hooks/useArtworkSettings';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
 
@@ -47,6 +48,7 @@ const ArtworkPlayer = ({
   castingType,
   isCustomView,
   artworkPreviewMIMEType,
+  displayPreferences,
 }: {
   previewURL: string;
   artworkID: string;
@@ -56,6 +58,7 @@ const ArtworkPlayer = ({
   isCustomView?: boolean;
   keyboardCode?: number;
   artworkPreviewMIMEType?: string;
+  displayPreferences: DP1DisplayPreference;
 }) => {
   const FADE_IN_BUFFER_MS = 50;
   const FADE_IN_OUT_DAILY_MS = 350;
@@ -84,7 +87,8 @@ const ArtworkPlayer = ({
   const webGLRecoveryIntervalRef = useRef<NodeJS.Timeout>();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isWebGLContextLost = useRef<boolean>(false);
-  const { loadingSettings, displaySettings } = useArtworkSettings(artworkID);
+
+  const { displaySettings } = useArtworkSettings(displayPreferences);
 
   // Cursor layer handle
   const cursorRef = useRef<CursorLayerHandle>(null);
@@ -361,8 +365,8 @@ const ArtworkPlayer = ({
   useEffect(() => {
     if (
       !displayPreviewURL ||
-      !displaySettings ||
-      !context.deviceRotation?.viewMode
+      !context.deviceRotation?.viewMode ||
+      !displaySettings
     ) {
       return;
     }
@@ -375,18 +379,13 @@ const ArtworkPlayer = ({
     updateSoftwareURL(displaySettings);
   }, [displayPreviewURL, displaySettings, context.deviceRotation?.viewMode]);
 
-  const updateSoftwareURL = (
-    displaySettings: TokenDisplaySettingWithChanged
-  ) => {
+  const updateSoftwareURL = (displaySettings: DP1DisplayPreference) => {
     if (
       previewType === PreviewHTMLTag.iframe &&
       !displayPreviewURL.includes('base64')
     ) {
       const displayMode =
-        (displaySettings.scaling ?? DisplaySettings.defaultScaling) ===
-        ArtFraming.CropToFill
-          ? 'crop'
-          : 'fit';
+        displaySettings.scaling === Scaling.Fill ? 'crop' : 'fit';
       const queryParam = `&display_mode=${displayMode}`;
       const url = new URL(displayPreviewURL);
       url.search += queryParam;
@@ -533,10 +532,6 @@ const ArtworkPlayer = ({
   }, [previewURL]);
 
   useEffect(() => {
-    console.log('[ArtworkPlayer] loadingSettings', loadingSettings);
-  }, [loadingSettings]);
-
-  useEffect(() => {
     console.log('[ArtworkPlayer] loading', loading);
   }, [loading]);
 
@@ -553,21 +548,19 @@ const ArtworkPlayer = ({
       <div
         style={{
           display: 'flex',
-          backgroundColor: displaySettings?.backgroundColor ?? '#000000',
+          backgroundColor: displayPreferences.background ?? '#000000',
           justifyContent: 'center',
           position: 'relative',
           transition: `opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.2s ease`,
           opacity: opacity,
           padding:
-            (displaySettings?.scaling ?? DisplaySettings.defaultScaling) ===
-            ArtFraming.FitToScreen
-              ? `${String((displaySettings?.marginTop ?? 0) * 100)}vh ${String((displaySettings?.marginRight ?? 0) * 100)}vw ${String((displaySettings?.marginBottom ?? 0) * 100)}vh ${String((displaySettings?.marginLeft ?? 0) * 100)}vw`
-              : '0',
+            displayPreferences.margin &&
+            getDP1Margin(displayPreferences.margin),
           width: '100vw',
           height: '100vh',
         }}>
         <CursorLayer ref={cursorRef} />
-        {(previewType === null || loading || loadingSettings) && <Loading />}
+        {(previewType === null || loading) && <Loading />}
         {displayPreviewURL && previewType === PreviewHTMLTag.image && (
           <div
             style={{
@@ -579,11 +572,9 @@ const ArtworkPlayer = ({
               style={{
                 width: '100%',
                 height: '100%',
-                objectFit:
-                  (displaySettings?.scaling ??
-                    DisplaySettings.defaultScaling) === ArtFraming.FitToScreen
-                    ? 'contain'
-                    : 'cover',
+                objectFit: convertScalingToObjectFit(
+                  displayPreferences.scaling
+                ),
               }}
               className={styles.image}
               src={displayPreviewURL}
@@ -607,22 +598,18 @@ const ArtworkPlayer = ({
             style={{
               width: '100%',
               height: '100%',
-              objectFit:
-                (displaySettings?.scaling ?? DisplaySettings.defaultScaling) ===
-                ArtFraming.FitToScreen
-                  ? 'contain'
-                  : 'cover',
+              objectFit: convertScalingToObjectFit(displayPreferences.scaling),
             }}
-            autoPlay={displaySettings?.autoPlay ?? true}
-            loop={displaySettings?.looping ?? true}
+            autoPlay={displayPreferences.autoPlay ?? true}
+            loop={displayPreferences.loop ?? true}
             playsInline
             crossOrigin="anonymous"
             onLoad={loadedSource}></video>
         )}
         {displayPreviewURL && previewType === PreviewHTMLTag.audio && (
           <audio
-            autoPlay={displaySettings?.autoPlay ?? true}
-            loop={displaySettings?.looping ?? true}>
+            autoPlay={displayPreferences.autoPlay ?? true}
+            loop={displayPreferences.loop ?? true}>
             <source
               src={displayPreviewURL}
               onLoadedData={loadedSource}></source>
