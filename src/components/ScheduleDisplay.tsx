@@ -117,6 +117,7 @@ const ScheduleDisplay = () => {
         backgroundColor: 'black',
         padding: '10px',
         color: 'white',
+        fontSize: '20px',
       }}>
       There is a scheduled playlist that will begin in: {countdown}
     </div>
