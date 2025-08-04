@@ -100,7 +100,7 @@ const axiosInstance = axios.create({
 // Add error interceptor to main axios instance
 axiosInstance.interceptors.response.use(response => response, handleAxiosError);
 
-export const supportAxiosInstance = axios.create({
+const supportAxiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_SUPPORT_API_URL,
   headers: {
     'Content-Type': 'application/json',
@@ -114,11 +114,11 @@ supportAxiosInstance.interceptors.response.use(
   handleAxiosError
 );
 
-export const infuraAxiosInstance = axios.create({
+const infuraAxiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_INFURA_ENDPOINT,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-export default axiosInstance;
+export { axiosInstance, supportAxiosInstance, infuraAxiosInstance };

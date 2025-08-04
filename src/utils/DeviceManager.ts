@@ -3,12 +3,19 @@ import { FFDeviceConfigService, PlatformConfigService } from './platform';
 import * as Sentry from '@sentry/nextjs';
 import { DeviceNamePrefix, LocalStorageItem, PLATFORM } from '@/constants';
 import { BrowserInfo, detect } from 'detect-browser';
-import { DisplaySettings } from '@/models/display_settings.model';
+import { DeviceDisplaySettings } from '@/models/display_settings.model';
 import { ViewMode } from '@/models';
 
-class DeviceManager {
-  static instance = new DeviceManager();
+export class DeviceManager {
+  private static instance: DeviceManager | null;
   private _configService: PlatformConfigService | null = null;
+
+  public static getInstance() {
+    if (!DeviceManager.instance) {
+      DeviceManager.instance = new DeviceManager();
+    }
+    return DeviceManager.instance;
+  }
 
   get configService(): PlatformConfigService {
     if (!this._configService) {
@@ -88,13 +95,13 @@ class DeviceManager {
     return name.replace(DeviceNamePrefix.ffDevice, '');
   }
 
-  public getDeviceDisplaySettings(): DisplaySettings | null {
+  public getDeviceDisplaySettings(): DeviceDisplaySettings | null {
     const config = this.getFromLocalStorage(LocalStorageItem.displaySettings);
-    return config ? (JSON.parse(config) as DisplaySettings) : null;
+    return config ? (JSON.parse(config) as DeviceDisplaySettings) : null;
   }
 
   public setDeviceDisplaySettings(
-    displaySettings: DisplaySettings | null
+    displaySettings: DeviceDisplaySettings | null
   ): void {
     this.setToLocalStorage(
       LocalStorageItem.displaySettings,
@@ -112,4 +119,4 @@ class DeviceManager {
   }
 }
 
-export default DeviceManager.instance;
+export const deviceManager = DeviceManager.getInstance();

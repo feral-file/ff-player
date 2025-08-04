@@ -1,4 +1,4 @@
-import CanvasService from '../CanvasService';
+import { canvasService } from '../CanvasService';
 import { WebSocketMessage } from '@/models';
 import {
   ConnectivityEventDetail,
@@ -6,7 +6,7 @@ import {
   WatchdogEvent,
 } from '@/models/custom_event';
 import { handleOverheatingError } from '@/utils/ErrorNavigation';
-import DeviceManager from '@/utils/DeviceManager';
+import { deviceManager } from '@/utils/DeviceManager';
 import { DeviceNamePrefix } from '@/constants';
 
 const sendDeviceInfoCommand = 'sendDeviceInfo';
@@ -67,7 +67,7 @@ export class CDPRequestHandler {
         return this.handleCommandRequest(event.messageID, wsMessage);
       }
 
-      throw Error(`Invalid message: ${JSON.stringify(wsMessage)}`);
+      throw Error(`Empty command`);
     } catch (error) {
       console.error('[CDP] Error handling CDP request:', error);
       return JSON.stringify({
@@ -97,12 +97,12 @@ export class CDPRequestHandler {
         const request = wsMessage.request as Record<string, unknown> | null;
         const deviceId = request?.deviceId;
         if (deviceId) {
-          DeviceManager.setDeviceId(deviceId as string);
+          deviceManager.setDeviceId(deviceId as string);
         }
 
         const version = request?.version;
         if (version) {
-          DeviceManager.setName(
+          deviceManager.setName(
             DeviceNamePrefix.ffDevice + (version as string)
           );
         }
@@ -115,7 +115,7 @@ export class CDPRequestHandler {
       }
 
       default: {
-        const responseMessage = CanvasService.processMessage(wsMessage);
+        const responseMessage = canvasService.processMessage(wsMessage);
         reply = {
           messageID,
           message: responseMessage,
@@ -161,6 +161,8 @@ export class CDPRequestHandler {
       console.error('[CDP] Error handling watchdog event:', error);
     }
 
-    return false;
+    return JSON.stringify({
+      message: { ok: false },
+    });
   }
 }

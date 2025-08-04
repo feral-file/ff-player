@@ -8,7 +8,7 @@ export enum ArtworkModel {
 }
 
 export interface Artwork {
-  id?: string;
+  id: string;
   seriesID?: string;
   index?: number;
   name?: string;

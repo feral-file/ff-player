@@ -1,6 +1,6 @@
 import { LocalStorageItem, PLATFORM, VENDOR } from '@/constants';
 import { ExhibitionDisplaySection, MetricEvent } from '@/models/metric.model';
-import DeviceManager from '@/utils/DeviceManager';
+import { deviceManager } from '@/utils/DeviceManager';
 import axios, { AxiosInstance } from 'axios';
 import * as Sentry from '@sentry/nextjs';
 import { ExhibitionCatalog } from '@/models';
@@ -19,7 +19,7 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
 
   // Add x-device-id to headers if not exists
   if (!accountsRequester.defaults.headers['x-device-id']) {
-    const deviceID = DeviceManager.getDeviceId();
+    const deviceID = deviceManager.getDeviceId();
     if (!deviceID) {
       throw new Error('Device ID not found');
     }
@@ -39,13 +39,13 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
 
   // Add x-device-model to headers if not exists
   if (!accountsRequester.defaults.headers['x-device-model']) {
-    const model = DeviceManager.getDeviceModel();
+    const model = deviceManager.getDeviceModel();
     accountsRequester.defaults.headers['x-device-model'] = model;
   }
 
   // Add x-device-name to headers if not exists
   if (!accountsRequester.defaults.headers['x-device-name']) {
-    const name = DeviceManager.getName();
+    const name = deviceManager.getName();
     accountsRequester.defaults.headers['x-device-name'] = name;
   }
 

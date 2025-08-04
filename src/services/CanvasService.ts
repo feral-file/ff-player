@@ -13,18 +13,17 @@ import {
   ConnectReplyV2,
   ConnectRequestV2,
   DisconnectReplyV2,
-  DisplaySettings,
+  DeviceDisplaySettings,
   ViewMode,
   UpdateArtFramingRequest,
   UpdateCursorPositionsRequest,
   UpdateDisplaySettingsRequest,
   UpdateCursorPositionsReply,
-  TokenDisplaySettings,
   DisplayPlaylistRequest,
   DisplayPlaylistReply,
   ArtFraming,
 } from '@/models';
-import DeviceManager from '@/utils/DeviceManager';
+import { deviceManager } from '@/utils/DeviceManager';
 import {
   CursorPositionListener,
   CursorPosition,
@@ -37,16 +36,27 @@ import {
   DP1DisplayPreference,
   Scaling,
 } from '@/models/dp1.model';
-import DP1ScheduleService from './DP1ScheduleService';
+import { dp1ScheduleService } from './DP1ScheduleService';
 
-class CanvasService {
+export class CanvasService {
   private castInfo: CastInfo | null = null;
-  private static instance: CanvasService | null;
+  private static _instance: CanvasService | undefined;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
+
+  public static getInstance() {
+    if (!CanvasService._instance) {
+      CanvasService._instance = new CanvasService();
+    }
+    return CanvasService._instance;
+  }
 
   // Cursor positions
   private cursorPositionsListeners: CursorPositionListener[] = [];
   private currentCursorPositions: CursorPosition[] = [];
+
+  public resetCursorPositions() {
+    this.currentCursorPositions = [];
+  }
 
   public addCursorPositionsListener(callback: CursorPositionListener) {
     this.cursorPositionsListeners.push(callback);
@@ -59,6 +69,10 @@ class CanvasService {
     this.cursorPositionsListeners = this.cursorPositionsListeners.filter(
       listener => listener !== callback
     );
+  }
+
+  public clearCursorPositionsListeners() {
+    this.cursorPositionsListeners = [];
   }
 
   private notifyCursorPositionsChanged(positions: CursorPosition[]) {
@@ -103,9 +117,13 @@ class CanvasService {
       );
   }
 
+  public clearDisplaySettingsChangedListeners() {
+    this.displaySettingsChangedListeners = [];
+  }
+
   private notifyDisplaySettingsChanged(
     isSaveToDevice: boolean,
-    displaySettings: TokenDisplaySettings
+    displaySettings: DP1DisplayPreference
   ) {
     this.displaySettingsChangedListeners.forEach(listener => {
       try {
@@ -115,13 +133,7 @@ class CanvasService {
       }
     });
   }
-
-  public static getInstance() {
-    if (!CanvasService.instance) {
-      CanvasService.instance = new CanvasService();
-    }
-    return CanvasService.instance;
-  }
+  // End display settings
 
   public getCastInfo() {
     console.log(
@@ -149,12 +161,15 @@ class CanvasService {
 
   public processMessage(messageData: Record<string, unknown>) {
     const commandStr = messageData.command;
+
     if (!commandStr) {
-      console.error(
-        '[CAST] Command not found in the message:',
-        JSON.stringify(messageData)
-      );
-      return;
+      console.error('[CAST] Command not found:', JSON.stringify(messageData));
+      return { ok: false, error: ErrorType.CommandNotFound };
+    }
+
+    if (!Object.values(CastCommand).includes(commandStr as CastCommand)) {
+      console.error('[CAST] Not supported command:', commandStr);
+      return { ok: false, error: ErrorType.InvalidCommand };
     }
 
     const command = CastCommand[commandStr as keyof typeof CastCommand];
@@ -172,12 +187,8 @@ class CanvasService {
     return reply;
   }
 
-  private commandHandler(command: CastCommand, requestJson: unknown): Reply {
-    console.log(
-      '[CAST] commandHandler:',
-      JSON.stringify(command),
-      JSON.stringify(requestJson)
-    );
+  public commandHandler(command: CastCommand, requestJson: unknown): Reply {
+    console.log('[CAST] commandHandler:', command, JSON.stringify(requestJson));
     try {
       switch (command) {
         case CastCommand.connect:
@@ -187,7 +198,7 @@ class CanvasService {
         case CastCommand.checkStatus:
           return this.getStatus();
         case CastCommand.castDaily:
-          return this.castDaily(requestJson as object);
+          return this.castDaily();
         case CastCommand.updateArtFraming:
           return this.updateArtFraming(requestJson as UpdateArtFramingRequest);
         case CastCommand.updateDisplaySettings:
@@ -202,7 +213,7 @@ class CanvasService {
           return this.displayPlaylist(requestJson as DisplayPlaylistRequest);
         default:
           console.error(`[CAST] Unknown command: ${command}`);
-          return { ok: false };
+          return { ok: false, error: ErrorType.InvalidCommand };
       }
     } catch (error) {
       console.error('[CAST] Error handling command:', error);
@@ -220,7 +231,7 @@ class CanvasService {
       return { ok: false, error: ErrorType.Overheating };
     }
 
-    const deviceSettings = DeviceManager.getDeviceDisplaySettings();
+    const deviceSettings = deviceManager.getDeviceDisplaySettings();
     return {
       ok: true,
       index: this.castInfo?.index,
@@ -229,26 +240,16 @@ class CanvasService {
       displayKey: this.castInfo?.displayKey,
 
       deviceSettings: {
-        scaling: deviceSettings?.scaling ?? DisplaySettings.defaultScaling,
-        orientation: DeviceManager.getViewMode() ?? ViewMode.landscape,
+        scaling:
+          deviceSettings?.scaling ?? DeviceDisplaySettings.defaultScaling,
+        orientation: deviceManager.getViewMode() ?? ViewMode.landscape,
       },
 
       items: this.castInfo?.items,
     };
   }
 
-  public castDaily(request: object): Reply {
-    console.log('[CanvasService] Cast daily: ', request);
-
-    this.setCastInfo({
-      castCommand: CastCommand.castDaily,
-      deviceInfo: this.castInfo?.deviceInfo,
-      displayKey: 'daily_work',
-    });
-    return { ok: true };
-  }
-
-  private connect(request: ConnectRequestV2): ConnectReplyV2 {
+  public connect(request: ConnectRequestV2): ConnectReplyV2 {
     console.log('[CanvasService] Connect request:', JSON.stringify(request));
 
     this.setCastInfo({
@@ -270,6 +271,17 @@ class CanvasService {
     return { ok: true };
   }
 
+  public castDaily(): Reply {
+    console.log('[CanvasService] Cast daily');
+
+    this.setCastInfo({
+      castCommand: CastCommand.castDaily,
+      deviceInfo: this.castInfo?.deviceInfo,
+      displayKey: 'daily_work',
+    });
+    return { ok: true };
+  }
+
   // ---------------------------- Interactions ----------------------------
   public updateCursorPositions(
     request: UpdateCursorPositionsRequest
@@ -283,7 +295,7 @@ class CanvasService {
     return { ok: true };
   }
 
-  // Settings
+  // ---------------------------- Settings ----------------------------
   public updateArtFraming(request: UpdateArtFramingRequest): Reply {
     console.log('Update ArtFraming: ', JSON.stringify(request));
 
@@ -307,9 +319,8 @@ class CanvasService {
     return { ok: true };
   }
 
-  // DP1 Handlers
-
-  private displayPlaylist(
+  // ---------------------------- DP1 ----------------------------
+  public displayPlaylist(
     request: DisplayPlaylistRequest
   ): DisplayPlaylistReply {
     const dp1Intent = request.intent;
@@ -351,7 +362,7 @@ class CanvasService {
     return reply;
   }
 
-  private nowDisplayPlaylist(request: NowDisplayRequest): NowDisplayReply {
+  public nowDisplayPlaylist(request: NowDisplayRequest): NowDisplayReply {
     if (!request.dp1CallData.items.length) {
       console.error('[CanvasService] No items to display');
       return { ok: false };
@@ -369,7 +380,7 @@ class CanvasService {
     return { ok: true };
   }
 
-  private schedulePlaylist(
+  public schedulePlaylist(
     request: SchedulePlaylistRequest
   ): SchedulePlaylistReply {
     if (!request.dp1CallData.items.length) {
@@ -386,7 +397,7 @@ class CanvasService {
       '[CanvasService] Schedule playlist: ',
       JSON.stringify({ request })
     );
-    DP1ScheduleService.storeScheduledTask(
+    dp1ScheduleService.storeScheduledTask(
       request.dp1CallData,
       request.scheduleTime.replace('Z', '')
     );
@@ -395,4 +406,4 @@ class CanvasService {
   }
 }
 
-export default CanvasService.getInstance();
+export const canvasService = CanvasService.getInstance();

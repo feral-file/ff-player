@@ -1,12 +1,12 @@
 import { IndexerToken } from '@/models';
-import apolloClient from '@/utils/ApolloClient';
+import { apolloClient } from '@/utils/ApolloClient';
 import { customPreviewFromTokenMetadata } from '@/utils/helper';
 import { gql } from '@apollo/client';
 import * as Sentry from '@sentry/nextjs';
 
 const LIMIT_PER_PAGE = 50;
 
-export const IndexerService = {
+class IndexerService {
   async getIndexerTokenPreview(token: IndexerToken): Promise<string> {
     if (
       token.asset?.metadata.project.latest.artworkMetadata?.isFeralfileFrame
@@ -23,11 +23,11 @@ export const IndexerService = {
     }
 
     return token.asset?.metadata.project.latest.previewURL ?? '';
-  },
+  }
 
   async queryIndexerToken(id: string): Promise<IndexerToken | null> {
     try {
-      const data = await IndexerService.queryTokensChunk([id]);
+      const data = await indexerService.queryTokensChunk([id]);
       const token = data[0] || null;
       return token;
     } catch (error) {
@@ -35,7 +35,7 @@ export const IndexerService = {
       Sentry.captureException(error);
       return null;
     }
-  },
+  }
 
   async queryTokens(ids: string[]): Promise<IndexerToken[]> {
     try {
@@ -43,7 +43,7 @@ export const IndexerService = {
 
       for (let i = 0; i < ids.length; i += LIMIT_PER_PAGE) {
         const idsChunk = ids.slice(i, i + LIMIT_PER_PAGE);
-        const data = await IndexerService.queryTokensChunk(idsChunk);
+        const data = await indexerService.queryTokensChunk(idsChunk);
         tokens = tokens.concat(data);
       }
 
@@ -53,7 +53,7 @@ export const IndexerService = {
       Sentry.captureException(error);
       return [];
     }
-  },
+  }
 
   async queryTokensChunk(ids: string[]): Promise<IndexerToken[]> {
     return new Promise((resolve, reject) => {
@@ -99,5 +99,7 @@ export const IndexerService = {
           reject(error);
         });
     });
-  },
-};
+  }
+}
+
+export const indexerService = new IndexerService();

@@ -7,87 +7,88 @@ import { onError } from '@apollo/client/link/error';
 import { RetryLink } from '@apollo/client/link/retry';
 import { GraphQLFormattedError } from 'graphql';
 
-const errorLink = onError(({ graphQLErrors, networkError }) => {
-  if (graphQLErrors) {
-    graphQLErrors.forEach(
-      ({ message, locations, path }: GraphQLFormattedError) => {
-        const locationStr =
-          locations
-            ?.map(loc => `${String(loc.line)}:${String(loc.column)}`)
-            .join(', ') ?? 'unknown';
-        const pathStr = path?.join('.') ?? 'unknown';
-        console.error(
-          `[GraphQL error]: Message: ${message}, Location: ${locationStr}, Path: ${pathStr}`
+export const createApolloClient = () => {
+  if (!process.env.NEXT_PUBLIC_INDEXER_MAINNET_URL) {
+    throw new Error('NEXT_PUBLIC_INDEXER_MAINNET_URL is not set');
+  }
+
+  const errorLink = onError(({ graphQLErrors, networkError }) => {
+    if (graphQLErrors) {
+      graphQLErrors.forEach(
+        ({ message, locations, path }: GraphQLFormattedError) => {
+          const locationStr =
+            locations
+              ?.map(loc => `${String(loc.line)}:${String(loc.column)}`)
+              .join(', ') ?? 'unknown';
+          const pathStr = path?.join('.') ?? 'unknown';
+          console.error(
+            `[GraphQL error]: Message: ${message}, Location: ${locationStr}, Path: ${pathStr}`
+          );
+        }
+      );
+    }
+
+    if (networkError) {
+      console.error(`[Network error]: ${JSON.stringify(networkError)}`);
+    }
+  });
+
+  const retryLink = new RetryLink({
+    delay: {
+      initial: NETWORK_ERROR_RETRY_DELAY,
+      max: Infinity,
+    },
+    attempts: {
+      max: NETWORK_ERROR_RETRY_COUNT,
+      retryIf: error => {
+        // Check for TypeError: Failed to fetch
+        if (
+          error instanceof TypeError &&
+          error.message.includes('Failed to fetch')
+        ) {
+          return false;
+        }
+
+        // Check for network errors - safely check if error has networkError property
+        const shouldRetry = Boolean(
+          error &&
+            typeof error === 'object' &&
+            'networkError' in error &&
+            (error as { networkError?: unknown }).networkError != null
         );
-      }
-    );
-  }
 
-  if (networkError) {
-    console.error(`[Network error]: ${JSON.stringify(networkError)}`);
-  }
-});
+        if (shouldRetry) {
+          console.log('[Apollo Retry] Will retry due to network error');
+        } else {
+          console.log('[Apollo Retry] Will not retry - not a network error');
+        }
 
-const retryLink = new RetryLink({
-  delay: {
-    initial: NETWORK_ERROR_RETRY_DELAY,
-    max: Infinity,
-  },
-  attempts: {
-    max: NETWORK_ERROR_RETRY_COUNT,
-    retryIf: error => {
-      console.log(
-        '[Apollo Retry] Checking if should retry error:',
-        JSON.stringify(error)
-      );
-
-      // Check for TypeError: Failed to fetch
-      if (
-        error instanceof TypeError &&
-        error.message.includes('Failed to fetch')
-      ) {
-        return true;
-      }
-
-      // Check for network errors - safely check if error has networkError property
-      const shouldRetry = Boolean(
-        error &&
-          typeof error === 'object' &&
-          'networkError' in error &&
-          (error as { networkError?: unknown }).networkError != null
-      );
-
-      if (shouldRetry) {
-        console.log('[Apollo Retry] Will retry due to network error');
-      } else {
-        console.log('[Apollo Retry] Will not retry - not a network error');
-      }
-
-      return shouldRetry;
+        return shouldRetry;
+      },
     },
-  },
-});
+  });
 
-const httpLink = new HttpLink({
-  uri: `${process.env.NEXT_PUBLIC_INDEXER_MAINNET_URL ?? ''}/v2/graphql`,
-});
+  const httpLink = new HttpLink({
+    uri: `${process.env.NEXT_PUBLIC_INDEXER_MAINNET_URL}/v2/graphql`,
+  });
 
-const apolloClient = new ApolloClient({
-  link: from([errorLink, retryLink, httpLink]),
-  cache: new InMemoryCache(),
-  defaultOptions: {
-    watchQuery: {
-      fetchPolicy: 'cache-and-network',
-      errorPolicy: 'all',
+  return new ApolloClient({
+    link: from([errorLink, retryLink, httpLink]),
+    cache: new InMemoryCache(),
+    defaultOptions: {
+      watchQuery: {
+        fetchPolicy: 'cache-and-network',
+        errorPolicy: 'all',
+      },
+      query: {
+        fetchPolicy: 'network-only',
+        errorPolicy: 'all',
+      },
+      mutate: {
+        errorPolicy: 'all',
+      },
     },
-    query: {
-      fetchPolicy: 'network-only',
-      errorPolicy: 'all',
-    },
-    mutate: {
-      errorPolicy: 'all',
-    },
-  },
-});
+  });
+};
 
-export default apolloClient;
+export const apolloClient = createApolloClient();

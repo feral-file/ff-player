@@ -1,19 +1,17 @@
 import axios from 'axios';
 
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
-class AppService {
-  private static instance: AppService | null = null;
-  private static currentVersion: string;
+export class AppService {
+  private static _instance: AppService | undefined;
+  private currentVersion: string | undefined;
 
-  public static getInstance(): AppService {
-    if (!AppService.instance) {
-      AppService.instance = new AppService();
+  static getInstance(): AppService {
+    if (!AppService._instance) {
+      AppService._instance = new AppService();
     }
-
-    return AppService.instance;
+    return AppService._instance;
   }
 
-  public static async getCurrentVersion() {
+  public async getCurrentVersion() {
     if (!this.currentVersion) {
       this.currentVersion = await this.getVersion();
     }
@@ -21,7 +19,11 @@ class AppService {
     return this.currentVersion;
   }
 
-  public static async getVersion() {
+  public setCurrentVersion(version: string) {
+    this.currentVersion = version;
+  }
+
+  public async getVersion() {
     const response = await axios.get(
       `/version.json?t=${Date.now().toString()}`
     );
@@ -32,4 +34,4 @@ class AppService {
   }
 }
 
-export default AppService;
+export const appService = AppService.getInstance();

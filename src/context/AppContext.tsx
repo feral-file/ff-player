@@ -1,6 +1,6 @@
 'use client';
 
-import {
+import React, {
   ReactNode,
   createContext,
   useContext,
@@ -12,20 +12,21 @@ import useNetworkManger from '@/services/custom-hooks/useNetworkManager';
 import useDeviceRotation, {
   DeviceRotation,
 } from '@/services/custom-hooks/useDeviceRotation';
-import RemoteConfigService, {
+import {
   AppRemoteConfig,
+  remoteConfigService,
 } from '@/services/remoteConfigService';
 import { AppSettings, LocalStorageItem } from '@/constants';
-import DeviceManager from '@/utils/DeviceManager';
+import { deviceManager } from '@/utils/DeviceManager';
 import useCastInfo from '@/services/custom-hooks/useCastInfo';
 import { CastCommand, CastInfo } from '@/models';
-import CanvasService from '@/services/CanvasService';
-import { useDeviceSettings } from '@/services/custom-hooks/useDeviceSettings';
-import { DisplaySettings } from '@/models/display_settings.model';
+import useDeviceSettings from '@/services/custom-hooks/useDeviceSettings';
+import { DeviceDisplaySettings } from '@/models/display_settings.model';
 import { CDPRequestHandler } from '@/services/cdp-handler/CDPRequestHandler';
 import useCursorPositions, {
   CursorPosition,
 } from '@/services/custom-hooks/useCursorPositions';
+import { canvasService } from '@/services/CanvasService';
 interface AppContextProps {
   children: ReactNode;
 }
@@ -34,13 +35,13 @@ interface AppContextValue {
   context: AppConfigContext;
 }
 
-interface AppConfigContext {
+export interface AppConfigContext {
   isInitialized: boolean;
   isOnline: boolean;
   deviceRotation?: DeviceRotation;
   appRemoteConfig: AppRemoteConfig;
   castInfo: CastInfo | null;
-  displaySettings: DisplaySettings | null;
+  displaySettings: DeviceDisplaySettings | undefined;
   cursorPositions: CursorPosition[] | null;
 }
 
@@ -57,7 +58,6 @@ export const useAppContext = () => {
 
 export const AppProvider = ({ children }: AppContextProps) => {
   const [appRemoteConfig, setAppConfig] = useState({} as AppRemoteConfig);
-  const remoteConfigService = useRef(new RemoteConfigService());
   const [isInitialized, setIsInitialized] = useState(false);
 
   const { castInfo, setCastInfo } = useCastInfo();
@@ -80,7 +80,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const initDeviceConfigService = async () => {
     try {
       console.log('[AppContext] initDeviceConfigService');
-      await DeviceManager.init();
+      await deviceManager.init();
       initialDisplaySettings();
       initCastInfo();
     } catch (error) {
@@ -90,7 +90,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
   const initialDisplaySettings = () => {
     console.log('[AppContext] initialDisplaySettings');
-    const displaySettings = DeviceManager.getDeviceDisplaySettings();
+    const displaySettings = deviceManager.getDeviceDisplaySettings();
     if (displaySettings) {
       setDisplaySettings(displaySettings);
     }
@@ -115,10 +115,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
       }
 
       setCastInfo(castInfo);
-      CanvasService.setCastInfo(castInfo, false);
+      canvasService.setCastInfo(castInfo, false);
       // TODO: Send cast info to app
     } else {
-      CanvasService.castDaily({});
+      canvasService.castDaily();
       console.log('CastInfo is null, send cast daily message');
       // TODO: Send cast info to app
     }
@@ -149,8 +149,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const appRemoteConfig =
-          await remoteConfigService.current.getAppRemoteConfig();
+        const appRemoteConfig = await remoteConfigService.getAppRemoteConfig();
         setAppConfig(appRemoteConfig);
       } catch {
         // Return default value if failed to load config

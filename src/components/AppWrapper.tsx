@@ -1,7 +1,7 @@
 'use client';
 
 import { useAppContext } from '@/context/AppContext';
-import AppService from '@/services/app.service';
+import { appService } from '@/services/app.service';
 import { CastCommand } from '@/models';
 import { useRouter, usePathname } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
@@ -10,8 +10,8 @@ import {
   NavigateToErrorEventDetail,
 } from '@/models/custom_event';
 import { LocalStorageItem } from '@/constants';
-import DP1ScheduleService from '@/services/DP1ScheduleService';
 import ScheduleDisplay from './ScheduleDisplay';
+import { dp1ScheduleService } from '@/services/DP1ScheduleService';
 
 const enum CastState {
   None, // Not casting
@@ -77,13 +77,13 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
 
   // Check for scheduled DP1 tasks
   useEffect(() => {
-    DP1ScheduleService.checkScheduledTask();
+    dp1ScheduleService.checkScheduledTask();
   }, []);
 
   const checkVersion = async () => {
     const [currentVersion, newVersion] = await Promise.all([
-      AppService.getCurrentVersion(),
-      AppService.getVersion(),
+      appService.getCurrentVersion(),
+      appService.getVersion(),
     ]);
     console.log('[INFO] Current Version:', currentVersion);
     console.log('[INFO] New Version:', newVersion);

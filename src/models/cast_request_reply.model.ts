@@ -1,8 +1,8 @@
 import { CursorPosition } from '@/services/custom-hooks/useCursorPositions';
 import { ViewMode } from './common.model';
-import { TokenDisplaySettings } from './display_settings.model';
 import { ErrorType } from './error.model';
 import { DP1Call, DP1Intent, DP1Item, Scaling } from './dp1.model';
+import { DeviceDisplaySettings } from './display_settings.model';
 
 export interface DeviceInfo {
   device_name: string;
@@ -134,7 +134,7 @@ export interface UpdateArtFramingRequest extends Request {
   frameConfig: number;
 }
 
-export interface UpdateDisplaySettingsRequest extends TokenDisplaySettings {
+export interface UpdateDisplaySettingsRequest extends DeviceDisplaySettings {
   tokenId?: string;
   isSaved: boolean;
 }

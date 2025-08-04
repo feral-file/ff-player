@@ -14,7 +14,7 @@ export enum Blockchain {
 }
 
 export interface Exhibition {
-  id?: string;
+  id: string;
   title?: string;
   slug?: string;
   noteTitle?: string;

@@ -38,10 +38,17 @@ export async function getContentTypeFromURL(
     }
     throw new Error('No content type found in headers');
   } catch (error) {
-    console.log(
-      '[ContentType] Failed to get content-type from HEAD request',
-      JSON.stringify(error)
-    );
+    if (error instanceof Error) {
+      console.log(
+        '[ContentType] Failed to get content-type from HEAD request',
+        error.message
+      );
+    } else {
+      console.log(
+        '[ContentType] Failed to get content-type from HEAD request',
+        JSON.stringify(error)
+      );
+    }
 
     const extension = url.pathname.split('.').pop()?.toLowerCase();
     if (extension) {
@@ -91,14 +98,15 @@ export function bnToHex(
 
 export async function customPreviewFromTokenMetadata(
   contract?: ExhibitionContract,
-  tokenID?: string
+  tokenID?: string,
+  getMetadataFn = getTokenMetadataAnimationURL
 ): Promise<string | undefined> {
   if (!contract || !tokenID) {
     return undefined;
   }
 
   try {
-    const animationURL = await getTokenMetadataAnimationURL(contract, tokenID);
+    const animationURL = await getMetadataFn(contract, tokenID);
     if (!animationURL) {
       return undefined;
     }
@@ -111,6 +119,7 @@ export async function customPreviewFromTokenMetadata(
       '[CustomPreviewFromTokenMetadata] Error:',
       JSON.stringify(error)
     );
+    return undefined;
   }
 }
 

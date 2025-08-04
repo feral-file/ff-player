@@ -1,20 +1,20 @@
 import { Daily, IndexerToken } from '@/models';
 import { artworkService } from './ArtworkService';
-import axiosInstance from './axiosService';
+import { axiosInstance } from './axiosService';
 import { convertToTokenID, IndexerSource } from '@/utils/indexer';
 import { convertToQueryParams } from '@/utils/queryParams';
 import * as Sentry from '@sentry/nextjs';
-import { IndexerService } from './IndexerService';
+import { indexerService } from './IndexerService';
 
-class DailyService {
+export class DailyService {
   private dailies: Daily[] = [];
-  private static instance: DailyService | null = null;
+  private static _instance: DailyService | undefined;
 
   public static getInstance(): DailyService {
-    if (!DailyService.instance) {
-      DailyService.instance = new DailyService();
+    if (!DailyService._instance) {
+      DailyService._instance = new DailyService();
     }
-    return DailyService.instance;
+    return DailyService._instance;
   }
 
   public getDailies(): Daily[] {
@@ -38,18 +38,6 @@ class DailyService {
     }
 
     return nextDailyDisplayTime.getTime() - now;
-  }
-
-  public async getUpcomingDaily(
-    expand: string[],
-    pagingParams?: string
-  ): Promise<Daily[]> {
-    const expandParams = convertToQueryParams(expand);
-    const response = await axiosInstance.get(
-      `/api/dailies/upcoming?${expandParams}&${pagingParams ?? ''}`
-    );
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    return response.data.result as Daily[];
   }
 
   public async getDailiesByDate(
@@ -99,15 +87,15 @@ class DailyService {
         return convertToTokenID(d.blockchain, d.contractAddress, d.tokenID);
       });
 
-      if (ids.length === 0) {
+      if (ids.length === 0 || ids.every(id => !id)) {
         return [];
       }
 
-      const data = await IndexerService.queryTokens(ids);
+      const data = await indexerService.queryTokens(ids);
       const previewData = new Map<string, string>();
       await Promise.all(
         data.map(async (token: IndexerToken) => {
-          const previewURL = await IndexerService.getIndexerTokenPreview(token);
+          const previewURL = await indexerService.getIndexerTokenPreview(token);
           previewData.set(token.id, previewURL);
         })
       );
@@ -174,7 +162,7 @@ class DailyService {
     }
 
     const id = convertToTokenID(blockchain, contractAddress, tokenID);
-    const token = await IndexerService.queryIndexerToken(id);
+    const token = await indexerService.queryIndexerToken(id);
     if (!token) {
       throw new Error('Token not found');
     }
@@ -232,4 +220,4 @@ class DailyService {
   }
 }
 
-export default DailyService.getInstance();
+export const dailyService = DailyService.getInstance();

@@ -1,5 +1,5 @@
 import { DeviceNamePrefix, LocalStorageItem } from '@/constants';
-import DeviceManager from './DeviceManager';
+import { deviceManager } from './DeviceManager';
 import { BrowserInfo, detect } from 'detect-browser';
 
 export interface PlatformConfigService {
@@ -17,7 +17,7 @@ export class WebConfigService implements PlatformConfigService {
 
   setDeviceInfo() {
     const deviceName = this.getOrCreateDeviceName();
-    DeviceManager.setName(deviceName);
+    deviceManager.setName(deviceName);
   }
 
   generateRandomString(length: number): string {
@@ -73,7 +73,7 @@ export class FFDeviceConfigService extends WebConfigService {
 
   override setDeviceInfo() {
     super.setDeviceInfo();
-    DeviceManager.setDeviceId(this.getDeviceID());
+    deviceManager.setDeviceId(this.getDeviceID());
   }
 
   getDeviceID(): string {

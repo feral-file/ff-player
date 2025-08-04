@@ -50,6 +50,6 @@ export interface FileInfo {
 }
 
 interface SeriesMetadata {
-  mediumDescription: string[];
+  mediumDescription?: string[];
   onchainRenderer?: boolean;
 }

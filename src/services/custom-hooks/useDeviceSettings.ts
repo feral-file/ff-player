@@ -1,18 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import CanvasService from '../CanvasService';
-import DeviceManager from '@/utils/DeviceManager';
-import { DisplaySettings } from '@/models/display_settings.model';
+import { canvasService } from '../CanvasService';
+import { deviceManager } from '@/utils/DeviceManager';
+import { DeviceDisplaySettings } from '@/models/display_settings.model';
 
-export function useDeviceSettings() {
-  const [displaySettings, setDisplaySettings] =
-    useState<DisplaySettings | null>(null);
+const useDeviceSettings = () => {
+  const [displaySettings, setDisplaySettings] = useState<
+    DeviceDisplaySettings | undefined
+  >();
 
   useEffect(() => {
     const onSettingsChanged = (
       isSaveToDevice: boolean,
-      newSettings: DisplaySettings
+      newSettings: DeviceDisplaySettings
     ) => {
       if (isSaveToDevice) {
         setDisplaySettings(prev => ({
@@ -22,17 +23,19 @@ export function useDeviceSettings() {
       }
     };
 
-    CanvasService.addDisplaySettingsChangedListener(onSettingsChanged);
+    canvasService.addDisplaySettingsChangedListener(onSettingsChanged);
     return () => {
-      CanvasService.removeDisplaySettingsChangedListener(onSettingsChanged);
+      canvasService.removeDisplaySettingsChangedListener(onSettingsChanged);
     };
   }, []);
 
   useEffect(() => {
     if (displaySettings) {
-      DeviceManager.setDeviceDisplaySettings(displaySettings);
+      deviceManager.setDeviceDisplaySettings(displaySettings);
     }
   }, [displaySettings]);
 
   return { displaySettings, setDisplaySettings };
-}
+};
+
+export default useDeviceSettings;

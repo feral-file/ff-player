@@ -1,5 +1,5 @@
 import { DP1Call } from '@/models/dp1.model';
-import CanvasService from './CanvasService';
+import { canvasService } from './CanvasService';
 import { LocalStorageItem } from '@/constants';
 
 export interface ScheduledDP1Task {
@@ -9,14 +9,14 @@ export interface ScheduledDP1Task {
 }
 
 class DP1ScheduleService {
-  private static instance: DP1ScheduleService | null = null;
+  private static _instance: DP1ScheduleService | undefined;
   private timeoutId: NodeJS.Timeout | null = null;
 
   public static getInstance(): DP1ScheduleService {
-    if (!DP1ScheduleService.instance) {
-      DP1ScheduleService.instance = new DP1ScheduleService();
+    if (!DP1ScheduleService._instance) {
+      DP1ScheduleService._instance = new DP1ScheduleService();
     }
-    return DP1ScheduleService.instance;
+    return DP1ScheduleService._instance;
   }
 
   public storeScheduledTask(dp1CallData: DP1Call, scheduleTime: string): void {
@@ -132,7 +132,7 @@ class DP1ScheduleService {
       '[DP1ScheduleService] Executing scheduled task:',
       scheduledTask.id
     );
-    CanvasService.executeScheduledDP1Task(scheduledTask.dp1CallData);
+    canvasService.executeScheduledDP1Task(scheduledTask.dp1CallData);
     this.removeTask(scheduledTask.id);
     this.clearTimeoutIfExists();
   }
@@ -147,4 +147,4 @@ class DP1ScheduleService {
   }
 }
 
-export default DP1ScheduleService.getInstance();
+export const dp1ScheduleService = DP1ScheduleService.getInstance();

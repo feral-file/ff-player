@@ -1,11 +1,11 @@
 import { Exhibition, Series } from '@/models';
-import axiosInstance from './axiosService';
+import { axiosInstance } from './axiosService';
 import axios from 'axios';
 import { removeArtistAliasSuffixes } from '@/utils/ui/formatAlias';
 import * as Sentry from '@sentry/nextjs';
 import { SOURCE_EXHIBITION_ID } from '@/constants';
 
-class ExhibitionService {
+export class ExhibitionService {
   public async getExhibition(id: string) {
     try {
       if (id == SOURCE_EXHIBITION_ID) {
@@ -35,7 +35,7 @@ class ExhibitionService {
     }
   }
 
-  private async getSourceExhibition(): Promise<Exhibition | undefined> {
+  protected async getSourceExhibition(): Promise<Exhibition | undefined> {
     try {
       const response = await axios.get(
         `${
@@ -56,7 +56,7 @@ class ExhibitionService {
     }
   }
 
-  private async getSourceSeries(): Promise<Series[] | undefined> {
+  protected async getSourceSeries(): Promise<Series[] | undefined> {
     try {
       const response = await axios.get(
         `${

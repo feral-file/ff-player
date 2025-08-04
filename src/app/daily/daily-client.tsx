@@ -1,7 +1,7 @@
 'use client';
 
 import ArtworkPlayer from '../../components/artwork-player/ArtworkPlayer';
-import DailyService from '@/services/DailyService';
+import { dailyService } from '@/services/DailyService';
 import { useEffect, useRef, useState } from 'react';
 import { Daily, ViewMode } from '@/models';
 import { convertToTokenID } from '@/utils/indexer';
@@ -71,8 +71,8 @@ export default function DailyClient() {
     // Handle cast daily
     async function handleCastDaily() {
       try {
-        await DailyService.refreshDailies(newDailyHour);
-        dailies = DailyService.getDailies();
+        await dailyService.refreshDailies(newDailyHour);
+        dailies = dailyService.getDailies();
         if (dailies.length > 0) {
           // Set metric metadata
           if (dailyRef.current !== dailies[0]) {
@@ -89,7 +89,7 @@ export default function DailyClient() {
             );
           }
 
-          const delay = DailyService.getNextDailyDelay(newDailyHour);
+          const delay = dailyService.getNextDailyDelay(newDailyHour);
           // Reset next token handle
           nextTokenIndex.current = 0;
           if (switchTokenRef.current) {
@@ -100,10 +100,8 @@ export default function DailyClient() {
             const tokenIDs = dailyRef.current.tokenIDs;
 
             const updatePreview = () => {
-              DailyService.getPreviewURLs(
-                tokenIDs[nextTokenIndex.current],
-                dailies[0]
-              )
+              dailyService
+                .getPreviewURLs(tokenIDs[nextTokenIndex.current], dailies[0])
                 .then(urls => {
                   if (!urls) {
                     fallbackToDefaultArtwork();

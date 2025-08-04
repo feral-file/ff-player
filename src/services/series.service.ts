@@ -1,5 +1,5 @@
 import { Artwork, Exhibition, Series } from '@/models';
-import axiosInstance from './axiosService';
+import { axiosInstance } from './axiosService';
 import * as Sentry from '@sentry/nextjs';
 
 class SeriesService {
@@ -26,11 +26,10 @@ class SeriesService {
     } catch (error) {
       console.log('[API] Failed to load artwork:', JSON.stringify(error));
       Sentry.captureException(error);
-      return {};
     }
   }
 
-  private getSourceArtwork(artworkID: string, exhibition: Exhibition) {
+  public getSourceArtwork(artworkID: string, exhibition: Exhibition) {
     const listArtworks =
       exhibition.series?.flatMap(series => series.artworks ?? []) ?? [];
 
