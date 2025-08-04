@@ -66,6 +66,7 @@ export const IndexerService = {
                 burnedIncluded: true
               ) {
                 id
+                blockchain
                 contractAddress
                 indexID
                 source
@@ -78,6 +79,7 @@ export const IndexerService = {
                       latest {
                         medium
                         previewURL
+                        artworkMetadata
                       }
                     }
                   }

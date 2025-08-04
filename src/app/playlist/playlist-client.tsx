@@ -29,7 +29,7 @@ export default function PlaylistClient() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>();
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
-  const currentPlaylistRef = useRef<DP1Item>();
+  const currentItemRef = useRef<DP1Item>();
 
   useEffect(() => {
     return () => {
@@ -53,32 +53,32 @@ export default function PlaylistClient() {
     indexRef.current = currentIndex;
 
     const index = currentIndex % playlist.length;
-    const currentPlaylist = playlist[index];
-    if (currentPlaylist !== currentPlaylistRef.current) {
-      currentPlaylistRef.current = currentPlaylist;
-      if (currentPlaylist.provenance?.contract) {
+    const currentItem = playlist[index];
+    if (currentItem !== currentItemRef.current) {
+      currentItemRef.current = currentItem;
+      if (currentItem.provenance?.contract) {
         const tokenID = convertToTokenID(
-          currentPlaylist.provenance.contract.chain,
-          currentPlaylist.provenance.contract.address,
-          currentPlaylist.provenance.contract.tokenId
+          currentItem.provenance.contract.chain,
+          currentItem.provenance.contract.address,
+          currentItem.provenance.contract.tokenId
         );
         setArtworkID(tokenID);
       } else {
-        setArtworkID(currentPlaylist.id);
+        setArtworkID(currentItem.id);
       }
     }
 
-    fetchItemPreviewURL(currentPlaylist).catch((error: unknown) => {
+    fetchItemPreviewURL(currentItem).catch((error: unknown) => {
       console.log('[PlaylistClient] Error fetching item preview URL:', error);
     });
 
     setIsLeeMullicanExhibition(
-      currentPlaylist.provenance?.contract?.address ===
+      currentItem.provenance?.contract?.address ===
         LEE_MULLICAN_EXHIBITION_CONTRACT
     );
 
     if (!castInfo?.isPaused) {
-      startInterval(currentPlaylist.duration);
+      startInterval(currentItem.duration);
     }
   }, [currentIndex, playlist]);
 
@@ -261,7 +261,7 @@ export default function PlaylistClient() {
           castingType={CastingArtworkType.Playlist}
           isCustomView={isLeeMullicanExhibition}
           displayPreferences={{
-            ...(currentPlaylistRef.current?.display ?? {}),
+            ...(currentItemRef.current?.display ?? {}),
             ...defaultDP1DisplayPreference,
           }}
         />

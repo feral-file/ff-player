@@ -3,10 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import CanvasService from '../CanvasService';
 import { useAppContext } from '@/context/AppContext';
-import {
-  defaultDP1DisplayPreference,
-  DP1DisplayPreference,
-} from '@/models/dp1.model';
+import { DP1DisplayPreference } from '@/models/dp1.model';
 
 export type TokenDisplaySettingWithChanged = DP1DisplayPreference & {
   changed?: boolean;
