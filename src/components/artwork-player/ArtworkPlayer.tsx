@@ -548,14 +548,14 @@ const ArtworkPlayer = ({
       <div
         style={{
           display: 'flex',
-          backgroundColor: displayPreferences.background ?? '#000000',
+          backgroundColor: displaySettings?.background ?? '#000000',
           justifyContent: 'center',
           position: 'relative',
           transition: `opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.2s ease`,
           opacity: opacity,
-          padding:
-            displayPreferences.margin &&
-            getDP1Margin(displayPreferences.margin),
+          padding: displaySettings?.margin
+            ? getDP1Margin(displaySettings.margin)
+            : '0px',
           width: '100vw',
           height: '100vh',
         }}>
@@ -572,9 +572,7 @@ const ArtworkPlayer = ({
               style={{
                 width: '100%',
                 height: '100%',
-                objectFit: convertScalingToObjectFit(
-                  displayPreferences.scaling
-                ),
+                objectFit: convertScalingToObjectFit(displaySettings?.scaling),
               }}
               className={styles.image}
               src={displayPreviewURL}
@@ -598,18 +596,18 @@ const ArtworkPlayer = ({
             style={{
               width: '100%',
               height: '100%',
-              objectFit: convertScalingToObjectFit(displayPreferences.scaling),
+              objectFit: convertScalingToObjectFit(displaySettings?.scaling),
             }}
-            autoPlay={displayPreferences.autoPlay ?? true}
-            loop={displayPreferences.loop ?? true}
+            autoPlay={displaySettings?.autoPlay ?? true}
+            loop={displaySettings?.loop ?? true}
             playsInline
             crossOrigin="anonymous"
             onLoad={loadedSource}></video>
         )}
         {displayPreviewURL && previewType === PreviewHTMLTag.audio && (
           <audio
-            autoPlay={displayPreferences.autoPlay ?? true}
-            loop={displayPreferences.loop ?? true}>
+            autoPlay={displaySettings?.autoPlay ?? true}
+            loop={displaySettings?.loop ?? true}>
             <source
               src={displayPreviewURL}
               onLoadedData={loadedSource}></source>

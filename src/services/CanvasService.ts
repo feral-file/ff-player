@@ -22,6 +22,7 @@ import {
   TokenDisplaySettings,
   DisplayPlaylistRequest,
   DisplayPlaylistReply,
+  ArtFraming,
 } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import {
@@ -286,8 +287,11 @@ class CanvasService {
   public updateArtFraming(request: UpdateArtFramingRequest): Reply {
     console.log('Update ArtFraming: ', JSON.stringify(request));
 
+    const artFraming = Object.values(ArtFraming)[request.frameConfig];
+
     this.notifyDisplaySettingsChanged(true, {
-      scaling: Object.values(Scaling)[request.frameConfig],
+      scaling:
+        artFraming === ArtFraming.CropToFill ? Scaling.Fill : Scaling.Fit,
     });
 
     return { ok: true };
