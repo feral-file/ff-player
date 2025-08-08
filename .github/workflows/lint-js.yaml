@@ -12,29 +12,29 @@ on:
 jobs:
   lint:
     name: Lint
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '20'
-        cache: 'npm'
-        cache-dependency-path: ./package-lock.json
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ./package-lock.json
 
-    - name: Install dependencies
-      run: npm install
+      - name: Install dependencies
+        run: npm install
 
-    - uses: reviewdog/action-setup@v1
-      with:
-        reviewdog_version: latest
+      - uses: reviewdog/action-setup@v1
+        with:
+          reviewdog_version: latest
 
-    - name: Lint
-      env:
-        REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        npm install --save-dev eslint-formatter-rdjson
-        ./node_modules/.bin/eslint --format=rdjson src | reviewdog -f=rdjson -reporter=github-pr-review -fail-on-error
+      - name: Lint
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm install --save-dev eslint-formatter-rdjson
+          ./node_modules/.bin/eslint --format=rdjson src | reviewdog -f=rdjson -reporter=github-pr-review -fail-on-error

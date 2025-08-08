@@ -67,7 +67,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const isFirstRender = useRef(true);
 
   const deviceRotation = useDeviceRotation();
-  const canvasService = useRef(CanvasService.getInstance());
 
   const initContext = async () => {
     try {
@@ -116,10 +115,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
       }
 
       setCastInfo(castInfo);
-      canvasService.current.setCastInfo(castInfo, false);
+      CanvasService.setCastInfo(castInfo, false);
       // TODO: Send cast info to app
     } else {
-      canvasService.current.castDaily({});
+      CanvasService.castDaily({});
       console.log('CastInfo is null, send cast daily message');
       // TODO: Send cast info to app
     }

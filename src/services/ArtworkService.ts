@@ -1,13 +1,9 @@
-import { ApolloClient, gql, NormalizedCacheObject } from '@apollo/client';
-import createApolloClient from '@/utils/ApolloClient';
-import { Artwork, IndexerToken, AssetConfiguration, Series } from '@/models';
+import { Artwork, Series } from '@/models';
 import axiosInstance from './axiosService';
-import * as Sentry from '@sentry/nextjs';
 import { customPreviewFromTokenMetadata } from '@/utils/helper';
-import { SeriesService } from './series.service';
-import { ExhibitionService } from './exhibition.service';
+import { seriesService } from './series.service';
+import { exhibitionService } from './exhibition.service';
 
-const LIMIT_PER_PAGE = 50;
 const cloudFlareHostingDomain = 'imagedelivery.net';
 const ipfsGateway = 'https://ipfs.io/ipfs/';
 
@@ -45,12 +41,12 @@ class ArtworkService {
     series?: Series
   ): Promise<string> {
     if (!series) {
-      series = await new SeriesService().getSeries(artwork.seriesID ?? '');
+      series = await seriesService.getSeries(artwork.seriesID ?? '');
     }
 
     if (series.metadata?.onchainRenderer && artwork.id) {
       if (!series.exhibition) {
-        const exhibition = await new ExhibitionService().getExhibition(
+        const exhibition = await exhibitionService.getExhibition(
           series.exhibitionID
         );
         series.exhibition = exhibition;
@@ -76,147 +72,6 @@ class ArtworkService {
     return previewUrl ? this.transformPreviewSrc(previewUrl) : '';
   }
 
-  public async getIndexerTokenPreview(token: IndexerToken): Promise<string> {
-    if (
-      token.asset?.metadata.project.latest.artworkMetadata?.isFeralfileFrame
-    ) {
-      return (
-        (await customPreviewFromTokenMetadata(
-          {
-            address: token.contractAddress,
-            blockchainType: token.blockchain,
-          },
-          token.id
-        )) ?? ''
-      );
-    }
-
-    return token.asset?.metadata.project.latest.previewURL ?? '';
-  }
-
-  public async queryIndexerToken(id: string): Promise<IndexerToken | null> {
-    const client = createApolloClient();
-    const data = await this.queryTokensChunk(client, [id]);
-    const token = data[0] || null;
-    return token;
-  }
-
-  public async queryTokens(ids: string[]): Promise<IndexerToken[]> {
-    try {
-      const client = createApolloClient();
-      let tokens: IndexerToken[] = [];
-
-      for (let i = 0; i < ids.length; i += LIMIT_PER_PAGE) {
-        const idsChunk = ids.slice(i, i + LIMIT_PER_PAGE);
-        const data = await this.queryTokensChunk(client, idsChunk);
-        tokens = tokens.concat(data);
-      }
-
-      return tokens;
-    } catch (error) {
-      console.log('[API] Error querying tokens:', JSON.stringify(error));
-      Sentry.captureException(error);
-      return [];
-    }
-  }
-
-  public async queryTokenConfiguration(
-    tokenId: string
-  ): Promise<AssetConfiguration | undefined> {
-    const client = createApolloClient();
-
-    return new Promise((resolve, reject) => {
-      client
-        .query({
-          query: gql`
-            {
-              tokens(
-                ids: ["${tokenId}"]
-                burnedIncluded: true
-              ) {
-                asset {
-                  attributes {
-                    configuration {
-                      scaling
-                      backgroundColor
-                      marginLeft
-                      marginRight
-                      marginTop
-                      marginBottom
-                      autoPlay
-                      looping
-                      interactable
-                      overridable
-                    }
-                  }
-                }
-              }
-            }
-          `,
-        })
-        .then((result: { data: { tokens: IndexerToken[] } }) => {
-          if (result.data.tokens.length === 0) {
-            resolve(undefined);
-          }
-
-          const token = result.data.tokens[0];
-          resolve(token.asset?.attributes?.configuration);
-        })
-        .catch((error: unknown) => {
-          console.log('[API] Error querying tokens:', JSON.stringify(error));
-          // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
-          reject(error);
-        });
-    });
-  }
-
-  private async queryTokensChunk(
-    client: ApolloClient<NormalizedCacheObject>,
-    ids: string[]
-  ): Promise<IndexerToken[]> {
-    return new Promise((resolve, reject) => {
-      client
-        .query({
-          query: gql`
-            {
-              tokens(
-                ids: ["${ids.join('","')}"]
-                burnedIncluded: true
-              ) {
-                id
-                contractAddress
-                indexID
-                source
-                asset {
-                  thumbnailID
-                  staticPreviewURLLandscape
-                  staticPreviewURLPortrait
-                  metadata {
-                    project {
-                      latest {
-                        medium
-                        previewURL
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          `,
-        })
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .then((result: any) => {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-          resolve(result.data.tokens);
-        })
-        .catch((error: unknown) => {
-          console.log('[API] Error querying tokens:', JSON.stringify(error));
-          // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
-          reject(error);
-        });
-    });
-  }
-
   private transformPreviewSrc(src: string): string {
     if (src.startsWith('https')) {
       if (src.includes(cloudFlareHostingDomain)) {
@@ -235,4 +90,4 @@ class ArtworkService {
   }
 }
 
-export default ArtworkService;
+export const artworkService = new ArtworkService();

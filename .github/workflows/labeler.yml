@@ -1,12 +1,12 @@
-name: "Pull Request Labeler"
+name: 'Pull Request Labeler'
 on:
-- pull_request_target
+  - pull_request_target
 
 jobs:
   labeler:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
     steps:
-    - uses: actions/labeler@v5
+      - uses: actions/labeler@v5

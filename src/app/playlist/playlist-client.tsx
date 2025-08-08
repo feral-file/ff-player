@@ -2,14 +2,15 @@
 
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { useAppContext } from '@/context/AppContext';
-import { IndexerToken } from '@/models';
 import { CastingArtworkType } from '@/models/metric.model';
-import ArtworkService from '@/services/ArtworkService';
-import CanvasService from '@/services/CanvasService';
 import { getIndex } from '@/utils/playlist';
-import { PlayArtwork, PlaylistToken, CastCommand } from '@/models';
+import { CastCommand } from '@/models';
 import { useEffect, useRef, useState } from 'react';
+import { defaultDP1DisplayPreference, DP1Item } from '@/models/dp1.model';
 import { LEE_MULLICAN_EXHIBITION_CONTRACT } from '@/constants';
+import { convertToTokenID } from '@/utils/indexer';
+import { DP1Service } from '@/services/DP1Service';
+import CanvasService from '@/services/CanvasService';
 
 export default function PlaylistClient() {
   const { context } = useAppContext();
@@ -19,20 +20,16 @@ export default function PlaylistClient() {
   const [isLeeMullicanExhibition, setIsLeeMullicanExhibition] =
     useState<boolean>(false);
 
+  const [playlist, setPlaylist] = useState<DP1Item[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const indexRef = useRef<number>(-1);
-  const [playlist, setPlaylist] = useState<PlaylistToken[]>([]);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [startTime, setStartTime] = useState<number>(0);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>();
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
-  const currentPlaylistRef = useRef<PlaylistToken>();
-
-  // Services
-  const artworkService = useRef(new ArtworkService());
-  const canvasService = useRef(CanvasService.getInstance());
+  const currentItemRef = useRef<DP1Item>();
 
   useEffect(() => {
     return () => {
@@ -56,41 +53,56 @@ export default function PlaylistClient() {
     indexRef.current = currentIndex;
 
     const index = currentIndex % playlist.length;
-    const currentPlaylist = playlist[index];
-    if (currentPlaylist !== currentPlaylistRef.current) {
-      currentPlaylistRef.current = currentPlaylist;
-      setArtworkID(currentPlaylist.token.id);
+    const currentItem = playlist[index];
+    if (currentItem !== currentItemRef.current) {
+      currentItemRef.current = currentItem;
+      if (currentItem.provenance?.contract) {
+        const tokenID = convertToTokenID(
+          currentItem.provenance.contract.chain,
+          currentItem.provenance.contract.address,
+          currentItem.provenance.contract.tokenId
+        );
+        setArtworkID(tokenID);
+      } else {
+        setArtworkID(currentItem.id);
+      }
     }
-    setCastPreviewURL(currentPlaylist.previewURL);
+
+    fetchItemPreviewURL(currentItem).catch((error: unknown) => {
+      console.log('[PlaylistClient] Error fetching item preview URL:', error);
+    });
+
     setIsLeeMullicanExhibition(
-      currentPlaylist.contractAddress === LEE_MULLICAN_EXHIBITION_CONTRACT
+      currentItem.provenance?.contract?.address ===
+        LEE_MULLICAN_EXHIBITION_CONTRACT
     );
 
     if (!castInfo?.isPaused) {
-      startInterval(currentPlaylist.duration);
+      startInterval(currentItem.duration);
     }
   }, [currentIndex, playlist]);
 
-  const handleUpdateDuration = (artworks: PlayArtwork[]) => {
+  const fetchItemPreviewURL = async (item: DP1Item) => {
+    const itemPreview = await DP1Service.getItemPreviewURL(item);
+    setCastPreviewURL(itemPreview);
+  };
+
+  const handleUpdateDuration = (dp1Items: DP1Item[]) => {
     const durationMap = new Map<string, number>();
-    artworks.forEach((a: PlayArtwork) => {
-      if (a.token) {
-        durationMap.set(a.token.id, a.duration);
-      }
+    dp1Items.forEach((a: DP1Item) => {
+      durationMap.set(a.id, a.duration);
     });
 
-    const updatedPlaylist = playlist.map((p: PlaylistToken, i: number) => {
+    const updatedPlaylist = playlist.map((item: DP1Item) => {
       return {
-        ...p,
-        duration: artworks[i].duration,
+        ...item,
+        duration: durationMap.get(item.id) ?? 0,
       };
     });
 
     const startTime = castInfo?.startTime ?? Date.now();
     const currentPlaylistItem = playlist[currentIndex];
-    const currentArtwork = artworks.find(
-      a => a.token?.id === currentPlaylistItem.token.id
-    );
+    const currentArtwork = dp1Items.find(a => a.id === currentPlaylistItem.id);
     if (currentArtwork) {
       startInterval(currentArtwork.duration);
     }
@@ -157,55 +169,18 @@ export default function PlaylistClient() {
 
     intervalRef.current = setInterval(() => {
       const index = getIndex(playlist, startTime);
-      canvasService.current.setCastInfo({
+      CanvasService.setCastInfo({
         ...castInfo,
         castCommand: CastCommand.updateIndex,
         index,
       });
-    }, duration);
+    }, duration * 1000);
   };
 
   const clearTimer = () => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = undefined;
-    }
-  };
-
-  const getNftTokens = async (
-    artworks: PlayArtwork[]
-  ): Promise<PlaylistToken[]> => {
-    try {
-      const assetIds = artworks.map(
-        (artwork: PlayArtwork) => artwork.token?.id ?? ''
-      );
-      const tokens = await artworkService.current.queryTokens(assetIds);
-      const previewData = new Map<string, string>();
-      const contractAddress = new Map<string, string>();
-      const mapTokens = new Map<string, IndexerToken>();
-      await Promise.all(
-        tokens.map(async (token: IndexerToken) => {
-          const previewURL =
-            await artworkService.current.getIndexerTokenPreview(token);
-          previewData.set(token.indexID, previewURL);
-          contractAddress.set(token.indexID, token.contractAddress);
-          mapTokens.set(token.indexID, token);
-        })
-      );
-      const updatedArtworks = artworks.map((artwork: PlayArtwork) => {
-        const aw: PlaylistToken = {
-          duration: artwork.duration,
-          previewURL: previewData.get(artwork.token?.id ?? '') ?? '',
-          token: artwork.token ?? { id: '' },
-          contractAddress: contractAddress.get(artwork.token?.id ?? ''),
-          indexerToken: mapTokens.get(artwork.token?.id ?? ''),
-        };
-        return aw;
-      });
-      return updatedArtworks;
-    } catch (error) {
-      console.log('Error fetching NFT tokens:', JSON.stringify(error));
-      return [];
     }
   };
 
@@ -217,24 +192,18 @@ export default function PlaylistClient() {
           case CastCommand.castListArtwork: {
             indexRef.current = -1;
             setCurrentIndex(-1);
-            if (castInfo.artworks?.length) {
-              getNftTokens(castInfo.artworks)
-                .then((updatedArtworks: PlaylistToken[]) => {
-                  setPlaylist(updatedArtworks);
 
-                  if (castInfo.startTime) {
-                    setStartTime(castInfo.startTime);
-                    const i = getIndex(updatedArtworks, castInfo.startTime);
-                    setCurrentIndex(i);
-                  }
+            if (castInfo.items?.length) {
+              setPlaylist(castInfo.items);
+              if (castInfo.startTime) {
+                setStartTime(castInfo.startTime);
+                const i = getIndex(castInfo.items, castInfo.startTime);
+                setCurrentIndex(i);
+              }
 
-                  if (castInfo.isPaused) {
-                    handlePauseCasting();
-                  }
-                })
-                .catch((error: unknown) => {
-                  console.error(error);
-                });
+              if (castInfo.isPaused) {
+                handlePauseCasting();
+              }
             }
 
             break;
@@ -252,8 +221,8 @@ export default function PlaylistClient() {
             break;
           }
           case CastCommand.updateDuration: {
-            if (castInfo.artworks) {
-              handleUpdateDuration(castInfo.artworks);
+            if (castInfo.items) {
+              handleUpdateDuration(castInfo.items);
             }
             break;
           }
@@ -291,6 +260,10 @@ export default function PlaylistClient() {
           artworkID={artworkID ?? ''}
           castingType={CastingArtworkType.Playlist}
           isCustomView={isLeeMullicanExhibition}
+          displayPreferences={{
+            ...(currentItemRef.current?.display ?? {}),
+            ...defaultDP1DisplayPreference,
+          }}
         />
       </div>
     </>

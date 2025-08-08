@@ -8,6 +8,7 @@ import {
   FileUseVideo,
   TokenMetadata,
 } from '@/models';
+import { Scaling } from '@/models/dp1.model';
 import { infuraAxiosInstance } from '@/services/axiosService';
 import Web3 from 'web3';
 import { provider } from 'web3-core';
@@ -140,4 +141,32 @@ export async function getTokenMetadataAnimationURL(
   }
 
   return undefined;
+}
+
+export function convertScalingToObjectFit(
+  scalingMode?: Scaling
+): 'contain' | 'cover' | 'fill' {
+  switch (scalingMode) {
+    case Scaling.Fit:
+      return 'contain';
+    case Scaling.Fill:
+      return 'cover';
+    case Scaling.Stretch:
+      return 'fill';
+    default:
+      return 'contain'; // Default to 'contain' for undefined or other values
+  }
+}
+
+export function getDP1Margin(margin: number | string): string {
+  if (typeof margin === 'number') {
+    return `${String(margin)}px`;
+  }
+
+  if (margin.endsWith('%')) {
+    const marginValue = Number(margin.replace('%', ''));
+    return `${String(marginValue)}vh ${String(marginValue)}vw`;
+  }
+
+  return margin;
 }

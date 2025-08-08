@@ -16,7 +16,7 @@ const YOUTUBE_THUMBNAIL_URL =
   'https://img.youtube.com/vi/{video-id}/{variant}.jpg';
 const YOUTUBE_VIDEO_URL = 'https://www.youtube.com/embed/{video-id}';
 
-export class PostService {
+class PostService {
   public async getExhibitionPosts(exhibition: Exhibition): Promise<Post[]> {
     try {
       const isJG043Show = exhibition.id === AppSettings.JG_043_EXHIBITION_ID;
@@ -155,3 +155,5 @@ export class PostService {
     }
   }
 }
+
+export const postService = new PostService();

@@ -3,14 +3,13 @@ import {
   ExhibitionCatalog,
   PlayArtwork,
 } from './cast_request_reply.model';
+import { DP1Item } from './dp1.model';
 
 export enum CastCommand {
   connect = 'connect',
   disconnect = 'disconnect',
   checkStatus = 'checkStatus',
   castListArtwork = 'castListArtwork',
-  cancelCasting = 'cancelCasting',
-  appendArtworkToCastingList = 'appendArtworkToCastingList',
   pauseCasting = 'pauseCasting',
   resumeCasting = 'resumeCasting',
   nextArtwork = 'nextArtwork',
@@ -19,15 +18,11 @@ export enum CastCommand {
   updateIndex = 'updateIndex',
   updateDuration = 'updateDuration',
   castExhibition = 'castExhibition',
-  tapGesture = 'tapGesture',
-  dragGesture = 'dragGesture',
-  setCursorOffset = 'setCursorOffset',
-  getCursorOffset = 'getCursorOffset',
-  sendKeyboardEvent = 'sendKeyboardEvent',
   castDaily = 'castDaily',
   updateArtFraming = 'updateArtFraming',
   updateDisplaySettings = 'updateDisplaySettings',
   cursorUpdate = 'cursorUpdate',
+  displayPlaylist = 'displayPlaylist',
 }
 
 export interface CastInfo {
@@ -50,4 +45,7 @@ export interface CastInfo {
 
   // Cast daily
   displayKey?: string;
+
+  // DP1
+  items?: DP1Item[];
 }

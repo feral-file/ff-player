@@ -1,14 +1,14 @@
-import { ArtFraming } from '@/models';
 import { AssetConfiguration } from './token.model';
+import { Scaling } from './dp1.model';
 
 export class DisplaySettings {
-  scaling?: ArtFraming;
+  scaling?: Scaling;
 
-  constructor(scaling?: ArtFraming) {
+  constructor(scaling?: Scaling) {
     this.scaling = scaling;
   }
 
-  static defaultScaling: ArtFraming = ArtFraming.FitToScreen;
+  static defaultScaling: Scaling = Scaling.Fit;
 
   static defaultSettings() {
     return new DisplaySettings(DisplaySettings.defaultScaling);
@@ -27,7 +27,7 @@ export class TokenDisplaySettings extends DisplaySettings {
   overridable?: boolean;
 
   constructor(
-    scaling?: ArtFraming,
+    scaling?: Scaling,
     backgroundColor?: string,
     marginLeft?: number,
     marginRight?: number,
@@ -52,7 +52,7 @@ export class TokenDisplaySettings extends DisplaySettings {
 
   static fromAssetConfiguration(assetConfiguration: AssetConfiguration) {
     return new TokenDisplaySettings(
-      assetConfiguration.scaling as ArtFraming,
+      assetConfiguration.scaling as Scaling,
       assetConfiguration.backgroundColor,
       assetConfiguration.marginLeft,
       assetConfiguration.marginRight,
