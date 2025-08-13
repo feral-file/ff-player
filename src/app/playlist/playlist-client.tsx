@@ -178,6 +178,7 @@ export default function PlaylistClient() {
   };
 
   const clearTimer = () => {
+    console.log('clearTimer');
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = undefined;
@@ -197,7 +198,9 @@ export default function PlaylistClient() {
               setPlaylist(castInfo.items);
               if (castInfo.startTime) {
                 setStartTime(castInfo.startTime);
+                console.log('castInfo.startTime', castInfo.startTime);
                 const i = getIndex(castInfo.items, castInfo.startTime);
+                console.log('index', i);
                 setCurrentIndex(i);
               }
 
