@@ -57,3 +57,18 @@ export function getArtworkStartTime(
 
   return artworkStartTime;
 }
+
+export function recalculateStartTimeForIndex(
+  dp1Items: DP1Item[],
+  targetIndex: number
+): number {
+  const currentTime = Date.now();
+  let totalDurationBeforeIndex = 0;
+  for (let i = 0; i < targetIndex; i++) {
+    totalDurationBeforeIndex += (dp1Items[i].duration || 0) * 1000;
+  }
+
+  const newStartTime = currentTime - totalDurationBeforeIndex;
+
+  return newStartTime;
+}
