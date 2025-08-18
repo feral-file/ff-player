@@ -42,6 +42,8 @@ const useDeviceRotation = () => {
   }, []);
 
   useEffect(() => {
+    console.log('viewMode', viewMode);
+
     if (viewMode) {
       DeviceManager.setViewMode(viewMode);
     }
