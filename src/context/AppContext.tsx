@@ -26,6 +26,7 @@ import { CDPRequestHandler } from '@/services/cdp-handler/CDPRequestHandler';
 import useCursorPositions, {
   CursorPosition,
 } from '@/services/custom-hooks/useCursorPositions';
+import { recalculateStartTimeForIndex } from '@/utils/playlist';
 interface AppContextProps {
   children: ReactNode;
 }
@@ -112,6 +113,21 @@ export const AppProvider = ({ children }: AppContextProps) => {
           deviceInfo: castInfo.deviceInfo,
           displayKey: 'daily_work',
         };
+      } else if (castInfo.items && castInfo.index !== undefined) {
+        // Recalculate startTime based on current index to ensure correct display
+        console.log(
+          '[AppContext] Recalculating startTime for index:',
+          castInfo.index
+        );
+        const newStartTime = recalculateStartTimeForIndex(
+          castInfo.items,
+          castInfo.index
+        );
+        castInfo = {
+          ...castInfo,
+          startTime: newStartTime,
+        };
+        console.log('[AppContext] New startTime calculated:', newStartTime);
       }
 
       setCastInfo(castInfo);
