@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import MessageModal from '@/components/MessageModal';
 import { ErrorType } from '@/models/error.model';
+import { LocalStorageItem } from '@/constants';
 
 const ErrorPage = () => {
   const searchParams = useSearchParams();
@@ -15,9 +16,11 @@ const ErrorPage = () => {
 
     switch (errorType) {
       case ErrorType.Overheating: {
+        const currentArtworkName =
+          localStorage.getItem(LocalStorageItem.currentArtworkName) ?? '';
         setTitle('System Overheating Detected');
         setMessage(
-          'The device temperature has exceeded safe operating levels. To prevent damage, playback has been paused. Please reboot the device to continue viewing the artwork.'
+          `The device temperature has exceeded safe operating levels${currentArtworkName ? ` while viewing ${currentArtworkName}` : ''}. To prevent damage, playback has been paused. Please reboot the device to continue viewing the artwork.`
         );
         break;
       }

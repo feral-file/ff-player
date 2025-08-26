@@ -7,7 +7,7 @@ import { useAppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
 import { appendMetricEventToLocalStorage } from '@/services/metric.service';
 import MessageModal from '../MessageModal';
-import { CLIENT_BANDWIDTH_HINT } from '@/constants';
+import { CLIENT_BANDWIDTH_HINT, LocalStorageItem } from '@/constants';
 import {
   FileUseAudio,
   FileUseIframePDF,
@@ -37,6 +37,7 @@ import {
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
 import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
 import { useArtworkSettings } from '@/services/custom-hooks/useArtworkSettings';
+import { exhibitionService, seriesService } from '@/services';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
 
@@ -542,6 +543,39 @@ const ArtworkPlayer = ({
   useEffect(() => {
     console.log('[ArtworkPlayer] artworkID', artworkID);
   }, [artworkID]);
+
+  useEffect(() => {
+    if (artworkID) {
+      const setCurrentArtworkName = async () => {
+        const exhibition = exhibitionID
+          ? await exhibitionService.getExhibition(exhibitionID)
+          : undefined;
+
+        const id = artworkID.split('-')[2];
+        if (!id) {
+          return;
+        }
+
+        const artwork = await seriesService.getArtwork(id, exhibition);
+        if (artwork) {
+          const name = artwork.name ?? '';
+          const artworkName = artwork.series?.title
+            ? artwork.series.title + (name ? ' ' + name : '')
+            : name;
+          localStorage.setItem(
+            LocalStorageItem.currentArtworkName,
+            artworkName
+          );
+        }
+      };
+      setCurrentArtworkName().catch((error: unknown) => {
+        console.error(
+          '[ArtworkPlayer] Error setting current artwork name',
+          error
+        );
+      });
+    }
+  }, [artworkID, exhibitionID]);
 
   return (
     <>
