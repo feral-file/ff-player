@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import MessageModal from '@/components/MessageModal';
 import { ErrorType } from '@/models/error.model';
-import { LocalStorageItem } from '@/constants';
+import CanvasService from '@/services/CanvasService';
+import { CastCommand } from '@/models';
 
 const ErrorPage = () => {
   const searchParams = useSearchParams();
@@ -16,12 +17,21 @@ const ErrorPage = () => {
 
     switch (errorType) {
       case ErrorType.Overheating: {
-        const currentArtworkName =
-          localStorage.getItem(LocalStorageItem.currentArtworkName) ?? '';
+        let playingArtworkTitle: string | undefined;
+        const castInfo = CanvasService.getCastInfo();
+        if (
+          castInfo?.castCommand === CastCommand.castListArtwork &&
+          castInfo.items?.length
+        ) {
+          const playingArtwork = castInfo.items[castInfo.index ?? 0];
+          playingArtworkTitle = playingArtwork.title;
+        }
+
         setTitle('System Overheating Detected');
         setMessage(
-          `The device temperature has exceeded safe operating levels${currentArtworkName ? ` while viewing ${currentArtworkName}` : ''}. To prevent damage, playback has been paused. Please reboot the device to continue viewing the artwork.`
+          `The device temperature has exceeded safe operating levels${playingArtworkTitle ? ` while viewing ${playingArtworkTitle}` : ''}. To prevent damage, playback has been paused. Please reboot the device to continue viewing the artwork.`
         );
+
         break;
       }
 
