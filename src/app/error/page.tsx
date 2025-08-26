@@ -6,31 +6,61 @@ import MessageModal from '@/components/MessageModal';
 import { ErrorType } from '@/models/error.model';
 import CanvasService from '@/services/CanvasService';
 import { CastCommand } from '@/models';
+import { IndexerService } from '@/services/IndexerService';
 
 const ErrorPage = () => {
   const searchParams = useSearchParams();
   const [message, setMessage] = useState<string>('');
   const [title, setTitle] = useState<string>('Issue Detected');
 
+  async function getPlayingArtworkTitle() {
+    let playingArtworkTitle: string | undefined;
+
+    const castInfo = CanvasService.getCastInfo();
+    switch (castInfo?.castCommand) {
+      case CastCommand.castListArtwork: {
+        if (castInfo.items?.length) {
+          const playingArtwork = castInfo.items[castInfo.index ?? 0];
+          playingArtworkTitle = playingArtwork.title;
+        }
+        break;
+      }
+
+      case CastCommand.castDaily: {
+        const currentDailyTokenId = castInfo.dailyTokenID;
+
+        if (!currentDailyTokenId) {
+          break;
+        }
+
+        const token =
+          await IndexerService.queryIndexerToken(currentDailyTokenId);
+        playingArtworkTitle = token?.asset?.metadata.project.latest.title;
+        break;
+      }
+    }
+
+    return playingArtworkTitle;
+  }
+
   useEffect(() => {
     const errorType = searchParams.get('error');
 
     switch (errorType) {
       case ErrorType.Overheating: {
-        let playingArtworkTitle: string | undefined;
-        const castInfo = CanvasService.getCastInfo();
-        if (
-          castInfo?.castCommand === CastCommand.castListArtwork &&
-          castInfo.items?.length
-        ) {
-          const playingArtwork = castInfo.items[castInfo.index ?? 0];
-          playingArtworkTitle = playingArtwork.title;
-        }
-
-        setTitle('System Overheating Detected');
-        setMessage(
-          `The device temperature has exceeded safe operating levels${playingArtworkTitle ? ` while viewing ${playingArtworkTitle}` : ''}. To prevent damage, playback has been paused. Please reboot the device to continue viewing the artwork.`
-        );
+        getPlayingArtworkTitle()
+          .then(title => {
+            setTitle('System Overheating Detected');
+            setMessage(
+              `The device temperature has exceeded safe operating levels${title ? ` while viewing ${title}` : ''}. To prevent damage, playback has been paused. Please reboot the device to continue viewing the artwork.`
+            );
+          })
+          .catch((error: unknown) => {
+            console.log(
+              '[ErrorPage] Error when get current playing artwork title',
+              error
+            );
+          });
 
         break;
       }
