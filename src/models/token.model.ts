@@ -9,6 +9,7 @@ interface ArtworkMetadata {
 }
 
 interface IndexerArtwork {
+  title?: string;
   medium: string;
   previewURL: string;
   artworkMetadata?: ArtworkMetadata;

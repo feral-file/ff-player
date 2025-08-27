@@ -15,6 +15,7 @@ import { CastingArtworkType } from '@/models/metric.model';
 import { useAppContext } from '@/context/AppContext';
 import * as Sentry from '@sentry/nextjs';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
+import CanvasService from '@/services/CanvasService';
 
 export default function DailyClient() {
   const { context } = useAppContext();
@@ -65,6 +66,14 @@ export default function DailyClient() {
       setCastPreviewURL(dailyRef.current.previewURL);
       setArtworkPreviewMIMEType(dailyRef.current.artwork?.previewMIMEType);
     }
+
+    CanvasService.setCastInfo(
+      {
+        ...CanvasService.getCastInfo(),
+        dailyTokenID: undefined,
+      },
+      false
+    );
   };
 
   useEffect(() => {
@@ -98,12 +107,9 @@ export default function DailyClient() {
 
           if (dailyRef.current.tokenIDs.length > 1) {
             const tokenIDs = dailyRef.current.tokenIDs;
-
+            const currentTokenID = tokenIDs[nextTokenIndex.current];
             const updatePreview = () => {
-              DailyService.getPreviewURLs(
-                tokenIDs[nextTokenIndex.current],
-                dailies[0]
-              )
+              DailyService.getPreviewURLs(currentTokenID, dailies[0])
                 .then(urls => {
                   if (!urls) {
                     fallbackToDefaultArtwork();
@@ -112,13 +118,20 @@ export default function DailyClient() {
 
                   setLandscapeStaticURL(urls[0]);
                   setPortraitStaticURL(urls[1]);
+                  CanvasService.setCastInfo(
+                    {
+                      ...CanvasService.getCastInfo(),
+                      dailyTokenID: currentTokenID,
+                    },
+                    false
+                  );
                 })
                 .catch((error: unknown) => {
                   console.error(error, ':', JSON.stringify(error));
                   Sentry.captureException(error);
                   fallbackToDefaultArtwork();
                 });
-              const numberOfToken = dailyRef.current?.tokenIDs.length ?? 0;
+              const numberOfToken = tokenIDs.length;
               nextTokenIndex.current =
                 (nextTokenIndex.current + 1) % numberOfToken;
             };
@@ -135,6 +148,13 @@ export default function DailyClient() {
             setCastPreviewURL(dailyRef.current.previewURL);
             setIsLeeMucianExhibition(
               dailies[0].contractAddress === LEE_MULLICAN_EXHIBITION_CONTRACT
+            );
+            CanvasService.setCastInfo(
+              {
+                ...CanvasService.getCastInfo(),
+                dailyTokenID: dailyRef.current.tokenID,
+              },
+              false
             );
           }
 

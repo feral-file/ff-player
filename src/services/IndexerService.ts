@@ -77,6 +77,7 @@ export const IndexerService = {
                   metadata {
                     project {
                       latest {
+                        title
                         medium
                         previewURL
                         artworkMetadata

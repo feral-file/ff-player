@@ -45,6 +45,7 @@ export interface CastInfo {
 
   // Cast daily
   displayKey?: string;
+  dailyTokenID?: string;
 
   // DP1
   items?: DP1Item[];

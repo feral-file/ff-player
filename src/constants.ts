@@ -7,7 +7,6 @@ export enum LocalStorageItem {
   viewMode = 'viewMode',
   criticalTemp = 'criticalTemp',
   dp1ScheduledTask = 'dp1_scheduled_tasks',
-  currentArtworkName = 'currentArtworkName',
 }
 
 export enum Platform {
