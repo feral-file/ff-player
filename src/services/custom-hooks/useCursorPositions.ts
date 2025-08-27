@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import CanvasService from '../CanvasService';
+import { canvasService } from '../CanvasService';
 
 export interface CursorPosition {
   x: number;
@@ -16,10 +16,10 @@ const useCursorPositions = () => {
       setCursorPositions(positions);
     };
 
-    CanvasService.addCursorPositionsListener(handleCursorPositions);
+    canvasService.addCursorPositionsListener(handleCursorPositions);
 
     return () => {
-      CanvasService.removeCursorPositionsListener(handleCursorPositions);
+      canvasService.removeCursorPositionsListener(handleCursorPositions);
     };
   }, []);
 

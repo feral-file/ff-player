@@ -37,6 +37,7 @@ import {
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
 import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
 import { useArtworkSettings } from '@/services/custom-hooks/useArtworkSettings';
+import { handleOverheatingError } from '@/utils/ErrorNavigation';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
 
@@ -545,6 +546,25 @@ const ArtworkPlayer = ({
 
   return (
     <>
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          zIndex: 9999,
+          backgroundColor: 'red',
+          color: 'white',
+          padding: '10px',
+          borderRadius: '5px',
+          cursor: 'pointer',
+        }}>
+        <button
+          onClick={() => {
+            handleOverheatingError();
+          }}>
+          Test
+        </button>
+      </div>
       <div
         style={{
           display: 'flex',

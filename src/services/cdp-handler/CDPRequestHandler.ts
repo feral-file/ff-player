@@ -1,4 +1,4 @@
-import CanvasService from '../CanvasService';
+import { canvasService } from '../CanvasService';
 import { WebSocketMessage } from '@/models';
 import {
   ConnectivityEventDetail,
@@ -115,7 +115,7 @@ export class CDPRequestHandler {
       }
 
       default: {
-        const responseMessage = CanvasService.processMessage(wsMessage);
+        const responseMessage = canvasService.processMessage(wsMessage);
         reply = {
           messageID,
           message: responseMessage,

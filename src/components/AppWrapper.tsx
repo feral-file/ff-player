@@ -98,21 +98,15 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
 
+    const isOverheating =
+      localStorage.getItem(LocalStorageItem.criticalTemp) === 'true';
+
+    if (isOverheating) {
+      return;
+    }
+
     console.log('[AppWrapper] process cast info:', JSON.stringify(castInfo));
     console.log('AppWrapper castState', castState);
-
-    const checkRemoveCriticalTemp = () => {
-      if (
-        castInfo.castCommand &&
-        [
-          CastCommand.castDaily,
-          CastCommand.castListArtwork,
-          CastCommand.castExhibition,
-        ].includes(castInfo.castCommand)
-      ) {
-        localStorage.removeItem(LocalStorageItem.criticalTemp);
-      }
-    };
 
     const handleCastCommand = () => {
       switch (castInfo.castCommand) {
@@ -165,7 +159,6 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       }
     };
 
-    checkRemoveCriticalTemp();
     handleCastCommand();
   }, [castInfo, pathname]);
 

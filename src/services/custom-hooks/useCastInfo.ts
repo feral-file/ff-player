@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import CanvasService from '../CanvasService';
+import { canvasService } from '../CanvasService';
 import { CastCommand, CastInfo } from '@/models';
 import { LocalStorageItem } from '@/constants';
 
@@ -30,11 +30,11 @@ const useCastInfo = () => {
     };
 
     // Subscribe to cast info changes
-    CanvasService.onCastInfoChange = handleCastInfoChange;
+    canvasService.onCastInfoChange = handleCastInfoChange;
 
     return () => {
       // Cleanup subscription
-      CanvasService.onCastInfoChange = null;
+      canvasService.onCastInfoChange = null;
     };
   }, []);
 

@@ -1,5 +1,5 @@
 import { DP1Call } from '@/models/dp1.model';
-import CanvasService from './CanvasService';
+import { canvasService } from './CanvasService';
 import { LocalStorageItem } from '@/constants';
 
 export interface ScheduledDP1Task {
@@ -132,7 +132,7 @@ class DP1ScheduleService {
       '[DP1ScheduleService] Executing scheduled task:',
       scheduledTask.id
     );
-    CanvasService.executeScheduledDP1Task(scheduledTask.dp1CallData);
+    canvasService.executeScheduledDP1Task(scheduledTask.dp1CallData);
     this.removeTask(scheduledTask.id);
     this.clearTimeoutIfExists();
   }

@@ -19,7 +19,7 @@ import { AppSettings, LocalStorageItem } from '@/constants';
 import DeviceManager from '@/utils/DeviceManager';
 import useCastInfo from '@/services/custom-hooks/useCastInfo';
 import { CastCommand, CastInfo } from '@/models';
-import CanvasService from '@/services/CanvasService';
+import { canvasService } from '@/services/CanvasService';
 import { useDeviceSettings } from '@/services/custom-hooks/useDeviceSettings';
 import { DisplaySettings } from '@/models/display_settings.model';
 import { CDPRequestHandler } from '@/services/cdp-handler/CDPRequestHandler';
@@ -130,11 +130,12 @@ export const AppProvider = ({ children }: AppContextProps) => {
         console.log('[AppContext] New startTime calculated:', newStartTime);
       }
 
+      localStorage.removeItem(LocalStorageItem.criticalTemp);
       setCastInfo(castInfo);
-      CanvasService.setCastInfo(castInfo, false);
+      canvasService.setCastInfo(castInfo, false);
       // TODO: Send cast info to app
     } else {
-      CanvasService.castDaily({});
+      canvasService.castDaily({});
       console.log('CastInfo is null, send cast daily message');
       // TODO: Send cast info to app
     }

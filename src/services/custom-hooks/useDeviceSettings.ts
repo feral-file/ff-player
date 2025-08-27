@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import CanvasService from '../CanvasService';
+import { canvasService } from '../CanvasService';
 import DeviceManager from '@/utils/DeviceManager';
 import { DisplaySettings } from '@/models/display_settings.model';
 
@@ -22,9 +22,9 @@ export function useDeviceSettings() {
       }
     };
 
-    CanvasService.addDisplaySettingsChangedListener(onSettingsChanged);
+    canvasService.addDisplaySettingsChangedListener(onSettingsChanged);
     return () => {
-      CanvasService.removeDisplaySettingsChangedListener(onSettingsChanged);
+      canvasService.removeDisplaySettingsChangedListener(onSettingsChanged);
     };
   }, []);
 
