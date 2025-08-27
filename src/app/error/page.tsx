@@ -7,7 +7,6 @@ import { ErrorType } from '@/models/error.model';
 import { canvasService } from '@/services/CanvasService';
 import { CastCommand } from '@/models';
 import { IndexerService } from '@/services/IndexerService';
-import { LocalStorageItem } from '@/constants';
 
 const ErrorPage = () => {
   const searchParams = useSearchParams();
@@ -15,15 +14,8 @@ const ErrorPage = () => {
   const [title, setTitle] = useState<string>('Issue Detected');
 
   async function getPlayingArtworkTitle() {
-    console.log('getPlayingArtworkTitle');
-
     let playingArtworkTitle: string | undefined;
-
-    const castInfoString = localStorage.getItem(LocalStorageItem.castInfo);
-    console.log('castInfoString', castInfoString);
-
     const castInfo = canvasService.getCastInfo();
-    console.log('castInfo', JSON.stringify(castInfo));
     switch (castInfo?.castCommand) {
       case CastCommand.castListArtwork: {
         if (castInfo.items?.length) {
@@ -35,22 +27,16 @@ const ErrorPage = () => {
 
       case CastCommand.castDaily: {
         const currentDailyTokenId = castInfo.dailyTokenID;
-        console.log('currentDailyTokenId', currentDailyTokenId);
-
         if (!currentDailyTokenId) {
           break;
         }
 
         const token =
           await IndexerService.queryIndexerToken(currentDailyTokenId);
-        console.log('token', JSON.stringify(token));
-
         playingArtworkTitle = token?.asset?.metadata.project.latest.title;
         break;
       }
     }
-
-    console.log('playingArtworkTitle', playingArtworkTitle);
 
     return playingArtworkTitle;
   }

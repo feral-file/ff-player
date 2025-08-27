@@ -117,8 +117,6 @@ class CanvasService {
   }
 
   public static getInstance() {
-    console.log('CanvasService.instance', CanvasService.instance);
-
     if (!CanvasService.instance) {
       CanvasService.instance = new CanvasService();
     }
