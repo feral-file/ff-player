@@ -149,10 +149,10 @@ class DailyService {
     }
   }
 
-  public async getPreviewURLs(
+  public async getDailyIndexerTokenID(
     tokenID: string,
     daily: Daily
-  ): Promise<string[] | null> {
+  ): Promise<string> {
     let { blockchain, contractAddress } = daily;
     try {
       const artwork = await artworkService.getArtworkDetail(
@@ -174,6 +174,15 @@ class DailyService {
     }
 
     const id = convertToTokenID(blockchain, contractAddress, tokenID);
+
+    return id;
+  }
+
+  public async getPreviewURLs(
+    tokenID: string,
+    daily: Daily
+  ): Promise<string[] | null> {
+    const id = await this.getDailyIndexerTokenID(tokenID, daily);
     const token = await IndexerService.queryIndexerToken(id);
     if (!token) {
       throw new Error('Token not found');

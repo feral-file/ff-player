@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import CanvasService from '../CanvasService';
+import { canvasService } from '../CanvasService';
 import { useAppContext } from '@/context/AppContext';
 import { DP1DisplayPreference } from '@/models/dp1.model';
 
@@ -30,9 +30,9 @@ export function useArtworkSettings(displayPreferences: DP1DisplayPreference) {
         changed: true,
       }));
     };
-    CanvasService.addDisplaySettingsChangedListener(onSettingsChanged);
+    canvasService.addDisplaySettingsChangedListener(onSettingsChanged);
     return () => {
-      CanvasService.removeDisplaySettingsChangedListener(onSettingsChanged);
+      canvasService.removeDisplaySettingsChangedListener(onSettingsChanged);
     };
   }, []);
 

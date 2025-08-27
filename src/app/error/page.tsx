@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import MessageModal from '@/components/MessageModal';
 import { ErrorType } from '@/models/error.model';
-import CanvasService from '@/services/CanvasService';
+import { canvasService } from '@/services/CanvasService';
 import { CastCommand } from '@/models';
 import { IndexerService } from '@/services/IndexerService';
 
@@ -15,8 +15,7 @@ const ErrorPage = () => {
 
   async function getPlayingArtworkTitle() {
     let playingArtworkTitle: string | undefined;
-
-    const castInfo = CanvasService.getCastInfo();
+    const castInfo = canvasService.getCastInfo();
     switch (castInfo?.castCommand) {
       case CastCommand.castListArtwork: {
         if (castInfo.items?.length) {
@@ -28,7 +27,6 @@ const ErrorPage = () => {
 
       case CastCommand.castDaily: {
         const currentDailyTokenId = castInfo.dailyTokenID;
-
         if (!currentDailyTokenId) {
           break;
         }

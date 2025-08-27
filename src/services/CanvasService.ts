@@ -179,6 +179,17 @@ class CanvasService {
       JSON.stringify(requestJson)
     );
     try {
+      if (
+        [
+          CastCommand.castDaily,
+          CastCommand.castListArtwork,
+          CastCommand.castExhibition,
+          CastCommand.displayPlaylist,
+        ].includes(command)
+      ) {
+        localStorage.removeItem(LocalStorageItem.criticalTemp);
+      }
+
       switch (command) {
         case CastCommand.connect:
           return this.connect(requestJson as ConnectRequestV2);
@@ -395,4 +406,4 @@ class CanvasService {
   }
 }
 
-export default CanvasService.getInstance();
+export const canvasService = CanvasService.getInstance();

@@ -10,7 +10,7 @@ import { defaultDP1DisplayPreference, DP1Item } from '@/models/dp1.model';
 import { LEE_MULLICAN_EXHIBITION_CONTRACT } from '@/constants';
 import { convertToTokenID } from '@/utils/indexer';
 import { DP1Service } from '@/services/DP1Service';
-import CanvasService from '@/services/CanvasService';
+import { canvasService } from '@/services/CanvasService';
 
 export default function PlaylistClient() {
   const { context } = useAppContext();
@@ -169,7 +169,7 @@ export default function PlaylistClient() {
 
     intervalRef.current = setInterval(() => {
       const index = getIndex(playlist, startTime);
-      CanvasService.setCastInfo({
+      canvasService.setCastInfo({
         ...castInfo,
         castCommand: CastCommand.updateIndex,
         index,

@@ -15,7 +15,7 @@ import { CastingArtworkType } from '@/models/metric.model';
 import { useAppContext } from '@/context/AppContext';
 import * as Sentry from '@sentry/nextjs';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
-import CanvasService from '@/services/CanvasService';
+import { canvasService } from '@/services/CanvasService';
 
 export default function DailyClient() {
   const { context } = useAppContext();
@@ -67,9 +67,11 @@ export default function DailyClient() {
       setArtworkPreviewMIMEType(dailyRef.current.artwork?.previewMIMEType);
     }
 
-    CanvasService.setCastInfo(
+    console.log('setDailyTokenID to undefined');
+
+    canvasService.setCastInfo(
       {
-        ...CanvasService.getCastInfo(),
+        ...canvasService.getCastInfo(),
         dailyTokenID: undefined,
       },
       false
@@ -118,13 +120,8 @@ export default function DailyClient() {
 
                   setLandscapeStaticURL(urls[0]);
                   setPortraitStaticURL(urls[1]);
-                  CanvasService.setCastInfo(
-                    {
-                      ...CanvasService.getCastInfo(),
-                      dailyTokenID: currentTokenID,
-                    },
-                    false
-                  );
+
+                  convertAndSaveDailyTokenId(currentTokenID, dailies[0]);
                 })
                 .catch((error: unknown) => {
                   console.error(error, ':', JSON.stringify(error));
@@ -149,12 +146,10 @@ export default function DailyClient() {
             setIsLeeMucianExhibition(
               dailies[0].contractAddress === LEE_MULLICAN_EXHIBITION_CONTRACT
             );
-            CanvasService.setCastInfo(
-              {
-                ...CanvasService.getCastInfo(),
-                dailyTokenID: dailyRef.current.tokenID,
-              },
-              false
+
+            convertAndSaveDailyTokenId(
+              dailyRef.current.tokenID,
+              dailyRef.current
             );
           }
 
@@ -204,6 +199,23 @@ export default function DailyClient() {
       clearDailyInterval();
     };
   }, []);
+
+  function convertAndSaveDailyTokenId(tokenID: string, daily: Daily) {
+    DailyService.getDailyIndexerTokenID(tokenID, daily)
+      .then(dailyTokenID => {
+        console.log('setDailyTokenID', dailyTokenID);
+        canvasService.setCastInfo(
+          {
+            ...canvasService.getCastInfo(),
+            dailyTokenID: dailyTokenID,
+          },
+          false
+        );
+      })
+      .catch((error: unknown) => {
+        console.error(error);
+      });
+  }
 
   return (
     <>
