@@ -7,6 +7,7 @@ import { ErrorType } from '@/models/error.model';
 import { canvasService } from '@/services/CanvasService';
 import { CastCommand } from '@/models';
 import { IndexerService } from '@/services/IndexerService';
+import { convertToTokenID } from '@/utils/indexer';
 
 const ErrorPage = () => {
   const searchParams = useSearchParams();
@@ -18,10 +19,27 @@ const ErrorPage = () => {
     const castInfo = canvasService.getCastInfo();
     switch (castInfo?.castCommand) {
       case CastCommand.castListArtwork: {
-        if (castInfo.items?.length) {
-          const playingArtwork = castInfo.items[castInfo.index ?? 0];
-          playingArtworkTitle = playingArtwork.title;
+        if (!castInfo.items?.length) {
+          break;
         }
+
+        const playingArtwork = castInfo.items[castInfo.index ?? 0];
+        if (playingArtwork.title) {
+          playingArtworkTitle = playingArtwork.title;
+          break;
+        }
+
+        if (!playingArtwork.provenance?.contract) {
+          break;
+        }
+
+        const tokenID = convertToTokenID(
+          playingArtwork.provenance.contract.chain,
+          playingArtwork.provenance.contract.address,
+          playingArtwork.provenance.contract.tokenId
+        );
+        const token = await IndexerService.queryIndexerToken(tokenID);
+        playingArtworkTitle = token?.asset?.metadata.project.latest.title;
         break;
       }
 
