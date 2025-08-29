@@ -23,6 +23,8 @@ import {
   DisplayPlaylistRequest,
   DisplayPlaylistReply,
   ArtFraming,
+  MoveToArtworkRequest as MoveToItemRequest,
+  MoveToArtworkReply as MoveToItemReply,
 } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import {
@@ -38,6 +40,7 @@ import {
   Scaling,
 } from '@/models/dp1.model';
 import DP1ScheduleService from './DP1ScheduleService';
+import { calculateStartTime } from '@/utils/playlist';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -211,6 +214,8 @@ class CanvasService {
           );
         case CastCommand.displayPlaylist:
           return this.displayPlaylist(requestJson as DisplayPlaylistRequest);
+        case CastCommand.moveToArtwork:
+          return this.moveToArtwork(requestJson as MoveToItemRequest);
         default:
           console.error(`[CAST] Unknown command: ${command}`);
           return { ok: false };
@@ -278,6 +283,28 @@ class CanvasService {
   public disconnect(): DisconnectReplyV2 {
     console.log('[CanvasService] Disconnect');
     this.setCastInfo(null);
+    return { ok: true };
+  }
+
+  // ---------------------------- Playlist controller ----------------------------
+  private moveToArtwork(request: MoveToItemRequest): MoveToItemReply {
+    console.log('[CanvasService] move to item', request.index);
+    if (request.index < 0) {
+      return { ok: false };
+    }
+
+    const startTime = calculateStartTime(
+      this.castInfo?.items ?? [],
+      request.index
+    );
+
+    this.setCastInfo({
+      ...this.castInfo,
+      castCommand: CastCommand.moveToArtwork,
+      isPaused: false,
+      startTime,
+      index: request.index,
+    });
     return { ok: true };
   }
 
@@ -376,6 +403,7 @@ class CanvasService {
       startTime: Date.now(),
       index: 0,
       isPaused: false,
+      playlistId: request.dp1CallData.id,
     });
     return { ok: true };
   }

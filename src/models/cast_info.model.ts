@@ -42,6 +42,7 @@ export interface CastInfo {
   isPaused?: boolean;
   elapsedTime?: number;
   remainTime?: number;
+  playlistId?: string;
 
   // Cast daily
   displayKey?: string;

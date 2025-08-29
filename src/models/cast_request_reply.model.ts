@@ -99,7 +99,7 @@ export type PauseCastingReply = Reply;
 export type ResumeCastingRequest = Request;
 export type ResumeCastingReply = Reply;
 export interface MoveToArtworkRequest extends Request {
-  artwork: { token: { id: string } };
+  index: number;
 }
 export type MoveToArtworkReply = Reply;
 export interface UpdateDurationRequest extends Request {
