@@ -376,6 +376,7 @@ class CanvasService {
       startTime: Date.now(),
       index: 0,
       isPaused: false,
+      playlistId: request.dp1CallData.id,
     });
     return { ok: true };
   }
