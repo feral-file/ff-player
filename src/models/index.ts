@@ -10,4 +10,3 @@ export * from './cast_info.model';
 export * from './cast_request_reply.model';
 export * from './common.model';
 export * from './display_settings.model';
-export * from './playlist.model';

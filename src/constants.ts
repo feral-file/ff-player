@@ -9,10 +9,6 @@ export enum LocalStorageItem {
   dp1ScheduledTask = 'dp1_scheduled_tasks',
 }
 
-export enum Platform {
-  ffDevice = 'ff-device',
-}
-
 export enum DeviceNamePrefix {
   ffDevice = 'FF-X1-',
 }
