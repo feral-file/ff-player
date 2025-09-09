@@ -1,23 +1,11 @@
-platform:samsung:
-- changed-files:
-  - any-glob-to-any-file: platform/samsung/**
-
-platform:lg:
-- changed-files:
-  - any-glob-to-any-file: platform/lg/**
-
-platform:google:
-- changed-files:
-  - any-glob-to-any-file: platform/google/**
-
 webapp:js:
-- changed-files:
-  - any-glob-to-any-file: ['**/*.tsx', '**/*.ts']
+  - changed-files:
+      - any-glob-to-any-file: ['**/*.tsx', '**/*.ts']
 
 webapp:css:
-- changed-files:
-  - any-glob-to-any-file: ['**/*.scss', '**/*.css']
+  - changed-files:
+      - any-glob-to-any-file: ['**/*.scss', '**/*.css']
 
 env_changed:
-- changed-files:
-  - any-glob-to-any-file: ['**/*.env*']
+  - changed-files:
+      - any-glob-to-any-file: ['**/*.env*']
