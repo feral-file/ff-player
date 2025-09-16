@@ -7,7 +7,7 @@ export function getIndex(playlistItems: DP1Item[], startTime: number): number {
   let elapsedTime = currentTime - startTime;
 
   const totalDuration = playlistItems.reduce(
-    (acc, artwork) => acc + (artwork.duration || 0) * 1000,
+    (acc, artwork) => acc + (artwork.duration ?? 0) * 1000,
     0
   );
 
@@ -15,7 +15,7 @@ export function getIndex(playlistItems: DP1Item[], startTime: number): number {
 
   for (let i = 0; i < playlistItems.length; i++) {
     const artwork = playlistItems[i];
-    elapsedTime -= (artwork.duration || 0) * 1000;
+    elapsedTime -= (artwork.duration ?? 0) * 1000;
     if (elapsedTime < 0) {
       index = i;
       break;
@@ -32,7 +32,7 @@ export function calculateStartTime(
 ): number {
   let startTime = new Date().setMilliseconds(0);
   for (let i = 0; i < index; i++) {
-    startTime -= (dp1Items[i].duration || 0) * 1000;
+    startTime -= (dp1Items[i].duration ?? 0) * 1000;
   }
 
   if (elapsedTime) {
@@ -52,7 +52,7 @@ export function getArtworkStartTime(
 
   // Add the duration of all previous artworks
   for (let i = 0; i < index; i++) {
-    artworkStartTime += (dp1Items[i].duration || 0) * 1000;
+    artworkStartTime += (dp1Items[i].duration ?? 0) * 1000;
   }
 
   return artworkStartTime;
@@ -65,7 +65,7 @@ export function recalculateStartTimeForIndex(
   const currentTime = Date.now();
   let totalDurationBeforeIndex = 0;
   for (let i = 0; i < targetIndex; i++) {
-    totalDurationBeforeIndex += (dp1Items[i].duration || 0) * 1000;
+    totalDurationBeforeIndex += (dp1Items[i].duration ?? 0) * 1000;
   }
 
   const newStartTime = currentTime - totalDurationBeforeIndex;
