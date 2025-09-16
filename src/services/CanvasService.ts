@@ -399,7 +399,10 @@ class CanvasService {
     this.setCastInfo({
       castCommand: CastCommand.castListArtwork,
       deviceInfo: this.castInfo?.deviceInfo,
-      items: request.dp1CallData.items,
+      items: request.dp1CallData.items.map(item => ({
+        ...item,
+        duration: item.duration ?? 0,
+      })),
       startTime: Date.now(),
       index: 0,
       isPaused: false,
