@@ -3,7 +3,7 @@ import {
   ExhibitionCatalog,
   PlayArtwork,
 } from './cast_request_reply.model';
-import { DP1Item } from './dp1.model';
+import { DP1Call, DP1Item } from './dp1.model';
 
 export enum CastCommand {
   connect = 'connect',
@@ -50,4 +50,6 @@ export interface CastInfo {
 
   // DP1
   items?: DP1Item[];
+  playlist?: DP1Call;
+  playlistUrl?: string;
 }

@@ -1,6 +1,7 @@
 export interface DP1 {
   intent: DP1Intent;
   dp1_call: DP1Call;
+  playlistUrl?: string;
 }
 
 export interface DP1Intent {

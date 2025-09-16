@@ -236,7 +236,6 @@ class CanvasService {
       return { ok: false, error: ErrorType.Overheating };
     }
 
-    const deviceSettings = DeviceManager.getDeviceDisplaySettings();
     return {
       ok: true,
       index: this.castInfo?.index,
@@ -245,11 +244,17 @@ class CanvasService {
       displayKey: this.castInfo?.displayKey,
 
       deviceSettings: {
-        scaling: deviceSettings?.scaling ?? DisplaySettings.defaultScaling,
+        scaling:
+          DeviceManager.getDeviceDisplaySettings()?.scaling ??
+          DisplaySettings.defaultScaling,
         orientation: DeviceManager.getViewMode() ?? ViewMode.landscape,
       },
 
       items: this.castInfo?.items,
+
+      playlist: this.castInfo?.playlist,
+      playlistUrl: this.castInfo?.playlistUrl,
+      castCommand: DeviceManager.getCastInfo()?.castCommand,
     };
   }
 
@@ -352,6 +357,7 @@ class CanvasService {
   ): DisplayPlaylistReply {
     const dp1Intent = request.intent;
     const dp1CallData = request.dp1_call;
+    const playlistUrl = request.playlistUrl;
     const action = dp1Intent.action;
 
     console.log('[CanvasService] display playlist: ', action);
@@ -364,7 +370,10 @@ class CanvasService {
     let reply: Reply;
     switch (action) {
       case DP1Action.NowDisplay: {
-        return this.nowDisplayPlaylist({ dp1CallData });
+        return this.nowDisplayPlaylist({
+          dp1CallData,
+          playlistUrl,
+        });
       }
 
       case DP1Action.SchedulePlay: {
@@ -407,6 +416,8 @@ class CanvasService {
       index: 0,
       isPaused: false,
       playlistId: request.dp1CallData.id,
+      playlist: request.dp1CallData,
+      playlistUrl: request.playlistUrl,
     });
     return { ok: true };
   }
