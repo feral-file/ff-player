@@ -18,7 +18,7 @@ const ErrorPage = () => {
     let playingArtworkTitle: string | undefined;
     const castInfo = canvasService.getCastInfo();
     switch (castInfo?.castCommand) {
-      case CastCommand.castListArtwork: {
+      case CastCommand.displayPlaylist: {
         if (!castInfo.items?.length) {
           break;
         }

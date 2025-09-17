@@ -189,7 +189,7 @@ export default function PlaylistClient() {
     if (castInfo) {
       const handleCastCommand = () => {
         switch (castInfo.castCommand) {
-          case CastCommand.castListArtwork: {
+          case CastCommand.displayPlaylist: {
             indexRef.current = -1;
             setCurrentIndex(-1);
 

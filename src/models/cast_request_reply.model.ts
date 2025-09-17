@@ -92,12 +92,6 @@ export interface CastExhibitionRequest {
 }
 export type CastExhibitionReply = Reply;
 
-export interface CastListArtworkRequest {
-  artworks: PlayArtwork[];
-  startTime?: number;
-}
-export type CastListArtworkReply = Reply;
-
 export type NextArtworkRequest = Request;
 export type NextArtworkReply = Reply;
 export type PreviousArtworkRequest = Request;

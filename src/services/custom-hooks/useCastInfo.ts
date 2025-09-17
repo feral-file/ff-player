@@ -50,7 +50,7 @@ const useCastInfo = () => {
 
     const castInfoToStore = castInfo;
     if (castInfoToStore && isPlaylistControlCommand(castInfoToStore)) {
-      castInfoToStore.castCommand = CastCommand.castListArtwork;
+      castInfoToStore.castCommand = CastCommand.displayPlaylist;
     }
 
     delete castInfoToStore?.elapsedTime;

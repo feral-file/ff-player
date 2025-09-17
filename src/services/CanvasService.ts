@@ -185,7 +185,6 @@ class CanvasService {
       if (
         [
           CastCommand.castDaily,
-          CastCommand.castListArtwork,
           CastCommand.castExhibition,
           CastCommand.displayPlaylist,
         ].includes(command)
@@ -406,7 +405,7 @@ class CanvasService {
 
     console.log('[CanvasService] Display playlist: ', JSON.stringify(request));
     this.setCastInfo({
-      castCommand: CastCommand.castListArtwork,
+      castCommand: CastCommand.displayPlaylist,
       deviceInfo: this.castInfo?.deviceInfo,
       items: request.dp1CallData.items.map(item => ({
         ...item,

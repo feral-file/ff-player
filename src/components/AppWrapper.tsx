@@ -110,7 +110,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
 
     const handleCastCommand = () => {
       switch (castInfo.castCommand) {
-        case CastCommand.castListArtwork: {
+        case CastCommand.displayPlaylist: {
           if (pathname === '/playlist') {
             return;
           }

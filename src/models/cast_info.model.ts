@@ -9,7 +9,6 @@ export enum CastCommand {
   connect = 'connect',
   disconnect = 'disconnect',
   checkStatus = 'checkStatus',
-  castListArtwork = 'castListArtwork',
   pauseCasting = 'pauseCasting',
   resumeCasting = 'resumeCasting',
   nextArtwork = 'nextArtwork',
