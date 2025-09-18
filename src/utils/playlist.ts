@@ -7,15 +7,15 @@ export function getIndex(playlistItems: DP1Item[], startTime: number): number {
   let elapsedTime = currentTime - startTime;
 
   const totalDuration = playlistItems.reduce(
-    (acc, artwork) => acc + (artwork.duration ?? 0) * 1000,
+    (acc, item) => acc + (item.duration ?? 0) * 1000,
     0
   );
 
   elapsedTime = elapsedTime % totalDuration;
 
   for (let i = 0; i < playlistItems.length; i++) {
-    const artwork = playlistItems[i];
-    elapsedTime -= (artwork.duration ?? 0) * 1000;
+    const item = playlistItems[i];
+    elapsedTime -= (item.duration ?? 0) * 1000;
     if (elapsedTime < 0) {
       index = i;
       break;
@@ -62,6 +62,10 @@ export function recalculateStartTimeForIndex(
   dp1Items: DP1Item[],
   targetIndex: number
 ): number {
+  if (targetIndex < 0 || targetIndex >= dp1Items.length) {
+    return new Date().setMilliseconds(0);
+  }
+
   const currentTime = Date.now();
   let totalDurationBeforeIndex = 0;
   for (let i = 0; i < targetIndex; i++) {

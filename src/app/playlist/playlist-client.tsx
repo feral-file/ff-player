@@ -200,7 +200,8 @@ export default function PlaylistClient() {
           if (foundIdx >= 0) {
             nextIndex = (foundIdx + 1) % newPlaylist.length;
           } else {
-            nextIndex = currentIndex;
+            nextIndex =
+              currentIndex >= 0 ? currentIndex % newPlaylist.length : 0;
           }
         }
 
