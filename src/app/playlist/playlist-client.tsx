@@ -125,8 +125,12 @@ export default function PlaylistClient() {
     const startTime = castInfo?.startTime ?? Date.now();
     setStartTime(startTime);
     let duration = remainTimeRef.current;
-    if (duration === 0 && castInfo?.artworks?.length && currentIndex >= 0) {
-      duration = castInfo.artworks[currentIndex].duration;
+    if (
+      duration === 0 &&
+      castInfo?.playlist?.items?.length &&
+      currentIndex >= 0
+    ) {
+      duration = castInfo.playlist.items[currentIndex].duration ?? 0;
     }
 
     startInterval(duration);

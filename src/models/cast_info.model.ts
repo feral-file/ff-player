@@ -1,8 +1,4 @@
-import {
-  DeviceInfo,
-  ExhibitionCatalog,
-  PlayArtwork,
-} from './cast_request_reply.model';
+import { DeviceInfo, ExhibitionCatalog } from './cast_request_reply.model';
 import { DP1Call } from './dp1.model';
 
 export enum CastCommand {
@@ -36,7 +32,6 @@ export interface CastInfo {
   catalog?: ExhibitionCatalog;
 
   // Cast list artwork
-  artworks?: PlayArtwork[];
   startTime?: number;
   index?: number;
   isPaused?: boolean;
