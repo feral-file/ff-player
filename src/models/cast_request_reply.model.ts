@@ -82,6 +82,7 @@ export interface DisplayPlaylistRequest {
   intent: DP1Intent;
   dp1_call: DP1Call;
   playlistUrl?: string;
+  refresh?: boolean;
 }
 export type DisplayPlaylistReply = Reply;
 

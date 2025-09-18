@@ -22,6 +22,7 @@ export enum CastCommand {
   updateDisplaySettings = 'updateDisplaySettings',
   cursorUpdate = 'cursorUpdate',
   displayPlaylist = 'displayPlaylist',
+  refreshPlaylist = 'refreshPlaylist',
 }
 
 export interface CastInfo {

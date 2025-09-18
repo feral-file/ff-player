@@ -170,3 +170,34 @@ export function getDP1Margin(margin: number | string): string {
 
   return margin;
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function deepEqual(a: any, b: any): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b) return false;
+
+  // Array compare (thứ tự quan trọng)
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!deepEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+
+  // Object compare
+  if (a && b && typeof a === 'object') {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    const keysA = Object.keys(a);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    for (const key of keysA) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      if (!deepEqual(a[key], b[key])) return false;
+    }
+    return true;
+  }
+
+  return false;
+}

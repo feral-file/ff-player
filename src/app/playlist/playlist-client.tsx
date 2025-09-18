@@ -3,7 +3,7 @@
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { useAppContext } from '@/context/AppContext';
 import { CastingArtworkType } from '@/models/metric.model';
-import { getIndex } from '@/utils/playlist';
+import { getIndex, recalculateStartTimeForIndex } from '@/utils/playlist';
 import { CastCommand } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import { defaultDP1DisplayPreference, DP1Item } from '@/models/dp1.model';
@@ -30,6 +30,8 @@ export default function PlaylistClient() {
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
   const currentItemRef = useRef<DP1Item>();
+  // A queued playlist to be swapped in when the current item's timer ends
+  const queuedPlaylistRef = useRef<DP1Item[] | null>(null);
 
   useEffect(() => {
     return () => {
@@ -158,6 +160,19 @@ export default function PlaylistClient() {
     setCurrentIndex(castInfo?.index ?? 0);
   };
 
+  const handleRefreshPlaylist = () => {
+    // Queue the refreshed playlist to swap at the end of the current item's duration
+    const newItems = castInfo?.playlist?.items ?? [];
+    if (!newItems.length) {
+      return;
+    }
+
+    queuedPlaylistRef.current = newItems.map(item => ({
+      ...item,
+      duration: item.duration ?? 0,
+    }));
+  };
+
   const startInterval = (duration: number) => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -168,6 +183,39 @@ export default function PlaylistClient() {
     }
 
     intervalRef.current = setInterval(() => {
+      // If a refreshed playlist has been queued, swap it in exactly at the boundary
+      if (queuedPlaylistRef.current?.length) {
+        const newPlaylist = queuedPlaylistRef.current;
+        queuedPlaylistRef.current = null;
+
+        // Determine next index in the new playlist
+        const currentId = currentItemRef.current?.id;
+        let nextIndex = 0;
+        if (currentId) {
+          const foundIdx = newPlaylist.findIndex(i => i.id === currentId);
+          if (foundIdx >= 0) {
+            nextIndex = (foundIdx + 1) % newPlaylist.length;
+          } else {
+            nextIndex = currentIndex;
+          }
+        }
+
+        const newStartTime = recalculateStartTimeForIndex(
+          newPlaylist,
+          nextIndex
+        );
+        indexRef.current = -1;
+        setCurrentIndex(-1);
+        setPlaylist(newPlaylist);
+        setStartTime(newStartTime);
+        canvasService.setCastInfo({
+          ...castInfo,
+          castCommand: CastCommand.updateIndex,
+          index: nextIndex,
+        });
+        return;
+      }
+
       const index = getIndex(playlist, startTime);
       canvasService.setCastInfo({
         ...castInfo,
@@ -189,6 +237,10 @@ export default function PlaylistClient() {
     if (castInfo) {
       const handleCastCommand = () => {
         switch (castInfo.castCommand) {
+          case CastCommand.refreshPlaylist: {
+            handleRefreshPlaylist();
+            break;
+          }
           case CastCommand.displayPlaylist: {
             indexRef.current = -1;
             setCurrentIndex(-1);

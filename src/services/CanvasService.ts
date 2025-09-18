@@ -41,6 +41,7 @@ import {
 } from '@/models/dp1.model';
 import DP1ScheduleService from './DP1ScheduleService';
 import { calculateStartTime } from '@/utils/playlist';
+import { deepEqual } from '@/utils/helper';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -366,6 +367,11 @@ class CanvasService {
       message: 'Received DP1 command',
     });
 
+    if (request.refresh) {
+      this.refreshPlaylist(dp1CallData);
+      return { ok: true };
+    }
+
     let reply: Reply;
     switch (action) {
       case DP1Action.NowDisplay: {
@@ -444,6 +450,19 @@ class CanvasService {
     );
 
     return { ok: true };
+  }
+
+  private refreshPlaylist(newPlaylist: DP1Call) {
+    const currentPlaylist = this.castInfo?.playlist;
+    if (currentPlaylist && deepEqual(currentPlaylist, newPlaylist)) {
+      return;
+    }
+
+    this.setCastInfo({
+      ...(this.castInfo ?? {}),
+      playlist: newPlaylist,
+      castCommand: CastCommand.refreshPlaylist,
+    });
   }
 }
 
