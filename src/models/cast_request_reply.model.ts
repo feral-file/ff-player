@@ -79,7 +79,7 @@ export interface CheckDeviceStatusReply extends Reply {
 }
 
 export interface DisplayPlaylistRequest {
-  intent: DP1Intent;
+  intent?: DP1Intent;
   dp1_call: DP1Call;
   playlistUrl?: string;
   refresh?: boolean;

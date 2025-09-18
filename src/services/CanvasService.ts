@@ -358,7 +358,7 @@ class CanvasService {
     const dp1Intent = request.intent;
     const dp1CallData = request.dp1_call;
     const playlistUrl = request.playlistUrl;
-    const action = dp1Intent.action;
+    const action = dp1Intent?.action;
 
     console.log('[CanvasService] display playlist: ', action);
     Sentry.addBreadcrumb({
@@ -384,7 +384,7 @@ class CanvasService {
       case DP1Action.SchedulePlay: {
         return this.schedulePlaylist({
           dp1CallData,
-          scheduleTime: dp1Intent.schedule_time,
+          scheduleTime: dp1Intent?.schedule_time,
         });
       }
 
