@@ -249,11 +249,11 @@ export default function PlaylistClient() {
             indexRef.current = -1;
             setCurrentIndex(-1);
 
-            if (castInfo.items?.length) {
-              setPlaylist(castInfo.items);
+            if (castInfo.playlist?.items?.length) {
+              setPlaylist(castInfo.playlist.items);
               if (castInfo.startTime) {
                 setStartTime(castInfo.startTime);
-                const i = getIndex(castInfo.items, castInfo.startTime);
+                const i = getIndex(castInfo.playlist.items, castInfo.startTime);
                 setCurrentIndex(i);
               }
 
@@ -277,8 +277,8 @@ export default function PlaylistClient() {
             break;
           }
           case CastCommand.updateDuration: {
-            if (castInfo.items) {
-              handleUpdateDuration(castInfo.items);
+            if (castInfo.playlist?.items) {
+              handleUpdateDuration(castInfo.playlist.items);
             }
             break;
           }

@@ -113,14 +113,14 @@ export const AppProvider = ({ children }: AppContextProps) => {
           deviceInfo: castInfo.deviceInfo,
           displayKey: 'daily_work',
         };
-      } else if (castInfo.items && castInfo.index !== undefined) {
+      } else if (castInfo.playlist?.items && castInfo.index !== undefined) {
         // Recalculate startTime based on current index to ensure correct display
         console.log(
           '[AppContext] Recalculating startTime for index:',
           castInfo.index
         );
         const newStartTime = recalculateStartTimeForIndex(
-          castInfo.items,
+          castInfo.playlist.items,
           castInfo.index
         );
         castInfo = {

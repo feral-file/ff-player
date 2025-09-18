@@ -250,7 +250,7 @@ class CanvasService {
         orientation: DeviceManager.getViewMode() ?? ViewMode.landscape,
       },
 
-      items: this.castInfo?.items,
+      items: this.castInfo?.playlist?.items,
 
       playlist: this.castInfo?.playlist,
       playlistUrl: this.castInfo?.playlistUrl,
@@ -299,7 +299,7 @@ class CanvasService {
     }
 
     const startTime = calculateStartTime(
-      this.castInfo?.items ?? [],
+      this.castInfo?.playlist?.items ?? [],
       request.index
     );
 
@@ -404,7 +404,7 @@ class CanvasService {
   }
 
   private nowDisplayPlaylist(request: NowDisplayRequest): NowDisplayReply {
-    if (!request.dp1CallData.items.length) {
+    if (!request.dp1CallData.items?.length) {
       console.error('[CanvasService] No items to display');
       return { ok: false };
     }
@@ -413,16 +413,12 @@ class CanvasService {
     this.setCastInfo({
       castCommand: CastCommand.displayPlaylist,
       deviceInfo: this.castInfo?.deviceInfo,
-      items: request.dp1CallData.items.map(item => ({
-        ...item,
-        duration: item.duration ?? 0,
-      })),
+      playlist: request.dp1CallData,
+      playlistUrl: request.playlistUrl,
       startTime: Date.now(),
       index: 0,
       isPaused: false,
       playlistId: request.dp1CallData.id,
-      playlist: request.dp1CallData,
-      playlistUrl: request.playlistUrl,
     });
     return { ok: true };
   }
@@ -430,7 +426,7 @@ class CanvasService {
   private schedulePlaylist(
     request: SchedulePlaylistRequest
   ): SchedulePlaylistReply {
-    if (!request.dp1CallData.items.length) {
+    if (!request.dp1CallData.items?.length) {
       console.error('[CanvasService] No items to schedule');
       return { ok: false };
     }
@@ -460,6 +456,8 @@ class CanvasService {
       );
       // return;
     }
+
+    console.log('newPlaylist', newPlaylist.items?.length);
 
     this.setCastInfo({
       ...(this.castInfo ?? {}),

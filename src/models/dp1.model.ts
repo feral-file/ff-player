@@ -16,7 +16,7 @@ export interface DP1Call {
   slug: string;
   created: string;
   defaults: DP1Defaults;
-  items: DP1Item[];
+  items?: DP1Item[];
   signature: string;
 }
 
