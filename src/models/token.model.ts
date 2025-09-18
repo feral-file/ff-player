@@ -37,6 +37,7 @@ export interface IndexerToken {
   indexID: string;
   source: string;
   asset?: Asset;
+  owner?: string;
   blockchain?: Blockchain;
 }
 

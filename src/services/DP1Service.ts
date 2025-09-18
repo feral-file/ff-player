@@ -3,7 +3,10 @@ import { convertToTokenID } from '@/utils/indexer';
 import { IndexerService } from './IndexerService';
 
 export const DP1Service = {
-  async getItemPreviewURL(item: DP1Item): Promise<string | null> {
+  async getItemPreviewURL(item: DP1Item): Promise<{
+    preview: string | null;
+    owner: string | null;
+  } | null> {
     if (item.provenance?.contract) {
       const tokenId = convertToTokenID(
         item.provenance.contract.chain,
@@ -14,10 +17,17 @@ export const DP1Service = {
       const token = await IndexerService.queryIndexerToken(tokenId);
       console.log('[DP1Service] token', token);
       if (token) {
-        return await IndexerService.getIndexerTokenPreview(token);
+        const preview = await IndexerService.getIndexerTokenPreview(token);
+        return {
+          preview,
+          owner: token.owner ?? null,
+        };
       }
     }
 
-    return item.source ?? null;
+    return {
+      preview: item.source ?? null,
+      owner: null,
+    };
   },
 };

@@ -70,6 +70,7 @@ export const IndexerService = {
                 contractAddress
                 indexID
                 source
+                owner
                 asset {
                   thumbnailID
                   staticPreviewURLLandscape
