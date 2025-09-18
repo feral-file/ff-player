@@ -455,7 +455,10 @@ class CanvasService {
   private refreshPlaylist(newPlaylist: DP1Call) {
     const currentPlaylist = this.castInfo?.playlist;
     if (currentPlaylist && deepEqual(currentPlaylist, newPlaylist)) {
-      return;
+      console.log(
+        '[CanvasService] New playlist is the same as the current playlist'
+      );
+      // return;
     }
 
     this.setCastInfo({

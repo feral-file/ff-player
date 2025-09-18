@@ -204,6 +204,10 @@ export default function PlaylistClient() {
           newPlaylist,
           nextIndex
         );
+        console.log('Use queued playlist');
+        console.log('Current index: ', currentIndex);
+        console.log('Next index: ', nextIndex);
+
         indexRef.current = -1;
         setCurrentIndex(-1);
         setPlaylist(newPlaylist);
