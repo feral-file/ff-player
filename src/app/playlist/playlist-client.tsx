@@ -189,6 +189,7 @@ export default function PlaylistClient() {
     }
 
     intervalRef.current = setInterval(() => {
+      const currentCastInfo = canvasService.getCastInfo();
       // If a refreshed playlist has been queued, swap it in exactly at the boundary
       if (queuedPlaylistRef.current?.length) {
         const newPlaylist = queuedPlaylistRef.current;
@@ -220,16 +221,17 @@ export default function PlaylistClient() {
         setPlaylist(newPlaylist);
         setStartTime(newStartTime);
         canvasService.setCastInfo({
-          ...castInfo,
+          ...currentCastInfo,
           castCommand: CastCommand.updateIndex,
           index: nextIndex,
         });
+
         return;
       }
 
       const index = getIndex(playlist, startTime);
       canvasService.setCastInfo({
-        ...castInfo,
+        ...currentCastInfo,
         castCommand: CastCommand.updateIndex,
         index,
       });
