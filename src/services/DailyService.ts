@@ -5,9 +5,10 @@ import { convertToTokenID, IndexerSource } from '@/utils/indexer';
 import { convertToQueryParams } from '@/utils/queryParams';
 import * as Sentry from '@sentry/nextjs';
 import { IndexerService } from './IndexerService';
+import { DEFAULT_DAILY } from '@/constants';
 
 class DailyService {
-  private dailies: Daily[] = [];
+  private daily: Daily | null = null;
   private static instance: DailyService | null = null;
 
   public static getInstance(): DailyService {
@@ -17,13 +18,12 @@ class DailyService {
     return DailyService.instance;
   }
 
-  public getDailies(): Daily[] {
-    return this.dailies;
+  public getDaily(): Daily | null {
+    return this.daily;
   }
 
   public async refreshDailies(newDailyHour: number): Promise<void> {
-    const newDailies = await this.callingDailies(newDailyHour);
-    this.dailies = newDailies;
+    this.daily = await this.getFirstDaily(newDailyHour);
   }
 
   public getNextDailyDelay(newDailyHour: number): number {
@@ -71,10 +71,11 @@ class DailyService {
     return response.data.result as Daily[];
   }
 
-  public async callingDailies(newDailyHour: number): Promise<Daily[]> {
+  public async getFirstDaily(newDailyHour: number): Promise<Daily | null> {
     try {
+      let firstDaily: Daily;
       const date = this.getCurrentLocaleDateOnly(newDailyHour);
-      let dailies = await this.getDailiesByDate(date, [
+      const dailies = await this.getDailiesByDate(date, [
         'includeSuccessfulSwap',
       ]);
 
@@ -83,70 +84,50 @@ class DailyService {
         Sentry.captureMessage(
           '[DAILY] No upcoming dailies, using default daily'
         );
-        dailies = [this.getDefaultDaily()];
+        firstDaily = DEFAULT_DAILY;
+      } else {
+        firstDaily = dailies[0];
       }
 
-      const ids = dailies.map((d: Daily) => {
-        if (d.artwork?.swap) {
-          const swap = d.artwork.swap;
-          return convertToTokenID(
-            swap.blockchainType,
-            swap.contractAddress,
-            swap.token
-          );
-        }
-
-        return convertToTokenID(d.blockchain, d.contractAddress, d.tokenID);
-      });
-
-      if (ids.length === 0) {
-        return [];
-      }
-
-      const data = await IndexerService.queryTokens(ids);
-      const previewData = new Map<string, string>();
-      await Promise.all(
-        data.map(async (token: IndexerToken) => {
-          const previewURL = await IndexerService.getIndexerTokenPreview(token);
-          previewData.set(token.id, previewURL);
-        })
-      );
-
-      const indexerData = new Map<string, IndexerToken>();
-      data.forEach((token: IndexerToken) => {
-        indexerData.set(token.id, token);
-      });
-
-      const convertDailies = await Promise.all(
-        dailies.map(async (d: Daily) => {
-          let tokenID = d.tokenID;
-          if (d.artwork?.swap) {
-            tokenID = d.artwork.swap.token;
-          }
-          const token = indexerData.get(tokenID);
-
-          const previewURL =
-            token?.source === IndexerSource.feral_file && d.artwork
-              ? await artworkService.getArtworkPreview(d.artwork)
-              : previewData.get(tokenID);
-
-          return {
-            ...d,
-            previewURL,
-            token,
-          };
-        })
-      );
-
-      return convertDailies;
+      return await this.getFullDailyInfo(firstDaily);
     } catch (error) {
       console.error(
         '[DAILY] Error when convert dailies',
         JSON.stringify(error)
       );
       Sentry.captureException(error);
-      return [this.getDefaultDaily()];
+      return await this.getFullDailyInfo(DEFAULT_DAILY);
     }
+  }
+
+  private async getFullDailyInfo(daily: Daily): Promise<Daily> {
+    const indexerTokenID = await this.getDailyIndexerTokenID(
+      daily.tokenID,
+      daily
+    );
+
+    if (!indexerTokenID) {
+      return daily;
+    }
+
+    const token = await IndexerService.queryIndexerToken(indexerTokenID);
+    if (!token) {
+      return daily;
+    }
+
+    const previewURL =
+      token.source === IndexerSource.feral_file.toString() && daily.artwork
+        ? await artworkService.getArtworkPreview(daily.artwork)
+        : await IndexerService.getIndexerTokenPreview(token);
+
+    return {
+      ...daily,
+      previewURL,
+      token,
+      indexerTokenID,
+      contractAddress:
+        daily.artwork?.successfulSwap?.contractAddress ?? daily.contractAddress,
+    };
   }
 
   public async getDailyIndexerTokenID(
@@ -154,40 +135,25 @@ class DailyService {
     daily: Daily
   ): Promise<string> {
     let { blockchain, contractAddress } = daily;
-    try {
-      const artwork = await artworkService.getArtworkDetail(
-        tokenID,
-        false,
-        true
-      );
-      if (artwork?.successfulSwap) {
-        blockchain = artwork.successfulSwap.blockchainType;
-        contractAddress = artwork.successfulSwap.contractAddress;
-        tokenID = artwork.successfulSwap.token;
+    let artwork = daily.artwork ?? null;
+    if (!artwork) {
+      try {
+        artwork = await artworkService.getArtworkDetail(tokenID, false, true);
+      } catch {
+        console.log('[DAILY] Artwork not found');
       }
-    } catch {
-      console.log(
-        'Artwork with ID:',
-        tokenID,
-        'not found from Feral File, start query indexer.'
-      );
     }
 
-    const id = convertToTokenID(blockchain, contractAddress, tokenID);
+    if (artwork?.successfulSwap) {
+      blockchain = artwork.successfulSwap.blockchainType;
+      contractAddress = artwork.successfulSwap.contractAddress;
+      tokenID = artwork.successfulSwap.token;
+    }
 
-    return id;
+    return convertToTokenID(blockchain, contractAddress, tokenID);
   }
 
-  public async getPreviewURLs(
-    tokenID: string,
-    daily: Daily
-  ): Promise<string[] | null> {
-    const id = await this.getDailyIndexerTokenID(tokenID, daily);
-    const token = await IndexerService.queryIndexerToken(id);
-    if (!token) {
-      throw new Error('Token not found');
-    }
-
+  public getPreviewURLs(token: IndexerToken): string[] | null {
     if (!token.asset) {
       return null;
     }
@@ -205,20 +171,6 @@ class DailyService {
             token.asset.metadata.project.latest.previewURL,
           ] // Use the same image for both landscape and portrait
         : null;
-  }
-
-  private getDefaultDaily(): Daily {
-    // Payphone Token
-    return {
-      blockchain: 'ethereum',
-      contractAddress: '0x1D9787369B1DCf709f92Da1d8743c2A4b6028a83',
-      displayTime: new Date().toString(),
-      id: '',
-      tokenName: '#1',
-      tokenID: '339348595130070749814751437599411258966098496',
-      tokenIDs: ['339348595130070749814751437599411258966098496'],
-      note: '',
-    };
   }
 
   private getCurrentLocaleDateOnly(newDailyHour: number): string {

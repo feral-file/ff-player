@@ -541,10 +541,6 @@ const ArtworkPlayer = ({
     console.log('[ArtworkPlayer] previewType', previewType);
   }, [previewType]);
 
-  useEffect(() => {
-    console.log('[ArtworkPlayer] artworkID', artworkID);
-  }, [artworkID]);
-
   return (
     <>
       {owner && (

@@ -40,7 +40,6 @@ export interface CastInfo {
   playlistId?: string;
 
   // Cast daily
-  displayKey?: string;
   dailyTokenID?: string;
 
   // DP1

@@ -8,7 +8,12 @@ import {
   FileUseVideo,
   TokenMetadata,
 } from '@/models';
-import { Scaling } from '@/models/dp1.model';
+import {
+  DP1Chain,
+  DP1License,
+  DP1ProvenanceType,
+  Scaling,
+} from '@/models/dp1.model';
 import { infuraAxiosInstance } from '@/services/axiosService';
 import Web3 from 'web3';
 import { provider } from 'web3-core';
@@ -200,4 +205,42 @@ export function deepEqual(a: any, b: any): boolean {
   }
 
   return false;
+}
+
+export function buildPlaylistItem(
+  blockChain: DP1Chain,
+  contractAddress: string,
+  tokenId: string,
+  duration: number
+) {
+  return {
+    id: tokenId,
+    source: '',
+    license: DP1License.Open,
+    duration: duration,
+    provenance: {
+      type: DP1ProvenanceType.OnChain,
+      standard: 'other',
+      contract: {
+        chain: blockChain,
+        address: contractAddress,
+        tokenId: tokenId,
+      },
+    },
+  };
+}
+
+export function normalizeProvenanceChain(blockchain: string): DP1Chain {
+  const b = blockchain.toLowerCase().trim();
+  switch (b) {
+    case 'ethereum':
+    case 'evm':
+      return DP1Chain.EVM;
+    case 'tezos':
+      return DP1Chain.Tezos;
+    case 'bitmark':
+      return DP1Chain.Bitmark;
+    default:
+      return DP1Chain.Other;
+  }
 }

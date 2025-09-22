@@ -13,8 +13,6 @@ import {
   ConnectReplyV2,
   ConnectRequestV2,
   DisconnectReplyV2,
-  DisplaySettings,
-  ViewMode,
   UpdateArtFramingRequest,
   UpdateCursorPositionsRequest,
   UpdateDisplaySettingsRequest,
@@ -238,23 +236,14 @@ class CanvasService {
 
     return {
       ok: true,
-      index: this.castInfo?.index,
-      isPaused: this.castInfo?.isPaused,
-
-      displayKey: this.castInfo?.displayKey,
-
-      deviceSettings: {
-        scaling:
-          DeviceManager.getDeviceDisplaySettings()?.scaling ??
-          DisplaySettings.defaultScaling,
-        orientation: DeviceManager.getViewMode() ?? ViewMode.landscape,
-      },
-
-      items: this.castInfo?.playlist?.items,
+      castCommand: DeviceManager.getCastInfo()?.castCommand,
 
       playlist: this.castInfo?.playlist,
       playlistUrl: this.castInfo?.playlistUrl,
-      castCommand: DeviceManager.getCastInfo()?.castCommand,
+
+      items: this.castInfo?.playlist?.items,
+      index: this.castInfo?.index,
+      isPaused: this.castInfo?.isPaused,
     };
   }
 
@@ -264,7 +253,6 @@ class CanvasService {
     this.setCastInfo({
       castCommand: CastCommand.castDaily,
       deviceInfo: this.castInfo?.deviceInfo,
-      displayKey: 'daily_work',
     });
     return { ok: true };
   }

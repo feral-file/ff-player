@@ -1,8 +1,7 @@
 import { CursorPosition } from '@/services/custom-hooks/useCursorPositions';
-import { ViewMode } from './common.model';
 import { TokenDisplaySettings } from './display_settings.model';
 import { ErrorType } from './error.model';
-import { DP1Call, DP1Intent, DP1Item, Scaling } from './dp1.model';
+import { DP1Call, DP1Intent, DP1Item } from './dp1.model';
 import { CastCommand } from '.';
 
 export interface DeviceInfo {
@@ -69,13 +68,6 @@ export interface CheckDeviceStatusReply extends Reply {
   items?: DP1Item[];
   index?: number;
   isPaused?: boolean;
-
-  displayKey?: string;
-
-  deviceSettings?: {
-    scaling: Scaling;
-    orientation: ViewMode;
-  };
 }
 
 export interface DisplayPlaylistRequest {

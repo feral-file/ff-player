@@ -26,7 +26,7 @@ export const DP1Service = {
     }
 
     return {
-      preview: item.source ?? null,
+      preview: item.source,
       owner: null,
     };
   },
