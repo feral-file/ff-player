@@ -49,7 +49,6 @@ const ArtworkPlayer = ({
   isCustomView,
   artworkPreviewMIMEType,
   displayPreferences,
-  owner,
 }: {
   previewURL: string;
   artworkID: string;
@@ -60,7 +59,6 @@ const ArtworkPlayer = ({
   keyboardCode?: number;
   artworkPreviewMIMEType?: string;
   displayPreferences: DP1DisplayPreference;
-  owner?: string;
 }) => {
   const FADE_IN_BUFFER_MS = 50;
   const FADE_IN_OUT_DAILY_MS = 350;
@@ -543,23 +541,6 @@ const ArtworkPlayer = ({
 
   return (
     <>
-      {owner && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: 'yellow',
-            color: 'black',
-            padding: '10px',
-            zIndex: 1000,
-            fontSize: 50,
-          }}>
-          {owner}
-        </div>
-      )}
-
       <div
         style={{
           display: 'flex',

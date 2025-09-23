@@ -3,7 +3,7 @@ import { convertToTokenID } from '@/utils/indexer';
 import { IndexerService } from './IndexerService';
 
 export const DP1Service = {
-  async getItemPreviewURL(item: DP1Item): Promise<{
+  async getItemInfo(item: DP1Item): Promise<{
     preview: string | null;
     owner: string | null;
   } | null> {

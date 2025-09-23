@@ -24,7 +24,6 @@ export default function PlaylistClient() {
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const indexRef = useRef<number>(-1);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
-  const [owner, setOwner] = useState<string | null>(null);
   const [startTime, setStartTime] = useState<number>(0);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>();
@@ -86,9 +85,8 @@ export default function PlaylistClient() {
   }, [currentIndex, playlist]);
 
   const fetchItemPreviewURL = async (item: DP1Item) => {
-    const itemInfo = await DP1Service.getItemPreviewURL(item);
+    const itemInfo = await DP1Service.getItemInfo(item);
     setCastPreviewURL(itemInfo?.preview ?? null);
-    setOwner(itemInfo?.owner ?? null);
   };
 
   const handleUpdateDuration = (dp1Items: DP1Item[]) => {
@@ -329,7 +327,6 @@ export default function PlaylistClient() {
             ...(currentItemRef.current?.display ?? {}),
             ...defaultDP1DisplayPreference,
           }}
-          owner={owner ?? ''}
         />
       </div>
     </>
