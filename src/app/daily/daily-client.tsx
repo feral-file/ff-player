@@ -8,6 +8,7 @@ import {
   DEFAULT_DAILY,
   DEFAULT_DELAY,
   LEE_MULLICAN_EXHIBITION_CONTRACT,
+  NO_DURATION_VALUE,
   SWITCH_TOKEN_INTERVAL,
   TIMESTAMP_PER_HOUR,
 } from '@/constants';
@@ -207,7 +208,9 @@ export default function DailyClient() {
         ),
         isDefaultDaily ? DEFAULT_DAILY.contractAddress : contractAddress,
         isDefaultDaily ? DEFAULT_DAILY.tokenID : tokenID,
-        dailyRef.current?.tokenIDs.length === 1 ? 0 : SWITCH_TOKEN_INTERVAL
+        dailyRef.current?.tokenIDs.length === 1
+          ? NO_DURATION_VALUE
+          : SWITCH_TOKEN_INTERVAL
       );
     });
 

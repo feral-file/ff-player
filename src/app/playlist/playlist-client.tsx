@@ -7,7 +7,10 @@ import { getIndex, recalculateStartTimeForIndex } from '@/utils/playlist';
 import { CastCommand } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import { defaultDP1DisplayPreference, DP1Item } from '@/models/dp1.model';
-import { LEE_MULLICAN_EXHIBITION_CONTRACT } from '@/constants';
+import {
+  LEE_MULLICAN_EXHIBITION_CONTRACT,
+  NO_DURATION_VALUE,
+} from '@/constants';
 import { convertToTokenID } from '@/utils/indexer';
 import { DP1Service } from '@/services/DP1Service';
 import { canvasService } from '@/services/CanvasService';
@@ -80,7 +83,7 @@ export default function PlaylistClient() {
     );
 
     if (!castInfo?.isPaused) {
-      startInterval(currentItem.duration ?? 0);
+      startInterval(currentItem.duration);
     }
   }, [currentIndex, playlist]);
 
@@ -92,7 +95,7 @@ export default function PlaylistClient() {
   const handleUpdateDuration = (dp1Items: DP1Item[]) => {
     const durationMap = new Map<string, number>();
     dp1Items.forEach((a: DP1Item) => {
-      durationMap.set(a.id, a.duration ?? 0);
+      durationMap.set(a.id, a.duration);
     });
 
     const updatedPlaylist = playlist.map((item: DP1Item) => {
@@ -106,7 +109,7 @@ export default function PlaylistClient() {
     const currentPlaylistItem = playlist[currentIndex];
     const currentArtwork = dp1Items.find(a => a.id === currentPlaylistItem.id);
     if (currentArtwork) {
-      startInterval(currentArtwork.duration ?? 0);
+      startInterval(currentArtwork.duration);
     }
 
     setStartTime(startTime);
@@ -130,7 +133,7 @@ export default function PlaylistClient() {
       castInfo?.playlist?.items?.length &&
       currentIndex >= 0
     ) {
-      duration = castInfo.playlist.items[currentIndex].duration ?? 0;
+      duration = castInfo.playlist.items[currentIndex].duration;
     }
 
     startInterval(duration);
@@ -173,7 +176,7 @@ export default function PlaylistClient() {
 
     queuedPlaylistRef.current = newItems.map(item => ({
       ...item,
-      duration: item.duration ?? 0,
+      duration: item.duration,
     }));
   };
 
@@ -182,7 +185,7 @@ export default function PlaylistClient() {
       clearInterval(intervalRef.current);
     }
 
-    if (duration === 0) {
+    if (duration === 0 || duration === NO_DURATION_VALUE) {
       return;
     }
 

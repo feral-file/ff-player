@@ -234,8 +234,6 @@ class CanvasService {
       return { ok: false, error: ErrorType.Overheating };
     }
 
-    console.log('this.castInfo', JSON.stringify(this.castInfo));
-
     return {
       ok: true,
       castCommand: DeviceManager.getCastInfo()?.castCommand,
