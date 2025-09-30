@@ -4,18 +4,21 @@ import ArtworkPlayer from '../../components/artwork-player/ArtworkPlayer';
 import DailyService from '@/services/DailyService';
 import { useEffect, useRef, useState } from 'react';
 import { Daily, ViewMode } from '@/models';
-import { convertToTokenID } from '@/utils/indexer';
 import {
+  DEFAULT_DAILY,
   DEFAULT_DELAY,
   LEE_MULLICAN_EXHIBITION_CONTRACT,
+  NO_DURATION_VALUE,
   SWITCH_TOKEN_INTERVAL,
   TIMESTAMP_PER_HOUR,
 } from '@/constants';
 import { CastingArtworkType } from '@/models/metric.model';
 import { useAppContext } from '@/context/AppContext';
 import * as Sentry from '@sentry/nextjs';
-import { defaultDP1DisplayPreference } from '@/models/dp1.model';
+import { defaultDP1DisplayPreference, DP1Call } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
+import { IndexerService } from '@/services/IndexerService';
+import { buildPlaylistItem, normalizeProvenanceChain } from '@/utils/helper';
 
 export default function DailyClient() {
   const { context } = useAppContext();
@@ -31,14 +34,14 @@ export default function DailyClient() {
   const switchTokenRef = useRef<ReturnType<typeof setInterval> | undefined>(
     undefined
   );
-  const nextTokenIndex = useRef<number>(0);
+  const currentTokenIndex = useRef<number>(0);
   const [artworkID, setArtworkID] = useState<string | undefined>();
   const [artworkPreviewMIMEType, setArtworkPreviewMIMEType] = useState<
     string | undefined
   >();
 
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
-  const [isLeeMucianExhibition, setIsLeeMucianExhibition] =
+  const [isLeeMullicanExhibition, setIsLeeMullicanExhibition] =
     useState<boolean>(false);
 
   const newDailyHour = context.appRemoteConfig.new_daily_hour;
@@ -58,24 +61,12 @@ export default function DailyClient() {
   }, [landscapeStaticURL, portraitStaticURL, context.deviceRotation?.viewMode]);
 
   const fallbackToDefaultArtwork = () => {
-    if (switchTokenRef.current) {
-      clearInterval(switchTokenRef.current);
-    }
-
     if (dailyRef.current?.previewURL) {
-      setCastPreviewURL(dailyRef.current.previewURL);
-      setArtworkPreviewMIMEType(dailyRef.current.artwork?.previewMIMEType);
+      setCastPreviewURL(DEFAULT_DAILY.previewURL);
+      setArtworkPreviewMIMEType('image');
     }
 
-    console.log('setDailyTokenID to undefined');
-
-    canvasService.setCastInfo(
-      {
-        ...canvasService.getCastInfo(),
-        dailyTokenID: undefined,
-      },
-      false
-    );
+    saveCurrentDailyInfo(DEFAULT_DAILY.indexerTokenID, true);
   };
 
   useEffect(() => {
@@ -83,78 +74,83 @@ export default function DailyClient() {
     async function handleCastDaily() {
       try {
         await DailyService.refreshDailies(newDailyHour);
-        dailies = DailyService.getDailies();
-        if (dailies.length > 0) {
-          // Set metric metadata
-          if (dailyRef.current !== dailies[0]) {
-            dailyRef.current = dailies[0];
-            setArtworkID(
-              convertToTokenID(
-                dailyRef.current.blockchain,
-                dailyRef.current.contractAddress,
-                dailyRef.current.tokenID
-              )
-            );
-            setArtworkPreviewMIMEType(
-              dailyRef.current.artwork?.previewMIMEType
-            );
-          }
+        const firstDaily = DailyService.getDaily();
+        if (!firstDaily) {
+          return;
+        }
 
-          const delay = DailyService.getNextDailyDelay(newDailyHour);
+        if (firstDaily.id !== dailyRef.current?.id) {
+          dailyRef.current = firstDaily;
+          setArtworkPreviewMIMEType(dailyRef.current.artwork?.previewMIMEType);
+          setIsLeeMullicanExhibition(
+            dailyRef.current.contractAddress ===
+              LEE_MULLICAN_EXHIBITION_CONTRACT
+          );
+
           // Reset next token handle
-          nextTokenIndex.current = 0;
+          currentTokenIndex.current = 0;
           if (switchTokenRef.current) {
             clearInterval(switchTokenRef.current);
           }
 
           if (dailyRef.current.tokenIDs.length > 1) {
+            // Slideshow
             const tokenIDs = dailyRef.current.tokenIDs;
-            const currentTokenID = tokenIDs[nextTokenIndex.current];
-            const updatePreview = () => {
-              DailyService.getPreviewURLs(currentTokenID, dailies[0])
-                .then(urls => {
-                  if (!urls) {
+            const updateDailyInfo = (index: number) => {
+              const currentTokenID = tokenIDs[index];
+              const indexerTokenID = dailyRef.current?.indexerTokenID?.replace(
+                /-[^-]+$/,
+                `-${currentTokenID}`
+              );
+              setArtworkID(indexerTokenID);
+
+              if (!indexerTokenID) {
+                fallbackToDefaultArtwork();
+                return;
+              }
+
+              IndexerService.queryIndexerToken(indexerTokenID)
+                .then(token => {
+                  if (!token) {
                     fallbackToDefaultArtwork();
                     return;
                   }
 
-                  setLandscapeStaticURL(urls[0]);
-                  setPortraitStaticURL(urls[1]);
+                  const previewUrls = DailyService.getPreviewURLs(token);
+                  if (!previewUrls) {
+                    fallbackToDefaultArtwork();
+                    return;
+                  }
 
-                  convertAndSaveDailyTokenId(currentTokenID, dailies[0]);
+                  setLandscapeStaticURL(previewUrls[0]);
+                  setPortraitStaticURL(previewUrls[1]);
+                  saveCurrentDailyInfo(indexerTokenID);
                 })
                 .catch((error: unknown) => {
                   console.error(error, ':', JSON.stringify(error));
                   Sentry.captureException(error);
                   fallbackToDefaultArtwork();
                 });
-              const numberOfToken = tokenIDs.length;
-              nextTokenIndex.current =
-                (nextTokenIndex.current + 1) % numberOfToken;
             };
 
             // Trigger the function immediately
-            updatePreview();
+            updateDailyInfo(0);
 
             // Set up the interval
-            switchTokenRef.current = setInterval(
-              updatePreview,
-              SWITCH_TOKEN_INTERVAL
-            );
-          } else if (dailyRef.current.previewURL) {
-            setCastPreviewURL(dailyRef.current.previewURL);
-            setIsLeeMucianExhibition(
-              dailies[0].contractAddress === LEE_MULLICAN_EXHIBITION_CONTRACT
-            );
-
-            convertAndSaveDailyTokenId(
-              dailyRef.current.tokenID,
-              dailyRef.current
-            );
+            switchTokenRef.current = setInterval(() => {
+              currentTokenIndex.current =
+                (currentTokenIndex.current + 1) % tokenIDs.length;
+              updateDailyInfo(currentTokenIndex.current);
+            }, SWITCH_TOKEN_INTERVAL);
+          } else {
+            setArtworkID(dailyRef.current.indexerTokenID);
+            setCastPreviewURL(dailyRef.current.previewURL ?? '');
+            saveCurrentDailyInfo(dailyRef.current.indexerTokenID ?? '');
           }
-
-          startTimeout(delay > 0 ? delay : DEFAULT_DELAY);
         }
+
+        const delay = DailyService.getNextDailyDelay(newDailyHour);
+        startTimeout(delay > 0 ? delay : DEFAULT_DELAY);
       } catch (error) {
         console.error(error);
       }
@@ -188,7 +184,6 @@ export default function DailyClient() {
       console.error(error);
     });
 
-    let dailies: Daily[] = [];
     const clearDailyInterval = () => {
       if (dailyIntervalRef.current) {
         clearInterval(dailyIntervalRef.current);
@@ -200,21 +195,43 @@ export default function DailyClient() {
     };
   }, []);
 
-  function convertAndSaveDailyTokenId(tokenID: string, daily: Daily) {
-    DailyService.getDailyIndexerTokenID(tokenID, daily)
-      .then(dailyTokenID => {
-        console.log('setDailyTokenID', dailyTokenID);
-        canvasService.setCastInfo(
-          {
-            ...canvasService.getCastInfo(),
-            dailyTokenID: dailyTokenID,
-          },
-          false
-        );
-      })
-      .catch((error: unknown) => {
-        console.error(error);
-      });
+  function saveCurrentDailyInfo(
+    indexerTokenID: string,
+    isDefaultDaily = false
+  ) {
+    const blockchain = dailyRef.current?.blockchain ?? '';
+    const contractAddress = dailyRef.current?.contractAddress ?? '';
+    const items = dailyRef.current?.tokenIDs.map(tokenID => {
+      return buildPlaylistItem(
+        normalizeProvenanceChain(
+          isDefaultDaily ? DEFAULT_DAILY.blockchain : blockchain
+        ),
+        isDefaultDaily ? DEFAULT_DAILY.contractAddress : contractAddress,
+        isDefaultDaily ? DEFAULT_DAILY.tokenID : tokenID,
+        dailyRef.current?.tokenIDs.length === 1
+          ? NO_DURATION_VALUE
+          : SWITCH_TOKEN_INTERVAL
+      );
+    });
+
+    const playlist: DP1Call = {
+      dpVersion: '1.0',
+      title: 'Daily',
+      items,
+      signature: '',
+    };
+
+    const index =
+      dailyRef.current?.tokenIDs.length === 1 ? 0 : currentTokenIndex.current;
+    canvasService.setCastInfo(
+      {
+        ...canvasService.getCastInfo(),
+        dailyTokenID: indexerTokenID,
+        playlist,
+        index,
+      },
+      false
+    );
   }
 
   return (
@@ -224,7 +241,7 @@ export default function DailyClient() {
           previewURL={castPreviewURL ?? ''}
           artworkID={artworkID ?? ''}
           castingType={CastingArtworkType.Daily}
-          isCustomView={isLeeMucianExhibition}
+          isCustomView={isLeeMullicanExhibition}
           artworkPreviewMIMEType={artworkPreviewMIMEType}
           displayPreferences={defaultDP1DisplayPreference}
         />

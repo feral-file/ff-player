@@ -1,6 +1,7 @@
 export interface DP1 {
   intent: DP1Intent;
   dp1_call: DP1Call;
+  playlistUrl?: string;
 }
 
 export interface DP1Intent {
@@ -10,13 +11,13 @@ export interface DP1Intent {
 
 export interface DP1Call {
   dpVersion: string;
-  id: string;
+  id?: string;
   title: string;
-  slug: string;
-  created: string;
-  defaults: DP1Defaults;
-  items: DP1Item[];
-  signature: string;
+  slug?: string;
+  created?: string;
+  defaults?: DP1Defaults;
+  items?: DP1Item[];
+  signature?: string;
 }
 
 export enum DP1Action {
@@ -35,11 +36,11 @@ export interface DP1Item {
   id: string;
   title?: string;
   slug?: string;
-  source?: string;
-  duration?: number;
+  source: string;
+  duration: number;
   license: DP1License;
-  ref: string;
-  override: {
+  ref?: string;
+  override?: {
     duration: number;
   };
   display?: DP1DisplayPreference;
@@ -111,6 +112,7 @@ export enum DP1License {
 
 export enum DP1Chain {
   EVM = 'evm',
+  Bitmark = 'bitmark',
   Tezos = 'tezos',
   Other = 'other',
 }

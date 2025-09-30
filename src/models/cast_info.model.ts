@@ -1,15 +1,10 @@
-import {
-  DeviceInfo,
-  ExhibitionCatalog,
-  PlayArtwork,
-} from './cast_request_reply.model';
-import { DP1Item } from './dp1.model';
+import { DeviceInfo, ExhibitionCatalog } from './cast_request_reply.model';
+import { DP1Call } from './dp1.model';
 
 export enum CastCommand {
   connect = 'connect',
   disconnect = 'disconnect',
   checkStatus = 'checkStatus',
-  castListArtwork = 'castListArtwork',
   pauseCasting = 'pauseCasting',
   resumeCasting = 'resumeCasting',
   nextArtwork = 'nextArtwork',
@@ -23,6 +18,7 @@ export enum CastCommand {
   updateDisplaySettings = 'updateDisplaySettings',
   cursorUpdate = 'cursorUpdate',
   displayPlaylist = 'displayPlaylist',
+  refreshPlaylist = 'refreshPlaylist',
 }
 
 export interface CastInfo {
@@ -36,7 +32,6 @@ export interface CastInfo {
   catalog?: ExhibitionCatalog;
 
   // Cast list artwork
-  artworks?: PlayArtwork[];
   startTime?: number;
   index?: number;
   isPaused?: boolean;
@@ -45,9 +40,9 @@ export interface CastInfo {
   playlistId?: string;
 
   // Cast daily
-  displayKey?: string;
   dailyTokenID?: string;
 
   // DP1
-  items?: DP1Item[];
+  playlist?: DP1Call;
+  playlistUrl?: string;
 }

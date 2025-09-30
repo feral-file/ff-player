@@ -18,12 +18,12 @@ const ErrorPage = () => {
     let playingArtworkTitle: string | undefined;
     const castInfo = canvasService.getCastInfo();
     switch (castInfo?.castCommand) {
-      case CastCommand.castListArtwork: {
-        if (!castInfo.items?.length) {
+      case CastCommand.displayPlaylist: {
+        if (!castInfo.playlist?.items?.length) {
           break;
         }
 
-        const playingArtwork = castInfo.items[castInfo.index ?? 0];
+        const playingArtwork = castInfo.playlist.items[castInfo.index ?? 0];
         if (playingArtwork.title) {
           playingArtworkTitle = playingArtwork.title;
           break;

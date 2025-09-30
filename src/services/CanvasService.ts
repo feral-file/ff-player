@@ -13,8 +13,6 @@ import {
   ConnectReplyV2,
   ConnectRequestV2,
   DisconnectReplyV2,
-  DisplaySettings,
-  ViewMode,
   UpdateArtFramingRequest,
   UpdateCursorPositionsRequest,
   UpdateDisplaySettingsRequest,
@@ -41,6 +39,7 @@ import {
 } from '@/models/dp1.model';
 import DP1ScheduleService from './DP1ScheduleService';
 import { calculateStartTime } from '@/utils/playlist';
+import { deepEqual } from '@/utils/helper';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -185,7 +184,6 @@ class CanvasService {
       if (
         [
           CastCommand.castDaily,
-          CastCommand.castListArtwork,
           CastCommand.castExhibition,
           CastCommand.displayPlaylist,
         ].includes(command)
@@ -236,20 +234,16 @@ class CanvasService {
       return { ok: false, error: ErrorType.Overheating };
     }
 
-    const deviceSettings = DeviceManager.getDeviceDisplaySettings();
     return {
       ok: true,
+      castCommand: DeviceManager.getCastInfo()?.castCommand,
+
+      playlist: this.castInfo?.playlist,
+      playlistUrl: this.castInfo?.playlistUrl,
+
+      items: this.castInfo?.playlist?.items,
       index: this.castInfo?.index,
       isPaused: this.castInfo?.isPaused,
-
-      displayKey: this.castInfo?.displayKey,
-
-      deviceSettings: {
-        scaling: deviceSettings?.scaling ?? DisplaySettings.defaultScaling,
-        orientation: DeviceManager.getViewMode() ?? ViewMode.landscape,
-      },
-
-      items: this.castInfo?.items,
     };
   }
 
@@ -259,7 +253,6 @@ class CanvasService {
     this.setCastInfo({
       castCommand: CastCommand.castDaily,
       deviceInfo: this.castInfo?.deviceInfo,
-      displayKey: 'daily_work',
     });
     return { ok: true };
   }
@@ -294,7 +287,7 @@ class CanvasService {
     }
 
     const startTime = calculateStartTime(
-      this.castInfo?.items ?? [],
+      this.castInfo?.playlist?.items ?? [],
       request.index
     );
 
@@ -352,7 +345,8 @@ class CanvasService {
   ): DisplayPlaylistReply {
     const dp1Intent = request.intent;
     const dp1CallData = request.dp1_call;
-    const action = dp1Intent.action;
+    const playlistUrl = request.playlistUrl;
+    const action = dp1Intent?.action;
 
     console.log('[CanvasService] display playlist: ', action);
     Sentry.addBreadcrumb({
@@ -361,16 +355,24 @@ class CanvasService {
       message: 'Received DP1 command',
     });
 
+    if (request.refresh) {
+      this.refreshPlaylist(dp1CallData);
+      return { ok: true };
+    }
+
     let reply: Reply;
     switch (action) {
       case DP1Action.NowDisplay: {
-        return this.nowDisplayPlaylist({ dp1CallData });
+        return this.nowDisplayPlaylist({
+          dp1CallData,
+          playlistUrl,
+        });
       }
 
       case DP1Action.SchedulePlay: {
         return this.schedulePlaylist({
           dp1CallData,
-          scheduleTime: dp1Intent.schedule_time,
+          scheduleTime: dp1Intent?.schedule_time,
         });
       }
 
@@ -390,19 +392,17 @@ class CanvasService {
   }
 
   private nowDisplayPlaylist(request: NowDisplayRequest): NowDisplayReply {
-    if (!request.dp1CallData.items.length) {
+    if (!request.dp1CallData.items?.length) {
       console.error('[CanvasService] No items to display');
       return { ok: false };
     }
 
     console.log('[CanvasService] Display playlist: ', JSON.stringify(request));
     this.setCastInfo({
-      castCommand: CastCommand.castListArtwork,
+      castCommand: CastCommand.displayPlaylist,
       deviceInfo: this.castInfo?.deviceInfo,
-      items: request.dp1CallData.items.map(item => ({
-        ...item,
-        duration: item.duration ?? 0,
-      })),
+      playlist: request.dp1CallData,
+      playlistUrl: request.playlistUrl,
       startTime: Date.now(),
       index: 0,
       isPaused: false,
@@ -414,7 +414,7 @@ class CanvasService {
   private schedulePlaylist(
     request: SchedulePlaylistRequest
   ): SchedulePlaylistReply {
-    if (!request.dp1CallData.items.length) {
+    if (!request.dp1CallData.items?.length) {
       console.error('[CanvasService] No items to schedule');
       return { ok: false };
     }
@@ -434,6 +434,24 @@ class CanvasService {
     );
 
     return { ok: true };
+  }
+
+  private refreshPlaylist(newPlaylist: DP1Call) {
+    const currentPlaylist = this.castInfo?.playlist;
+    if (currentPlaylist && deepEqual(currentPlaylist, newPlaylist)) {
+      console.log(
+        '[CanvasService] New playlist is the same as the current playlist'
+      );
+      // return;
+    }
+
+    console.log('newPlaylist', newPlaylist.items?.length);
+
+    this.setCastInfo({
+      ...(this.castInfo ?? {}),
+      playlist: newPlaylist,
+      castCommand: CastCommand.refreshPlaylist,
+    });
   }
 }
 

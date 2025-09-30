@@ -6,11 +6,11 @@ export interface Daily {
   blockchain: string;
   contractAddress: string;
   displayTime: string;
-  note: string;
   tokenID: string;
   tokenIDs: string[];
   tokenName?: string;
   previewURL?: string;
   token?: IndexerToken;
   artwork?: Artwork;
+  indexerTokenID?: string;
 }

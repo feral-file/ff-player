@@ -39,10 +39,13 @@ export function formatArtworkIndexID(artwork: Artwork, exhibition: Exhibition) {
     return tokenID;
   }
 
-  if (exhibition.mintBlockchain === Blockchain.Bitmark && artwork.swap) {
-    contractAddress = artwork.swap.contractAddress;
-    blockchain = artwork.swap.blockchainType;
-    tokenID = artwork.swap.token;
+  if (
+    exhibition.mintBlockchain === Blockchain.Bitmark &&
+    artwork.successfulSwap
+  ) {
+    contractAddress = artwork.successfulSwap.contractAddress;
+    blockchain = artwork.successfulSwap.blockchainType;
+    tokenID = artwork.successfulSwap.token;
   } else {
     contractAddress = exhibition.contracts?.[0]?.address ?? '';
     blockchain = exhibition.mintBlockchain ?? '';

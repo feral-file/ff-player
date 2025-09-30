@@ -3,11 +3,14 @@
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { useAppContext } from '@/context/AppContext';
 import { CastingArtworkType } from '@/models/metric.model';
-import { getIndex } from '@/utils/playlist';
+import { getIndex, recalculateStartTimeForIndex } from '@/utils/playlist';
 import { CastCommand } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import { defaultDP1DisplayPreference, DP1Item } from '@/models/dp1.model';
-import { LEE_MULLICAN_EXHIBITION_CONTRACT } from '@/constants';
+import {
+  LEE_MULLICAN_EXHIBITION_CONTRACT,
+  NO_DURATION_VALUE,
+} from '@/constants';
 import { convertToTokenID } from '@/utils/indexer';
 import { DP1Service } from '@/services/DP1Service';
 import { canvasService } from '@/services/CanvasService';
@@ -30,6 +33,8 @@ export default function PlaylistClient() {
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
   const currentItemRef = useRef<DP1Item>();
+  // A queued playlist to be swapped in when the current item's timer ends
+  const queuedPlaylistRef = useRef<DP1Item[] | null>(null);
 
   useEffect(() => {
     return () => {
@@ -78,19 +83,19 @@ export default function PlaylistClient() {
     );
 
     if (!castInfo?.isPaused) {
-      startInterval(currentItem.duration ?? 0);
+      startInterval(currentItem.duration);
     }
   }, [currentIndex, playlist]);
 
   const fetchItemPreviewURL = async (item: DP1Item) => {
-    const itemPreview = await DP1Service.getItemPreviewURL(item);
-    setCastPreviewURL(itemPreview);
+    const itemInfo = await DP1Service.getItemInfo(item);
+    setCastPreviewURL(itemInfo?.preview ?? null);
   };
 
   const handleUpdateDuration = (dp1Items: DP1Item[]) => {
     const durationMap = new Map<string, number>();
     dp1Items.forEach((a: DP1Item) => {
-      durationMap.set(a.id, a.duration ?? 0);
+      durationMap.set(a.id, a.duration);
     });
 
     const updatedPlaylist = playlist.map((item: DP1Item) => {
@@ -104,7 +109,7 @@ export default function PlaylistClient() {
     const currentPlaylistItem = playlist[currentIndex];
     const currentArtwork = dp1Items.find(a => a.id === currentPlaylistItem.id);
     if (currentArtwork) {
-      startInterval(currentArtwork.duration ?? 0);
+      startInterval(currentArtwork.duration);
     }
 
     setStartTime(startTime);
@@ -123,8 +128,12 @@ export default function PlaylistClient() {
     const startTime = castInfo?.startTime ?? Date.now();
     setStartTime(startTime);
     let duration = remainTimeRef.current;
-    if (duration === 0 && castInfo?.artworks?.length && currentIndex >= 0) {
-      duration = castInfo.artworks[currentIndex].duration;
+    if (
+      duration === 0 &&
+      castInfo?.playlist?.items?.length &&
+      currentIndex >= 0
+    ) {
+      duration = castInfo.playlist.items[currentIndex].duration;
     }
 
     startInterval(duration);
@@ -158,19 +167,72 @@ export default function PlaylistClient() {
     setCurrentIndex(castInfo?.index ?? 0);
   };
 
+  const handleRefreshPlaylist = () => {
+    // Queue the refreshed playlist to swap at the end of the current item's duration
+    const newItems = castInfo?.playlist?.items ?? [];
+    if (!newItems.length) {
+      return;
+    }
+
+    queuedPlaylistRef.current = newItems.map(item => ({
+      ...item,
+      duration: item.duration,
+    }));
+  };
+
   const startInterval = (duration: number) => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
 
-    if (duration === 0) {
+    if (duration === 0 || duration === NO_DURATION_VALUE) {
       return;
     }
 
     intervalRef.current = setInterval(() => {
+      const currentCastInfo = canvasService.getCastInfo();
+      // If a refreshed playlist has been queued, swap it in exactly at the boundary
+      if (queuedPlaylistRef.current?.length) {
+        const newPlaylist = queuedPlaylistRef.current;
+        queuedPlaylistRef.current = null;
+
+        // Determine next index in the new playlist
+        const currentId = currentItemRef.current?.id;
+        let nextIndex = 0;
+        if (currentId) {
+          const foundIdx = newPlaylist.findIndex(i => i.id === currentId);
+          if (foundIdx >= 0) {
+            nextIndex = (foundIdx + 1) % newPlaylist.length;
+          } else {
+            nextIndex =
+              currentIndex >= 0 ? currentIndex % newPlaylist.length : 0;
+          }
+        }
+
+        const newStartTime = recalculateStartTimeForIndex(
+          newPlaylist,
+          nextIndex
+        );
+        console.log('Use queued playlist');
+        console.log('Current index: ', currentIndex);
+        console.log('Next index: ', nextIndex);
+
+        indexRef.current = -1;
+        setCurrentIndex(-1);
+        setPlaylist(newPlaylist);
+        setStartTime(newStartTime);
+        canvasService.setCastInfo({
+          ...currentCastInfo,
+          castCommand: CastCommand.updateIndex,
+          index: nextIndex,
+        });
+
+        return;
+      }
+
       const index = getIndex(playlist, startTime);
       canvasService.setCastInfo({
-        ...castInfo,
+        ...currentCastInfo,
         castCommand: CastCommand.updateIndex,
         index,
       });
@@ -189,15 +251,19 @@ export default function PlaylistClient() {
     if (castInfo) {
       const handleCastCommand = () => {
         switch (castInfo.castCommand) {
-          case CastCommand.castListArtwork: {
+          case CastCommand.refreshPlaylist: {
+            handleRefreshPlaylist();
+            break;
+          }
+          case CastCommand.displayPlaylist: {
             indexRef.current = -1;
             setCurrentIndex(-1);
 
-            if (castInfo.items?.length) {
-              setPlaylist(castInfo.items);
+            if (castInfo.playlist?.items?.length) {
+              setPlaylist(castInfo.playlist.items);
               if (castInfo.startTime) {
                 setStartTime(castInfo.startTime);
-                const i = getIndex(castInfo.items, castInfo.startTime);
+                const i = getIndex(castInfo.playlist.items, castInfo.startTime);
                 setCurrentIndex(i);
               }
 
@@ -221,8 +287,8 @@ export default function PlaylistClient() {
             break;
           }
           case CastCommand.updateDuration: {
-            if (castInfo.items) {
-              handleUpdateDuration(castInfo.items);
+            if (castInfo.playlist?.items) {
+              handleUpdateDuration(castInfo.playlist.items);
             }
             break;
           }

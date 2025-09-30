@@ -8,7 +8,12 @@ import {
   FileUseVideo,
   TokenMetadata,
 } from '@/models';
-import { Scaling } from '@/models/dp1.model';
+import {
+  DP1Chain,
+  DP1License,
+  DP1ProvenanceType,
+  Scaling,
+} from '@/models/dp1.model';
 import { infuraAxiosInstance } from '@/services/axiosService';
 import Web3 from 'web3';
 import { provider } from 'web3-core';
@@ -169,4 +174,73 @@ export function getDP1Margin(margin: number | string): string {
   }
 
   return margin;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function deepEqual(a: any, b: any): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b) return false;
+
+  // Array compare (thứ tự quan trọng)
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!deepEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+
+  // Object compare
+  if (a && b && typeof a === 'object') {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    const keysA = Object.keys(a);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    for (const key of keysA) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      if (!deepEqual(a[key], b[key])) return false;
+    }
+    return true;
+  }
+
+  return false;
+}
+
+export function buildPlaylistItem(
+  blockChain: DP1Chain,
+  contractAddress: string,
+  tokenId: string,
+  duration: number
+) {
+  return {
+    id: tokenId,
+    source: '',
+    license: DP1License.Open,
+    duration: duration,
+    provenance: {
+      type: DP1ProvenanceType.OnChain,
+      standard: 'other',
+      contract: {
+        chain: blockChain,
+        address: contractAddress,
+        tokenId: tokenId,
+      },
+    },
+  };
+}
+
+export function normalizeProvenanceChain(blockchain: string): DP1Chain {
+  const b = blockchain.toLowerCase().trim();
+  switch (b) {
+    case 'ethereum':
+    case 'evm':
+      return DP1Chain.EVM;
+    case 'tezos':
+      return DP1Chain.Tezos;
+    case 'bitmark':
+      return DP1Chain.Bitmark;
+    default:
+      return DP1Chain.Other;
+  }
 }

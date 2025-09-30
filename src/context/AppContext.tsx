@@ -99,7 +99,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
   const initCastInfo = () => {
     console.log('[AppContext] initCastInfo');
-    let castInfo = getCastInfoFromLocalStorage();
+    let castInfo = DeviceManager.getCastInfo();
 
     if (castInfo) {
       const path = window.location.pathname;
@@ -111,16 +111,15 @@ export const AppProvider = ({ children }: AppContextProps) => {
         castInfo = {
           castCommand: CastCommand.castDaily,
           deviceInfo: castInfo.deviceInfo,
-          displayKey: 'daily_work',
         };
-      } else if (castInfo.items && castInfo.index !== undefined) {
+      } else if (castInfo.playlist?.items && castInfo.index !== undefined) {
         // Recalculate startTime based on current index to ensure correct display
         console.log(
           '[AppContext] Recalculating startTime for index:',
           castInfo.index
         );
         const newStartTime = recalculateStartTimeForIndex(
-          castInfo.items,
+          castInfo.playlist.items,
           castInfo.index
         );
         castInfo = {
@@ -139,21 +138,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
       console.log('CastInfo is null, send cast daily message');
       // TODO: Send cast info to app
     }
-  };
-
-  const getCastInfoFromLocalStorage = () => {
-    const castInfoString = localStorage.getItem(LocalStorageItem.castInfo);
-    console.log('LocalStorage castInfo', castInfoString);
-    if (castInfoString != null) {
-      try {
-        const castInfo = JSON.parse(castInfoString) as CastInfo;
-        return castInfo;
-      } catch (error) {
-        console.log('Error init cast info', error);
-      }
-    }
-
-    return null;
   };
 
   useEffect(() => {
@@ -196,7 +180,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
     }
 
     if (isOnline) {
-      const castInfo = getCastInfoFromLocalStorage();
+      const castInfo = DeviceManager.getCastInfo();
       if (castInfo) {
         // TODO: Send cast info to app
       }

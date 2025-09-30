@@ -22,7 +22,7 @@ class DP1ScheduleService {
   public storeScheduledTask(dp1CallData: DP1Call, scheduleTime: string): void {
     try {
       const newTask: ScheduledDP1Task = {
-        id: dp1CallData.id,
+        id: dp1CallData.id ?? '',
         scheduleTime,
         dp1CallData,
       };

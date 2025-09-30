@@ -1,8 +1,8 @@
 import { CursorPosition } from '@/services/custom-hooks/useCursorPositions';
-import { ViewMode } from './common.model';
 import { TokenDisplaySettings } from './display_settings.model';
 import { ErrorType } from './error.model';
-import { DP1Call, DP1Intent, DP1Item, Scaling } from './dp1.model';
+import { DP1Call, DP1Intent, DP1Item } from './dp1.model';
+import { CastCommand } from '.';
 
 export interface DeviceInfo {
   device_name: string;
@@ -48,6 +48,7 @@ export type DisconnectReplyV2 = Reply;
 
 export interface NowDisplayRequest {
   dp1CallData: DP1Call;
+  playlistUrl?: string;
 }
 export type NowDisplayReply = Reply;
 
@@ -59,21 +60,21 @@ export type SchedulePlaylistReply = Reply;
 
 export type CheckDeviceStatusRequest = Request;
 export interface CheckDeviceStatusReply extends Reply {
+  castCommand?: CastCommand;
+
+  playlist?: DP1Call;
+  playlistUrl?: string;
+
   items?: DP1Item[];
   index?: number;
   isPaused?: boolean;
-
-  displayKey?: string;
-
-  deviceSettings?: {
-    scaling: Scaling;
-    orientation: ViewMode;
-  };
 }
 
 export interface DisplayPlaylistRequest {
-  intent: DP1Intent;
+  intent?: DP1Intent;
   dp1_call: DP1Call;
+  playlistUrl?: string;
+  refresh?: boolean;
 }
 export type DisplayPlaylistReply = Reply;
 
@@ -83,12 +84,6 @@ export interface CastExhibitionRequest {
   catalog?: ExhibitionCatalog;
 }
 export type CastExhibitionReply = Reply;
-
-export interface CastListArtworkRequest {
-  artworks: PlayArtwork[];
-  startTime?: number;
-}
-export type CastListArtworkReply = Reply;
 
 export type NextArtworkRequest = Request;
 export type NextArtworkReply = Reply;

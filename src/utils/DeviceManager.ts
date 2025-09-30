@@ -4,7 +4,7 @@ import * as Sentry from '@sentry/nextjs';
 import { DeviceNamePrefix, LocalStorageItem, PLATFORM } from '@/constants';
 import { BrowserInfo, detect } from 'detect-browser';
 import { DisplaySettings } from '@/models/display_settings.model';
-import { ViewMode } from '@/models';
+import { CastInfo, ViewMode } from '@/models';
 
 class DeviceManager {
   static instance = new DeviceManager();
@@ -109,6 +109,21 @@ class DeviceManager {
 
   public setViewMode(viewMode: ViewMode): void {
     this.setToLocalStorage(LocalStorageItem.viewMode, viewMode);
+  }
+
+  public getCastInfo(): CastInfo | null {
+    const castInfoString = localStorage.getItem(LocalStorageItem.castInfo);
+    console.log('LocalStorage castInfo', castInfoString);
+    if (castInfoString != null) {
+      try {
+        const castInfo = JSON.parse(castInfoString) as CastInfo;
+        return castInfo;
+      } catch (error) {
+        console.log('Error init cast info', error);
+      }
+    }
+
+    return null;
   }
 }
 

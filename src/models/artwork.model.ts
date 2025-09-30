@@ -23,7 +23,6 @@ export interface Artwork {
   series?: Series;
   metadata?: ArtworkMetadata;
   artistAlias?: string;
-  swap?: Swap;
   successfulSwap?: Swap;
 }
 
