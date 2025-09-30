@@ -29,7 +29,7 @@ import {
   CursorPositionListener,
   CursorPosition,
 } from './custom-hooks/useCursorPositions';
-import { LocalStorageItem } from '@/constants';
+import { LocalStorageItem, NO_DURATION_VALUE } from '@/constants';
 import { ErrorType } from '@/models/error.model';
 import {
   DP1Action,
@@ -401,7 +401,13 @@ class CanvasService {
     this.setCastInfo({
       castCommand: CastCommand.displayPlaylist,
       deviceInfo: this.castInfo?.deviceInfo,
-      playlist: request.dp1CallData,
+      playlist: {
+        ...request.dp1CallData,
+        items: request.dp1CallData.items.map(item => ({
+          ...item,
+          duration: item.duration ?? NO_DURATION_VALUE,
+        })),
+      },
       playlistUrl: request.playlistUrl,
       startTime: Date.now(),
       index: 0,
