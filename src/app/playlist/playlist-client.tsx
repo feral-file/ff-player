@@ -83,7 +83,7 @@ export default function PlaylistClient() {
     );
 
     if (!castInfo?.isPaused) {
-      startInterval(currentItem.duration);
+      startInterval(currentItem.duration ?? 0);
     }
   }, [currentIndex, playlist]);
 
@@ -95,7 +95,7 @@ export default function PlaylistClient() {
   const handleUpdateDuration = (dp1Items: DP1Item[]) => {
     const durationMap = new Map<string, number>();
     dp1Items.forEach((a: DP1Item) => {
-      durationMap.set(a.id, a.duration);
+      durationMap.set(a.id, a.duration ?? 0);
     });
 
     const updatedPlaylist = playlist.map((item: DP1Item) => {
@@ -109,7 +109,7 @@ export default function PlaylistClient() {
     const currentPlaylistItem = playlist[currentIndex];
     const currentArtwork = dp1Items.find(a => a.id === currentPlaylistItem.id);
     if (currentArtwork) {
-      startInterval(currentArtwork.duration);
+      startInterval(currentArtwork.duration ?? 0);
     }
 
     setStartTime(startTime);
@@ -133,7 +133,7 @@ export default function PlaylistClient() {
       castInfo?.playlist?.items?.length &&
       currentIndex >= 0
     ) {
-      duration = castInfo.playlist.items[currentIndex].duration;
+      duration = castInfo.playlist.items[currentIndex].duration ?? 0;
     }
 
     startInterval(duration);
@@ -176,7 +176,7 @@ export default function PlaylistClient() {
 
     queuedPlaylistRef.current = newItems.map(item => ({
       ...item,
-      duration: item.duration,
+      duration: item.duration ?? 0,
     }));
   };
 

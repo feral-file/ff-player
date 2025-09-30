@@ -37,7 +37,7 @@ export interface DP1Item {
   title?: string;
   slug?: string;
   source: string;
-  duration: number;
+  duration?: number;
   license: DP1License;
   ref?: string;
   override?: {
