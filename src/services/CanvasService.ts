@@ -442,7 +442,7 @@ class CanvasService {
       console.log(
         '[CanvasService] New playlist is the same as the current playlist'
       );
-      // return;
+      return;
     }
 
     console.log('newPlaylist', newPlaylist.items?.length);

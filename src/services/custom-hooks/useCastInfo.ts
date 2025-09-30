@@ -20,6 +20,7 @@ const useCastInfo = () => {
         CastCommand.previousArtwork,
         CastCommand.updateDuration,
         CastCommand.updateIndex,
+        CastCommand.refreshPlaylist,
       ].includes(castInfo.castCommand)
     );
   };
