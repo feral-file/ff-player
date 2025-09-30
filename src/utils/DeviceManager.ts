@@ -113,7 +113,6 @@ class DeviceManager {
 
   public getCastInfo(): CastInfo | null {
     const castInfoString = localStorage.getItem(LocalStorageItem.castInfo);
-    console.log('LocalStorage castInfo', castInfoString);
     if (castInfoString != null) {
       try {
         const castInfo = JSON.parse(castInfoString) as CastInfo;

@@ -247,7 +247,7 @@ export default function PlaylistClient() {
   };
 
   useEffect(() => {
-    console.log('[PlaylistClient] castInfo', castInfo);
+    console.log('[PlaylistClient] castInfo', castInfo?.castCommand);
     if (castInfo) {
       const handleCastCommand = () => {
         switch (castInfo.castCommand) {

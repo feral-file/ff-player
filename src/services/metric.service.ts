@@ -61,7 +61,7 @@ export function appendMetricEventToLocalStorage(
   event: MetricEvent[],
   uploadAfterAppend = false
 ) {
-  console.log('[METRIC]: append event to localStorage', JSON.stringify(event));
+  console.log('[METRIC]: append event to localStorage, length: ', event.length);
   const metricEvents = localStorage.getItem(LocalStorageItem.metricEvents);
   let events: MetricEvent[] = [];
   if (metricEvents) {
