@@ -134,7 +134,7 @@ class CanvasService {
   }
 
   public setCastInfo(castInfo: CastInfo | null, notify = true) {
-    console.log('[CanvasService] Setting castInfo:', JSON.stringify(castInfo));
+    console.log('[CanvasService] Setting castInfo:', notify);
     this.castInfo = castInfo;
     if (notify) {
       this.onCastInfoChange?.(this.castInfo);
@@ -168,18 +168,12 @@ class CanvasService {
     });
 
     const requestJson = messageData.request;
-    console.log('[CanvasService] Request data:', JSON.stringify(requestJson));
     const reply = this.commandHandler(command, requestJson);
-    console.log('[CanvasService] Response message:', JSON.stringify(reply));
     return reply;
   }
 
   private commandHandler(command: CastCommand, requestJson: unknown): Reply {
-    console.log(
-      '[CAST] commandHandler:',
-      JSON.stringify(command),
-      JSON.stringify(requestJson)
-    );
+    console.log('[CAST] commandHandler:', JSON.stringify(command));
     try {
       if (
         [
@@ -199,7 +193,7 @@ class CanvasService {
         case CastCommand.checkStatus:
           return this.getStatus();
         case CastCommand.castDaily:
-          return this.castDaily(requestJson as object);
+          return this.castDaily();
         case CastCommand.updateArtFraming:
           return this.updateArtFraming(requestJson as UpdateArtFramingRequest);
         case CastCommand.updateDisplaySettings:
@@ -247,8 +241,8 @@ class CanvasService {
     };
   }
 
-  public castDaily(request: object): Reply {
-    console.log('[CanvasService] Cast daily: ', request);
+  public castDaily(): Reply {
+    console.log('[CanvasService] Cast daily: ');
 
     this.setCastInfo({
       castCommand: CastCommand.castDaily,
@@ -258,7 +252,7 @@ class CanvasService {
   }
 
   private connect(request: ConnectRequestV2): ConnectReplyV2 {
-    console.log('[CanvasService] Connect request:', JSON.stringify(request));
+    console.log('[CanvasService] Connect request:');
 
     this.setCastInfo({
       ...(this.castInfo ?? {}),
@@ -397,7 +391,7 @@ class CanvasService {
       return { ok: false };
     }
 
-    console.log('[CanvasService] Display playlist: ', JSON.stringify(request));
+    console.log('[CanvasService] Display playlist');
     this.setCastInfo({
       castCommand: CastCommand.displayPlaylist,
       deviceInfo: this.castInfo?.deviceInfo,
@@ -430,10 +424,7 @@ class CanvasService {
       return { ok: false };
     }
 
-    console.log(
-      '[CanvasService] Schedule playlist: ',
-      JSON.stringify({ request })
-    );
+    console.log('[CanvasService] Schedule playlist');
     DP1ScheduleService.storeScheduledTask(
       request.dp1CallData,
       request.scheduleTime.replace('Z', '')

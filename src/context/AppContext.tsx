@@ -134,7 +134,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
       canvasService.setCastInfo(castInfo, false);
       // TODO: Send cast info to app
     } else {
-      canvasService.castDaily({});
+      canvasService.castDaily();
       console.log('CastInfo is null, send cast daily message');
       // TODO: Send cast info to app
     }

@@ -15,7 +15,6 @@ export const DP1Service = {
       );
 
       const token = await IndexerService.queryIndexerToken(tokenId);
-      console.log('[DP1Service] token', token);
       if (token) {
         const preview = await IndexerService.getIndexerTokenPreview(token);
         return {
