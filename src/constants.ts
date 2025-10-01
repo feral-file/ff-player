@@ -19,7 +19,6 @@ export enum DeviceNamePrefix {
 
 export const AppSettings = {
   VERSION_CHECK_INTERVAL_DURATION: 1000 * 60 * 60, // 1 minutes
-  DEFAULT_NEW_DAILY_HOUR: 6, // 6:00 AM
   JG_043_EXHIBITION_ID: '46a0f68b-a657-4364-92a0-32a88b65fbd9',
   EF_046_EXHIBITION_ID: '796f9fd9-d405-451c-a584-d9f21222c6dd',
   STANDARD_HEIGHT: 1080,
@@ -53,19 +52,3 @@ export const NETWORK_ERROR_RETRY_DELAY = 1000;
 
 export const VENDOR = 'ffPortal';
 export const PLATFORM = 'ffPortal';
-
-export const DEFAULT_DAILY = {
-  id: 'default_daily',
-  blockchain: 'ethereum',
-  contractAddress: '0x1D9787369B1DCf709f92Da1d8743c2A4b6028a83',
-  displayTime: new Date().toString(),
-  tokenName: '#1',
-  tokenID: '339348595130070749814751437599411258966098496',
-  tokenIDs: ['339348595130070749814751437599411258966098496'],
-  previewURL:
-    'https://cdn.feralfileassets.com/previews/cccecf88-6d8f-485f-9358-0def21bc4ad7/1704989387/_unique-previews/0',
-  indexerTokenID:
-    'eth-0x1D9787369B1DCf709f92Da1d8743c2A4b6028a83-339348595130070749814751437599411258966098496',
-};
-
-export const NO_DURATION_VALUE = 999999999;

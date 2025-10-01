@@ -61,7 +61,7 @@ const ArtworkPlayer = ({
   displayPreferences: DP1DisplayPreference;
 }) => {
   const FADE_IN_BUFFER_MS = 50;
-  const FADE_IN_OUT_DAILY_MS = 350;
+  const FADE_IN_OUT_DURATION_MS = 350;
   const { context } = useAppContext();
   const [opacity, setOpacity] = useState(1);
   const [displayPreviewURL, setDisplayPreviewURL] = useState<string>('');
@@ -240,7 +240,7 @@ const ArtworkPlayer = ({
 
       fadeInTimeoutRef.current = setTimeout(() => {
         setDisplayPreviewURL(previewURL);
-      }, FADE_IN_OUT_DAILY_MS + FADE_IN_BUFFER_MS);
+      }, FADE_IN_OUT_DURATION_MS + FADE_IN_BUFFER_MS);
     }
 
     return () => {
@@ -547,7 +547,7 @@ const ArtworkPlayer = ({
           backgroundColor: displaySettings?.background ?? '#000000',
           justifyContent: 'center',
           position: 'relative',
-          transition: `opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.2s ease`,
+          transition: `opacity ${FADE_IN_OUT_DURATION_MS.toString()}ms, padding 0.2s ease`,
           opacity: opacity,
           padding: displaySettings?.margin
             ? getDP1Margin(displaySettings.margin)

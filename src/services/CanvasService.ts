@@ -29,7 +29,7 @@ import {
   CursorPositionListener,
   CursorPosition,
 } from './custom-hooks/useCursorPositions';
-import { LocalStorageItem, NO_DURATION_VALUE } from '@/constants';
+import { LocalStorageItem } from '@/constants';
 import { ErrorType } from '@/models/error.model';
 import {
   DP1Action,
@@ -176,11 +176,9 @@ class CanvasService {
     console.log('[CAST] commandHandler:', JSON.stringify(command));
     try {
       if (
-        [
-          CastCommand.castDaily,
-          CastCommand.castExhibition,
-          CastCommand.displayPlaylist,
-        ].includes(command)
+        [CastCommand.castExhibition, CastCommand.displayPlaylist].includes(
+          command
+        )
       ) {
         localStorage.removeItem(LocalStorageItem.criticalTemp);
       }
@@ -192,8 +190,6 @@ class CanvasService {
           return this.disconnect();
         case CastCommand.checkStatus:
           return this.getStatus();
-        case CastCommand.castDaily:
-          return this.castDaily();
         case CastCommand.updateArtFraming:
           return this.updateArtFraming(requestJson as UpdateArtFramingRequest);
         case CastCommand.updateDisplaySettings:
@@ -239,16 +235,6 @@ class CanvasService {
       index: this.castInfo?.index,
       isPaused: this.castInfo?.isPaused,
     };
-  }
-
-  public castDaily(): Reply {
-    console.log('[CanvasService] Cast daily: ');
-
-    this.setCastInfo({
-      castCommand: CastCommand.castDaily,
-      deviceInfo: this.castInfo?.deviceInfo,
-    });
-    return { ok: true };
   }
 
   private connect(request: ConnectRequestV2): ConnectReplyV2 {
@@ -399,7 +385,7 @@ class CanvasService {
         ...request.dp1CallData,
         items: request.dp1CallData.items.map(item => ({
           ...item,
-          duration: item.duration ?? NO_DURATION_VALUE,
+          duration: item.duration ?? 0,
         })),
       },
       playlistUrl: request.playlistUrl,

@@ -42,18 +42,6 @@ const ErrorPage = () => {
         playingArtworkTitle = token?.asset?.metadata.project.latest.title;
         break;
       }
-
-      case CastCommand.castDaily: {
-        const currentDailyTokenId = castInfo.dailyTokenID;
-        if (!currentDailyTokenId) {
-          break;
-        }
-
-        const token =
-          await IndexerService.queryIndexerToken(currentDailyTokenId);
-        playingArtworkTitle = token?.asset?.metadata.project.latest.title;
-        break;
-      }
     }
 
     return playingArtworkTitle;

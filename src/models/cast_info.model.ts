@@ -13,7 +13,6 @@ export enum CastCommand {
   updateIndex = 'updateIndex',
   updateDuration = 'updateDuration',
   castExhibition = 'castExhibition',
-  castDaily = 'castDaily',
   updateArtFraming = 'updateArtFraming',
   updateDisplaySettings = 'updateDisplaySettings',
   cursorUpdate = 'cursorUpdate',
@@ -38,9 +37,6 @@ export interface CastInfo {
   elapsedTime?: number;
   remainTime?: number;
   playlistId?: string;
-
-  // Cast daily
-  dailyTokenID?: string;
 
   // DP1
   playlist?: DP1Call;

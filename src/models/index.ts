@@ -4,7 +4,6 @@ export * from './post.model';
 export * from './series.model';
 export * from './artwork.model';
 export * from './token.model';
-export * from './daily.model';
 export * from './websocket.model';
 export * from './cast_info.model';
 export * from './cast_request_reply.model';
