@@ -1,4 +1,3 @@
-export * from './user.model';
 export * from './artwork.model';
 export * from './token.model';
 export * from './websocket.model';

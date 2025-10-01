@@ -8,8 +8,8 @@ import { CastCommand } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import { defaultDP1DisplayPreference, DP1Item } from '@/models/dp1.model';
 import { LEE_MULLICAN_EXHIBITION_CONTRACT } from '@/constants';
-import { convertToTokenID } from '@/utils/indexer';
 import { canvasService } from '@/services/CanvasService';
+import { convertToIndexerTokenID } from '@/utils/helper';
 
 export default function PlaylistClient() {
   const { context } = useAppContext();
@@ -76,7 +76,7 @@ export default function PlaylistClient() {
   // FIXME: It's old metric event. Review and remove if not needed.
   const getArtworkID = (item: DP1Item) => {
     if (item.provenance?.contract) {
-      const tokenID = convertToTokenID(
+      const tokenID = convertToIndexerTokenID(
         item.provenance.contract.chain,
         item.provenance.contract.address,
         item.provenance.contract.tokenId

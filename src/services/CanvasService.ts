@@ -186,6 +186,8 @@ class CanvasService {
           return this.disconnect();
         case CastCommand.checkStatus:
           return this.getStatus();
+        case CastCommand.displayPlaylist:
+          return this.displayPlaylist(requestJson as DisplayPlaylistRequest);
         case CastCommand.updateArtFraming:
           return this.updateArtFraming(requestJson as UpdateArtFramingRequest);
         case CastCommand.updateDisplaySettings:
@@ -196,8 +198,6 @@ class CanvasService {
           return this.updateCursorPositions(
             requestJson as UpdateCursorPositionsRequest
           );
-        case CastCommand.displayPlaylist:
-          return this.displayPlaylist(requestJson as DisplayPlaylistRequest);
         case CastCommand.moveToArtwork:
           return this.moveToArtwork(requestJson as MoveToItemRequest);
         default:
@@ -235,6 +235,9 @@ class CanvasService {
 
   private connect(request: ConnectRequestV2): ConnectReplyV2 {
     console.log('[CanvasService] Connect request:');
+
+    DeviceManager.setDeviceId(request.clientDevice.device_id ?? '');
+    DeviceManager.setName(request.clientDevice.device_name ?? '');
 
     this.setCastInfo({
       ...(this.castInfo ?? {}),

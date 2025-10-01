@@ -6,10 +6,7 @@ import {
   WatchdogEvent,
 } from '@/models/custom_event';
 import { handleOverheatingError } from '@/utils/ErrorNavigation';
-import DeviceManager from '@/utils/DeviceManager';
-import { DeviceNamePrefix } from '@/constants';
 
-const sendDeviceInfoCommand = 'sendDeviceInfo';
 const pingCommand = 'ping';
 
 export class CDPRequestHandler {
@@ -106,27 +103,6 @@ export class CDPRequestHandler {
     let reply: WebSocketMessage | null = null;
     switch (command) {
       case pingCommand: {
-        reply = {
-          messageID,
-          message: { ok: true },
-        };
-        break;
-      }
-
-      case sendDeviceInfoCommand: {
-        const request = wsMessage.request as Record<string, unknown> | null;
-        const deviceId = request?.deviceId;
-        if (deviceId) {
-          DeviceManager.setDeviceId(deviceId as string);
-        }
-
-        const version = request?.version;
-        if (version) {
-          DeviceManager.setName(
-            DeviceNamePrefix.ffDevice + (version as string)
-          );
-        }
-
         reply = {
           messageID,
           message: { ok: true },

@@ -1,4 +1,4 @@
-import { LocalStorageItem, PLATFORM, VENDOR } from '@/constants';
+import { LocalStorageItem } from '@/constants';
 import { MetricEvent } from '@/models/metric.model';
 import DeviceManager from '@/utils/DeviceManager';
 import axios, { AxiosInstance } from 'axios';
@@ -24,22 +24,6 @@ export async function uploadNewMetric(events: MetricEvent[]): Promise<void> {
     }
 
     accountsRequester.defaults.headers['x-device-id'] = deviceID;
-  }
-
-  // Add x-device-vendor to headers if not exists
-  if (
-    !accountsRequester.defaults.headers['x-device-vendor'] ||
-    !accountsRequester.defaults.headers['x-device-platform']
-  ) {
-    const { vendor, platform } = getDeviceInfoBaseOnPlatform();
-    accountsRequester.defaults.headers['x-device-vendor'] = vendor;
-    accountsRequester.defaults.headers['x-device-platform'] = platform;
-  }
-
-  // Add x-device-model to headers if not exists
-  if (!accountsRequester.defaults.headers['x-device-model']) {
-    const model = DeviceManager.getDeviceModel();
-    accountsRequester.defaults.headers['x-device-model'] = model;
   }
 
   // Add x-device-name to headers if not exists
@@ -117,8 +101,4 @@ export function uploadMetricEventsFromLocalStorage() {
       );
     });
   }
-}
-
-function getDeviceInfoBaseOnPlatform(): { vendor: string; platform: string } {
-  return { vendor: VENDOR, platform: PLATFORM };
 }

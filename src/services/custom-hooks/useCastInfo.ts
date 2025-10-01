@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { canvasService } from '../CanvasService';
 import { CastCommand, CastInfo } from '@/models';
-import { LocalStorageItem } from '@/constants';
+import DeviceManager from '@/utils/DeviceManager';
 
 const useCastInfo = () => {
   const [castInfo, setCastInfo] = useState<CastInfo | null>(null);
@@ -57,11 +57,7 @@ const useCastInfo = () => {
     delete castInfoToStore?.elapsedTime;
     delete castInfoToStore?.remainTime;
 
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    localStorage?.setItem(
-      LocalStorageItem.castInfo,
-      JSON.stringify(castInfoToStore)
-    );
+    DeviceManager.setDeviceInfo(castInfoToStore);
   }, [castInfo]);
 
   return { castInfo, setCastInfo };

@@ -22,7 +22,6 @@ export enum CastCommand {
 export interface CastInfo {
   castCommand?: CastCommand;
   deviceInfo?: DeviceInfo;
-  value?: string | number;
 
   // Cast list artwork
   startTime?: number;

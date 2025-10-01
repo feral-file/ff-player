@@ -69,19 +69,18 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
   const deviceRotation = useDeviceRotation();
 
-  const initContext = async () => {
+  const initContext = () => {
     try {
-      await initDeviceConfigService();
+      initDeviceConfigService();
       setIsInitialized(true);
     } catch (error) {
       console.log('Error init context', error);
     }
   };
 
-  const initDeviceConfigService = async () => {
+  const initDeviceConfigService = () => {
     try {
       console.log('[AppContext] initDeviceConfigService');
-      await DeviceManager.init();
       initialDisplaySettings();
       initCastInfo();
     } catch (error) {
@@ -161,9 +160,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   }, []);
 
   useEffect(() => {
-    initContext().catch((error: unknown) => {
-      console.log('Error init context', error);
-    });
+    initContext();
   }, []);
 
   useEffect(() => {

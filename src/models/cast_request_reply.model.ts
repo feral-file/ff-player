@@ -5,8 +5,8 @@ import { DP1Call, DP1Intent, DP1Item } from './dp1.model';
 import { CastCommand } from '.';
 
 export interface DeviceInfo {
-  device_name: string;
-  device_id: string;
+  device_name: string | null;
+  device_id: string | null;
 }
 
 export interface PlayArtwork {
