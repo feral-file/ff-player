@@ -19,8 +19,6 @@ export enum DeviceNamePrefix {
 
 export const AppSettings = {
   VERSION_CHECK_INTERVAL_DURATION: 1000 * 60 * 60, // 1 minutes
-  JG_043_EXHIBITION_ID: '46a0f68b-a657-4364-92a0-32a88b65fbd9',
-  EF_046_EXHIBITION_ID: '796f9fd9-d405-451c-a584-d9f21222c6dd',
   STANDARD_HEIGHT: 1080,
 };
 
@@ -40,7 +38,6 @@ export const CLIENT_BANDWIDTH_HINT = 16; // Mbps
 
 export const SWITCH_TOKEN_INTERVAL = 15 * 60 * 1000;
 
-export const SOURCE_EXHIBITION_ID = 'source';
 export const DEFAULT_DELAY = 24 * 60 * 60 * 1000;
 export const LEE_MULLICAN_EXHIBITION_CONTRACT =
   'KT1CtDPiLjHiU1LVLrhshDry8jkR9h29tXNo';

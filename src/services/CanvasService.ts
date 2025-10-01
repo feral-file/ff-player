@@ -175,11 +175,7 @@ class CanvasService {
   private commandHandler(command: CastCommand, requestJson: unknown): Reply {
     console.log('[CAST] commandHandler:', JSON.stringify(command));
     try {
-      if (
-        [CastCommand.castExhibition, CastCommand.displayPlaylist].includes(
-          command
-        )
-      ) {
+      if (command === CastCommand.displayPlaylist) {
         localStorage.removeItem(LocalStorageItem.criticalTemp);
       }
 

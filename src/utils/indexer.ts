@@ -1,6 +1,3 @@
-import { SOURCE_EXHIBITION_ID } from '@/constants';
-import { Artwork, Blockchain, Exhibition } from '@/models';
-
 export enum IndexerSource {
   feral_file = 'feralfile',
 }
@@ -28,28 +25,4 @@ export function convertToTokenID(
       return '';
     }
   }
-}
-
-export function formatArtworkIndexID(artwork: Artwork, exhibition: Exhibition) {
-  let contractAddress: string;
-  let blockchain: string;
-  let tokenID = artwork.id ?? '';
-
-  if (exhibition.id === SOURCE_EXHIBITION_ID) {
-    return tokenID;
-  }
-
-  if (
-    exhibition.mintBlockchain === Blockchain.Bitmark &&
-    artwork.successfulSwap
-  ) {
-    contractAddress = artwork.successfulSwap.contractAddress;
-    blockchain = artwork.successfulSwap.blockchainType;
-    tokenID = artwork.successfulSwap.token;
-  } else {
-    contractAddress = exhibition.contracts?.[0]?.address ?? '';
-    blockchain = exhibition.mintBlockchain ?? '';
-  }
-
-  return convertToTokenID(blockchain, contractAddress, tokenID);
 }

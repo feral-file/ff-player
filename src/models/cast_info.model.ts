@@ -1,4 +1,4 @@
-import { DeviceInfo, ExhibitionCatalog } from './cast_request_reply.model';
+import { DeviceInfo } from './cast_request_reply.model';
 import { DP1Call } from './dp1.model';
 
 export enum CastCommand {
@@ -12,7 +12,6 @@ export enum CastCommand {
   moveToArtwork = 'moveToArtwork',
   updateIndex = 'updateIndex',
   updateDuration = 'updateDuration',
-  castExhibition = 'castExhibition',
   updateArtFraming = 'updateArtFraming',
   updateDisplaySettings = 'updateDisplaySettings',
   cursorUpdate = 'cursorUpdate',
@@ -24,11 +23,6 @@ export interface CastInfo {
   castCommand?: CastCommand;
   deviceInfo?: DeviceInfo;
   value?: string | number;
-
-  // Cast exhibition
-  exhibitionId?: string;
-  catalogId?: string;
-  catalog?: ExhibitionCatalog;
 
   // Cast list artwork
   startTime?: number;

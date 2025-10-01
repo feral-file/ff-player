@@ -1,6 +1,6 @@
 import {
   Blockchain,
-  ExhibitionContract,
+  Contract,
   FileUseAudio,
   FileUseIframePDF,
   FileUseImage,
@@ -95,7 +95,7 @@ export function bnToHex(
 }
 
 export async function customPreviewFromTokenMetadata(
-  contract?: ExhibitionContract,
+  contract?: Contract,
   tokenID?: string
 ): Promise<string | undefined> {
   if (!contract || !tokenID) {
@@ -120,7 +120,7 @@ export async function customPreviewFromTokenMetadata(
 }
 
 export async function getTokenMetadataAnimationURL(
-  contract: ExhibitionContract,
+  contract: Contract,
   tokenID: string
 ): Promise<string | undefined> {
   if (contract.blockchainType === Blockchain.Ethereum && tokenID) {

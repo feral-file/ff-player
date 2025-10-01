@@ -9,14 +9,6 @@ export interface DeviceInfo {
   device_id: string;
 }
 
-export enum ExhibitionCatalog {
-  home,
-  curatorNote,
-  resource,
-  resourceDetail,
-  artwork,
-}
-
 export interface PlayArtwork {
   id: string;
   duration: number;
@@ -77,13 +69,6 @@ export interface DisplayPlaylistRequest {
   refresh?: boolean;
 }
 export type DisplayPlaylistReply = Reply;
-
-export interface CastExhibitionRequest {
-  exhibitionId: string;
-  catalogId?: string;
-  catalog?: ExhibitionCatalog;
-}
-export type CastExhibitionReply = Reply;
 
 export type NextArtworkRequest = Request;
 export type NextArtworkReply = Reply;

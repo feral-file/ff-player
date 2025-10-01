@@ -1,5 +1,3 @@
-import { Series } from './series.model';
-
 export enum ArtworkModel {
   multi = 'multi',
   single = 'single',
@@ -20,7 +18,6 @@ export interface Artwork {
   previewMIMEType?: string;
   thumbnailURI?: string;
   mintedAt?: string;
-  series?: Series;
   metadata?: ArtworkMetadata;
   artistAlias?: string;
   successfulSwap?: Swap;

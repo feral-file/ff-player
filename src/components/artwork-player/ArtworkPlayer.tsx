@@ -23,11 +23,7 @@ import {
   MITETypeIframe,
   PreviewHTMLTag,
 } from '@/models';
-import {
-  CastingArtworkType,
-  ExhibitionDisplaySection,
-  MetricEvent,
-} from '@/models/metric.model';
+import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
 
 import {
   getContentTypeFromURL,
@@ -43,8 +39,6 @@ const MAX_RECOVERY_TIME = 60000 * 10;
 const ArtworkPlayer = ({
   previewURL,
   artworkID,
-  section,
-  exhibitionID,
   castingType,
   isCustomView,
   artworkPreviewMIMEType,
@@ -52,8 +46,6 @@ const ArtworkPlayer = ({
 }: {
   previewURL: string;
   artworkID: string;
-  section?: ExhibitionDisplaySection; // For exhibition casting only
-  exhibitionID?: string; // For exhibition casting only
   castingType?: CastingArtworkType;
   isCustomView?: boolean;
   keyboardCode?: number;
@@ -156,9 +148,7 @@ const ArtworkPlayer = ({
           event: castingType,
           timestamp: new Date().toISOString(),
           parameters: {
-            section,
             tokenID: artworkID,
-            exhibitionID,
           },
         };
 
@@ -189,7 +179,7 @@ const ArtworkPlayer = ({
         }
       };
     }
-  }, [castingType, artworkID, exhibitionID, section]);
+  }, [castingType, artworkID]);
 
   useEffect(() => {
     const detectPreviewType = async (previewURL: string) => {
