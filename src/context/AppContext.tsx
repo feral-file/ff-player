@@ -108,6 +108,15 @@ export const AppProvider = ({ children }: AppContextProps) => {
         castInfo = {
           deviceInfo: castInfo.deviceInfo,
         };
+        // Fetch and cast default playlist after critical temp reset
+        canvasService.castDefaultPlaylist().catch((error: unknown) => {
+          console.error(
+            '[AppContext] Error fetching default playlist after critical temp:',
+            error
+          );
+        });
+        localStorage.removeItem(LocalStorageItem.criticalTemp);
+        return;
       } else if (castInfo.playlist?.items && castInfo.index !== undefined) {
         // Recalculate startTime based on current index to ensure correct display
         console.log(
@@ -129,7 +138,11 @@ export const AppProvider = ({ children }: AppContextProps) => {
       setCastInfo(castInfo);
       canvasService.setCastInfo(castInfo, false);
     } else {
-      // TODO: cast default playlist
+      // Cast default playlist
+      console.log('[AppContext] No castInfo found, fetching default playlist');
+      canvasService.castDefaultPlaylist().catch((error: unknown) => {
+        console.error('[AppContext] Error fetching default playlist:', error);
+      });
     }
   };
 

@@ -29,7 +29,7 @@ import {
   CursorPositionListener,
   CursorPosition,
 } from './custom-hooks/useCursorPositions';
-import { LocalStorageItem } from '@/constants';
+import { DEFAULT_PLAYLIST_URL, LocalStorageItem } from '@/constants';
 import { ErrorType } from '@/models/error.model';
 import {
   DP1Action,
@@ -40,6 +40,7 @@ import {
 import DP1ScheduleService from './DP1ScheduleService';
 import { calculateStartTime } from '@/utils/playlist';
 import { deepEqual } from '@/utils/helper';
+import { DP1Service } from './DP1Service';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -147,6 +148,46 @@ class CanvasService {
       JSON.stringify(dp1CallData)
     );
     this.nowDisplayPlaylist({ dp1CallData });
+  }
+
+  public async castDefaultPlaylist(): Promise<void> {
+    try {
+      console.log('[AppContext] Fetching default playlist...');
+      const defaultPlaylist = await DP1Service.getDefaultPlaylist();
+
+      if (!defaultPlaylist) {
+        return;
+      }
+
+      console.log('[AppContext] Default playlist fetched, casting...');
+
+      // Build the message data structure for displayPlaylist command
+      const messageData = {
+        command: CastCommand.displayPlaylist,
+        request: {
+          intent: {
+            action: DP1Action.NowDisplay,
+          },
+          dp1_call: defaultPlaylist,
+          playlistUrl: DEFAULT_PLAYLIST_URL,
+        },
+      };
+
+      // Simulate processMessage with the built message data
+      console.log('[AppContext] Processing default playlist message');
+      const reply = canvasService.processMessage(messageData);
+
+      if (reply?.ok) {
+        console.log('[AppContext] Default playlist cast successfully');
+      } else {
+        console.error(
+          '[AppContext] Failed to cast default playlist:',
+          JSON.stringify(reply)
+        );
+      }
+    } catch (error) {
+      console.error('[AppContext] Error in castDefaultPlaylist:', error);
+    }
   }
 
   public processMessage(messageData: Record<string, unknown>) {
