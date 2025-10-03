@@ -64,7 +64,7 @@ export class CDPRequestHandler {
           : (event.message as Record<string, unknown>);
 
       if (wsMessage.command) {
-        return this.handleCommandRequest(event.messageID, wsMessage);
+        return this.handleCommandRequest(wsMessage, event.messageID);
       }
 
       throw Error(`Invalid message: ${JSON.stringify(wsMessage)}`);
@@ -78,18 +78,15 @@ export class CDPRequestHandler {
   }
 
   private handleCommandRequest(
-    messageID: string,
-    wsMessage: Record<string, unknown>
+    wsMessage: Record<string, unknown>,
+    messageID?: string
   ) {
     console.log('[CDP] Command request received:', JSON.stringify(wsMessage));
     const command = wsMessage.command as string;
-    let reply: WebSocketMessage | null = null;
+    let responseMessage: unknown;
     switch (command) {
       case pingCommand: {
-        reply = {
-          messageID,
-          message: { ok: true },
-        };
+        responseMessage = { ok: true };
         break;
       }
 
@@ -107,22 +104,24 @@ export class CDPRequestHandler {
           );
         }
 
-        reply = {
-          messageID,
-          message: { ok: true },
-        };
+        responseMessage = { ok: true };
         break;
       }
 
       default: {
-        const responseMessage = canvasService.processMessage(wsMessage);
-        reply = {
-          messageID,
-          message: responseMessage,
-        };
+        responseMessage = canvasService.processMessage(wsMessage);
         break;
       }
     }
+
+    const reply: WebSocketMessage = messageID
+      ? {
+          messageID,
+          message: responseMessage,
+        }
+      : {
+          message: responseMessage,
+        };
 
     return JSON.stringify(reply);
   }

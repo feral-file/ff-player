@@ -1,4 +1,4 @@
 export interface WebSocketMessage {
-  messageID: string;
+  messageID?: string;
   message: unknown;
 }
