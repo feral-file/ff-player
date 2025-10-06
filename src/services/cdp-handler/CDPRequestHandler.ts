@@ -56,13 +56,13 @@ export class CDPRequestHandler {
   ): string {
     try {
       let wsMessage: Record<string, unknown>;
-      let messageID: string | undefined;
 
-      // FIXME: Remove this once the legacy format is no longer supported.
-      // Handle messageID and message support the legacy format.
-      if ('messageID' in event && 'message' in event) {
-        messageID = event.messageID as string | undefined;
-
+      if (!event.messageID && !event.message) {
+        // New format with no messageID required on reply
+        wsMessage = event as Record<string, unknown>;
+      } else {
+        // FIXME: Remove this once the legacy format is no longer supported.
+        // Handle messageID and message support the legacy format.
         if (!event.message) {
           throw new Error('Empty message');
         }
@@ -76,9 +76,6 @@ export class CDPRequestHandler {
         } else {
           wsMessage = event.message as Record<string, unknown>;
         }
-      } else {
-        // New format with no messageID required on reply
-        wsMessage = event as Record<string, unknown>;
       }
 
       if (typeof wsMessage !== 'object') {
@@ -86,7 +83,7 @@ export class CDPRequestHandler {
       }
 
       if (wsMessage.command) {
-        return this.handleCommandRequest(wsMessage, messageID);
+        return this.handleCommandRequest(wsMessage, event.messageID as string);
       }
 
       throw new Error(`Invalid message: ${JSON.stringify(wsMessage)}`);
@@ -106,10 +103,13 @@ export class CDPRequestHandler {
   ) {
     console.log('[CDP] Command request received:', JSON.stringify(wsMessage));
     const command = wsMessage.command as string;
-    let responseMessage: unknown;
+    let reply: WebSocketMessage | null = null;
     switch (command) {
       case pingCommand: {
-        responseMessage = { ok: true };
+        reply = {
+          messageID,
+          message: { ok: true },
+        };
         break;
       }
 
@@ -127,24 +127,22 @@ export class CDPRequestHandler {
           );
         }
 
-        responseMessage = { ok: true };
+        reply = {
+          messageID,
+          message: { ok: true },
+        };
         break;
       }
 
       default: {
-        responseMessage = canvasService.processMessage(wsMessage);
+        const responseMessage = canvasService.processMessage(wsMessage);
+        reply = {
+          messageID,
+          message: responseMessage,
+        };
         break;
       }
     }
-
-    const reply: WebSocketMessage = messageID
-      ? {
-          messageID,
-          message: responseMessage,
-        }
-      : {
-          message: responseMessage,
-        };
 
     return JSON.stringify(reply);
   }
