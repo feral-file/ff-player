@@ -12,7 +12,6 @@ import {
   NO_DURATION_VALUE,
 } from '@/constants';
 import { convertToTokenID } from '@/utils/indexer';
-import { DP1Service } from '@/services/DP1Service';
 import { canvasService } from '@/services/CanvasService';
 
 export default function PlaylistClient() {
@@ -61,22 +60,11 @@ export default function PlaylistClient() {
     const currentItem = playlist[index];
     if (currentItem !== currentItemRef.current) {
       currentItemRef.current = currentItem;
-      if (currentItem.provenance?.contract) {
-        const tokenID = convertToTokenID(
-          currentItem.provenance.contract.chain,
-          currentItem.provenance.contract.address,
-          currentItem.provenance.contract.tokenId
-        );
-        setArtworkID(tokenID);
-      } else {
-        setArtworkID(currentItem.id);
-      }
     }
 
-    fetchItemPreviewURL(currentItem).catch((error: unknown) => {
-      console.log('[PlaylistClient] Error fetching item preview URL:', error);
-    });
-
+    // Setup data for ArtworkPlayer component
+    setCastPreviewURL(currentItem.source);
+    getArtworkID(currentItem);
     setIsLeeMullicanExhibition(
       currentItem.provenance?.contract?.address ===
         LEE_MULLICAN_EXHIBITION_CONTRACT
@@ -87,9 +75,19 @@ export default function PlaylistClient() {
     }
   }, [currentIndex, playlist]);
 
-  const fetchItemPreviewURL = async (item: DP1Item) => {
-    const itemInfo = await DP1Service.getItemInfo(item);
-    setCastPreviewURL(itemInfo?.preview ?? null);
+  // Optional: Get artwork ID to be used for metric in ArtworkPlayer component.
+  // FIXME: It's old metric event. Review and remove if not needed.
+  const getArtworkID = (item: DP1Item) => {
+    if (item.provenance?.contract) {
+      const tokenID = convertToTokenID(
+        item.provenance.contract.chain,
+        item.provenance.contract.address,
+        item.provenance.contract.tokenId
+      );
+      setArtworkID(tokenID);
+    } else {
+      setArtworkID(item.id);
+    }
   };
 
   const handleUpdateDuration = (dp1Items: DP1Item[]) => {
