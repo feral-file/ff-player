@@ -51,35 +51,55 @@ export class CDPRequestHandler {
     this.isInitialized = false;
   }
 
-  private handleCDPRequest(event: WebSocketMessage): string {
+  private handleCDPRequest(
+    event: WebSocketMessage | Record<string, unknown>
+  ): string {
     try {
-      console.log('[CDP] Request received');
-      if (!event.message) {
-        throw Error('Empty message');
+      let wsMessage: Record<string, unknown>;
+
+      if (!event.messageID && !event.message) {
+        // New format with no messageID required on reply
+        wsMessage = event as Record<string, unknown>;
+      } else {
+        // FIXME: Remove this once the legacy format is no longer supported.
+        // Handle messageID and message support the legacy format.
+        if (!event.message) {
+          throw new Error('Empty message');
+        }
+
+        if (typeof event.message === 'string') {
+          try {
+            wsMessage = JSON.parse(event.message) as Record<string, unknown>;
+          } catch {
+            throw new Error(`Failed to parse message: ${event.message}`);
+          }
+        } else {
+          wsMessage = event.message as Record<string, unknown>;
+        }
       }
 
-      const wsMessage =
-        typeof event.message === 'string'
-          ? (JSON.parse(event.message) as Record<string, unknown>)
-          : (event.message as Record<string, unknown>);
+      if (typeof wsMessage !== 'object') {
+        throw new Error('Malformed message: not an object');
+      }
 
       if (wsMessage.command) {
-        return this.handleCommandRequest(event.messageID, wsMessage);
+        return this.handleCommandRequest(wsMessage, event.messageID as string);
       }
 
-      throw Error(`Invalid message: ${JSON.stringify(wsMessage)}`);
+      throw new Error(`Invalid message: ${JSON.stringify(wsMessage)}`);
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
       console.error('[CDP] Error handling CDP request:', error);
       return JSON.stringify({
         messageID: event.messageID,
-        message: { ok: false, error: (error as Error).message },
+        message: { ok: false, error: errMsg },
       });
     }
   }
 
   private handleCommandRequest(
-    messageID: string,
-    wsMessage: Record<string, unknown>
+    wsMessage: Record<string, unknown>,
+    messageID?: string
   ) {
     console.log('[CDP] Command request received:', JSON.stringify(wsMessage));
     const command = wsMessage.command as string;
