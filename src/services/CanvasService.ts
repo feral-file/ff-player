@@ -23,6 +23,7 @@ import {
   ArtFraming,
   MoveToArtworkRequest as MoveToItemRequest,
   MoveToArtworkReply as MoveToItemReply,
+  DisplaySettings,
 } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import {
@@ -238,6 +239,12 @@ class CanvasService {
       items: this.castInfo?.playlist?.items,
       index: this.castInfo?.index,
       isPaused: this.castInfo?.isPaused,
+
+      deviceSettings: {
+        scaling:
+          DeviceManager.getDeviceDisplaySettings()?.scaling ??
+          DisplaySettings.defaultScaling,
+      },
     };
   }
 
