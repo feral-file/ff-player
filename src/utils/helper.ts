@@ -1,21 +1,11 @@
 import {
-  Blockchain,
-  Contract,
   FileUseAudio,
   FileUseIframePDF,
   FileUseImage,
   FileUseStreamVideo,
   FileUseVideo,
-  TokenMetadata,
 } from '@/models';
 import { Scaling } from '@/models/dp1.model';
-import { infuraAxiosInstance } from '@/services/axiosService';
-import Web3 from 'web3';
-import { provider } from 'web3-core';
-
-const web3 = new Web3(
-  (Web3.givenProvider || 'wss://walletconnect.bitmark.com') as provider
-);
 
 export async function getContentTypeFromURL(
   previewURL: string
@@ -68,52 +58,6 @@ export async function getContentTypeFromURL(
   }
 }
 
-export function bnToHex(
-  bn: string | number | bigint,
-  hasPrefix = true,
-  length = 64
-) {
-  const base = 16;
-
-  let hex: string;
-  try {
-    hex = BigInt(bn).toString(base);
-  } catch (error: unknown) {
-    console.log('[BNToHex] Error:', JSON.stringify(error));
-    return bn.toString();
-  }
-
-  if (hasPrefix) {
-    hex = hex.padStart(length, '0');
-  }
-  return hex;
-}
-
-export async function customPreviewFromTokenMetadata(
-  contract?: Contract,
-  tokenID?: string
-): Promise<string | undefined> {
-  if (!contract || !tokenID) {
-    return undefined;
-  }
-
-  try {
-    const animationURL = await getTokenMetadataAnimationURL(contract, tokenID);
-    if (!animationURL) {
-      return undefined;
-    }
-
-    const httpResponse = await fetch(animationURL);
-    const tokenURL = httpResponse.url;
-    return tokenURL;
-  } catch (error) {
-    console.log(
-      '[CustomPreviewFromTokenMetadata] Error:',
-      JSON.stringify(error)
-    );
-  }
-}
-
 export function convertToIndexerTokenID(
   blockchain: string,
   contractAddress: string,
@@ -137,35 +81,6 @@ export function convertToIndexerTokenID(
       return '';
     }
   }
-}
-
-export async function getTokenMetadataAnimationURL(
-  contract: Contract,
-  tokenID: string
-): Promise<string | undefined> {
-  if (contract.blockchainType === Blockchain.Ethereum && tokenID) {
-    const tokenIDHex = bnToHex(tokenID);
-    const result = await infuraAxiosInstance.post<{ result: string }>('', {
-      jsonrpc: '2.0',
-      method: 'eth_call',
-      params: [
-        {
-          to: contract.address,
-          data: `0xc87b56dd${tokenIDHex}`, // Default interface is 8 digits at prefix
-        },
-        'latest',
-      ],
-      id: 1,
-    });
-    const tokenURL = String(
-      web3.eth.abi.decodeParameter('string', result.data.result)
-    );
-    const tokenResponse = await fetch(tokenURL);
-    const tokenMetadata = (await tokenResponse.json()) as TokenMetadata | null;
-    return tokenMetadata?.animation_url;
-  }
-
-  return undefined;
 }
 
 export function convertScalingToObjectFit(

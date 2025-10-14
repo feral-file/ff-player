@@ -9,14 +9,6 @@ export enum LocalStorageItem {
   dp1ScheduledTask = 'dp1_scheduled_tasks',
 }
 
-export enum Platform {
-  ffDevice = 'ff-device',
-}
-
-export enum DeviceNamePrefix {
-  ffDevice = 'FF1-',
-}
-
 export const AppSettings = {
   VERSION_CHECK_INTERVAL_DURATION: 1000 * 60 * 60, // 1 minutes
   STANDARD_HEIGHT: 1080,
