@@ -15,9 +15,7 @@ import ScheduleDisplay from './ScheduleDisplay';
 
 const enum CastState {
   None, // Not casting
-  Artwork, // Displaying artwork, playlist, dallies
-  Exhibition, // Displaying exhibition
-  Daily, // Displaying exhibition
+  Playlist, // Displaying playlist
 }
 
 // Separate loading component
@@ -115,40 +113,11 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
             return;
           }
 
-          setCastState(CastState.Artwork);
+          setCastState(CastState.Playlist);
           if (castState === CastState.None) {
             router.push('/playlist');
           } else {
             router.replace('/playlist');
-          }
-          break;
-        }
-
-        case CastCommand.castExhibition: {
-          if (pathname === '/exhibitions') {
-            return;
-          }
-
-          setCastState(CastState.Exhibition);
-          if (castState === CastState.None) {
-            router.push('/exhibitions');
-          } else {
-            router.replace('/exhibitions');
-          }
-
-          break;
-        }
-
-        case CastCommand.castDaily: {
-          if (pathname === '/daily') {
-            return;
-          }
-
-          setCastState(CastState.Daily);
-          if (castState === CastState.None) {
-            router.push('/daily');
-          } else {
-            router.replace('/daily');
           }
           break;
         }

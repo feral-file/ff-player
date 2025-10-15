@@ -1,65 +1,20 @@
-import { v4 as uuidv4 } from 'uuid';
-import { FFDeviceConfigService, PlatformConfigService } from './platform';
-import * as Sentry from '@sentry/nextjs';
-import { DeviceNamePrefix, LocalStorageItem, PLATFORM } from '@/constants';
-import { BrowserInfo, detect } from 'detect-browser';
+import { LocalStorageItem } from '@/constants';
 import { DisplaySettings } from '@/models/display_settings.model';
 import { CastInfo, ViewMode } from '@/models';
 
 class DeviceManager {
   static instance = new DeviceManager();
-  private _configService: PlatformConfigService | null = null;
-
-  get configService(): PlatformConfigService {
-    if (!this._configService) {
-      this._configService = this.createConfigService();
-    }
-    return this._configService;
-  }
-
-  private createConfigService(): PlatformConfigService {
-    const browser = detect() as BrowserInfo;
-
-    Sentry.addBreadcrumb({
-      data: {
-        PLATFORM,
-        ...browser,
-      },
-      category: 'DeviceManager',
-      message: 'Creating PlatformConfigService instance',
-    });
-
-    console.log('[DEVICE] creating PlatformConfigService instance ');
-    return new FFDeviceConfigService();
-  }
 
   private getFromLocalStorage(key: string): string | null {
-    return this.configService.getString(key);
+    return localStorage.getItem(key);
   }
 
   private setToLocalStorage(key: string, value: string): void {
-    this.configService.setString(key, value).catch((error: unknown) => {
-      Sentry.captureException(error);
-      console.error(
-        '[DEVICE] Error setting value to local storage',
-        JSON.stringify(error)
-      );
-    });
-  }
-
-  public async init(): Promise<void> {
-    console.log('[DeviceManager] init', this.configService);
-    await this.configService.init();
+    localStorage.setItem(key, value);
   }
 
   public getDeviceId(): string | null {
-    let deviceId = this.getFromLocalStorage(LocalStorageItem.deviceId);
-    if (!deviceId) {
-      deviceId = uuidv4();
-      this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
-    }
-
-    return deviceId;
+    return this.getFromLocalStorage(LocalStorageItem.deviceId);
   }
 
   public setDeviceId(deviceId: string): void {
@@ -67,25 +22,11 @@ class DeviceManager {
   }
 
   public getName(): string {
-    const name = this.getFromLocalStorage(LocalStorageItem.name);
-    return name ?? 'Unknown';
+    return this.getFromLocalStorage(LocalStorageItem.name) ?? 'Unknown';
   }
 
   public setName(name: string): void {
     this.setToLocalStorage(LocalStorageItem.name, name);
-  }
-
-  public getDeviceModel(): string {
-    const name = this.getFromLocalStorage(LocalStorageItem.name);
-    if (!name) {
-      return 'Unknown';
-    }
-
-    return this.stripPrefix(name);
-  }
-
-  private stripPrefix(name: string): string {
-    return name.replace(DeviceNamePrefix.ffDevice, '');
   }
 
   public getDeviceDisplaySettings(): DisplaySettings | null {
@@ -112,7 +53,7 @@ class DeviceManager {
   }
 
   public getCastInfo(): CastInfo | null {
-    const castInfoString = localStorage.getItem(LocalStorageItem.castInfo);
+    const castInfoString = this.getFromLocalStorage(LocalStorageItem.castInfo);
     if (castInfoString != null) {
       try {
         const castInfo = JSON.parse(castInfoString) as CastInfo;
@@ -123,6 +64,10 @@ class DeviceManager {
     }
 
     return null;
+  }
+
+  public setDeviceInfo(castInfo: CastInfo | null): void {
+    this.setToLocalStorage(LocalStorageItem.castInfo, JSON.stringify(castInfo));
   }
 }
 

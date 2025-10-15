@@ -7,7 +7,7 @@ import { ErrorType } from '@/models/error.model';
 import { canvasService } from '@/services/CanvasService';
 import { CastCommand } from '@/models';
 import { IndexerService } from '@/services/IndexerService';
-import { convertToTokenID } from '@/utils/indexer';
+import { convertToIndexerTokenID } from '@/utils/helper';
 
 const ErrorPage = () => {
   const searchParams = useSearchParams();
@@ -33,24 +33,12 @@ const ErrorPage = () => {
           break;
         }
 
-        const tokenID = convertToTokenID(
+        const tokenID = convertToIndexerTokenID(
           playingArtwork.provenance.contract.chain,
           playingArtwork.provenance.contract.address,
           playingArtwork.provenance.contract.tokenId
         );
         const token = await IndexerService.queryIndexerToken(tokenID);
-        playingArtworkTitle = token?.asset?.metadata.project.latest.title;
-        break;
-      }
-
-      case CastCommand.castDaily: {
-        const currentDailyTokenId = castInfo.dailyTokenID;
-        if (!currentDailyTokenId) {
-          break;
-        }
-
-        const token =
-          await IndexerService.queryIndexerToken(currentDailyTokenId);
         playingArtworkTitle = token?.asset?.metadata.project.latest.title;
         break;
       }

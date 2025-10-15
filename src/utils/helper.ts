@@ -1,26 +1,11 @@
 import {
-  Blockchain,
-  ExhibitionContract,
   FileUseAudio,
   FileUseIframePDF,
   FileUseImage,
   FileUseStreamVideo,
   FileUseVideo,
-  TokenMetadata,
 } from '@/models';
-import {
-  DP1Chain,
-  DP1License,
-  DP1ProvenanceType,
-  Scaling,
-} from '@/models/dp1.model';
-import { infuraAxiosInstance } from '@/services/axiosService';
-import Web3 from 'web3';
-import { provider } from 'web3-core';
-
-const web3 = new Web3(
-  (Web3.givenProvider || 'wss://walletconnect.bitmark.com') as provider
-);
+import { Scaling } from '@/models/dp1.model';
 
 export async function getContentTypeFromURL(
   previewURL: string
@@ -73,79 +58,29 @@ export async function getContentTypeFromURL(
   }
 }
 
-export function bnToHex(
-  bn: string | number | bigint,
-  hasPrefix = true,
-  length = 64
-) {
-  const base = 16;
-
-  let hex: string;
-  try {
-    hex = BigInt(bn).toString(base);
-  } catch (error: unknown) {
-    console.log('[BNToHex] Error:', JSON.stringify(error));
-    return bn.toString();
-  }
-
-  if (hasPrefix) {
-    hex = hex.padStart(length, '0');
-  }
-  return hex;
-}
-
-export async function customPreviewFromTokenMetadata(
-  contract?: ExhibitionContract,
-  tokenID?: string
-): Promise<string | undefined> {
-  if (!contract || !tokenID) {
-    return undefined;
-  }
-
-  try {
-    const animationURL = await getTokenMetadataAnimationURL(contract, tokenID);
-    if (!animationURL) {
-      return undefined;
+export function convertToIndexerTokenID(
+  blockchain: string,
+  contractAddress: string,
+  tokenID: string
+): string {
+  switch (blockchain) {
+    case 'ethereum':
+    case 'evm': {
+      return `eth-${contractAddress}-${tokenID}`;
     }
 
-    const httpResponse = await fetch(animationURL);
-    const tokenURL = httpResponse.url;
-    return tokenURL;
-  } catch (error) {
-    console.log(
-      '[CustomPreviewFromTokenMetadata] Error:',
-      JSON.stringify(error)
-    );
-  }
-}
+    case 'bitmark': {
+      return `bmk--${tokenID}`;
+    }
 
-export async function getTokenMetadataAnimationURL(
-  contract: ExhibitionContract,
-  tokenID: string
-): Promise<string | undefined> {
-  if (contract.blockchainType === Blockchain.Ethereum && tokenID) {
-    const tokenIDHex = bnToHex(tokenID);
-    const result = await infuraAxiosInstance.post<{ result: string }>('', {
-      jsonrpc: '2.0',
-      method: 'eth_call',
-      params: [
-        {
-          to: contract.address,
-          data: `0xc87b56dd${tokenIDHex}`, // Default interface is 8 digits at prefix
-        },
-        'latest',
-      ],
-      id: 1,
-    });
-    const tokenURL = String(
-      web3.eth.abi.decodeParameter('string', result.data.result)
-    );
-    const tokenResponse = await fetch(tokenURL);
-    const tokenMetadata = (await tokenResponse.json()) as TokenMetadata | null;
-    return tokenMetadata?.animation_url;
-  }
+    case 'tezos': {
+      return `tez-${contractAddress}-${tokenID}`;
+    }
 
-  return undefined;
+    default: {
+      return '';
+    }
+  }
 }
 
 export function convertScalingToObjectFit(
@@ -205,42 +140,4 @@ export function deepEqual(a: any, b: any): boolean {
   }
 
   return false;
-}
-
-export function buildPlaylistItem(
-  blockChain: DP1Chain,
-  contractAddress: string,
-  tokenId: string,
-  duration: number
-) {
-  return {
-    id: tokenId,
-    source: '',
-    license: DP1License.Open,
-    duration: duration,
-    provenance: {
-      type: DP1ProvenanceType.OnChain,
-      standard: 'other',
-      contract: {
-        chain: blockChain,
-        address: contractAddress,
-        tokenId: tokenId,
-      },
-    },
-  };
-}
-
-export function normalizeProvenanceChain(blockchain: string): DP1Chain {
-  const b = blockchain.toLowerCase().trim();
-  switch (b) {
-    case 'ethereum':
-    case 'evm':
-      return DP1Chain.EVM;
-    case 'tezos':
-      return DP1Chain.Tezos;
-    case 'bitmark':
-      return DP1Chain.Bitmark;
-    default:
-      return DP1Chain.Other;
-  }
 }

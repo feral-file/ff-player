@@ -23,11 +23,7 @@ import {
   MITETypeIframe,
   PreviewHTMLTag,
 } from '@/models';
-import {
-  CastingArtworkType,
-  ExhibitionDisplaySection,
-  MetricEvent,
-} from '@/models/metric.model';
+import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
 
 import {
   getContentTypeFromURL,
@@ -43,8 +39,6 @@ const MAX_RECOVERY_TIME = 60000 * 10;
 const ArtworkPlayer = ({
   previewURL,
   artworkID,
-  section,
-  exhibitionID,
   castingType,
   isCustomView,
   artworkPreviewMIMEType,
@@ -52,8 +46,6 @@ const ArtworkPlayer = ({
 }: {
   previewURL: string;
   artworkID: string;
-  section?: ExhibitionDisplaySection; // For exhibition casting only
-  exhibitionID?: string; // For exhibition casting only
   castingType?: CastingArtworkType;
   isCustomView?: boolean;
   keyboardCode?: number;
@@ -61,7 +53,7 @@ const ArtworkPlayer = ({
   displayPreferences: DP1DisplayPreference;
 }) => {
   const FADE_IN_BUFFER_MS = 50;
-  const FADE_IN_OUT_DAILY_MS = 350;
+  const FADE_IN_OUT_DURATION_MS = 350;
   const { context } = useAppContext();
   const [opacity, setOpacity] = useState(1);
   const [displayPreviewURL, setDisplayPreviewURL] = useState<string>('');
@@ -156,9 +148,7 @@ const ArtworkPlayer = ({
           event: castingType,
           timestamp: new Date().toISOString(),
           parameters: {
-            section,
             tokenID: artworkID,
-            exhibitionID,
           },
         };
 
@@ -189,7 +179,7 @@ const ArtworkPlayer = ({
         }
       };
     }
-  }, [castingType, artworkID, exhibitionID, section]);
+  }, [castingType, artworkID]);
 
   useEffect(() => {
     const detectPreviewType = async (previewURL: string) => {
@@ -240,7 +230,7 @@ const ArtworkPlayer = ({
 
       fadeInTimeoutRef.current = setTimeout(() => {
         setDisplayPreviewURL(previewURL);
-      }, FADE_IN_OUT_DAILY_MS + FADE_IN_BUFFER_MS);
+      }, FADE_IN_OUT_DURATION_MS + FADE_IN_BUFFER_MS);
     }
 
     return () => {
@@ -547,7 +537,7 @@ const ArtworkPlayer = ({
           backgroundColor: displaySettings?.background ?? '#000000',
           justifyContent: 'center',
           position: 'relative',
-          transition: `opacity ${FADE_IN_OUT_DAILY_MS.toString()}ms, padding 0.2s ease`,
+          transition: `opacity ${FADE_IN_OUT_DURATION_MS.toString()}ms, padding 0.2s ease`,
           opacity: opacity,
           padding: displaySettings?.margin
             ? getDP1Margin(displaySettings.margin)
@@ -609,19 +599,25 @@ const ArtworkPlayer = ({
               onLoadedData={loadedSource}></source>
           </audio>
         )}
-        {displaySoftwareURL &&
-          (previewType === PreviewHTMLTag.iframe ||
-            previewType === PreviewHTMLTag.iframePDF) && (
-            <iframe
-              key={iframeKey}
-              ref={iframeRef}
-              style={{ width: '100%', height: '100%' }}
-              src={displaySoftwareURL}
-              onLoad={handleIframeLoad}
-              onError={handleLoadIframeError}
-              sandbox="allow-same-origin allow-scripts"
-              tabIndex={0}></iframe>
-          )}
+        {displaySoftwareURL && previewType === PreviewHTMLTag.iframe && (
+          <iframe
+            key={iframeKey}
+            ref={iframeRef}
+            style={{ width: '100%', height: '100%' }}
+            src={displaySoftwareURL}
+            onLoad={handleIframeLoad}
+            onError={handleLoadIframeError}
+            sandbox="allow-same-origin allow-scripts"
+            tabIndex={0}></iframe>
+        )}
+        {displaySoftwareURL && previewType === PreviewHTMLTag.iframePDF && (
+          <iframe
+            style={{ width: '100%', height: '100%' }}
+            src={displaySoftwareURL}
+            onLoad={handleIframeLoad}
+            onError={handleLoadIframeError}
+            tabIndex={0}></iframe>
+        )}
       </div>
       {showMessageModal && (
         <MessageModal

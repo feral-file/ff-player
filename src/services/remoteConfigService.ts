@@ -4,7 +4,6 @@ import * as Sentry from '@sentry/nextjs';
 
 export interface AppRemoteConfig {
   duration: number;
-  new_daily_hour: number;
 }
 
 class RemoteConfigService {
@@ -31,7 +30,6 @@ class RemoteConfigService {
       // Return default value if failed to load config
       return {
         duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,
-        new_daily_hour: AppSettings.DEFAULT_NEW_DAILY_HOUR,
       };
     }
   }

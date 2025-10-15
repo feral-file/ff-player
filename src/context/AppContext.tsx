@@ -18,7 +18,7 @@ import RemoteConfigService, {
 import { AppSettings, LocalStorageItem } from '@/constants';
 import DeviceManager from '@/utils/DeviceManager';
 import useCastInfo from '@/services/custom-hooks/useCastInfo';
-import { CastCommand, CastInfo } from '@/models';
+import { CastInfo } from '@/models';
 import { canvasService } from '@/services/CanvasService';
 import { useDeviceSettings } from '@/services/custom-hooks/useDeviceSettings';
 import { DisplaySettings } from '@/models/display_settings.model';
@@ -69,19 +69,18 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
   const deviceRotation = useDeviceRotation();
 
-  const initContext = async () => {
+  const initContext = () => {
     try {
-      await initDeviceConfigService();
+      initDeviceConfigService();
       setIsInitialized(true);
     } catch (error) {
       console.log('Error init context', error);
     }
   };
 
-  const initDeviceConfigService = async () => {
+  const initDeviceConfigService = () => {
     try {
       console.log('[AppContext] initDeviceConfigService');
-      await DeviceManager.init();
       initialDisplaySettings();
       initCastInfo();
     } catch (error) {
@@ -102,16 +101,22 @@ export const AppProvider = ({ children }: AppContextProps) => {
     let castInfo = DeviceManager.getCastInfo();
 
     if (castInfo) {
-      const path = window.location.pathname;
-      const isDaily = path.includes('daily');
       const hasCriticalTemp =
         localStorage.getItem(LocalStorageItem.criticalTemp) === 'true';
-      if (isDaily || hasCriticalTemp) {
-        // Reset to daily cast info
+      if (hasCriticalTemp) {
+        // Reset to default playlist
         castInfo = {
-          castCommand: CastCommand.castDaily,
           deviceInfo: castInfo.deviceInfo,
         };
+        // Fetch and cast default playlist after critical temp reset
+        canvasService.castDefaultPlaylist().catch((error: unknown) => {
+          console.error(
+            '[AppContext] Error fetching default playlist after critical temp:',
+            error
+          );
+        });
+        localStorage.removeItem(LocalStorageItem.criticalTemp);
+        return;
       } else if (castInfo.playlist?.items && castInfo.index !== undefined) {
         // Recalculate startTime based on current index to ensure correct display
         console.log(
@@ -132,11 +137,12 @@ export const AppProvider = ({ children }: AppContextProps) => {
       localStorage.removeItem(LocalStorageItem.criticalTemp);
       setCastInfo(castInfo);
       canvasService.setCastInfo(castInfo, false);
-      // TODO: Send cast info to app
     } else {
-      canvasService.castDaily();
-      console.log('CastInfo is null, send cast daily message');
-      // TODO: Send cast info to app
+      // Cast default playlist
+      console.log('[AppContext] No castInfo found, fetching default playlist');
+      canvasService.castDefaultPlaylist().catch((error: unknown) => {
+        console.error('[AppContext] Error fetching default playlist:', error);
+      });
     }
   };
 
@@ -157,7 +163,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
         // Return default value if failed to load config
         setAppConfig({
           duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,
-          new_daily_hour: AppSettings.DEFAULT_NEW_DAILY_HOUR,
         } as AppRemoteConfig);
       }
     };
@@ -168,9 +173,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   }, []);
 
   useEffect(() => {
-    initContext().catch((error: unknown) => {
-      console.log('Error init context', error);
-    });
+    initContext();
   }, []);
 
   useEffect(() => {

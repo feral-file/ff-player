@@ -1,4 +1,4 @@
-import { Blockchain } from './exhibition.model';
+import { Blockchain } from './common.model';
 
 interface AssetAttributes {
   configuration?: AssetConfiguration;

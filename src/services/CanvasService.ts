@@ -30,7 +30,7 @@ import {
   CursorPositionListener,
   CursorPosition,
 } from './custom-hooks/useCursorPositions';
-import { LocalStorageItem, NO_DURATION_VALUE } from '@/constants';
+import { DEFAULT_PLAYLIST_URL, LocalStorageItem } from '@/constants';
 import { ErrorType } from '@/models/error.model';
 import {
   DP1Action,
@@ -41,6 +41,7 @@ import {
 import DP1ScheduleService from './DP1ScheduleService';
 import { calculateStartTime } from '@/utils/playlist';
 import { deepEqual } from '@/utils/helper';
+import { DP1Service } from './DP1Service';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -150,6 +151,46 @@ class CanvasService {
     this.nowDisplayPlaylist({ dp1CallData });
   }
 
+  public async castDefaultPlaylist(): Promise<void> {
+    try {
+      console.log('[AppContext] Fetching default playlist...');
+      const defaultPlaylist = await DP1Service.getDefaultPlaylist();
+
+      if (!defaultPlaylist) {
+        return;
+      }
+
+      console.log('[AppContext] Default playlist fetched, casting...');
+
+      // Build the message data structure for displayPlaylist command
+      const messageData = {
+        command: CastCommand.displayPlaylist,
+        request: {
+          intent: {
+            action: DP1Action.NowDisplay,
+          },
+          dp1_call: defaultPlaylist,
+          playlistUrl: DEFAULT_PLAYLIST_URL,
+        },
+      };
+
+      // Simulate processMessage with the built message data
+      console.log('[AppContext] Processing default playlist message');
+      const reply = canvasService.processMessage(messageData);
+
+      if (reply?.ok) {
+        console.log('[AppContext] Default playlist cast successfully');
+      } else {
+        console.error(
+          '[AppContext] Failed to cast default playlist:',
+          JSON.stringify(reply)
+        );
+      }
+    } catch (error) {
+      console.error('[AppContext] Error in castDefaultPlaylist:', error);
+    }
+  }
+
   public processMessage(messageData: Record<string, unknown>) {
     const commandStr = messageData.command;
     if (!commandStr) {
@@ -176,13 +217,7 @@ class CanvasService {
   private commandHandler(command: CastCommand, requestJson: unknown): Reply {
     console.log('[CAST] commandHandler:', JSON.stringify(command));
     try {
-      if (
-        [
-          CastCommand.castDaily,
-          CastCommand.castExhibition,
-          CastCommand.displayPlaylist,
-        ].includes(command)
-      ) {
+      if (command === CastCommand.displayPlaylist) {
         localStorage.removeItem(LocalStorageItem.criticalTemp);
       }
 
@@ -193,8 +228,8 @@ class CanvasService {
           return this.disconnect();
         case CastCommand.checkStatus:
           return this.getStatus();
-        case CastCommand.castDaily:
-          return this.castDaily();
+        case CastCommand.displayPlaylist:
+          return this.displayPlaylist(requestJson as DisplayPlaylistRequest);
         case CastCommand.updateArtFraming:
           return this.updateArtFraming(requestJson as UpdateArtFramingRequest);
         case CastCommand.updateDisplaySettings:
@@ -205,8 +240,6 @@ class CanvasService {
           return this.updateCursorPositions(
             requestJson as UpdateCursorPositionsRequest
           );
-        case CastCommand.displayPlaylist:
-          return this.displayPlaylist(requestJson as DisplayPlaylistRequest);
         case CastCommand.moveToArtwork:
           return this.moveToArtwork(requestJson as MoveToItemRequest);
         default:
@@ -248,18 +281,11 @@ class CanvasService {
     };
   }
 
-  public castDaily(): Reply {
-    console.log('[CanvasService] Cast daily: ');
-
-    this.setCastInfo({
-      castCommand: CastCommand.castDaily,
-      deviceInfo: this.castInfo?.deviceInfo,
-    });
-    return { ok: true };
-  }
-
   private connect(request: ConnectRequestV2): ConnectReplyV2 {
     console.log('[CanvasService] Connect request:');
+
+    DeviceManager.setDeviceId(request.clientDevice.device_id ?? '');
+    DeviceManager.setName(request.clientDevice.device_name ?? '');
 
     this.setCastInfo({
       ...(this.castInfo ?? {}),
@@ -406,7 +432,7 @@ class CanvasService {
         ...request.dp1CallData,
         items: request.dp1CallData.items.map(item => ({
           ...item,
-          duration: item.duration ?? NO_DURATION_VALUE,
+          duration: item.duration ?? 0,
         })),
       },
       playlistUrl: request.playlistUrl,

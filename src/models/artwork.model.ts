@@ -1,12 +1,3 @@
-import { Series } from './series.model';
-
-export enum ArtworkModel {
-  multi = 'multi',
-  single = 'single',
-  multi_unique = 'multi_unique',
-  unknown = 'unknown',
-}
-
 export interface Artwork {
   id?: string;
   seriesID?: string;
@@ -20,18 +11,8 @@ export interface Artwork {
   previewMIMEType?: string;
   thumbnailURI?: string;
   mintedAt?: string;
-  series?: Series;
-  metadata?: ArtworkMetadata;
   artistAlias?: string;
   successfulSwap?: Swap;
-}
-
-interface ArtworkMetadata {
-  previewCloudFlareURL?: string;
-  thumbnailCloudFlareURL?: string;
-  alternativePreviewURI?: string;
-  viewableAt?: string;
-  ts044MergedIndexes?: number[];
 }
 
 export interface Swap {

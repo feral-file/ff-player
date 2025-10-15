@@ -5,16 +5,8 @@ import { DP1Call, DP1Intent, DP1Item, Scaling } from './dp1.model';
 import { CastCommand } from '.';
 
 export interface DeviceInfo {
-  device_name: string;
-  device_id: string;
-}
-
-export enum ExhibitionCatalog {
-  home,
-  curatorNote,
-  resource,
-  resourceDetail,
-  artwork,
+  device_name: string | null;
+  device_id: string | null;
 }
 
 export interface PlayArtwork {
@@ -81,13 +73,6 @@ export interface DisplayPlaylistRequest {
   refresh?: boolean;
 }
 export type DisplayPlaylistReply = Reply;
-
-export interface CastExhibitionRequest {
-  exhibitionId: string;
-  catalogId?: string;
-  catalog?: ExhibitionCatalog;
-}
-export type CastExhibitionReply = Reply;
 
 export type NextArtworkRequest = Request;
 export type NextArtworkReply = Reply;
