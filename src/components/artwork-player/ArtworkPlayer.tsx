@@ -599,19 +599,25 @@ const ArtworkPlayer = ({
               onLoadedData={loadedSource}></source>
           </audio>
         )}
-        {displaySoftwareURL &&
-          (previewType === PreviewHTMLTag.iframe ||
-            previewType === PreviewHTMLTag.iframePDF) && (
-            <iframe
-              key={iframeKey}
-              ref={iframeRef}
-              style={{ width: '100%', height: '100%' }}
-              src={displaySoftwareURL}
-              onLoad={handleIframeLoad}
-              onError={handleLoadIframeError}
-              sandbox="allow-same-origin allow-scripts"
-              tabIndex={0}></iframe>
-          )}
+        {displaySoftwareURL && previewType === PreviewHTMLTag.iframe && (
+          <iframe
+            key={iframeKey}
+            ref={iframeRef}
+            style={{ width: '100%', height: '100%' }}
+            src={displaySoftwareURL}
+            onLoad={handleIframeLoad}
+            onError={handleLoadIframeError}
+            sandbox="allow-same-origin allow-scripts"
+            tabIndex={0}></iframe>
+        )}
+        {displaySoftwareURL && previewType === PreviewHTMLTag.iframePDF && (
+          <iframe
+            style={{ width: '100%', height: '100%' }}
+            src={displaySoftwareURL}
+            onLoad={handleIframeLoad}
+            onError={handleLoadIframeError}
+            tabIndex={0}></iframe>
+        )}
       </div>
       {showMessageModal && (
         <MessageModal
