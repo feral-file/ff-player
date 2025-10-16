@@ -30,11 +30,7 @@ import {
   CursorPositionListener,
   CursorPosition,
 } from './custom-hooks/useCursorPositions';
-import {
-  DEFAULT_PLAYLIST_URL,
-  LocalStorageItem,
-  NO_DURATION_VALUE,
-} from '@/constants';
+import { LocalStorageItem, NO_DURATION_VALUE } from '@/constants';
 import { ErrorType } from '@/models/error.model';
 import {
   DP1Action,
@@ -125,9 +121,7 @@ class CanvasService {
   }
 
   public static getInstance() {
-    if (!CanvasService.instance) {
-      CanvasService.instance = new CanvasService();
-    }
+    CanvasService.instance ??= new CanvasService();
     return CanvasService.instance;
   }
 
@@ -155,16 +149,16 @@ class CanvasService {
     this.nowDisplayPlaylist({ dp1CallData });
   }
 
-  public async castDefaultPlaylist(): Promise<void> {
+  public async castPlaylistByURL(playlistURL: string): Promise<void> {
     try {
-      console.log('[AppContext] Fetching default playlist...');
-      const defaultPlaylist = await DP1Service.getDefaultPlaylist();
+      console.log('[CanvasService] Fetching playlist from:', playlistURL);
+      const defaultPlaylist = await DP1Service.getPlaylist(playlistURL);
 
       if (!defaultPlaylist) {
         return;
       }
 
-      console.log('[AppContext] Default playlist fetched, casting...');
+      console.log('[CanvasService] Default playlist fetched, casting...');
 
       // Build the message data structure for displayPlaylist command
       const messageData = {
@@ -174,24 +168,24 @@ class CanvasService {
             action: DP1Action.NowDisplay,
           },
           dp1_call: defaultPlaylist,
-          playlistUrl: DEFAULT_PLAYLIST_URL,
+          playlistUrl: playlistURL,
         },
       };
 
       // Simulate processMessage with the built message data
-      console.log('[AppContext] Processing default playlist message');
+      console.log('[CanvasService] Processing default playlist message');
       const reply = canvasService.processMessage(messageData);
 
       if (reply?.ok) {
-        console.log('[AppContext] Default playlist cast successfully');
+        console.log('[CanvasService] Default playlist cast successfully');
       } else {
         console.error(
-          '[AppContext] Failed to cast default playlist:',
+          '[CanvasService] Failed to cast default playlist:',
           JSON.stringify(reply)
         );
       }
     } catch (error) {
-      console.error('[AppContext] Error in castDefaultPlaylist:', error);
+      console.error('[CanvasService] Error in castPlaylistByURL:', error);
     }
   }
 

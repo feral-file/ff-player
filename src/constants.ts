@@ -9,6 +9,8 @@ export enum LocalStorageItem {
 export const AppSettings = {
   VERSION_CHECK_INTERVAL_DURATION: 1000 * 60 * 60, // 1 minutes
   STANDARD_HEIGHT: 1080,
+  DEFAULT_PLAYLIST_URL:
+    'https://dp1-feed-operator-api-prod.autonomy-system.workers.dev/api/v1/playlists/503e271c-7d96-4d80-ae10-ae2ba658d535',
 };
 
 export const CLIENT_BANDWIDTH_HINT = 16; // Mbps
@@ -22,5 +24,3 @@ export const NO_DURATION_VALUE = 999999999;
 export const NETWORK_ERROR_MESSAGE = 'Network error';
 export const NETWORK_ERROR_RETRY_COUNT = 3;
 export const NETWORK_ERROR_RETRY_DELAY = 1000;
-export const DEFAULT_PLAYLIST_URL =
-  'https://dp1-feed-operator-api-prod.autonomy-system.workers.dev/api/v1/playlists/0f7a3583-6c45-4e77-a2de-a39efe4fa731';
