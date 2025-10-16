@@ -58,31 +58,6 @@ export async function getContentTypeFromURL(
   }
 }
 
-export function convertToIndexerTokenID(
-  blockchain: string,
-  contractAddress: string,
-  tokenID: string
-): string {
-  switch (blockchain) {
-    case 'ethereum':
-    case 'evm': {
-      return `eth-${contractAddress}-${tokenID}`;
-    }
-
-    case 'bitmark': {
-      return `bmk--${tokenID}`;
-    }
-
-    case 'tezos': {
-      return `tez-${contractAddress}-${tokenID}`;
-    }
-
-    default: {
-      return '';
-    }
-  }
-}
-
 export function convertScalingToObjectFit(
   scalingMode?: Scaling
 ): 'contain' | 'cover' | 'fill' {

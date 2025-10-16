@@ -6,73 +6,42 @@ import MessageModal from '@/components/MessageModal';
 import { ErrorType } from '@/models/error.model';
 import { canvasService } from '@/services/CanvasService';
 import { CastCommand } from '@/models';
-import { IndexerService } from '@/services/IndexerService';
-import { convertToIndexerTokenID } from '@/utils/helper';
 
 const ErrorPage = () => {
   const searchParams = useSearchParams();
   const [message, setMessage] = useState<string>('');
   const [title, setTitle] = useState<string>('Issue Detected');
 
-  async function getPlayingArtworkTitle() {
-    let playingArtworkTitle: string | undefined;
+  function getPlayingArtworkTitle(): string | undefined {
     const castInfo = canvasService.getCastInfo();
-    switch (castInfo?.castCommand) {
-      case CastCommand.displayPlaylist: {
-        if (!castInfo.playlist?.items?.length) {
-          break;
-        }
 
-        const playingArtwork = castInfo.playlist.items[castInfo.index ?? 0];
-        if (playingArtwork.title) {
-          playingArtworkTitle = playingArtwork.title;
-          break;
-        }
-
-        if (!playingArtwork.provenance?.contract) {
-          break;
-        }
-
-        const tokenID = convertToIndexerTokenID(
-          playingArtwork.provenance.contract.chain,
-          playingArtwork.provenance.contract.address,
-          playingArtwork.provenance.contract.tokenId
-        );
-        const token = await IndexerService.queryIndexerToken(tokenID);
-        playingArtworkTitle = token?.asset?.metadata.project.latest.title;
-        break;
-      }
+    if (
+      castInfo?.castCommand !== CastCommand.displayPlaylist ||
+      !Array.isArray(castInfo.playlist?.items) ||
+      !castInfo.playlist.items.length
+    ) {
+      return undefined;
     }
 
-    return playingArtworkTitle;
+    const playingArtwork = castInfo.playlist.items[castInfo.index ?? 0];
+    return playingArtwork.title?.trim() ?? undefined;
   }
 
   useEffect(() => {
     const errorType = searchParams.get('error');
 
-    switch (errorType) {
-      case ErrorType.Overheating: {
-        getPlayingArtworkTitle()
-          .then(title => {
-            setTitle('System Overheating Detected');
-            setMessage(
-              `The device temperature has exceeded safe operating levels${title ? ` while viewing ${title}` : ''}. To prevent damage, playback has been paused. Please reboot the device to continue viewing the artwork.`
-            );
-          })
-          .catch((error: unknown) => {
-            console.log(
-              '[ErrorPage] Error when get current playing artwork title',
-              error
-            );
-          });
+    if (!errorType) return;
 
-        break;
-      }
-
-      default: {
-        break;
-      }
+    if (errorType === ErrorType.Overheating.toString()) {
+      const playingArtworkTitle = getPlayingArtworkTitle();
+      setTitle('System Overheating Detected');
+      setMessage(
+        `The device temperature has exceeded safe operating levels` +
+          (playingArtworkTitle ? ` while viewing ${playingArtworkTitle}` : '') +
+          `. To prevent damage, playback has been paused. Please reboot the device to continue viewing the artwork.`
+      );
     }
+    // More error types in the future as needed
   }, [searchParams]);
 
   return (

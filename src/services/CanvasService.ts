@@ -11,7 +11,6 @@ import {
   CastCommand,
   CastInfo,
   ConnectReplyV2,
-  ConnectRequestV2,
   DisconnectReplyV2,
   UpdateArtFramingRequest,
   UpdateCursorPositionsRequest,
@@ -228,7 +227,7 @@ class CanvasService {
 
       switch (command) {
         case CastCommand.connect:
-          return this.connect(requestJson as ConnectRequestV2);
+          return this.connect();
         case CastCommand.disconnect:
           return this.disconnect();
         case CastCommand.checkStatus:
@@ -287,22 +286,13 @@ class CanvasService {
     };
   }
 
-  private connect(request: ConnectRequestV2): ConnectReplyV2 {
-    console.log('[CanvasService] Connect request:');
-
-    DeviceManager.setDeviceId(request.clientDevice.device_id ?? '');
-    DeviceManager.setName(request.clientDevice.device_name ?? '');
-
+  private connect(): ConnectReplyV2 {
     this.setCastInfo({
       ...(this.castInfo ?? {}),
       castCommand: CastCommand.connect,
-      deviceInfo: request.clientDevice,
     });
 
-    console.log(
-      '[CAST] Connected device:',
-      JSON.stringify(request.clientDevice)
-    );
+    console.log('[CAST] Connected device');
     return { ok: true };
   }
 
@@ -433,7 +423,6 @@ class CanvasService {
     console.log('[CanvasService] Display playlist');
     this.setCastInfo({
       castCommand: CastCommand.displayPlaylist,
-      deviceInfo: this.castInfo?.deviceInfo,
       playlist: {
         ...request.dp1CallData,
         items: request.dp1CallData.items.map(item => ({

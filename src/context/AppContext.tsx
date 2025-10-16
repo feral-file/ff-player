@@ -104,10 +104,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
       const hasCriticalTemp =
         localStorage.getItem(LocalStorageItem.criticalTemp) === 'true';
       if (hasCriticalTemp) {
-        // Reset to default playlist
-        castInfo = {
-          deviceInfo: castInfo.deviceInfo,
-        };
         // Fetch and cast default playlist after critical temp reset
         canvasService.castDefaultPlaylist().catch((error: unknown) => {
           console.error(

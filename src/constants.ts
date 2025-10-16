@@ -1,8 +1,5 @@
 export enum LocalStorageItem {
-  deviceId = 'device_id',
   castInfo = 'castInfo',
-  name = 'device_name',
-  metricEvents = 'metricEvents',
   displaySettings = 'displaySettings',
   viewMode = 'viewMode',
   criticalTemp = 'criticalTemp',

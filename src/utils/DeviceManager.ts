@@ -13,22 +13,6 @@ class DeviceManager {
     localStorage.setItem(key, value);
   }
 
-  public getDeviceId(): string | null {
-    return this.getFromLocalStorage(LocalStorageItem.deviceId);
-  }
-
-  public setDeviceId(deviceId: string): void {
-    this.setToLocalStorage(LocalStorageItem.deviceId, deviceId);
-  }
-
-  public getName(): string {
-    return this.getFromLocalStorage(LocalStorageItem.name) ?? 'Unknown';
-  }
-
-  public setName(name: string): void {
-    this.setToLocalStorage(LocalStorageItem.name, name);
-  }
-
   public getDeviceDisplaySettings(): DisplaySettings | null {
     const config = this.getFromLocalStorage(LocalStorageItem.displaySettings);
     return config ? (JSON.parse(config) as DisplaySettings) : null;

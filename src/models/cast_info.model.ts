@@ -1,4 +1,3 @@
-import { DeviceInfo } from './cast_request_reply.model';
 import { DP1Call } from './dp1.model';
 
 export enum CastCommand {
@@ -21,7 +20,6 @@ export enum CastCommand {
 
 export interface CastInfo {
   castCommand?: CastCommand;
-  deviceInfo?: DeviceInfo;
 
   // Cast list artwork
   startTime?: number;
