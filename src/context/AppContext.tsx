@@ -117,6 +117,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
         });
         localStorage.removeItem(LocalStorageItem.criticalTemp);
         return;
+      } else if (castInfo.castCommand?.toString() === 'castDaily') {
+        canvasService.castDefaultPlaylist().catch((error: unknown) => {
+          console.error('[AppContext] Error fetching default playlist:', error);
+        });
       } else if (castInfo.playlist?.items && castInfo.index !== undefined) {
         // Recalculate startTime based on current index to ensure correct display
         console.log(
