@@ -52,14 +52,10 @@ const ArtworkPlayer = ({
   artworkPreviewMIMEType?: string;
   displayPreferences: DP1DisplayPreference;
 }) => {
-  const FADE_IN_BUFFER_MS = 50;
   const FADE_IN_OUT_DURATION_MS = 350;
   const { context } = useAppContext();
   const [opacity, setOpacity] = useState(1);
   const [displayPreviewURL, setDisplayPreviewURL] = useState<string>('');
-  const fadeInTimeoutRef = useRef<ReturnType<typeof setInterval> | undefined>(
-    undefined
-  );
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [displaySoftwareURL, setDisplaySoftwareURL] =
     useState<string>(previewURL);
@@ -218,26 +214,16 @@ const ArtworkPlayer = ({
     };
 
     if (previewURL) {
-      if (fadeInTimeoutRef.current) {
-        clearTimeout(fadeInTimeoutRef.current);
-      }
-
       setOpacity(0);
       setPreviewType(null);
-      detectPreviewType(previewURL).catch((err: unknown) => {
-        console.error(err);
-      });
-
-      fadeInTimeoutRef.current = setTimeout(() => {
-        setDisplayPreviewURL(previewURL);
-      }, FADE_IN_OUT_DURATION_MS + FADE_IN_BUFFER_MS);
+      detectPreviewType(previewURL)
+        .catch((err: unknown) => {
+          console.error(err);
+        })
+        .finally(() => {
+          setDisplayPreviewURL(previewURL);
+        });
     }
-
-    return () => {
-      if (fadeInTimeoutRef.current) {
-        clearTimeout(fadeInTimeoutRef.current);
-      }
-    };
   }, [previewURL]);
 
   useEffect(() => {
