@@ -24,6 +24,7 @@ import {
   MoveToArtworkRequest as MoveToItemRequest,
   MoveToArtworkReply as MoveToItemReply,
   DisplaySettings,
+  ViewMode,
 } from '@/models';
 import DeviceManager from '@/utils/DeviceManager';
 import {
@@ -277,6 +278,7 @@ class CanvasService {
         scaling:
           DeviceManager.getDeviceDisplaySettings()?.scaling ??
           DisplaySettings.defaultScaling,
+        orientation: DeviceManager.getViewMode() ?? ViewMode.landscape,
       },
     };
   }
