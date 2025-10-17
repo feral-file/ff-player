@@ -31,7 +31,11 @@ import {
   CursorPositionListener,
   CursorPosition,
 } from './custom-hooks/useCursorPositions';
-import { DEFAULT_PLAYLIST_URL, LocalStorageItem } from '@/constants';
+import {
+  DEFAULT_PLAYLIST_URL,
+  LocalStorageItem,
+  NO_DURATION_VALUE,
+} from '@/constants';
 import { ErrorType } from '@/models/error.model';
 import {
   DP1Action,
@@ -434,7 +438,7 @@ class CanvasService {
         ...request.dp1CallData,
         items: request.dp1CallData.items.map(item => ({
           ...item,
-          duration: item.duration ?? 0,
+          duration: item.duration ?? NO_DURATION_VALUE,
         })),
       },
       playlistUrl: request.playlistUrl,

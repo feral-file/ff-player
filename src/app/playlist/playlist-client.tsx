@@ -7,7 +7,10 @@ import { getIndex, recalculateStartTimeForIndex } from '@/utils/playlist';
 import { CastCommand } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import { defaultDP1DisplayPreference, DP1Item } from '@/models/dp1.model';
-import { LEE_MULLICAN_EXHIBITION_CONTRACT } from '@/constants';
+import {
+  LEE_MULLICAN_EXHIBITION_CONTRACT,
+  NO_DURATION_VALUE,
+} from '@/constants';
 import { canvasService } from '@/services/CanvasService';
 import { convertToIndexerTokenID } from '@/utils/helper';
 
@@ -180,7 +183,7 @@ export default function PlaylistClient() {
       clearInterval(intervalRef.current);
     }
 
-    if (duration === 0) {
+    if (duration === 0 || duration === NO_DURATION_VALUE) {
       return;
     }
 

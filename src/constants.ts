@@ -19,6 +19,8 @@ export const CLIENT_BANDWIDTH_HINT = 16; // Mbps
 export const LEE_MULLICAN_EXHIBITION_CONTRACT =
   'KT1CtDPiLjHiU1LVLrhshDry8jkR9h29tXNo';
 
+export const NO_DURATION_VALUE = 999999999;
+
 // Network error
 export const NETWORK_ERROR_MESSAGE = 'Network error';
 export const NETWORK_ERROR_RETRY_COUNT = 3;
