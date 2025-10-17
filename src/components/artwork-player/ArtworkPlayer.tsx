@@ -535,7 +535,7 @@ const ArtworkPlayer = ({
           <iframe
             key={iframeKey}
             ref={iframeRef}
-            style={{ width: '100%', height: '100%' }}
+            className={styles.iframe}
             src={displaySoftwareURL}
             onLoad={handleIframeLoad}
             onError={handleLoadIframeError}
@@ -544,7 +544,7 @@ const ArtworkPlayer = ({
         )}
         {displaySoftwareURL && previewType === PreviewHTMLTag.iframePDF && (
           <iframe
-            style={{ width: '100%', height: '100%' }}
+            className={styles.iframe}
             src={displaySoftwareURL}
             onLoad={handleIframeLoad}
             onError={handleLoadIframeError}
