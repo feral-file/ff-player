@@ -22,7 +22,7 @@ export function getIndex(playlistItems: DP1Item[], startTime: number): number {
     }
   }
 
-  return index;
+  return index % playlistItems.length;
 }
 
 export function calculateStartTime(
