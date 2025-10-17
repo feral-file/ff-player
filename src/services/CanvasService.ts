@@ -212,6 +212,17 @@ class CanvasService {
 
     const requestJson = messageData.request;
     const reply = this.commandHandler(command, requestJson);
+
+    const logReply = {
+      ...reply,
+      playlist: {
+        ...(reply as CheckDeviceStatusReply).playlist,
+        items: undefined,
+      },
+      items: undefined,
+      itemLength: (reply as CheckDeviceStatusReply).items?.length,
+    };
+    console.log('[CAST] reply:', JSON.stringify(logReply));
     return reply;
   }
 
