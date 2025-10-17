@@ -1,5 +1,17 @@
-import { AssetConfiguration } from './token.model';
 import { Scaling } from './dp1.model';
+
+interface AssetConfiguration {
+  scaling?: string;
+  backgroundColor?: string;
+  marginLeft?: number;
+  marginRight?: number;
+  marginTop?: number;
+  marginBottom?: number;
+  autoPlay?: boolean;
+  looping?: boolean;
+  interactable?: boolean;
+  overridable?: boolean;
+}
 
 export class DisplaySettings {
   scaling?: Scaling;

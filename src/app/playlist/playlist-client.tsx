@@ -6,18 +6,12 @@ import { getIndex, recalculateStartTimeForIndex } from '@/utils/playlist';
 import { CastCommand } from '@/models';
 import { useEffect, useRef, useState } from 'react';
 import { defaultDP1DisplayPreference, DP1Item } from '@/models/dp1.model';
-import {
-  LEE_MULLICAN_EXHIBITION_CONTRACT,
-  NO_DURATION_VALUE,
-} from '@/constants';
+import { NO_DURATION_VALUE } from '@/constants';
 import { canvasService } from '@/services/CanvasService';
 
 export default function PlaylistClient() {
   const { context } = useAppContext();
   const castInfo = context.castInfo;
-
-  const [isLeeMullicanExhibition, setIsLeeMullicanExhibition] =
-    useState<boolean>(false);
 
   const [playlist, setPlaylist] = useState<DP1Item[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
@@ -61,10 +55,6 @@ export default function PlaylistClient() {
 
     // Setup data for ArtworkPlayer component
     setCastPreviewURL(currentItem.source);
-    setIsLeeMullicanExhibition(
-      currentItem.provenance?.contract?.address ===
-        LEE_MULLICAN_EXHIBITION_CONTRACT
-    );
 
     if (!castInfo?.isPaused) {
       startInterval(currentItem.duration ?? 0);
@@ -302,7 +292,6 @@ export default function PlaylistClient() {
       <div style={{ width: '100%', height: '100%' }}>
         <ArtworkPlayer
           previewURL={castPreviewURL ?? ''}
-          isCustomView={isLeeMullicanExhibition}
           displayPreferences={{
             ...(currentItemRef.current?.display ?? {}),
             ...defaultDP1DisplayPreference,
