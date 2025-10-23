@@ -379,13 +379,12 @@ export default function PlaylistClient() {
   return (
     <>
       <div style={{ width: '100%', height: '100%' }}>
-        <ArtworkPlayer
-          previewURL={castPreviewURL ?? ''}
-          displayPreferences={{
-            ...defaultDP1DisplayPreference,
-            ...(currentItemDisplayPreference ?? {}),
-          }}
-        />
+        {currentItemDisplayPreference && (
+          <ArtworkPlayer
+            previewURL={castPreviewURL ?? ''}
+            displayPreferences={currentItemDisplayPreference}
+          />
+        )}
       </div>
     </>
   );
