@@ -1,3 +1,5 @@
+import { DisplayOrientation } from './common.model';
+
 export interface DP1 {
   intent: DP1Intent;
   dp1_call: DP1Call;
@@ -39,9 +41,14 @@ export interface DP1Item {
   source: string;
   duration?: number;
   license: DP1License;
-  ref?: string;
+  ref?: string; // URL ipfs:// or https://... (content-addressed preferred)
+  refHash?: string; // When "ref" uses HTTPS, the "refHash" field is required for integrity.
   override?: {
-    duration: number;
+    duration?: number;
+    display?: DP1DisplayPreference;
+    license?: DP1License;
+    repro?: DP1Repro;
+    provenance?: DP1Provenance;
   };
   display?: DP1DisplayPreference;
   repro?: DP1Repro;
@@ -146,3 +153,44 @@ export const defaultDP1DisplayPreference: DP1DisplayPreference = {
   },
   userOverrides: true,
 };
+
+// ---- Manifest envelope which content from "ref" of DP1Item ----
+export interface RefManifest {
+  refVersion: string;
+  id: string; // unique identifier (for caching)
+  created: string;
+  locale?: string; // 'en' as default locale
+  metadata?: RefManifestMetadata;
+  controls?: RefManifestControls;
+  i18n?: Record<string, unknown>;
+}
+
+export interface RefManifestMetadata {
+  title: string;
+  artists: { name: string; id: string; url?: string }[];
+  creditLine: string;
+  description: string;
+  tags: string[];
+  thumbnails: {
+    small: RefManifestThumbnail;
+    large: RefManifestThumbnail;
+    xlarge: RefManifestThumbnail;
+    default: RefManifestThumbnail;
+  };
+}
+
+interface RefManifestThumbnail {
+  uri: string;
+  w: number;
+  h: number;
+  sha256: string;
+}
+
+export interface RefManifestControls {
+  display: DP1DisplayPreference;
+  safety: {
+    orientation: DisplayOrientation[]; // ['landscape', 'portrait', 'any']
+    maxCpuPct: number;
+    maxMemMB: number;
+  };
+}
