@@ -60,9 +60,24 @@ export default function PlaylistClient() {
 
     const index = currentIndex % playlist.length;
     const currentItem = playlist[index];
-    if (currentItem !== currentItemRef.current) {
-      currentItemRef.current = currentItem;
-    }
+    currentItemRef.current = currentItem;
+
+    handleItemDisplayPreference(currentItem, playlistDefaultsSettings).catch(
+      (error: unknown) => {
+        console.error(
+          '[PlaylistClient] Error handling item display preference',
+          error instanceof Error ? error.message : String(error)
+        );
+        Sentry.captureMessage(
+          '[PlaylistClient] Error handling item display preference',
+          {
+            extra: {
+              error: error instanceof Error ? error.message : String(error),
+            },
+          }
+        );
+      }
+    );
 
     // Setup data for ArtworkPlayer component
     setCastPreviewURL(currentItem.source);
@@ -298,6 +313,7 @@ export default function PlaylistClient() {
             indexRef.current = -1;
             setCurrentIndex(-1);
             setPlaylistDefaultsSettings(null);
+            currentItemRef.current = undefined;
 
             if (castInfo.playlist?.items?.length) {
               if (castInfo.playlist.defaults?.display) {
@@ -361,30 +377,6 @@ export default function PlaylistClient() {
       handlePauseCasting();
     }
   }, [context.isOnline]);
-
-  useEffect(() => {
-    if (!currentItemRef.current) {
-      return;
-    }
-
-    handleItemDisplayPreference(
-      currentItemRef.current,
-      playlistDefaultsSettings
-    ).catch((error: unknown) => {
-      console.error(
-        '[PlaylistClient] Error handling item display preference',
-        error instanceof Error ? error.message : String(error)
-      );
-      Sentry.captureMessage(
-        '[PlaylistClient] Error handling item display preference',
-        {
-          extra: {
-            error: error instanceof Error ? error.message : String(error),
-          },
-        }
-      );
-    });
-  }, [playlistDefaultsSettings, currentItemRef.current]);
 
   return (
     <>
