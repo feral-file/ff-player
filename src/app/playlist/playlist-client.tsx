@@ -105,10 +105,8 @@ export default function PlaylistClient() {
       let refDisplay: DP1DisplayPreference | undefined;
       try {
         if (dp1Item.ref) {
-          const manifest = await DP1Service.getItemRef(
-            dp1Item.ref,
-            dp1Item.refHash
-          );
+          // TODO: Implement ref hash verification
+          const manifest = await DP1Service.getItemRef(dp1Item.ref);
           refDisplay = manifest?.controls?.display;
         }
       } catch {

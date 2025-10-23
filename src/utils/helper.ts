@@ -117,7 +117,7 @@ export function deepEqual(a: any, b: any): boolean {
   return false;
 }
 
-// ---- Fetch content of item.ref ----
+// ---- TODO: Implement ref hash verification on DP1Service.getItemRef ----
 export async function sha256hex(
   bytes: Uint8Array<ArrayBuffer>
 ): Promise<string> {
