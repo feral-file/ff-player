@@ -15,7 +15,12 @@ export function useArtworkSettings(displayPreferences: DP1DisplayPreference) {
     TokenDisplaySettingWithChanged | null | undefined
   >(displayPreferences);
 
-  // Listen to token display settings changes
+  // Update tokenDisplaySettings when displayPreferences prop changes
+  useEffect(() => {
+    setTokenDisplaySettings(displayPreferences);
+  }, [displayPreferences]);
+
+  // Listen to token display settings changes by user control from mobile app
   useEffect(() => {
     const onSettingsChanged = (
       isSaveToDevice: boolean,
@@ -39,30 +44,11 @@ export function useArtworkSettings(displayPreferences: DP1DisplayPreference) {
   const displaySettings = useMemo(():
     | TokenDisplaySettingWithChanged
     | undefined => {
-    // // ignore first render
-    // if (tokenDisplaySettings === undefined) return undefined;
-    // console.log('[useArtworkSettings] displaySettings', tokenDisplaySettings);
-    // console.log(
-    //   '[useArtworkSettings] context.displaySettings',
-    //   context.displaySettings
-    // );
-    // if (!tokenDisplaySettings) {
-    //   return context.displaySettings ?? DisplaySettings.defaultSettings();
-    // }
-    // if (tokenDisplaySettings.changed) {
-    //   return tokenDisplaySettings;
-    // }
-    // if (tokenDisplaySettings.userOverrides) {
-    //   return {
-    //     ...tokenDisplaySettings,
-    //     ...context.displaySettings,
-    //   };
-    // }
-    // return tokenDisplaySettings;
-
     return {
       ...tokenDisplaySettings,
-      ...context.displaySettings,
+      ...(context.displaySettings
+        ? Object.fromEntries(Object.entries(context.displaySettings))
+        : {}),
     };
   }, [tokenDisplaySettings, context.displaySettings]);
 

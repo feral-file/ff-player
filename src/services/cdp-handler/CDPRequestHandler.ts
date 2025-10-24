@@ -20,9 +20,7 @@ export class CDPRequestHandler {
   }
 
   public static getInstance(): CDPRequestHandler {
-    if (!CDPRequestHandler.instance) {
-      CDPRequestHandler.instance = new CDPRequestHandler();
-    }
+    CDPRequestHandler.instance ??= new CDPRequestHandler();
     return CDPRequestHandler.instance;
   }
 
@@ -138,8 +136,8 @@ export class CDPRequestHandler {
     try {
       console.log('[CDP] Watchdog event received:', event);
 
-      switch (event as WatchdogEvent) {
-        case WatchdogEvent.CriticalCPUTemperature: {
+      switch (event) {
+        case WatchdogEvent.CriticalCPUTemperature.toString(): {
           handleOverheatingError();
           return JSON.stringify({
             message: { ok: true },
