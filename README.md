@@ -1,6 +1,6 @@
-# Feral File Display app
+# Feral File Display App
 
-Feral File Display app designed to connect with a WebSocket server, process commands, and generate a Branch.io deep link for further actions. 
+A Next.js application for displaying digital artworks in a playlist format. This is player of FF1 - The art computer by Feral File.
 
 ## Table of Contents
 
@@ -10,17 +10,22 @@ Feral File Display app designed to connect with a WebSocket server, process comm
   - [Installation](#installation)
   - [Running the Project](#running-the-project)
 - [Usage](#usage)
-  - [WebSocket Communication](#websocket-communication)
-  - [Branch.io Integration](#branchio-integration)
+  - [Artwork Display](#artwork-display)
+  - [Playlist Management](#playlist-management)
+  - [Display Settings](#display-settings)
 - [Project Structure](#project-structure)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## Features
 
-- **WebSocket Communication:** Establishes a connection with a WebSocket server and processes incoming commands.
-- **Branch.io Integration:** Generates a Branch.io deep link based on device information and displays it as a QR code.
-- **Device Management:** Stores and retrieves device-related information using local storage.
+- **Artwork Playlist Display:** Displays digital artworks in a timed playlist format with automatic progression
+- **Multi-format Support:** Supports images, videos, audio, PDFs, and interactive content (iframes)
+- **Display Settings:** Configurable scaling, background colors, margins, and playback settings
+- **CDP Communication:** Real-time communication for remote control and playlist updates
+- **Device Management:** Handles device rotation, network status, and display preferences
+- **Error Recovery:** Automatic WebGL context recovery and error handling
+- **Cursor Tracking:** Multi-cursor position tracking for interactive displays
 
 ## Getting Started
 
@@ -67,13 +72,30 @@ Open your browser and navigate to `http://localhost:3000` to view the applicatio
 
 ## Usage
 
-### WebSocket Communication
+### Artwork Display
 
-The application connects to a WebSocket server to receive and process commands. It uses the `ReconnectingWebSocket` library to manage the WebSocket connection, ensuring it reconnects automatically if the connection is lost.
+The application displays digital artworks in a full-screen format with support for:
 
-### Branch.io Integration
+- **Images:** JPG, PNG, GIF, and other image formats
+- **Videos:** MP4, WebM, and HLS streaming
+- **Audio:** MP3, WAV, and other audio formats
+- **Interactive Content:** HTML5 content via iframes
+- **PDFs:** PDF documents in iframe viewers
 
-Once connected to the WebSocket server and receiving a location ID and topic ID, the application generates a Branch.io deep link. This link is then displayed as a QR code, allowing users to scan and continue the process on a mobile device.
+### Playlist Management
+
+- **Timed Playlists:** Artworks are displayed for specified durations
+- **Automatic Progression:** Seamless transitions between artworks
+- **Remote Control:** CDP request for playlist navigation and updates
+
+### Display Settings
+
+Configure how artworks are displayed:
+
+- **Scaling:** Fit, fill, or custom scaling options
+- **Background:** Custom background colors
+- **Margins:** Adjustable margins around content
+- **Playback:** Auto-play and loop settings
 
 ## Project Structure
 
@@ -81,15 +103,21 @@ Here's a brief overview of the project's structure:
 
 ```
 .
-├── public/               # Static assets
+├── public/               # Static assets and fonts
 ├── src/                  # Source files
+│   ├── app/              # Next.js app router pages
+│   │   ├── page.tsx      # Home page
+│   │   ├── playlist/     # Playlist display page
 │   ├── components/       # React components
-│   ├── services/         # Service files (e.g., WebSocket, Branch.io)
-│   ├── utils/            # Utility functions and helpers
-│   ├── types/            # TypeScript types and interfaces
-│   ├── App.tsx           # Main application component
-│   └── index.tsx         # Entry point for React
-├── .env                  # Environment variables
+│   │   ├── artwork-player/  # Artwork display component
+│   │   ├── loading/      # Loading components
+│   │   └── ...           # Other UI components
+│   ├── context/          # React context providers
+│   ├── models/           # TypeScript type definitions
+│   ├── services/         # Business logic and API services
+│   │   ├── custom-hooks/ # Custom React hooks
+│   │   └── cdp-handler/  # Chrome DevTools Protocol handler
+│   └── utils/            # Utility functions and helpers
 ├── package.json          # Project metadata and dependencies
 └── README.md             # Project documentation
 ```
