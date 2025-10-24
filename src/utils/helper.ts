@@ -86,39 +86,6 @@ export function getDP1Margin(margin: number | string): string {
   return margin;
 }
 
-export function getDimensionsWithMargin(margin: number | string | undefined): {
-  width: string;
-  height: string;
-  padding: string;
-} {
-  if (!margin) {
-    return {
-      width: '100vw',
-      height: '100vh',
-      padding: '0px',
-    };
-  }
-
-  const marginStr = getDP1Margin(margin);
-  const marginParts = marginStr.split(' ');
-
-  if (marginParts.length === 2) {
-    // Format: "5vh 5vw" (vertical horizontal)
-    return {
-      width: `calc(100vw - ${marginParts[1]} * 2)`,
-      height: `calc(100vh - ${marginParts[0]} * 2)`,
-      padding: marginStr,
-    };
-  } else {
-    // Format: "10px" (same for all sides)
-    return {
-      width: `calc(100vw - ${marginStr} * 2)`,
-      height: `calc(100vh - ${marginStr} * 2)`,
-      padding: marginStr,
-    };
-  }
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function deepEqual(a: any, b: any): boolean {
   if (a === b) return true;

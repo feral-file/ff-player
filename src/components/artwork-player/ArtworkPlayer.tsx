@@ -26,7 +26,7 @@ import {
 import {
   getContentTypeFromURL,
   convertScalingToObjectFit,
-  getDimensionsWithMargin,
+  getDP1Margin,
 } from '@/utils/helper';
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
 import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
@@ -469,7 +469,11 @@ const ArtworkPlayer = ({
           position: 'relative',
           transition: `opacity ${FADE_IN_OUT_DURATION_MS.toString()}ms, padding 0.2s ease`,
           opacity: opacity,
-          ...getDimensionsWithMargin(displaySettings?.margin),
+          padding: displaySettings?.margin
+            ? getDP1Margin(displaySettings.margin)
+            : '0px',
+          width: '100vw',
+          height: '100vh',
         }}>
         <CursorLayer ref={cursorRef} />
         {(previewType === null || loading) && <Loading />}
