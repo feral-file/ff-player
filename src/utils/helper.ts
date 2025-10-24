@@ -21,6 +21,9 @@ export async function getContentTypeFromURL(
   try {
     const response = await fetch(extendPreviewURL, {
       method: 'HEAD',
+      headers: {
+        'Cache-Control': 'no-cache',
+      },
     });
     const contentType = response.headers.get('Content-Type');
     if (contentType) {
