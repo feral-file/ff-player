@@ -180,6 +180,8 @@ const ArtworkPlayer = ({
   useEffect(() => {
     const detectPreviewType = async (previewURL: string) => {
       console.log('[ArtworkPlayer] detectPreviewType', previewURL);
+      let extendedURL = previewURL; // Default to original URL
+
       try {
         if (artworkPreviewMIMEType) {
           compareToGetFileType(artworkPreviewMIMEType);
@@ -195,13 +197,15 @@ const ArtworkPlayer = ({
           return;
         }
 
-        const contentType = await getContentTypeFromURL(previewURL);
-        compareToGetFileType(contentType);
-        console.log('[ArtworkPlayer] Content-Type:', contentType);
+        const result = await getContentTypeFromURL(previewURL);
+        extendedURL = result.extendedURL;
+        compareToGetFileType(result.contentType);
+        console.log('[ArtworkPlayer] Content-Type:', result.contentType);
+        console.log('[ArtworkPlayer] Extended URL:', extendedURL);
         Sentry.addBreadcrumb({
           category: 'ArtworkPlayer',
           message: 'play artwork',
-          data: { previewURL, contentType },
+          data: { previewURL, contentType: result.contentType },
         });
       } catch (error) {
         console.log(
@@ -210,19 +214,17 @@ const ArtworkPlayer = ({
         );
         Sentry.captureException(error);
         setPreviewType(PreviewHTMLTag.iframe);
+      } finally {
+        setDisplayPreviewURL(extendedURL);
       }
     };
 
     if (previewURL) {
       setOpacity(0);
       setPreviewType(null);
-      detectPreviewType(previewURL)
-        .catch((err: unknown) => {
-          console.error(err);
-        })
-        .finally(() => {
-          setDisplayPreviewURL(previewURL);
-        });
+      detectPreviewType(previewURL).catch((err: unknown) => {
+        console.error(err);
+      });
     }
   }, [previewURL]);
 

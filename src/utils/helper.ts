@@ -9,7 +9,7 @@ import { Scaling } from '@/models/dp1.model';
 
 export async function getContentTypeFromURL(
   previewURL: string
-): Promise<string> {
+): Promise<{ contentType: string; extendedURL: string }> {
   const url = new URL(previewURL);
   // The second request could be failed, Chrome uses the cached response from the first request, which has no "Access-Control-Allow-Origin" response header.
   // Workaround: Use a dummy "?x-some-key=some-value" query string parameter will convince the browser that the request is different.
@@ -25,7 +25,7 @@ export async function getContentTypeFromURL(
     });
     const contentType = response.headers.get('Content-Type');
     if (contentType) {
-      return contentType;
+      return { contentType, extendedURL: extendPreviewURL };
     }
     throw new Error('No content type found in headers');
   } catch (error) {
@@ -51,7 +51,7 @@ export async function getContentTypeFromURL(
 
       if (inferredType) {
         console.log('[ContentType] Inferred Content-Type:', inferredType);
-        return inferredType;
+        return { contentType: inferredType, extendedURL: extendPreviewURL };
       }
     }
 
