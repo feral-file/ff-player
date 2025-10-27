@@ -30,7 +30,10 @@ export const FileUseImage: string[] = [
   'svg',
   'application/xml',
 ];
-export const MIMETypeUseStream: string[] = ['application/x-mpegurl'];
+export const MIMETypeUseStream: string[] = [
+  'application/x-mpegurl',
+  'application/vnd.apple.mpegurl',
+];
 export const MIMETypeVideo = 'video/*';
 export const MIMETypeAudio = 'audio/*';
 export const MIMETypeImage = 'image/*';

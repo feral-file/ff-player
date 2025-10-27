@@ -6,7 +6,8 @@ import Loading from '../loading/loading';
 import { useAppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
 import MessageModal from '../MessageModal';
-import { CLIENT_BANDWIDTH_HINT, KNOWN_ORIGINS } from '@/constants';
+import { CLIENT_BANDWIDTH_HINT } from '@/constants';
+import { createMediaLoader, BlobLoadedMediaType } from '@/utils/mediaLoader';
 import {
   FileUseAudio,
   FileUseIframePDF,
@@ -54,7 +55,6 @@ const ArtworkPlayer = ({
   const [displaySoftwareURL, setDisplaySoftwareURL] =
     useState<string>(previewURL);
   const [loading, setLoading] = useState<boolean>(true);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [showMessageModal, setShowMessageModal] = useState<boolean>(false);
   const [messageModalText, setMessageModalText] = useState<string | null>(null);
@@ -67,11 +67,15 @@ const ArtworkPlayer = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isWebGLContextLost = useRef<boolean>(false);
 
-  // Image loading
+  // Media loading refs
   const imageRef = useRef<HTMLImageElement | null>(null);
-  const expectedImageSrcRef = useRef<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const { displaySettings } = useArtworkSettings(displayPreferences);
+
+  // Media loader for CORS handling
+  const mediaLoader = useRef(createMediaLoader());
 
   // Cursor layer handle
   const cursorRef = useRef<CursorLayerHandle>(null);
@@ -209,253 +213,174 @@ const ArtworkPlayer = ({
     setLoading(false);
   };
 
-  // Video loading
+  // Video playback handling (after CORS loading)
   useEffect(() => {
-    if (previewType === PreviewHTMLTag.video && videoRef.current) {
-      setOpacity(1);
-      if (
-        isStreaming &&
-        Hls.isSupported() &&
-        displayPreviewURL.endsWith('.m3u8')
-      ) {
-        const hls = new Hls({
-          maxBufferSize: 60 * 1000 * 1000,
-          maxBufferLength: 30,
-          liveSyncDuration: 10,
-        });
-
-        hls.attachMedia(videoRef.current);
-        hls.on(Hls.Events.MEDIA_ATTACHED, () => {
-          hls.loadSource(
-            `${displayPreviewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
-          );
-          videoRef.current
-            ?.play()
-            .catch((error: unknown) => {
-              console.log('Error play video', error);
-            })
-            .finally(() => {
-              setLoading(false);
-            });
-        });
-
-        hls.on(Hls.Events.ERROR, function (event, data) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              if (data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL) {
-                console.log('Buffer stall detected, attempting to recover...');
-                hls.recoverMediaError();
-              }
-              break;
-            default:
-              console.error('An unrecoverable error occurred');
-              hls.destroy();
-              break;
-          }
-        });
-      } else {
-        videoRef.current.src = displayPreviewURL;
-        videoRef.current.addEventListener('loadeddata', () => {
-          videoRef.current
-            ?.play()
-            .catch(() => {
-              reTryToPlayVideo();
-            })
-            .finally(() => {
-              setLoading(false);
-            });
-        });
-      }
-    }
-  }, [previewType, isStreaming, displayPreviewURL]);
-  // ---- End of video loading ----
-
-  // Image loading: Set image source to prevent CORS issues
-  useEffect(() => {
-    if (previewType !== PreviewHTMLTag.image || !imageRef.current) {
+    const videoElement = videoRef.current;
+    if (previewType !== PreviewHTMLTag.video || !videoElement) {
       return;
     }
 
-    const imgElement = imageRef.current;
-    expectedImageSrcRef.current = null;
-    let currentObjectURL: string | null = null;
-    let isCancelled = false;
-    let loadAttempts = 0;
-    const maxAttempts = 2;
-    let hasFinalized = false;
+    setOpacity(1);
 
-    const cleanupURL = () => {
-      if (currentObjectURL) {
-        URL.revokeObjectURL(currentObjectURL);
-        currentObjectURL = null;
-      }
-    };
-
-    const finalizeLoad = () => {
-      if (hasFinalized || isCancelled) {
-        return;
-      }
-      hasFinalized = true;
-      cleanupURL();
-      loadedSource();
-    };
-
-    const handleError = (
-      sourceURL: string,
-      stage: 'trusted' | 'blob' | 'fallback',
-      attempt: number
-    ) => {
-      cleanupURL();
-      console.error(
-        `[ArtworkPlayer] Image load failed (attempt ${String(attempt)}/${String(maxAttempts)}):`,
-        {
-          sourceURL,
-          stage,
-          displayPreviewURL,
-        }
-      );
-
-      Sentry.captureMessage('[ArtworkPlayer] Image load failed', {
-        level: 'error',
-        extra: {
-          sourceURL,
-          displayPreviewURL,
-          stage,
-        },
-      });
-    };
-
-    const setSrc = (src: string) => {
-      if (isCancelled) {
-        return;
-      }
-
-      try {
-        expectedImageSrcRef.current = new URL(src, window.location.href).href;
-      } catch {
-        expectedImageSrcRef.current = src;
-      }
-
-      const currentSrc = imgElement.getAttribute('src');
-      if (currentSrc !== src) {
-        imgElement.src = src;
-      }
-
-      const resolvedSrc = imgElement.currentSrc || imgElement.src;
-      if (
-        imgElement.complete &&
-        resolvedSrc &&
-        expectedImageSrcRef.current &&
-        resolvedSrc === expectedImageSrcRef.current
-      ) {
-        finalizeLoad();
-      }
-    };
-
-    const attemptLoad = async (
-      url: string,
-      stage: 'trusted' | 'blob' | 'fallback'
-    ) => {
-      if (isCancelled) {
-        return;
-      }
-
-      loadAttempts++;
-
-      if (stage === 'trusted' || stage === 'fallback') {
-        // Direct loading for trusted origins or fallback
-        imgElement.onload = finalizeLoad;
-        imgElement.onerror = () => {
-          handleError(url, stage, loadAttempts);
-        };
-        setSrc(url);
-        return;
-      }
-
-      // Blob loading for unknown origins
-      try {
-        console.log('[ArtworkPlayer] Fetching image for blob conversion:', url);
-
-        const res = await fetch(url, {
-          mode: 'cors',
-          cache: 'no-store',
-          referrerPolicy: 'no-referrer',
+    const handleVideoPlay = () => {
+      videoElement
+        .play()
+        .catch((error: unknown) => {
+          console.log('Error play video', error);
+          reTryToPlayVideo();
+        })
+        .finally(() => {
+          setLoading(false);
         });
-
-        if (!res.ok) {
-          throw new Error(`HTTP ${String(res.status)}: ${res.statusText}`);
-        }
-
-        const blob = await res.blob();
-        const obj = URL.createObjectURL(blob);
-
-        currentObjectURL = obj;
-
-        imgElement.onload = finalizeLoad;
-        imgElement.onerror = () => {
-          handleError(obj, 'blob', loadAttempts);
-          if (loadAttempts < maxAttempts) {
-            void attemptLoad(displayPreviewURL, 'fallback');
-          }
-        };
-
-        setSrc(obj);
-      } catch (error) {
-        cleanupURL();
-
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        console.error(
-          '[ArtworkPlayer] Error fetching image for blob conversion:',
-          errorMessage
-        );
-
-        Sentry.captureMessage(
-          '[ArtworkPlayer] Error fetching image for blob conversion',
-          {
-            level: 'error',
-            extra: {
-              error: errorMessage,
-              displayPreviewURL,
-            },
-          }
-        );
-
-        // Fallback to direct loading if blob conversion fails
-        if (loadAttempts < maxAttempts) {
-          await attemptLoad(displayPreviewURL, 'fallback');
-        }
-      }
     };
 
-    const origin = (() => {
-      try {
-        return new URL(displayPreviewURL, window.location.href).origin;
-      } catch {
-        return null;
-      }
-    })();
+    let hlsInstance: Hls | null = null;
 
-    // Determine loading strategy
-    if (origin && KNOWN_ORIGINS.has(origin)) {
-      // Trusted origin - load directly
-      void attemptLoad(displayPreviewURL, 'trusted');
+    if (
+      isStreaming &&
+      Hls.isSupported() &&
+      displayPreviewURL.endsWith('.m3u8')
+    ) {
+      hlsInstance = new Hls({
+        maxBufferSize: 60 * 1000 * 1000,
+        maxBufferLength: 30,
+        liveSyncDuration: 10,
+      });
+
+      hlsInstance.attachMedia(videoElement);
+      hlsInstance.on(Hls.Events.MEDIA_ATTACHED, () => {
+        hlsInstance?.loadSource(
+          `${displayPreviewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
+        );
+        handleVideoPlay();
+      });
+
+      hlsInstance.on(Hls.Events.ERROR, function (event, data) {
+        switch (data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            if (data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL) {
+              console.log('Buffer stall detected, attempting to recover...');
+              hlsInstance?.recoverMediaError();
+            }
+            break;
+          default:
+            console.error('An unrecoverable error occurred');
+            hlsInstance?.destroy();
+            break;
+        }
+      });
     } else {
-      // Unknown origin - try blob conversion first
-      void attemptLoad(displayPreviewURL, 'blob');
+      // For non-streaming videos, play after loadeddata event
+      videoElement.addEventListener('loadeddata', handleVideoPlay);
     }
 
     return () => {
+      videoElement.removeEventListener('loadeddata', handleVideoPlay);
+      hlsInstance?.destroy();
+    };
+  }, [previewType, isStreaming, displayPreviewURL]);
+
+  // Universal media loading with CORS handling
+  useEffect(() => {
+    if (!displayPreviewURL) {
+      return;
+    }
+
+    let isCancelled = false;
+    const abortController = new AbortController();
+    const cleanupFns: (() => void)[] = [];
+
+    const loadMedia = async () => {
+      if (isCancelled) return;
+
+      const handleMediaError =
+        (mediaType: BlobLoadedMediaType) => (error: Error) => {
+          console.error(`[ArtworkPlayer] ${mediaType} load failed:`, error);
+          Sentry.captureMessage(`[ArtworkPlayer] ${mediaType} load failed`, {
+            level: 'error',
+            extra: { displayPreviewURL, mediaType },
+          });
+        };
+
+      if (previewType === PreviewHTMLTag.image && imageRef.current) {
+        const imageElement = imageRef.current;
+        imageElement.onload = loadedSource;
+        imageElement.onerror = () => {
+          handleMediaError('image')(new Error('Image load failed'));
+        };
+        cleanupFns.push(() => {
+          imageElement.onload = null;
+          imageElement.onerror = null;
+        });
+
+        await mediaLoader.current.loadMedia({
+          url: displayPreviewURL,
+          mediaType: 'image',
+          element: imageElement,
+          onLoad: loadedSource,
+          onError: handleMediaError('image'),
+          signal: abortController.signal,
+        });
+      } else if (
+        previewType === PreviewHTMLTag.video &&
+        videoRef.current &&
+        !isStreaming // Only load video if not streaming
+      ) {
+        const videoElement = videoRef.current;
+        videoElement.onloadeddata = loadedSource;
+        videoElement.onerror = () => {
+          handleMediaError('video')(new Error('Video load failed'));
+        };
+        cleanupFns.push(() => {
+          videoElement.onloadeddata = null;
+          videoElement.onerror = null;
+        });
+
+        console.log('[ArtworkPlayer] loading video', displayPreviewURL);
+        await mediaLoader.current.loadMedia({
+          url: displayPreviewURL,
+          mediaType: 'video',
+          element: videoElement,
+          onLoad: loadedSource,
+          onError: handleMediaError('video'),
+          signal: abortController.signal,
+        });
+      } else if (previewType === PreviewHTMLTag.audio && audioRef.current) {
+        const audioElement = audioRef.current;
+        audioElement.onloadeddata = loadedSource;
+        audioElement.onerror = () => {
+          handleMediaError('audio')(new Error('Audio load failed'));
+        };
+        cleanupFns.push(() => {
+          audioElement.onloadeddata = null;
+          audioElement.onerror = null;
+        });
+
+        await mediaLoader.current.loadMedia({
+          url: displayPreviewURL,
+          mediaType: 'audio',
+          element: audioElement,
+          onLoad: loadedSource,
+          onError: handleMediaError('audio'),
+          signal: abortController.signal,
+        });
+      }
+    };
+
+    void loadMedia();
+
+    return () => {
       isCancelled = true;
-      cleanupURL();
-      expectedImageSrcRef.current = null;
-      imgElement.onload = null;
-      imgElement.onerror = null;
+      abortController.abort();
+      cleanupFns.forEach(cleanup => {
+        cleanup();
+      });
+      mediaLoader.current.cleanup();
     };
   }, [displayPreviewURL, previewType]);
-  // ---- End of image loading ----
+  // ---- End of universal media loading with CORS handling ----
 
   useEffect(() => {
     if (context.isOnline) {
@@ -682,7 +607,6 @@ const ArtworkPlayer = ({
                 height: '100%',
                 objectFit: convertScalingToObjectFit(displaySettings?.scaling),
               }}
-              src={displayPreviewURL}
               className={styles.image}
               alt="Preview"
             />
@@ -713,12 +637,10 @@ const ArtworkPlayer = ({
         )}
         {displayPreviewURL && previewType === PreviewHTMLTag.audio && (
           <audio
+            ref={audioRef}
             autoPlay={displaySettings?.autoPlay ?? true}
-            loop={displaySettings?.loop ?? true}>
-            <source
-              src={displayPreviewURL}
-              onLoadedData={loadedSource}></source>
-          </audio>
+            loop={displaySettings?.loop ?? true}
+            onLoadedData={loadedSource}></audio>
         )}
         {displaySoftwareURL && previewType === PreviewHTMLTag.iframe && (
           <iframe
