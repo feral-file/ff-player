@@ -6,7 +6,7 @@ import Loading from '../loading/loading';
 import { useAppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
 import MessageModal from '../MessageModal';
-import { CLIENT_BANDWIDTH_HINT } from '@/constants';
+import { CLIENT_BANDWIDTH_HINT, KNOWN_ORIGINS } from '@/constants';
 import {
   FileUseAudio,
   FileUseIframePDF,
@@ -68,6 +68,7 @@ const ArtworkPlayer = ({
   const isWebGLContextLost = useRef<boolean>(false);
 
   const { displaySettings } = useArtworkSettings(displayPreferences);
+  const imageRef = useRef<HTMLImageElement | null>(null);
 
   // Cursor layer handle
   const cursorRef = useRef<CursorLayerHandle>(null);
@@ -459,6 +460,50 @@ const ArtworkPlayer = ({
     console.log('[ArtworkPlayer] previewType', previewType);
   }, [previewType]);
 
+  // Set image source to prevent CORS issues
+  useEffect(() => {
+    if (previewType === PreviewHTMLTag.image) {
+      const setImageSmart = async (img: HTMLImageElement, url: string) => {
+        const origin = new URL(url, window.location.href).origin;
+        if (KNOWN_ORIGINS.has(origin)) {
+          img.src = url;
+          return;
+        }
+
+        console.log('[ArtworkPlayer] setImageSmart fetch url', url);
+        const res = await fetch(url, {
+          mode: 'cors',
+          cache: 'no-store', // Prevent caching
+          referrerPolicy: 'no-referrer', // Prevent sending the referer header
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status.toString()}`);
+        const blob = await res.blob();
+        const obj = URL.createObjectURL(blob);
+        img.onload = () => {
+          URL.revokeObjectURL(obj);
+        };
+        img.src = obj;
+      };
+
+      if (imageRef.current) {
+        setImageSmart(imageRef.current, displayPreviewURL).catch(
+          (error: unknown) => {
+            console.log(
+              '[ArtworkPlayer] Error set image smart',
+              JSON.stringify(error)
+            );
+            Sentry.captureMessage('[ArtworkPlayer] Error set image smart', {
+              extra: {
+                error: JSON.stringify(error),
+                displayPreviewURL,
+              },
+            });
+          }
+        );
+      }
+    }
+  }, [displayPreviewURL, previewType, imageRef.current]);
+
   return (
     <>
       <div
@@ -485,13 +530,13 @@ const ArtworkPlayer = ({
             }}
             className={isCustomView ? styles.customRendering : ''}>
             <img
+              ref={imageRef}
               style={{
                 width: '100%',
                 height: '100%',
                 objectFit: convertScalingToObjectFit(displaySettings?.scaling),
               }}
               className={styles.image}
-              src={displayPreviewURL}
               alt="Preview"
               onLoad={loadedSource}
             />
