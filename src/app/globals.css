@@ -1,29 +1,9 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 @font-face {
   font-family: 'PP Mori';
   src:
     url(/fonts/PP_Mori/PPMori-Regular.woff2) format('woff2'),
     url(/fonts/PP_Mori/PPMori-Regular.woff) format('woff');
   font-weight: 400;
-}
-
-@font-face {
-  font-family: 'PP Mori';
-  src:
-    url(/fonts/PP_Mori/PPMori-Light.woff2) format('woff2'),
-    url(/fonts/PP_Mori/WEB/PPMori-Light.woff) format('woff');
-  font-weight: 300;
-}
-
-@font-face {
-  font-family: 'PP Mori';
-  src:
-    url(/fonts/PP_Mori/PPMori-Bold.woff2) format('woff2'),
-    url(/fonts/PP_Mori/PPMori-Bold.woff) format('woff');
-  font-weight: 700;
 }
 
 :root {

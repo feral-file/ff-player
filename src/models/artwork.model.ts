@@ -1,27 +1,3 @@
-export interface Artwork {
-  id?: string;
-  seriesID?: string;
-  index?: number;
-  name?: string;
-  previewURI?: string;
-  previewDisplay?: {
-    HLS?: string;
-    DASH?: string;
-  };
-  previewMIMEType?: string;
-  thumbnailURI?: string;
-  mintedAt?: string;
-  artistAlias?: string;
-  successfulSwap?: Swap;
-}
-
-export interface Swap {
-  id: string;
-  blockchainType: string;
-  contractAddress: string;
-  token: string;
-}
-
 // Artwork Preview
 export enum PreviewHTMLTag {
   iframe = 'iframe',

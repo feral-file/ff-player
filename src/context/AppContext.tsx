@@ -60,6 +60,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const [appRemoteConfig, setAppConfig] = useState({} as AppRemoteConfig);
   const remoteConfigService = useRef(new RemoteConfigService());
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isFallbackPlaylist, setIsFallbackPlaylist] = useState(false);
 
   const { castInfo, setCastInfo } = useCastInfo();
   const { displaySettings, setDisplaySettings } = useDeviceSettings();
@@ -104,23 +105,12 @@ export const AppProvider = ({ children }: AppContextProps) => {
       const hasCriticalTemp =
         localStorage.getItem(LocalStorageItem.criticalTemp) === 'true';
       if (hasCriticalTemp) {
-        // Reset to default playlist
-        castInfo = {
-          deviceInfo: castInfo.deviceInfo,
-        };
         // Fetch and cast default playlist after critical temp reset
-        canvasService.castDefaultPlaylist().catch((error: unknown) => {
-          console.error(
-            '[AppContext] Error fetching default playlist after critical temp:',
-            error
-          );
-        });
+        setIsFallbackPlaylist(true);
         localStorage.removeItem(LocalStorageItem.criticalTemp);
         return;
       } else if (castInfo.castCommand?.toString() === 'castDaily') {
-        canvasService.castDefaultPlaylist().catch((error: unknown) => {
-          console.error('[AppContext] Error fetching default playlist:', error);
-        });
+        setIsFallbackPlaylist(true);
       } else if (castInfo.playlist?.items && castInfo.index !== undefined) {
         // Recalculate startTime based on current index to ensure correct display
         console.log(
@@ -144,11 +134,24 @@ export const AppProvider = ({ children }: AppContextProps) => {
     } else {
       // Cast default playlist
       console.log('[AppContext] No castInfo found, fetching default playlist');
-      canvasService.castDefaultPlaylist().catch((error: unknown) => {
-        console.error('[AppContext] Error fetching default playlist:', error);
-      });
+      setIsFallbackPlaylist(true);
     }
   };
+
+  const fallbackPlaylist = () => {
+    console.log('[AppContext] Fallback default playlist');
+    canvasService
+      .castPlaylistByURL(appRemoteConfig.defaultPlaylistURL)
+      .catch((error: unknown) => {
+        console.error('[AppContext] Error fetching default playlist:', error);
+      });
+  };
+
+  useEffect(() => {
+    if (appRemoteConfig.defaultPlaylistURL && isFallbackPlaylist) {
+      fallbackPlaylist();
+    }
+  }, [appRemoteConfig.defaultPlaylistURL, isFallbackPlaylist]);
 
   useEffect(() => {
     const cdpRequestHandler = CDPRequestHandler.getInstance();
@@ -163,11 +166,12 @@ export const AppProvider = ({ children }: AppContextProps) => {
         const appRemoteConfig =
           await remoteConfigService.current.getAppRemoteConfig();
         setAppConfig(appRemoteConfig);
-      } catch {
-        // Return default value if failed to load config
+      } catch (error) {
+        console.log('[API] Failed to load config:', error);
         setAppConfig({
           duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,
-        } as AppRemoteConfig);
+          defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
+        });
       }
     };
 

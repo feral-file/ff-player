@@ -39,7 +39,7 @@ const MessageModal = ({
         left: 0,
         zIndex: 99,
         backgroundColor: 'rgba(0, 0, 0, 0.80)',
-        width: '100%',
+        width: 'auto',
         height: '100%',
         display: 'flex',
         justifyContent: 'center',

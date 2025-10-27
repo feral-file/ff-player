@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/nextjs';
 
 export interface AppRemoteConfig {
   duration: number;
+  defaultPlaylistURL: string;
 }
 
 class RemoteConfigService {
@@ -30,6 +31,7 @@ class RemoteConfigService {
       // Return default value if failed to load config
       return {
         duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,
+        defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
       };
     }
   }

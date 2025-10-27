@@ -5,7 +5,6 @@ import * as Sentry from '@sentry/nextjs';
 import Loading from '../loading/loading';
 import { useAppContext } from '@/context/AppContext';
 import styles from './styles.module.scss';
-import { appendMetricEventToLocalStorage } from '@/services/metric.service';
 import MessageModal from '../MessageModal';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
 import {
@@ -23,7 +22,6 @@ import {
   MITETypeIframe,
   PreviewHTMLTag,
 } from '@/models';
-import { CastingArtworkType, MetricEvent } from '@/models/metric.model';
 
 import {
   getContentTypeFromURL,
@@ -38,15 +36,11 @@ const MAX_RECOVERY_TIME = 60000 * 10;
 
 const ArtworkPlayer = ({
   previewURL,
-  artworkID,
-  castingType,
   isCustomView,
   artworkPreviewMIMEType,
   displayPreferences,
 }: {
   previewURL: string;
-  artworkID: string;
-  castingType?: CastingArtworkType;
   isCustomView?: boolean;
   keyboardCode?: number;
   artworkPreviewMIMEType?: string;
@@ -62,9 +56,6 @@ const ArtworkPlayer = ({
   const [loading, setLoading] = useState<boolean>(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
-  const newDayCheckTimeOutID = useRef<
-    NodeJS.Timeout | string | number | undefined
-  >(undefined);
   const [showMessageModal, setShowMessageModal] = useState<boolean>(false);
   const [messageModalText, setMessageModalText] = useState<string | null>(null);
   const [messageModalTitle, setMessageModalTitle] = useState<string | null>(
@@ -131,51 +122,6 @@ const ArtworkPlayer = ({
       cursorRef.current?.setPositions(context.cursorPositions);
     }
   }, [context.cursorPositions]);
-
-  // Metric
-  useEffect(() => {
-    if (castingType && artworkID) {
-      const handleMetric = () => {
-        if (newDayCheckTimeOutID.current) {
-          clearTimeout(newDayCheckTimeOutID.current as number);
-        }
-
-        const event: MetricEvent = {
-          event: castingType,
-          timestamp: new Date().toISOString(),
-          parameters: {
-            tokenID: artworkID,
-          },
-        };
-
-        const checkNewDay = () => {
-          const now = new Date();
-          const newDay = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate() + 1
-          );
-          newDay.setHours(0, 0, 0, 0);
-          const delay = newDay.getTime() - now.getTime();
-          newDayCheckTimeOutID.current = setTimeout(() => {
-            console.log('[METRIC]: New day');
-            handleMetric();
-          }, delay);
-        };
-
-        appendMetricEventToLocalStorage([event], true);
-        checkNewDay();
-      };
-
-      handleMetric();
-
-      return () => {
-        if (newDayCheckTimeOutID.current) {
-          clearTimeout(newDayCheckTimeOutID.current as number);
-        }
-      };
-    }
-  }, [castingType, artworkID]);
 
   useEffect(() => {
     const detectPreviewType = async (previewURL: string) => {
@@ -589,7 +535,7 @@ const ArtworkPlayer = ({
           <iframe
             key={iframeKey}
             ref={iframeRef}
-            style={{ width: '100%', height: '100%' }}
+            className={styles.iframe}
             src={displaySoftwareURL}
             onLoad={handleIframeLoad}
             onError={handleLoadIframeError}
@@ -598,7 +544,7 @@ const ArtworkPlayer = ({
         )}
         {displaySoftwareURL && previewType === PreviewHTMLTag.iframePDF && (
           <iframe
-            style={{ width: '100%', height: '100%' }}
+            className={styles.iframe}
             src={displaySoftwareURL}
             onLoad={handleIframeLoad}
             onError={handleLoadIframeError}

@@ -20,21 +20,3 @@ export enum DisplayOrientation {
   LandscapeReverse = 'landscapeReverse',
   PortraitReverse = 'portraitReverse',
 }
-
-export interface TokenMetadata {
-  name: string;
-  artwork_id: string;
-  image: string;
-  animation_url: string;
-}
-
-export enum Blockchain {
-  Bitmark = 'bitmark',
-  Tezos = 'tezos',
-  Ethereum = 'ethereum',
-}
-
-export interface Contract {
-  address: string;
-  blockchainType?: Blockchain;
-}

@@ -4,11 +4,6 @@ import { ErrorType } from './error.model';
 import { DP1Call, DP1Intent, DP1Item, Scaling } from './dp1.model';
 import { CastCommand, ViewMode } from '.';
 
-export interface DeviceInfo {
-  device_name: string | null;
-  device_id: string | null;
-}
-
 export interface PlayArtwork {
   id: string;
   duration: number;
@@ -30,10 +25,6 @@ export interface Reply {
   error?: ErrorType;
 }
 
-export interface ConnectRequestV2 {
-  clientDevice: DeviceInfo;
-  primaryAddress?: string;
-}
 export type ConnectReplyV2 = Reply;
 export type DisconnectRequest = Request;
 export type DisconnectReplyV2 = Reply;
