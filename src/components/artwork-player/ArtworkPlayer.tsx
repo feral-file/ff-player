@@ -67,8 +67,11 @@ const ArtworkPlayer = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isWebGLContextLost = useRef<boolean>(false);
 
-  const { displaySettings } = useArtworkSettings(displayPreferences);
+  // Image loading
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const expectedImageSrcRef = useRef<string | null>(null);
+
+  const { displaySettings } = useArtworkSettings(displayPreferences);
 
   // Cursor layer handle
   const cursorRef = useRef<CursorLayerHandle>(null);
@@ -206,6 +209,7 @@ const ArtworkPlayer = ({
     setLoading(false);
   };
 
+  // Video loading
   useEffect(() => {
     if (previewType === PreviewHTMLTag.video && videoRef.current) {
       setOpacity(1);
@@ -266,6 +270,192 @@ const ArtworkPlayer = ({
       }
     }
   }, [previewType, isStreaming, displayPreviewURL]);
+  // ---- End of video loading ----
+
+  // Image loading: Set image source to prevent CORS issues
+  useEffect(() => {
+    if (previewType !== PreviewHTMLTag.image || !imageRef.current) {
+      return;
+    }
+
+    const imgElement = imageRef.current;
+    expectedImageSrcRef.current = null;
+    let currentObjectURL: string | null = null;
+    let isCancelled = false;
+    let loadAttempts = 0;
+    const maxAttempts = 2;
+    let hasFinalized = false;
+
+    const cleanupURL = () => {
+      if (currentObjectURL) {
+        URL.revokeObjectURL(currentObjectURL);
+        currentObjectURL = null;
+      }
+    };
+
+    const finalizeLoad = () => {
+      if (hasFinalized || isCancelled) {
+        return;
+      }
+      hasFinalized = true;
+      cleanupURL();
+      loadedSource();
+    };
+
+    const handleError = (
+      sourceURL: string,
+      stage: 'trusted' | 'blob' | 'fallback',
+      attempt: number
+    ) => {
+      cleanupURL();
+      console.error(
+        `[ArtworkPlayer] Image load failed (attempt ${String(attempt)}/${String(maxAttempts)}):`,
+        {
+          sourceURL,
+          stage,
+          displayPreviewURL,
+        }
+      );
+
+      Sentry.captureMessage('[ArtworkPlayer] Image load failed', {
+        level: 'error',
+        extra: {
+          sourceURL,
+          displayPreviewURL,
+          stage,
+        },
+      });
+    };
+
+    const setSrc = (src: string) => {
+      if (isCancelled) {
+        return;
+      }
+
+      try {
+        expectedImageSrcRef.current = new URL(src, window.location.href).href;
+      } catch {
+        expectedImageSrcRef.current = src;
+      }
+
+      const currentSrc = imgElement.getAttribute('src');
+      if (currentSrc !== src) {
+        imgElement.src = src;
+      }
+
+      const resolvedSrc = imgElement.currentSrc || imgElement.src;
+      if (
+        imgElement.complete &&
+        resolvedSrc &&
+        expectedImageSrcRef.current &&
+        resolvedSrc === expectedImageSrcRef.current
+      ) {
+        finalizeLoad();
+      }
+    };
+
+    const attemptLoad = async (
+      url: string,
+      stage: 'trusted' | 'blob' | 'fallback'
+    ) => {
+      if (isCancelled) {
+        return;
+      }
+
+      loadAttempts++;
+
+      if (stage === 'trusted' || stage === 'fallback') {
+        // Direct loading for trusted origins or fallback
+        imgElement.onload = finalizeLoad;
+        imgElement.onerror = () => {
+          handleError(url, stage, loadAttempts);
+        };
+        setSrc(url);
+        return;
+      }
+
+      // Blob loading for unknown origins
+      try {
+        console.log('[ArtworkPlayer] Fetching image for blob conversion:', url);
+
+        const res = await fetch(url, {
+          mode: 'cors',
+          cache: 'no-store',
+          referrerPolicy: 'no-referrer',
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${String(res.status)}: ${res.statusText}`);
+        }
+
+        const blob = await res.blob();
+        const obj = URL.createObjectURL(blob);
+
+        currentObjectURL = obj;
+
+        imgElement.onload = finalizeLoad;
+        imgElement.onerror = () => {
+          handleError(obj, 'blob', loadAttempts);
+          if (loadAttempts < maxAttempts) {
+            void attemptLoad(displayPreviewURL, 'fallback');
+          }
+        };
+
+        setSrc(obj);
+      } catch (error) {
+        cleanupURL();
+
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.error(
+          '[ArtworkPlayer] Error fetching image for blob conversion:',
+          errorMessage
+        );
+
+        Sentry.captureMessage(
+          '[ArtworkPlayer] Error fetching image for blob conversion',
+          {
+            level: 'error',
+            extra: {
+              error: errorMessage,
+              displayPreviewURL,
+            },
+          }
+        );
+
+        // Fallback to direct loading if blob conversion fails
+        if (loadAttempts < maxAttempts) {
+          await attemptLoad(displayPreviewURL, 'fallback');
+        }
+      }
+    };
+
+    const origin = (() => {
+      try {
+        return new URL(displayPreviewURL, window.location.href).origin;
+      } catch {
+        return null;
+      }
+    })();
+
+    // Determine loading strategy
+    if (origin && KNOWN_ORIGINS.has(origin)) {
+      // Trusted origin - load directly
+      void attemptLoad(displayPreviewURL, 'trusted');
+    } else {
+      // Unknown origin - try blob conversion first
+      void attemptLoad(displayPreviewURL, 'blob');
+    }
+
+    return () => {
+      isCancelled = true;
+      cleanupURL();
+      expectedImageSrcRef.current = null;
+      imgElement.onload = null;
+      imgElement.onerror = null;
+    };
+  }, [displayPreviewURL, previewType]);
+  // ---- End of image loading ----
 
   useEffect(() => {
     if (context.isOnline) {
@@ -459,119 +649,6 @@ const ArtworkPlayer = ({
   useEffect(() => {
     console.log('[ArtworkPlayer] previewType', previewType);
   }, [previewType]);
-
-  // Set image source to prevent CORS issues
-  useEffect(() => {
-    if (previewType === PreviewHTMLTag.image && imageRef.current) {
-      let currentObjectURL: string | null = null;
-      let isCancelled = false;
-      const imgElement = imageRef.current;
-
-      const setImageSmart = async (img: HTMLImageElement, url: string) => {
-        try {
-          const origin = new URL(url, window.location.href).origin;
-          if (KNOWN_ORIGINS.has(origin)) {
-            if (isCancelled) {
-              return;
-            }
-            img.onload = () => {
-              loadedSource();
-            };
-            img.onerror = () => {
-              console.error(
-                '[ArtworkPlayer] Image load failed for trusted origin:',
-                url
-              );
-              Sentry.captureMessage(
-                '[ArtworkPlayer] Image load failed for trusted origin',
-                {
-                  extra: { url, origin },
-                }
-              );
-            };
-            img.src = url;
-            return;
-          }
-
-          console.log('[ArtworkPlayer] setImageSmart fetch url', url);
-          const res = await fetch(url, {
-            mode: 'cors',
-            cache: 'no-store', // Prevent caching
-            referrerPolicy: 'no-referrer', // Prevent sending the referer header
-          });
-
-          if (!res.ok) {
-            throw new Error(`HTTP ${res.status.toString()}: ${res.statusText}`);
-          }
-
-          const blob = await res.blob();
-          const obj = URL.createObjectURL(blob);
-          currentObjectURL = obj;
-
-          if (isCancelled) {
-            cleanupURL(obj);
-            return;
-          }
-
-          img.onload = () => {
-            cleanupURL(obj);
-            loadedSource();
-          };
-
-          img.onerror = () => {
-            cleanupURL(obj);
-            console.error(
-              '[ArtworkPlayer] Image load failed after blob creation:',
-              url
-            );
-            Sentry.captureMessage(
-              '[ArtworkPlayer] Image load failed after blob creation',
-              {
-                extra: { url },
-              }
-            );
-          };
-
-          img.src = obj;
-        } catch (error) {
-          // Clean up object URL if it was created
-          if (currentObjectURL) {
-            cleanupURL(currentObjectURL);
-          }
-          throw error;
-        }
-      };
-
-      const cleanupURL = (url: string) => {
-        if (url) {
-          URL.revokeObjectURL(url);
-          currentObjectURL = null;
-        }
-      };
-
-      setImageSmart(imgElement, displayPreviewURL).catch((error: unknown) => {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        console.error('[ArtworkPlayer] Error set image smart:', errorMessage);
-        Sentry.captureMessage('[ArtworkPlayer] Error set image smart', {
-          extra: {
-            error: errorMessage,
-            displayPreviewURL,
-            userAgent: navigator.userAgent,
-            timestamp: new Date().toISOString(),
-          },
-        });
-      });
-
-      // Cleanup function to revoke object URL on unmount or URL change
-      return () => {
-        isCancelled = true;
-        if (currentObjectURL) {
-          URL.revokeObjectURL(currentObjectURL);
-        }
-      };
-    }
-  }, [displayPreviewURL, previewType]);
 
   return (
     <>
