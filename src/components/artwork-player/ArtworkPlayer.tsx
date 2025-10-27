@@ -462,47 +462,116 @@ const ArtworkPlayer = ({
 
   // Set image source to prevent CORS issues
   useEffect(() => {
-    if (previewType === PreviewHTMLTag.image) {
-      const setImageSmart = async (img: HTMLImageElement, url: string) => {
-        const origin = new URL(url, window.location.href).origin;
-        if (KNOWN_ORIGINS.has(origin)) {
-          img.src = url;
-          return;
-        }
+    if (previewType === PreviewHTMLTag.image && imageRef.current) {
+      let currentObjectURL: string | null = null;
+      let isCancelled = false;
+      const imgElement = imageRef.current;
 
-        console.log('[ArtworkPlayer] setImageSmart fetch url', url);
-        const res = await fetch(url, {
-          mode: 'cors',
-          cache: 'no-store', // Prevent caching
-          referrerPolicy: 'no-referrer', // Prevent sending the referer header
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status.toString()}`);
-        const blob = await res.blob();
-        const obj = URL.createObjectURL(blob);
-        img.onload = () => {
-          URL.revokeObjectURL(obj);
-        };
-        img.src = obj;
+      const setImageSmart = async (img: HTMLImageElement, url: string) => {
+        try {
+          const origin = new URL(url, window.location.href).origin;
+          if (KNOWN_ORIGINS.has(origin)) {
+            if (isCancelled) {
+              return;
+            }
+            img.onload = () => {
+              loadedSource();
+            };
+            img.onerror = () => {
+              console.error(
+                '[ArtworkPlayer] Image load failed for trusted origin:',
+                url
+              );
+              Sentry.captureMessage(
+                '[ArtworkPlayer] Image load failed for trusted origin',
+                {
+                  extra: { url, origin },
+                }
+              );
+            };
+            img.src = url;
+            return;
+          }
+
+          console.log('[ArtworkPlayer] setImageSmart fetch url', url);
+          const res = await fetch(url, {
+            mode: 'cors',
+            cache: 'no-store', // Prevent caching
+            referrerPolicy: 'no-referrer', // Prevent sending the referer header
+          });
+
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status.toString()}: ${res.statusText}`);
+          }
+
+          const blob = await res.blob();
+          const obj = URL.createObjectURL(blob);
+          currentObjectURL = obj;
+
+          if (isCancelled) {
+            cleanupURL(obj);
+            return;
+          }
+
+          img.onload = () => {
+            cleanupURL(obj);
+            loadedSource();
+          };
+
+          img.onerror = () => {
+            cleanupURL(obj);
+            console.error(
+              '[ArtworkPlayer] Image load failed after blob creation:',
+              url
+            );
+            Sentry.captureMessage(
+              '[ArtworkPlayer] Image load failed after blob creation',
+              {
+                extra: { url },
+              }
+            );
+          };
+
+          img.src = obj;
+        } catch (error) {
+          // Clean up object URL if it was created
+          if (currentObjectURL) {
+            cleanupURL(currentObjectURL);
+          }
+          throw error;
+        }
       };
 
-      if (imageRef.current) {
-        setImageSmart(imageRef.current, displayPreviewURL).catch(
-          (error: unknown) => {
-            console.log(
-              '[ArtworkPlayer] Error set image smart',
-              JSON.stringify(error)
-            );
-            Sentry.captureMessage('[ArtworkPlayer] Error set image smart', {
-              extra: {
-                error: JSON.stringify(error),
-                displayPreviewURL,
-              },
-            });
-          }
-        );
-      }
+      const cleanupURL = (url: string) => {
+        if (url) {
+          URL.revokeObjectURL(url);
+          currentObjectURL = null;
+        }
+      };
+
+      setImageSmart(imgElement, displayPreviewURL).catch((error: unknown) => {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.error('[ArtworkPlayer] Error set image smart:', errorMessage);
+        Sentry.captureMessage('[ArtworkPlayer] Error set image smart', {
+          extra: {
+            error: errorMessage,
+            displayPreviewURL,
+            userAgent: navigator.userAgent,
+            timestamp: new Date().toISOString(),
+          },
+        });
+      });
+
+      // Cleanup function to revoke object URL on unmount or URL change
+      return () => {
+        isCancelled = true;
+        if (currentObjectURL) {
+          URL.revokeObjectURL(currentObjectURL);
+        }
+      };
     }
-  }, [displayPreviewURL, previewType, imageRef.current]);
+  }, [displayPreviewURL, previewType]);
 
   return (
     <>
@@ -536,9 +605,9 @@ const ArtworkPlayer = ({
                 height: '100%',
                 objectFit: convertScalingToObjectFit(displaySettings?.scaling),
               }}
+              src={displayPreviewURL}
               className={styles.image}
               alt="Preview"
-              onLoad={loadedSource}
             />
           </div>
         )}

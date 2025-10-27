@@ -23,7 +23,7 @@ export const NETWORK_ERROR_RETRY_COUNT = 3;
 export const NETWORK_ERROR_RETRY_DELAY = 1000;
 
 export const KNOWN_ORIGINS = new Set([
-  'https://feralfile.con',
+  'https://feralfile.com',
   'https://cdn.feralfileassets.com',
   'https://ipfs.io',
   'https://imagedelivery.net',
