@@ -331,9 +331,7 @@ const ArtworkPlayer = ({
   };
 
   const getCurrentCanvas = () => {
-    if (!canvasRef.current) {
-      canvasRef.current = document.createElement('canvas');
-    }
+    canvasRef.current ??= document.createElement('canvas');
     return canvasRef.current;
   };
 

@@ -1,4 +1,4 @@
-import { DP1Call } from '@/models/dp1.model';
+import { DP1Call, RefManifest } from '@/models/dp1.model';
 import axios from 'axios';
 import * as Sentry from '@sentry/nextjs';
 
@@ -13,6 +13,22 @@ export const DP1Service = {
       return response.data;
     } catch (error) {
       console.error('[DP1Service] Failed to load playlist:', error);
+      Sentry.captureException(error);
+      return null;
+    }
+  },
+
+  // TODO: Implement ref hash verification
+  async getItemRef(itemRefURL: string): Promise<RefManifest | null> {
+    try {
+      const response = await axios.get<RefManifest>(itemRefURL);
+      return response.data;
+    } catch (error) {
+      console.error(
+        '[DP1Service] Failed to load item ref from:',
+        itemRefURL,
+        error
+      );
       Sentry.captureException(error);
       return null;
     }

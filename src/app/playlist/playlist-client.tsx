@@ -5,15 +5,26 @@ import { useAppContext } from '@/context/AppContext';
 import { getIndex, recalculateStartTimeForIndex } from '@/utils/playlist';
 import { CastCommand } from '@/models';
 import { useEffect, useRef, useState } from 'react';
-import { defaultDP1DisplayPreference, DP1Item } from '@/models/dp1.model';
+import {
+  defaultDP1DisplayPreference,
+  DP1DisplayPreference,
+  DP1Item,
+  DP1Defaults,
+} from '@/models/dp1.model';
 import { NO_DURATION_VALUE } from '@/constants';
 import { canvasService } from '@/services/CanvasService';
+import { DP1Service } from '@/services/DP1Service';
+import * as Sentry from '@sentry/nextjs';
 
 export default function PlaylistClient() {
   const { context } = useAppContext();
   const castInfo = context.castInfo;
 
   const [playlist, setPlaylist] = useState<DP1Item[]>([]);
+  const [playlistDefaultsSettings, setPlaylistDefaultsSettings] =
+    useState<DP1Defaults | null>(null);
+  const [currentItemDisplayPreference, setCurrentItemDisplayPreference] =
+    useState<DP1DisplayPreference | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const indexRef = useRef<number>(-1);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
@@ -49,9 +60,24 @@ export default function PlaylistClient() {
 
     const index = currentIndex % playlist.length;
     const currentItem = playlist[index];
-    if (currentItem !== currentItemRef.current) {
-      currentItemRef.current = currentItem;
-    }
+    currentItemRef.current = currentItem;
+
+    handleItemDisplayPreference(currentItem, playlistDefaultsSettings).catch(
+      (error: unknown) => {
+        console.error(
+          '[PlaylistClient] Error handling item display preference',
+          error instanceof Error ? error.message : String(error)
+        );
+        Sentry.captureMessage(
+          '[PlaylistClient] Error handling item display preference',
+          {
+            extra: {
+              error: error instanceof Error ? error.message : String(error),
+            },
+          }
+        );
+      }
+    );
 
     // Setup data for ArtworkPlayer component
     setCastPreviewURL(currentItem.source);
@@ -60,6 +86,62 @@ export default function PlaylistClient() {
       startInterval(currentItem.duration ?? 0);
     }
   }, [currentIndex, playlist]);
+
+  const handleItemDisplayPreference = async (
+    dp1Item: DP1Item,
+    playlistDefaultsSettings: DP1Defaults | null
+  ) => {
+    const activeItemId = dp1Item.id;
+    const activeRef = dp1Item.ref;
+
+    try {
+      // 4) Playlist defaults.display (lowest priority)
+      const base: DP1DisplayPreference = {
+        ...defaultDP1DisplayPreference,
+        ...(playlistDefaultsSettings?.display ?? {}),
+      };
+
+      // 3) Content loaded from item.ref
+      let refDisplay: DP1DisplayPreference | undefined;
+      try {
+        if (dp1Item.ref) {
+          // TODO: Implement ref hash verification
+          const manifest = await DP1Service.getItemRef(dp1Item.ref);
+          refDisplay = manifest?.controls?.display;
+        }
+      } catch {
+        // Ignore ref load errors
+      }
+
+      // 2) Item override
+      let overriddenDisplay: DP1DisplayPreference | undefined;
+      if (dp1Item.override?.display) {
+        overriddenDisplay = dp1Item.override.display;
+      }
+
+      // 1) Item display (highest priority)
+      const merged: DP1DisplayPreference = {
+        ...base,
+        ...(refDisplay ?? {}),
+        ...(overriddenDisplay ?? {}),
+        ...(dp1Item.display ?? {}),
+      };
+
+      if (
+        currentItemRef.current?.id === activeItemId &&
+        currentItemRef.current.ref === activeRef
+      ) {
+        setCurrentItemDisplayPreference(merged);
+      }
+    } catch {
+      if (
+        currentItemRef.current?.id === activeItemId &&
+        currentItemRef.current.ref === activeRef
+      ) {
+        setCurrentItemDisplayPreference(defaultDP1DisplayPreference);
+      }
+    }
+  };
 
   const handleUpdateDuration = (dp1Items: DP1Item[]) => {
     const durationMap = new Map<string, number>();
@@ -225,10 +307,17 @@ export default function PlaylistClient() {
             break;
           }
           case CastCommand.displayPlaylist: {
+            // Reset data for new playlist arrival
             indexRef.current = -1;
             setCurrentIndex(-1);
+            setPlaylistDefaultsSettings(null);
+            currentItemRef.current = undefined;
 
             if (castInfo.playlist?.items?.length) {
+              if (castInfo.playlist.defaults?.display) {
+                setPlaylistDefaultsSettings(castInfo.playlist.defaults);
+              }
+
               setPlaylist(castInfo.playlist.items);
               if (castInfo.startTime) {
                 setStartTime(castInfo.startTime);
@@ -290,13 +379,12 @@ export default function PlaylistClient() {
   return (
     <>
       <div style={{ width: '100%', height: '100%' }}>
-        <ArtworkPlayer
-          previewURL={castPreviewURL ?? ''}
-          displayPreferences={{
-            ...(currentItemRef.current?.display ?? {}),
-            ...defaultDP1DisplayPreference,
-          }}
-        />
+        {currentItemDisplayPreference && (
+          <ArtworkPlayer
+            previewURL={castPreviewURL ?? ''}
+            displayPreferences={currentItemDisplayPreference}
+          />
+        )}
       </div>
     </>
   );

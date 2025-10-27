@@ -116,3 +116,69 @@ export function deepEqual(a: any, b: any): boolean {
 
   return false;
 }
+
+// ---- TODO: Implement ref hash verification on DP1Service.getItemRef ----
+export async function sha256hex(
+  bytes: Uint8Array<ArrayBuffer>
+): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((b: number) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function bufToHex(a: Uint8Array) {
+  return Array.from(a)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+// Accept hex or base64/base64url; normalize to lowercase hex
+export function normalizeHashToHex(s: string): string {
+  const str = s.trim();
+  // Allow prefixes like "sha256:..." or "sha256:hex:..."
+  const clean = str.replace(/^sha256:(hex:)?/i, '');
+  if (/^[0-9a-fA-F]+$/.test(clean) && clean.length >= 64)
+    return clean.toLowerCase();
+  // Base64/base64url → hex
+  const b = base64AnyToBytes(clean);
+  return bufToHex(b);
+}
+
+function base64AnyToBytes(inp: string): Uint8Array {
+  // Normalize base64url to base64
+  const b64 = inp
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .replace(/=+$/, m => m);
+  if (typeof atob === 'function') {
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  return new Uint8Array(Buffer.from(b64, 'base64'));
+}
+
+export function isContentAddressed(u: string): boolean {
+  // Check if it is an IPFS URI scheme (e.g., ipfs://...)
+  if (typeof u !== 'string') return false;
+  if (u.startsWith('ipfs://')) return true;
+
+  try {
+    const url = new URL(u);
+
+    // Match /ipfs/<CID> (CID is case-insensitive, usually base58 or base32)
+    // CIDv0: Qm... (base58), CIDv1: base32 lowercase, 46+ chars
+    // Accepts /ipfs/<cid>(/...)
+    const ipfsMatch = /\/ipfs\/([a-zA-Z0-9]+)/.exec(url.pathname);
+    if (ipfsMatch && ipfsMatch[1].length >= 46) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
