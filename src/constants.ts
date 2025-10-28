@@ -21,3 +21,10 @@ export const NO_DURATION_VALUE = 999999999;
 export const NETWORK_ERROR_MESSAGE = 'Network error';
 export const NETWORK_ERROR_RETRY_COUNT = 3;
 export const NETWORK_ERROR_RETRY_DELAY = 1000;
+
+export const KNOWN_ORIGINS = new Set([
+  'https://feralfile.com',
+  'https://cdn.feralfileassets.com',
+  'https://ipfs.io',
+  'https://imagedelivery.net',
+]);
