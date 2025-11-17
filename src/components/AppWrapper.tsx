@@ -86,6 +86,8 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
     console.log('[INFO] Current Version:', currentVersion);
     console.log('[INFO] New Version:', newVersion);
     if (newVersion !== currentVersion) {
+      // Set flag to indicate this is a version update reload
+      localStorage.setItem(LocalStorageItem.versionUpdateReload, 'true');
       window.location.reload();
     }
   };

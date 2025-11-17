@@ -100,20 +100,33 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const initCastInfo = () => {
     console.log('[AppContext] initCastInfo');
 
+    // Check if this is a version update reload
+    const isVersionUpdateReload =
+      localStorage.getItem(LocalStorageItem.versionUpdateReload) === 'true';
+
+    if (isVersionUpdateReload) {
+      console.log(
+        '[AppContext] Version update reload detected, skipping boot playlist'
+      );
+      localStorage.removeItem(LocalStorageItem.versionUpdateReload);
+    }
+
     let castInfo: CastInfo | null = null;
 
-    // First, check for boot playlist
-    const bootPlaylist = DeviceManager.getBootPlaylist();
-    if (bootPlaylist?.items?.length) {
-      console.log('[AppContext] Boot playlist found, casting boot playlist');
-      castInfo = {
-        castCommand: CastCommand.displayPlaylist,
-        playlist: bootPlaylist,
-        startTime: Date.now(),
-        index: 0,
-        isPaused: false,
-        playlistId: bootPlaylist.id,
-      };
+    // Only check for boot playlist if this is NOT a version update reload
+    if (!isVersionUpdateReload) {
+      const bootPlaylist = DeviceManager.getBootPlaylist();
+      if (bootPlaylist?.items?.length) {
+        console.log('[AppContext] Boot playlist found, casting boot playlist');
+        castInfo = {
+          castCommand: CastCommand.displayPlaylist,
+          playlist: bootPlaylist,
+          startTime: Date.now(),
+          index: 0,
+          isPaused: false,
+          playlistId: bootPlaylist.id,
+        };
+      }
     }
 
     castInfo = castInfo ?? DeviceManager.getCastInfo();
