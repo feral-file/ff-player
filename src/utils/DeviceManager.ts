@@ -1,6 +1,7 @@
 import { LocalStorageItem } from '@/constants';
 import { DisplaySettings } from '@/models/display_settings.model';
 import { CastInfo, ViewMode } from '@/models';
+import { DP1Call } from '@/models/dp1.model';
 
 class DeviceManager {
   static instance = new DeviceManager();
@@ -52,6 +53,20 @@ class DeviceManager {
 
   public setDeviceInfo(castInfo: CastInfo | null): void {
     this.setToLocalStorage(LocalStorageItem.castInfo, JSON.stringify(castInfo));
+  }
+
+  public getBootPlaylist(): DP1Call | null {
+    const bootPlaylist = this.getFromLocalStorage(
+      LocalStorageItem.bootPlaylist
+    );
+    return bootPlaylist ? (JSON.parse(bootPlaylist) as DP1Call) : null;
+  }
+
+  public setBootPlaylist(bootPlaylist: DP1Call): void {
+    this.setToLocalStorage(
+      LocalStorageItem.bootPlaylist,
+      JSON.stringify(bootPlaylist)
+    );
   }
 }
 

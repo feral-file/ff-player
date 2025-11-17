@@ -4,6 +4,7 @@ export enum LocalStorageItem {
   viewMode = 'viewMode',
   criticalTemp = 'criticalTemp',
   dp1ScheduledTask = 'dp1_scheduled_tasks',
+  bootPlaylist = 'boot_playlist',
 }
 
 export const AppSettings = {

@@ -398,6 +398,16 @@ class CanvasService {
         break;
       }
 
+      case DP1Action.DisplayAtBoot: {
+        reply = this.nowDisplayPlaylist({
+          dp1CallData,
+          playlistUrl,
+        });
+
+        DeviceManager.setBootPlaylist(dp1CallData);
+        break;
+      }
+
       default: {
         console.error('[CanvasService] Unknown DP1 action:', action);
         reply = { ok: false };
