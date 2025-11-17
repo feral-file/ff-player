@@ -26,6 +26,7 @@ export enum DP1Action {
   NowDisplay = 'now_display',
   SchedulePlay = 'schedule_play',
   GetCurrentPlaylist = 'get_current_playlist',
+  DisplayAtBoot = 'display_at_boot',
 }
 
 export interface DP1Defaults {

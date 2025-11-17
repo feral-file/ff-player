@@ -18,7 +18,7 @@ import RemoteConfigService, {
 import { AppSettings, LocalStorageItem } from '@/constants';
 import DeviceManager from '@/utils/DeviceManager';
 import useCastInfo from '@/services/custom-hooks/useCastInfo';
-import { CastInfo } from '@/models';
+import { CastInfo, CastCommand } from '@/models';
 import { canvasService } from '@/services/CanvasService';
 import { useDeviceSettings } from '@/services/custom-hooks/useDeviceSettings';
 import { DisplaySettings } from '@/models/display_settings.model';
@@ -99,7 +99,24 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
   const initCastInfo = () => {
     console.log('[AppContext] initCastInfo');
-    let castInfo = DeviceManager.getCastInfo();
+
+    let castInfo: CastInfo | null = null;
+
+    // First, check for boot playlist
+    const bootPlaylist = DeviceManager.getBootPlaylist();
+    if (bootPlaylist?.items?.length) {
+      console.log('[AppContext] Boot playlist found, casting boot playlist');
+      castInfo = {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: bootPlaylist,
+        startTime: Date.now(),
+        index: 0,
+        isPaused: false,
+        playlistId: bootPlaylist.id,
+      };
+    }
+
+    castInfo = castInfo ?? DeviceManager.getCastInfo();
 
     if (castInfo) {
       const hasCriticalTemp =
