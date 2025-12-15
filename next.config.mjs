@@ -28,6 +28,12 @@ const nextConfig = {
   },
   images: { unoptimized: true },
   reactStrictMode: false,
+  compiler: {
+    removeConsole:
+      process.env.NODE_ENV === 'production'
+        ? { exclude: ['error', 'warn'] }
+        : false,
+  },
   webpack: config => {
     const originalEntry = config.entry;
 
