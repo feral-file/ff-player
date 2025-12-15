@@ -260,6 +260,25 @@ class CanvasService {
       return { ok: false, error: ErrorType.Overheating };
     }
 
+    console.log('[CanvasService] returning status:', {
+      ok: true,
+      castCommand: DeviceManager.getCastInfo()?.castCommand,
+
+      playlist: this.castInfo?.playlist,
+      playlistUrl: this.castInfo?.playlistUrl,
+
+      items: this.castInfo?.playlist?.items,
+      index: this.castInfo?.index,
+      isPaused: this.castInfo?.isPaused,
+
+      deviceSettings: {
+        scaling:
+          DeviceManager.getDeviceDisplaySettings()?.scaling ??
+          DisplaySettings.defaultScaling,
+        orientation: DeviceManager.getViewMode() ?? ViewMode.landscape,
+      },
+    });
+
     return {
       ok: true,
       castCommand: DeviceManager.getCastInfo()?.castCommand,
