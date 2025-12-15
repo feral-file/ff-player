@@ -28,7 +28,11 @@ export class CDPRequestHandler {
     if (this.isInitialized) return;
     this.isInitialized = true;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    (window as any).handleCDPRequest = this.handleCDPRequest.bind(this);
+    (window as any).handleCDPRequest = async (
+      event: WebSocketMessage | Record<string, unknown>
+    ) => {
+      return await this.handleCDPRequest(event);
+    };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleConnectivityChange =
       this.handleConnectivityChange.bind(this);
@@ -46,9 +50,9 @@ export class CDPRequestHandler {
     this.isInitialized = false;
   }
 
-  private handleCDPRequest(
+  private async handleCDPRequest(
     event: WebSocketMessage | Record<string, unknown>
-  ): string {
+  ): Promise<string> {
     try {
       let wsMessage: Record<string, unknown>;
 
@@ -78,7 +82,10 @@ export class CDPRequestHandler {
       }
 
       if (wsMessage.command) {
-        return this.handleCommandRequest(wsMessage, event.messageID as string);
+        return await this.handleCommandRequest(
+          wsMessage,
+          event.messageID as string
+        );
       }
 
       throw new Error(`Invalid message: ${JSON.stringify(wsMessage)}`);
@@ -92,10 +99,10 @@ export class CDPRequestHandler {
     }
   }
 
-  private handleCommandRequest(
+  private async handleCommandRequest(
     wsMessage: Record<string, unknown>,
     messageID?: string
-  ) {
+  ): Promise<string> {
     console.log('[CDP] Command request received:', JSON.stringify(wsMessage));
     const command = wsMessage.command as string;
     let reply: WebSocketMessage | null = null;
@@ -109,7 +116,7 @@ export class CDPRequestHandler {
       }
 
       default: {
-        const responseMessage = canvasService.processMessage(wsMessage);
+        const responseMessage = await canvasService.processMessage(wsMessage);
         reply = {
           messageID,
           message: responseMessage,

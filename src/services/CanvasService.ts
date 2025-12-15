@@ -174,7 +174,7 @@ class CanvasService {
 
       // Simulate processMessage with the built message data
       console.log('[CanvasService] Processing default playlist message');
-      const reply = canvasService.processMessage(messageData);
+      const reply = await canvasService.processMessage(messageData);
 
       if (reply?.ok) {
         console.log('[CanvasService] Default playlist cast successfully');
@@ -189,7 +189,9 @@ class CanvasService {
     }
   }
 
-  public processMessage(messageData: Record<string, unknown>) {
+  public async processMessage(
+    messageData: Record<string, unknown>
+  ): Promise<Reply | undefined> {
     const commandStr = messageData.command;
     if (!commandStr) {
       console.error(
@@ -208,15 +210,25 @@ class CanvasService {
     });
 
     const requestJson = messageData.request;
-    const reply = this.commandHandler(command, requestJson);
+    const reply = await this.commandHandler(command, requestJson);
     return reply;
   }
 
-  private commandHandler(command: CastCommand, requestJson: unknown): Reply {
+  private async commandHandler(
+    command: CastCommand,
+    requestJson: unknown
+  ): Promise<Reply> {
     console.log('[CAST] commandHandler:', JSON.stringify(command));
     try {
       if (command === CastCommand.displayPlaylist) {
-        localStorage.removeItem(LocalStorageItem.criticalTemp);
+        DeviceManager.removeItem(LocalStorageItem.criticalTemp).catch(
+          (error: unknown) => {
+            console.error(
+              '[CanvasService] Error removing criticalTemp:',
+              error
+            );
+          }
+        );
       }
 
       switch (command) {
@@ -225,9 +237,11 @@ class CanvasService {
         case CastCommand.disconnect:
           return this.disconnect();
         case CastCommand.checkStatus:
-          return this.getStatus();
+          return await this.getStatus();
         case CastCommand.displayPlaylist:
-          return this.displayPlaylist(requestJson as DisplayPlaylistRequest);
+          return await this.displayPlaylist(
+            requestJson as DisplayPlaylistRequest
+          );
         case CastCommand.updateArtFraming:
           return this.updateArtFraming(requestJson as UpdateArtFramingRequest);
         case CastCommand.updateDisplaySettings:
@@ -250,34 +264,43 @@ class CanvasService {
     }
   }
 
-  public getStatus(): CheckDeviceStatusReply {
+  public async getStatus(): Promise<CheckDeviceStatusReply> {
     console.log('[CanvasService] Check status');
 
-    const isOverheating =
-      localStorage.getItem(LocalStorageItem.criticalTemp) === 'true';
+    try {
+      const criticalTempValue = await DeviceManager.getItem(
+        LocalStorageItem.criticalTemp
+      );
+      const isOverheating = criticalTempValue === 'true';
 
-    if (isOverheating) {
-      return { ok: false, error: ErrorType.Overheating };
+      if (isOverheating) {
+        return { ok: false, error: ErrorType.Overheating };
+      }
+
+      const storedCastInfo = await DeviceManager.getCastInfo();
+      return {
+        ok: true,
+        castCommand: storedCastInfo?.castCommand,
+
+        playlist: this.castInfo?.playlist,
+        playlistUrl: this.castInfo?.playlistUrl,
+
+        items: this.castInfo?.playlist?.items,
+        index: this.castInfo?.index,
+        isPaused: this.castInfo?.isPaused,
+
+        deviceSettings: {
+          scaling:
+            (await DeviceManager.getDeviceDisplaySettings())?.scaling ??
+            DisplaySettings.defaultScaling,
+          orientation:
+            (await DeviceManager.getViewMode()) ?? ViewMode.landscape,
+        },
+      };
+    } catch (error) {
+      console.error('[CanvasService] Error getting status:', error);
+      return { ok: false, error: ErrorType.StatusCheckFailed };
     }
-
-    return {
-      ok: true,
-      castCommand: DeviceManager.getCastInfo()?.castCommand,
-
-      playlist: this.castInfo?.playlist,
-      playlistUrl: this.castInfo?.playlistUrl,
-
-      items: this.castInfo?.playlist?.items,
-      index: this.castInfo?.index,
-      isPaused: this.castInfo?.isPaused,
-
-      deviceSettings: {
-        scaling:
-          DeviceManager.getDeviceDisplaySettings()?.scaling ??
-          DisplaySettings.defaultScaling,
-        orientation: DeviceManager.getViewMode() ?? ViewMode.landscape,
-      },
-    };
   }
 
   private connect(): ConnectReplyV2 {
@@ -357,9 +380,9 @@ class CanvasService {
 
   // DP1 Handlers
 
-  private displayPlaylist(
+  private async displayPlaylist(
     request: DisplayPlaylistRequest
-  ): DisplayPlaylistReply {
+  ): Promise<DisplayPlaylistReply> {
     const dp1Intent = request.intent;
     const dp1CallData = request.dp1_call;
     const playlistUrl = request.playlistUrl;
@@ -394,7 +417,7 @@ class CanvasService {
       }
 
       case DP1Action.GetCurrentPlaylist: {
-        reply = this.getStatus();
+        reply = await this.getStatus();
         break;
       }
 
@@ -404,7 +427,9 @@ class CanvasService {
           playlistUrl,
         });
 
-        DeviceManager.setBootPlaylist(dp1CallData);
+        DeviceManager.setBootPlaylist(dp1CallData).catch((error: unknown) => {
+          console.error('[CanvasService] Error setting boot playlist:', error);
+        });
         break;
       }
 
@@ -460,7 +485,9 @@ class CanvasService {
     DP1ScheduleService.storeScheduledTask(
       request.dp1CallData,
       request.scheduleTime.replace('Z', '')
-    );
+    ).catch((error: unknown) => {
+      console.error('[CanvasService] Error storing scheduled task:', error);
+    });
 
     return { ok: true };
   }

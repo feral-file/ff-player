@@ -70,52 +70,54 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
   const deviceRotation = useDeviceRotation();
 
-  const initContext = () => {
+  const initContext = async () => {
     try {
-      initDeviceConfigService();
+      await initDeviceConfigService();
       setIsInitialized(true);
     } catch (error) {
       console.log('Error init context', error);
     }
   };
 
-  const initDeviceConfigService = () => {
+  const initDeviceConfigService = async () => {
     try {
       console.log('[AppContext] initDeviceConfigService');
-      initialDisplaySettings();
-      initCastInfo();
+      await initialDisplaySettings();
+      await initCastInfo();
     } catch (error) {
       console.log('Error init device manager', error);
     }
   };
 
-  const initialDisplaySettings = () => {
+  const initialDisplaySettings = async () => {
     console.log('[AppContext] initialDisplaySettings');
-    const displaySettings = DeviceManager.getDeviceDisplaySettings();
+    const displaySettings = await DeviceManager.getDeviceDisplaySettings();
     if (displaySettings) {
       setDisplaySettings(displaySettings);
     }
   };
 
-  const initCastInfo = () => {
+  const initCastInfo = async () => {
     console.log('[AppContext] initCastInfo');
 
     // Check if this is a version update reload
-    const isVersionUpdateReload =
-      localStorage.getItem(LocalStorageItem.versionUpdateReload) === 'true';
+    const versionUpdateReloadValue = await DeviceManager.getItem(
+      LocalStorageItem.versionUpdateReload
+    );
+    const isVersionUpdateReload = versionUpdateReloadValue === 'true';
 
     if (isVersionUpdateReload) {
       console.log(
         '[AppContext] Version update reload detected, skipping boot playlist'
       );
-      localStorage.removeItem(LocalStorageItem.versionUpdateReload);
+      await DeviceManager.removeItem(LocalStorageItem.versionUpdateReload);
     }
 
     let castInfo: CastInfo | null = null;
 
     // Only check for boot playlist if this is NOT a version update reload
     if (!isVersionUpdateReload) {
-      const bootPlaylist = DeviceManager.getBootPlaylist();
+      const bootPlaylist = await DeviceManager.getBootPlaylist();
       if (bootPlaylist?.items?.length) {
         console.log('[AppContext] Boot playlist found, casting boot playlist');
         castInfo = {
@@ -129,15 +131,17 @@ export const AppProvider = ({ children }: AppContextProps) => {
       }
     }
 
-    castInfo = castInfo ?? DeviceManager.getCastInfo();
+    castInfo = castInfo ?? (await DeviceManager.getCastInfo());
 
     if (castInfo) {
-      const hasCriticalTemp =
-        localStorage.getItem(LocalStorageItem.criticalTemp) === 'true';
+      const criticalTempValue = await DeviceManager.getItem(
+        LocalStorageItem.criticalTemp
+      );
+      const hasCriticalTemp = criticalTempValue === 'true';
       if (hasCriticalTemp) {
         // Fetch and cast default playlist after critical temp reset
         setIsFallbackPlaylist(true);
-        localStorage.removeItem(LocalStorageItem.criticalTemp);
+        await DeviceManager.removeItem(LocalStorageItem.criticalTemp);
         return;
       } else if (castInfo.castCommand?.toString() === 'castDaily') {
         setIsFallbackPlaylist(true);
@@ -158,7 +162,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
         console.log('[AppContext] New startTime calculated:', newStartTime);
       }
 
-      localStorage.removeItem(LocalStorageItem.criticalTemp);
+      await DeviceManager.removeItem(LocalStorageItem.criticalTemp);
       setCastInfo(castInfo);
       canvasService.setCastInfo(castInfo, false);
     } else {
@@ -211,7 +215,9 @@ export const AppProvider = ({ children }: AppContextProps) => {
   }, []);
 
   useEffect(() => {
-    initContext();
+    initContext().catch((error: unknown) => {
+      console.error('[AppContext] Error initializing context:', error);
+    });
   }, []);
 
   useEffect(() => {
@@ -221,10 +227,15 @@ export const AppProvider = ({ children }: AppContextProps) => {
     }
 
     if (isOnline) {
-      const castInfo = DeviceManager.getCastInfo();
-      if (castInfo) {
-        // TODO: Send cast info to app
-      }
+      DeviceManager.getCastInfo()
+        .then((castInfo: CastInfo | null) => {
+          if (castInfo) {
+            // TODO: Send cast info to app
+          }
+        })
+        .catch((error: unknown) => {
+          console.error('[AppContext] Error getting cast info:', error);
+        });
     }
   }, [isOnline]);
 

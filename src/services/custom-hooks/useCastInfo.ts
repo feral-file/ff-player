@@ -57,7 +57,9 @@ const useCastInfo = () => {
     delete castInfoToStore?.elapsedTime;
     delete castInfoToStore?.remainTime;
 
-    DeviceManager.setDeviceInfo(castInfoToStore);
+    DeviceManager.setDeviceInfo(castInfoToStore).catch((error: unknown) => {
+      console.error('[useCastInfo] Error saving castInfo:', error);
+    });
   }, [castInfo]);
 
   return { castInfo, setCastInfo };

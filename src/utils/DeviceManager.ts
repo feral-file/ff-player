@@ -2,43 +2,44 @@ import { LocalStorageItem } from '@/constants';
 import { DisplaySettings } from '@/models/display_settings.model';
 import { CastInfo, ViewMode } from '@/models';
 import { DP1Call } from '@/models/dp1.model';
+import indexedDBStorage from './IndexedDBStorage';
 
 class DeviceManager {
   static instance = new DeviceManager();
 
-  private getFromLocalStorage(key: string): string | null {
-    return localStorage.getItem(key);
+  private async getFromStorage(key: string): Promise<string | null> {
+    return await indexedDBStorage.getItem(key);
   }
 
-  private setToLocalStorage(key: string, value: string): void {
-    localStorage.setItem(key, value);
+  private async setToStorage(key: string, value: string): Promise<void> {
+    await indexedDBStorage.setItem(key, value);
   }
 
-  public getDeviceDisplaySettings(): DisplaySettings | null {
-    const config = this.getFromLocalStorage(LocalStorageItem.displaySettings);
+  public async getDeviceDisplaySettings(): Promise<DisplaySettings | null> {
+    const config = await this.getFromStorage(LocalStorageItem.displaySettings);
     return config ? (JSON.parse(config) as DisplaySettings) : null;
   }
 
-  public setDeviceDisplaySettings(
+  public async setDeviceDisplaySettings(
     displaySettings: DisplaySettings | null
-  ): void {
-    this.setToLocalStorage(
+  ): Promise<void> {
+    await this.setToStorage(
       LocalStorageItem.displaySettings,
       displaySettings ? JSON.stringify(displaySettings) : '{}'
     );
   }
 
-  public getViewMode(): ViewMode | null {
-    const config = this.getFromLocalStorage(LocalStorageItem.viewMode);
+  public async getViewMode(): Promise<ViewMode | null> {
+    const config = await this.getFromStorage(LocalStorageItem.viewMode);
     return config ? (config as ViewMode) : null;
   }
 
-  public setViewMode(viewMode: ViewMode): void {
-    this.setToLocalStorage(LocalStorageItem.viewMode, viewMode);
+  public async setViewMode(viewMode: ViewMode): Promise<void> {
+    await this.setToStorage(LocalStorageItem.viewMode, viewMode);
   }
 
-  public getCastInfo(): CastInfo | null {
-    const castInfoString = this.getFromLocalStorage(LocalStorageItem.castInfo);
+  public async getCastInfo(): Promise<CastInfo | null> {
+    const castInfoString = await this.getFromStorage(LocalStorageItem.castInfo);
     if (castInfoString != null) {
       try {
         const castInfo = JSON.parse(castInfoString) as CastInfo;
@@ -51,22 +52,38 @@ class DeviceManager {
     return null;
   }
 
-  public setDeviceInfo(castInfo: CastInfo | null): void {
-    this.setToLocalStorage(LocalStorageItem.castInfo, JSON.stringify(castInfo));
+  public async setDeviceInfo(castInfo: CastInfo | null): Promise<void> {
+    await this.setToStorage(
+      LocalStorageItem.castInfo,
+      JSON.stringify(castInfo)
+    );
   }
 
-  public getBootPlaylist(): DP1Call | null {
-    const bootPlaylist = this.getFromLocalStorage(
+  public async getBootPlaylist(): Promise<DP1Call | null> {
+    const bootPlaylist = await this.getFromStorage(
       LocalStorageItem.bootPlaylist
     );
     return bootPlaylist ? (JSON.parse(bootPlaylist) as DP1Call) : null;
   }
 
-  public setBootPlaylist(bootPlaylist: DP1Call): void {
-    this.setToLocalStorage(
+  public async setBootPlaylist(bootPlaylist: DP1Call): Promise<void> {
+    await this.setToStorage(
       LocalStorageItem.bootPlaylist,
       JSON.stringify(bootPlaylist)
     );
+  }
+
+  // Helper methods for simple key-value operations
+  public async getItem(key: string): Promise<string | null> {
+    return await indexedDBStorage.getItem(key);
+  }
+
+  public async setItem(key: string, value: string): Promise<void> {
+    await indexedDBStorage.setItem(key, value);
+  }
+
+  public async removeItem(key: string): Promise<void> {
+    await indexedDBStorage.removeItem(key);
   }
 }
 
