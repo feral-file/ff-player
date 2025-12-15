@@ -278,6 +278,26 @@ class CanvasService {
       }
 
       const storedCastInfo = await DeviceManager.getCastInfo();
+      console.log('[CanvasService] Stored cast info:', storedCastInfo);
+      console.log('[CanvasService] returning status:', {
+        ok: true,
+        castCommand: storedCastInfo?.castCommand,
+
+        playlist: this.castInfo?.playlist,
+        playlistUrl: this.castInfo?.playlistUrl,
+
+        items: this.castInfo?.playlist?.items,
+        index: this.castInfo?.index,
+        isPaused: this.castInfo?.isPaused,
+
+        deviceSettings: {
+          scaling:
+            (await DeviceManager.getDeviceDisplaySettings())?.scaling ??
+            DisplaySettings.defaultScaling,
+          orientation:
+            (await DeviceManager.getViewMode()) ?? ViewMode.landscape,
+        },
+      });
       return {
         ok: true,
         castCommand: storedCastInfo?.castCommand,
