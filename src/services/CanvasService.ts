@@ -174,7 +174,7 @@ class CanvasService {
 
       // Simulate processMessage with the built message data
       console.log('[CanvasService] Processing default playlist message');
-      const reply = await canvasService.processMessage(messageData);
+      const reply = canvasService.processMessage(messageData);
 
       if (reply?.ok) {
         console.log('[CanvasService] Default playlist cast successfully');
@@ -189,9 +189,7 @@ class CanvasService {
     }
   }
 
-  public async processMessage(
-    messageData: Record<string, unknown>
-  ): Promise<Reply | undefined> {
+  public processMessage(messageData: Record<string, unknown>): Reply | undefined {
     const commandStr = messageData.command;
     if (!commandStr) {
       console.error(
@@ -210,14 +208,11 @@ class CanvasService {
     });
 
     const requestJson = messageData.request;
-    const reply = await this.commandHandler(command, requestJson);
+    const reply = this.commandHandler(command, requestJson);
     return reply;
   }
 
-  private async commandHandler(
-    command: CastCommand,
-    requestJson: unknown
-  ): Promise<Reply> {
+  private commandHandler(command: CastCommand, requestJson: unknown): Reply {
     console.log('[CAST] commandHandler:', JSON.stringify(command));
     try {
       if (command === CastCommand.displayPlaylist) {
@@ -237,11 +232,9 @@ class CanvasService {
         case CastCommand.disconnect:
           return this.disconnect();
         case CastCommand.checkStatus:
-          return await this.getStatus();
+          return this.getStatus();
         case CastCommand.displayPlaylist:
-          return await this.displayPlaylist(
-            requestJson as DisplayPlaylistRequest
-          );
+          return this.displayPlaylist(requestJson as DisplayPlaylistRequest);
         case CastCommand.updateArtFraming:
           return this.updateArtFraming(requestJson as UpdateArtFramingRequest);
         case CastCommand.updateDisplaySettings:
@@ -264,27 +257,20 @@ class CanvasService {
     }
   }
 
-  public async getStatus(): Promise<CheckDeviceStatusReply> {
+  public getStatus(): CheckDeviceStatusReply {
     console.log('[CanvasService] Check status');
 
     try {
-      const [
-        criticalTempValue,
-        storedCastInfo,
-        storedDisplaySettings,
-        storedViewMode,
-      ] = await Promise.all([
-        DeviceManager.getItem(LocalStorageItem.criticalTemp),
-        DeviceManager.getCastInfo(),
-        DeviceManager.getDeviceDisplaySettings(),
-        DeviceManager.getViewMode(),
-      ]);
+      const criticalTempValue = DeviceManager.getCachedItem(
+        LocalStorageItem.criticalTemp
+      );
       const isOverheating = criticalTempValue === 'true';
 
       if (isOverheating) {
         return { ok: false, error: ErrorType.Overheating };
       }
 
+      const storedCastInfo = DeviceManager.getCachedCastInfo();
       if (!this.castInfo && storedCastInfo) {
         // Ensure in-memory state is available for future status calls
         this.setCastInfo(storedCastInfo, false);
@@ -304,8 +290,10 @@ class CanvasService {
 
         deviceSettings: {
           scaling:
-            storedDisplaySettings?.scaling ?? DisplaySettings.defaultScaling,
-          orientation: storedViewMode ?? ViewMode.landscape,
+            DeviceManager.getCachedDeviceDisplaySettings()?.scaling ??
+            DisplaySettings.defaultScaling,
+          orientation:
+            DeviceManager.getCachedViewMode() ?? ViewMode.landscape,
         },
       };
     } catch (error) {
@@ -391,9 +379,9 @@ class CanvasService {
 
   // DP1 Handlers
 
-  private async displayPlaylist(
+  private displayPlaylist(
     request: DisplayPlaylistRequest
-  ): Promise<DisplayPlaylistReply> {
+  ): DisplayPlaylistReply {
     const dp1Intent = request.intent;
     const dp1CallData = request.dp1_call;
     const playlistUrl = request.playlistUrl;
@@ -428,7 +416,7 @@ class CanvasService {
       }
 
       case DP1Action.GetCurrentPlaylist: {
-        reply = await this.getStatus();
+        reply = this.getStatus();
         break;
       }
 

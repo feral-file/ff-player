@@ -11,7 +11,17 @@ class IndexedDBStorage {
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
 
+  private isSupported(): boolean {
+    // Guard against server-side / worker contexts where indexedDB is undefined.
+    return typeof indexedDB !== 'undefined';
+  }
+
   private async init(): Promise<void> {
+    if (!this.isSupported()) {
+      // No-op on unsupported environments (e.g., Node/SSR); behave as empty storage.
+      return;
+    }
+
     if (this.db) {
       return;
     }
@@ -57,6 +67,7 @@ class IndexedDBStorage {
    */
   async getItem(key: string): Promise<string | null> {
     try {
+      if (!this.isSupported()) return null;
       await this.init();
       if (!this.db) {
         return null;
@@ -99,6 +110,7 @@ class IndexedDBStorage {
    */
   async setItem(key: string, value: string): Promise<void> {
     try {
+      if (!this.isSupported()) return;
       await this.init();
       if (!this.db) {
         throw new Error('Database not initialized');
@@ -158,6 +170,7 @@ class IndexedDBStorage {
    */
   async removeItem(key: string): Promise<void> {
     try {
+      if (!this.isSupported()) return;
       await this.init();
       if (!this.db) {
         return;
@@ -198,6 +211,7 @@ class IndexedDBStorage {
    */
   async clear(): Promise<void> {
     try {
+      if (!this.isSupported()) return;
       await this.init();
       if (!this.db) {
         return;
