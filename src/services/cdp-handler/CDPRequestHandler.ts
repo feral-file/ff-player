@@ -9,6 +9,14 @@ import { handleOverheatingError } from '@/utils/ErrorNavigation';
 
 const pingCommand = 'ping';
 
+// CDP Request Timeout Configuration
+// Most operations complete in <500ms, but we allow extra time for:
+// - First-time IndexedDB initialization (100-500ms)
+// - Database upgrades (100-1000ms)
+// - Large data reads/migrations (200-1000ms)
+// - Slow devices or high system load
+const CDP_REQUEST_TIMEOUT_MS = 3000; // 3 seconds - balance between safety and responsiveness
+
 export class CDPRequestHandler {
   private static instance: CDPRequestHandler | null = null;
   private isInitialized = false;
@@ -27,11 +35,62 @@ export class CDPRequestHandler {
   public initialize() {
     if (this.isInitialized) return;
     this.isInitialized = true;
+    // Expose a synchronous bridge expected by the host/runtime.
+    // Internally we still await async flows, but we block until resolved to keep
+    // the external interface synchronous (returns a JSON string, not a Promise).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    (window as any).handleCDPRequest = async (
+    (window as any).handleCDPRequest = (
       event: WebSocketMessage | Record<string, unknown>
     ) => {
-      return await this.handleCDPRequest(event);
+      let response: string | undefined;
+      let done = false;
+      const messageID =
+        typeof (event as { messageID?: unknown }).messageID === 'string'
+          ? (event as { messageID?: string }).messageID
+          : undefined;
+
+      // Start the async handler and block synchronously until it resolves.
+      // Note: This busy-wait blocks the main thread, but is necessary to maintain
+      // the synchronous interface expected by the host runtime.
+      void this.handleCDPRequest(event)
+        .then(res => {
+          response = res;
+        })
+        .catch((error: unknown) => {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          response = JSON.stringify({
+            messageID,
+            message: { ok: false, error: errMsg },
+          });
+        })
+        .finally(() => {
+          done = true;
+        });
+
+      // Block synchronously until the async handler resolves.
+      const start = Date.now();
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      while (!done) {
+        // Prevent infinite hang; fail fast after timeout.
+        if (Date.now() - start > CDP_REQUEST_TIMEOUT_MS) {
+          response ??= JSON.stringify({
+            messageID,
+            message: {
+              ok: false,
+              error: 'Timeout waiting for CDP handler',
+            },
+          });
+          break;
+        }
+      }
+
+      return (
+        response ??
+        JSON.stringify({
+          messageID,
+          message: { ok: false, error: 'Unknown CDP handler error' },
+        })
+      );
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleConnectivityChange =

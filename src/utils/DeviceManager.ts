@@ -7,8 +7,32 @@ import indexedDBStorage from './IndexedDBStorage';
 class DeviceManager {
   static instance = new DeviceManager();
 
+  private localStorageAvailable(): boolean {
+    try {
+      return typeof localStorage !== 'undefined';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Read from IndexedDB, but fallback to existing localStorage data (from older app versions).
+   * When a fallback hit occurs, migrate the value into IndexedDB for future reads.
+   */
   private async getFromStorage(key: string): Promise<string | null> {
-    return await indexedDBStorage.getItem(key);
+    const value = await indexedDBStorage.getItem(key);
+    if (value !== null) return value;
+
+    if (!this.localStorageAvailable()) return null;
+
+    const legacy = localStorage.getItem(key);
+    if (legacy !== null) {
+      // Best-effort migrate the legacy value into IndexedDB for next time.
+      await indexedDBStorage.setItem(key, legacy);
+      return legacy;
+    }
+
+    return null;
   }
 
   private async setToStorage(key: string, value: string): Promise<void> {

@@ -268,33 +268,44 @@ class CanvasService {
     console.log('[CanvasService] Check status');
 
     try {
-      const criticalTempValue = await DeviceManager.getItem(
-        LocalStorageItem.criticalTemp
-      );
+      const [
+        criticalTempValue,
+        storedCastInfo,
+        storedDisplaySettings,
+        storedViewMode,
+      ] = await Promise.all([
+        DeviceManager.getItem(LocalStorageItem.criticalTemp),
+        DeviceManager.getCastInfo(),
+        DeviceManager.getDeviceDisplaySettings(),
+        DeviceManager.getViewMode(),
+      ]);
       const isOverheating = criticalTempValue === 'true';
 
       if (isOverheating) {
         return { ok: false, error: ErrorType.Overheating };
       }
 
-      const storedCastInfo = await DeviceManager.getCastInfo();
+      if (!this.castInfo && storedCastInfo) {
+        // Ensure in-memory state is available for future status calls
+        this.setCastInfo(storedCastInfo, false);
+      }
+
+      const activeCastInfo = this.castInfo ?? storedCastInfo ?? null;
       return {
         ok: true,
-        castCommand: storedCastInfo?.castCommand,
+        castCommand: activeCastInfo?.castCommand,
 
-        playlist: this.castInfo?.playlist,
-        playlistUrl: this.castInfo?.playlistUrl,
+        playlist: activeCastInfo?.playlist,
+        playlistUrl: activeCastInfo?.playlistUrl,
 
-        items: this.castInfo?.playlist?.items,
-        index: this.castInfo?.index,
-        isPaused: this.castInfo?.isPaused,
+        items: activeCastInfo?.playlist?.items,
+        index: activeCastInfo?.index,
+        isPaused: activeCastInfo?.isPaused,
 
         deviceSettings: {
           scaling:
-            (await DeviceManager.getDeviceDisplaySettings())?.scaling ??
-            DisplaySettings.defaultScaling,
-          orientation:
-            (await DeviceManager.getViewMode()) ?? ViewMode.landscape,
+            storedDisplaySettings?.scaling ?? DisplaySettings.defaultScaling,
+          orientation: storedViewMode ?? ViewMode.landscape,
         },
       };
     } catch (error) {
