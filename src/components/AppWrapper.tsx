@@ -122,7 +122,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
           return;
         }
 
-        console.log('[AppWrapper] process cast info:', castInfo.castCommand);
+        console.log('[AppWrapper] process cast info');
         console.log('AppWrapper castState', castState);
 
         handleCastCommand();

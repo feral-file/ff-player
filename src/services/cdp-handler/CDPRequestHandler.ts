@@ -95,11 +95,10 @@ export class CDPRequestHandler {
   private handleCommandRequest(
     wsMessage: Record<string, unknown>,
     messageID?: string
-  ): string {
-    console.log('[CDP] Command request received:', JSON.stringify(wsMessage));
+  ) {
+    console.log('[CDP Handler] Command request received');
     const command = wsMessage.command as string;
     let reply: WebSocketMessage | null = null;
-    console.log('[CDP] Command:', command);
     switch (command) {
       case pingCommand: {
         reply = {
@@ -119,7 +118,6 @@ export class CDPRequestHandler {
       }
     }
 
-    console.log('[CDP] Reply:', JSON.stringify(reply));
     return JSON.stringify(reply);
   }
 
@@ -136,7 +134,7 @@ export class CDPRequestHandler {
 
   public handleWatchdogEvent(event: string) {
     try {
-      console.log('[CDP] Watchdog event received:', event);
+      console.log('[CDP Handler] Watchdog event received');
 
       switch (event) {
         case WatchdogEvent.CriticalCPUTemperature.toString(): {

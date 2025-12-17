@@ -168,7 +168,7 @@ class DeviceManager {
       try {
         return JSON.parse(castInfoString) as CastInfo;
       } catch (error) {
-        console.log('Error init cast info', error);
+        console.error('Error init cast info', error);
       }
     }
 

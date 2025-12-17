@@ -126,10 +126,7 @@ class CanvasService {
   }
 
   public getCastInfo() {
-    console.log(
-      '[CanvasService] Retrieving castInfo:',
-      JSON.stringify(this.castInfo)
-    );
+    console.log('[CanvasService] Retrieving castInfo');
     return this.castInfo;
   }
 
@@ -142,10 +139,7 @@ class CanvasService {
   }
 
   public executeScheduledDP1Task(dp1CallData: DP1Call): void {
-    console.log(
-      '[CanvasService] Executing scheduled DP1 task with data:',
-      JSON.stringify(dp1CallData)
-    );
+    console.log('[CanvasService] Executing scheduled DP1 task with data');
     this.nowDisplayPlaylist({ dp1CallData });
   }
 
@@ -189,7 +183,9 @@ class CanvasService {
     }
   }
 
-  public processMessage(messageData: Record<string, unknown>): Reply | undefined {
+  public processMessage(
+    messageData: Record<string, unknown>
+  ): Reply | undefined {
     const commandStr = messageData.command;
     if (!commandStr) {
       console.error(
@@ -292,8 +288,7 @@ class CanvasService {
           scaling:
             DeviceManager.getCachedDeviceDisplaySettings()?.scaling ??
             DisplaySettings.defaultScaling,
-          orientation:
-            DeviceManager.getCachedViewMode() ?? ViewMode.landscape,
+          orientation: DeviceManager.getCachedViewMode() ?? ViewMode.landscape,
         },
       };
     } catch (error) {
