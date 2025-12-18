@@ -96,7 +96,7 @@ export class CDPRequestHandler {
     wsMessage: Record<string, unknown>,
     messageID?: string
   ) {
-    console.log('[CDP] Command request received:', JSON.stringify(wsMessage));
+    console.log('[CDP Handler] Command request received');
     const command = wsMessage.command as string;
     let reply: WebSocketMessage | null = null;
     switch (command) {
@@ -134,7 +134,7 @@ export class CDPRequestHandler {
 
   public handleWatchdogEvent(event: string) {
     try {
-      console.log('[CDP] Watchdog event received:', event);
+      console.log('[CDP Handler] Watchdog event received');
 
       switch (event) {
         case WatchdogEvent.CriticalCPUTemperature.toString(): {

@@ -4,6 +4,7 @@ import {
   NavigateToErrorEventDetail,
 } from '@/models/custom_event';
 import { ErrorType } from '@/models/error.model';
+import DeviceManager from './DeviceManager';
 
 export function navigateToErrorPageAction(errorType: string) {
   const params = new URLSearchParams({
@@ -23,6 +24,13 @@ export function navigateToErrorPageAction(errorType: string) {
 }
 
 export function handleOverheatingError() {
-  localStorage.setItem(LocalStorageItem.criticalTemp, 'true');
-  navigateToErrorPageAction(ErrorType.Overheating);
+  DeviceManager.setItem(LocalStorageItem.criticalTemp, 'true')
+    .then(() => {
+      navigateToErrorPageAction(ErrorType.Overheating);
+    })
+    .catch((error: unknown) => {
+      console.error('[ErrorNavigation] Error setting critical temp:', error);
+      // Still navigate to error page even if storage fails
+      navigateToErrorPageAction(ErrorType.Overheating);
+    });
 }

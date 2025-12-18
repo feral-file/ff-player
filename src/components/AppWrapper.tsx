@@ -12,6 +12,7 @@ import {
 import { LocalStorageItem } from '@/constants';
 import DP1ScheduleService from '@/services/DP1ScheduleService';
 import ScheduleDisplay from './ScheduleDisplay';
+import DeviceManager from '@/utils/DeviceManager';
 
 const enum CastState {
   None, // Not casting
@@ -75,7 +76,9 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
 
   // Check for scheduled DP1 tasks
   useEffect(() => {
-    DP1ScheduleService.checkScheduledTask();
+    DP1ScheduleService.checkScheduledTask().catch((error: unknown) => {
+      console.error('[AppWrapper] Error checking scheduled tasks:', error);
+    });
   }, []);
 
   const checkVersion = async () => {
@@ -87,8 +90,18 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
     console.log('[INFO] New Version:', newVersion);
     if (newVersion !== currentVersion) {
       // Set flag to indicate this is a version update reload
-      localStorage.setItem(LocalStorageItem.versionUpdateReload, 'true');
-      window.location.reload();
+      DeviceManager.setItem(LocalStorageItem.versionUpdateReload, 'true')
+        .then(() => {
+          window.location.reload();
+        })
+        .catch((error: unknown) => {
+          console.error(
+            '[AppWrapper] Error setting version update reload flag:',
+            error
+          );
+          // Still reload even if storage fails
+          window.location.reload();
+        });
     }
   };
 
@@ -98,15 +111,25 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
 
-    const isOverheating =
-      localStorage.getItem(LocalStorageItem.criticalTemp) === 'true';
+    const checkCriticalTempToHandleCastCommand = async () => {
+      try {
+        const criticalTempValue = await DeviceManager.getItem(
+          LocalStorageItem.criticalTemp
+        );
+        const isOverheating = criticalTempValue === 'true';
 
-    if (isOverheating) {
-      return;
-    }
+        if (isOverheating) {
+          return;
+        }
 
-    console.log('[AppWrapper] process cast info:', castInfo.castCommand);
-    console.log('AppWrapper castState', castState);
+        console.log('[AppWrapper] process cast info');
+        console.log('AppWrapper castState', castState);
+
+        handleCastCommand();
+      } catch (error) {
+        console.error('[AppWrapper] Error checking critical temp:', error);
+      }
+    };
 
     const handleCastCommand = () => {
       switch (castInfo.castCommand) {
@@ -130,8 +153,10 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       }
     };
 
-    handleCastCommand();
-  }, [castInfo, pathname]);
+    checkCriticalTempToHandleCastCommand().catch((error: unknown) => {
+      console.error('[AppWrapper] Error checking critical temp:', error);
+    });
+  }, [castInfo, pathname, castState, router]);
 
   return (
     <div

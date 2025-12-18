@@ -1,6 +1,7 @@
 import { DP1Call } from '@/models/dp1.model';
 import { canvasService } from './CanvasService';
 import { LocalStorageItem } from '@/constants';
+import DeviceManager from '@/utils/DeviceManager';
 
 export interface ScheduledDP1Task {
   id: string;
@@ -13,13 +14,14 @@ class DP1ScheduleService {
   private timeoutId: NodeJS.Timeout | null = null;
 
   public static getInstance(): DP1ScheduleService {
-    if (!DP1ScheduleService.instance) {
-      DP1ScheduleService.instance = new DP1ScheduleService();
-    }
+    DP1ScheduleService.instance ??= new DP1ScheduleService();
     return DP1ScheduleService.instance;
   }
 
-  public storeScheduledTask(dp1CallData: DP1Call, scheduleTime: string): void {
+  public async storeScheduledTask(
+    dp1CallData: DP1Call,
+    scheduleTime: string
+  ): Promise<void> {
     try {
       const newTask: ScheduledDP1Task = {
         id: dp1CallData.id ?? '',
@@ -27,7 +29,7 @@ class DP1ScheduleService {
         dp1CallData,
       };
 
-      localStorage.setItem(
+      await DeviceManager.setItem(
         LocalStorageItem.dp1ScheduledTask,
         JSON.stringify(newTask)
       );
@@ -42,11 +44,11 @@ class DP1ScheduleService {
     }
   }
 
-  public removeTask(taskId: string): void {
+  public async removeTask(taskId: string): Promise<void> {
     try {
-      const scheduledTask = this.getScheduledTask();
-      if (scheduledTask && scheduledTask.id === taskId) {
-        localStorage.removeItem(LocalStorageItem.dp1ScheduledTask);
+      const scheduledTask = await this.getScheduledTask();
+      if (scheduledTask?.id === taskId) {
+        await DeviceManager.removeItem(LocalStorageItem.dp1ScheduledTask);
         console.log('[DP1ScheduleService] Removed task:', taskId);
       }
     } catch (error) {
@@ -54,9 +56,11 @@ class DP1ScheduleService {
     }
   }
 
-  public getScheduledTask(): ScheduledDP1Task | null {
+  public async getScheduledTask(): Promise<ScheduledDP1Task | null> {
     try {
-      const stored = localStorage.getItem(LocalStorageItem.dp1ScheduledTask);
+      const stored = await DeviceManager.getItem(
+        LocalStorageItem.dp1ScheduledTask
+      );
       return stored ? (JSON.parse(stored) as ScheduledDP1Task) : null;
     } catch (error) {
       console.error(
@@ -67,9 +71,9 @@ class DP1ScheduleService {
     }
   }
 
-  public checkScheduledTask(): void {
+  public async checkScheduledTask(): Promise<void> {
     try {
-      const scheduledTask = this.getScheduledTask();
+      const scheduledTask = await this.getScheduledTask();
       if (!scheduledTask) {
         console.log('[DP1ScheduleService] No existing scheduled tasks found');
         return;
@@ -133,7 +137,12 @@ class DP1ScheduleService {
       scheduledTask.id
     );
     canvasService.executeScheduledDP1Task(scheduledTask.dp1CallData);
-    this.removeTask(scheduledTask.id);
+    this.removeTask(scheduledTask.id).catch((error: unknown) => {
+      console.error(
+        '[DP1ScheduleService] Error removing task after execution:',
+        error
+      );
+    });
     this.clearTimeoutIfExists();
   }
 

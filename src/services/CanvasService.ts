@@ -126,10 +126,7 @@ class CanvasService {
   }
 
   public getCastInfo() {
-    console.log(
-      '[CanvasService] Retrieving castInfo:',
-      JSON.stringify(this.castInfo)
-    );
+    console.log('[CanvasService] Retrieving castInfo');
     return this.castInfo;
   }
 
@@ -142,10 +139,7 @@ class CanvasService {
   }
 
   public executeScheduledDP1Task(dp1CallData: DP1Call): void {
-    console.log(
-      '[CanvasService] Executing scheduled DP1 task with data:',
-      JSON.stringify(dp1CallData)
-    );
+    console.log('[CanvasService] Executing scheduled DP1 task with data');
     this.nowDisplayPlaylist({ dp1CallData });
   }
 
@@ -189,7 +183,9 @@ class CanvasService {
     }
   }
 
-  public processMessage(messageData: Record<string, unknown>) {
+  public processMessage(
+    messageData: Record<string, unknown>
+  ): Reply | undefined {
     const commandStr = messageData.command;
     if (!commandStr) {
       console.error(
@@ -216,7 +212,14 @@ class CanvasService {
     console.log('[CAST] commandHandler:', JSON.stringify(command));
     try {
       if (command === CastCommand.displayPlaylist) {
-        localStorage.removeItem(LocalStorageItem.criticalTemp);
+        DeviceManager.removeItem(LocalStorageItem.criticalTemp).catch(
+          (error: unknown) => {
+            console.error(
+              '[CanvasService] Error removing criticalTemp:',
+              error
+            );
+          }
+        );
       }
 
       switch (command) {
@@ -251,33 +254,51 @@ class CanvasService {
   }
 
   public getStatus(): CheckDeviceStatusReply {
-    console.log('[CanvasService] Check status');
+    try {
+      const criticalTempValue = DeviceManager.getCachedItem(
+        LocalStorageItem.criticalTemp
+      );
+      const isOverheating = criticalTempValue === 'true';
 
-    const isOverheating =
-      localStorage.getItem(LocalStorageItem.criticalTemp) === 'true';
+      if (isOverheating) {
+        return { ok: false, error: ErrorType.Overheating };
+      }
 
-    if (isOverheating) {
-      return { ok: false, error: ErrorType.Overheating };
+      const storedCastInfo = DeviceManager.getCachedCastInfo();
+      if (!this.castInfo && storedCastInfo) {
+        // Ensure in-memory state is available for future status calls
+        this.setCastInfo(storedCastInfo, false);
+      }
+
+      const activeCastInfo = this.castInfo ?? storedCastInfo ?? null;
+
+      console.log(
+        '[CanvasService getStatus] Reply ok. Current index:',
+        activeCastInfo?.index ?? 'N/A'
+      );
+
+      return {
+        ok: true,
+        castCommand: activeCastInfo?.castCommand,
+
+        playlist: activeCastInfo?.playlist,
+        playlistUrl: activeCastInfo?.playlistUrl,
+
+        items: activeCastInfo?.playlist?.items,
+        index: activeCastInfo?.index,
+        isPaused: activeCastInfo?.isPaused,
+
+        deviceSettings: {
+          scaling:
+            DeviceManager.getCachedDeviceDisplaySettings()?.scaling ??
+            DisplaySettings.defaultScaling,
+          orientation: DeviceManager.getCachedViewMode() ?? ViewMode.landscape,
+        },
+      };
+    } catch (error) {
+      console.error('[CanvasService] Error getting status:', error);
+      return { ok: false, error: ErrorType.StatusCheckFailed };
     }
-
-    return {
-      ok: true,
-      castCommand: DeviceManager.getCastInfo()?.castCommand,
-
-      playlist: this.castInfo?.playlist,
-      playlistUrl: this.castInfo?.playlistUrl,
-
-      items: this.castInfo?.playlist?.items,
-      index: this.castInfo?.index,
-      isPaused: this.castInfo?.isPaused,
-
-      deviceSettings: {
-        scaling:
-          DeviceManager.getDeviceDisplaySettings()?.scaling ??
-          DisplaySettings.defaultScaling,
-        orientation: DeviceManager.getViewMode() ?? ViewMode.landscape,
-      },
-    };
   }
 
   private connect(): ConnectReplyV2 {
@@ -404,7 +425,9 @@ class CanvasService {
           playlistUrl,
         });
 
-        DeviceManager.setBootPlaylist(dp1CallData);
+        DeviceManager.setBootPlaylist(dp1CallData).catch((error: unknown) => {
+          console.error('[CanvasService] Error setting boot playlist:', error);
+        });
         break;
       }
 
@@ -460,7 +483,9 @@ class CanvasService {
     DP1ScheduleService.storeScheduledTask(
       request.dp1CallData,
       request.scheduleTime.replace('Z', '')
-    );
+    ).catch((error: unknown) => {
+      console.error('[CanvasService] Error storing scheduled task:', error);
+    });
 
     return { ok: true };
   }
