@@ -254,8 +254,6 @@ class CanvasService {
   }
 
   public getStatus(): CheckDeviceStatusReply {
-    console.log('[CanvasService] Check status');
-
     try {
       const criticalTempValue = DeviceManager.getCachedItem(
         LocalStorageItem.criticalTemp
@@ -273,6 +271,12 @@ class CanvasService {
       }
 
       const activeCastInfo = this.castInfo ?? storedCastInfo ?? null;
+
+      console.log(
+        '[CanvasService getStatus] Reply ok. Current index:',
+        activeCastInfo?.index ?? 'N/A'
+      );
+
       return {
         ok: true,
         castCommand: activeCastInfo?.castCommand,
