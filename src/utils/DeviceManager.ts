@@ -86,20 +86,16 @@ class DeviceManager {
       const legacyValue = this.readFromLocalStorage(key);
       if (legacyValue !== null) {
         value = legacyValue;
-        let migrated = false;
         try {
           await indexedDBStorage.setItem(key, legacyValue);
-          migrated = true;
+
+          // Remove legacy data after successful migration
+          this.removeFromLegacyStorage(key);
         } catch (error) {
           console.error(
             `[DeviceManager] Error migrating "${key}" to IndexedDB:`,
             error
           );
-        } finally {
-          // Only remove legacy data if we successfully wrote to IndexedDB.
-          if (migrated) {
-            this.removeFromLegacyStorage(key);
-          }
         }
       }
     }
