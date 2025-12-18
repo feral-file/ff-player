@@ -82,7 +82,7 @@ class DeviceManager {
       );
     }
 
-    if (value === null) {
+    if (!value) {
       const legacyValue = this.readFromLocalStorage(key);
       if (legacyValue !== null) {
         value = legacyValue;
