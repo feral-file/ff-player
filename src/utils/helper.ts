@@ -22,6 +22,16 @@ export async function getContentTypeFromURL(
     const response = await fetch(extendPreviewURL, {
       method: 'HEAD',
     });
+
+    // Treat non-2xx as failure, even if Content-Type is present (e.g., 504 text/plain pages)
+    if (!response.ok) {
+      throw new Error(
+        `HEAD request failed with status ${String(
+          response.status
+        )} ${response.statusText}`
+      );
+    }
+
     const contentType = response.headers.get('Content-Type');
     if (contentType) {
       return contentType;

@@ -132,10 +132,19 @@ const ArtworkPlayer = ({
   }, [context.cursorPositions]);
 
   useEffect(() => {
-    const detectPreviewType = async (previewURL: string) => {
-      console.log('[ArtworkPlayer] detectPreviewType', previewURL);
+    let cancelled = false;
+    const currentURL = previewURL;
+
+    const detectPreviewType = async (url: string) => {
+      console.log(
+        '[ArtworkPlayer] detectPreviewType',
+        url.startsWith('http') ? url : 'data/text source'
+      );
+      const isStale = () => cancelled || url !== currentURL;
+
       try {
         if (artworkPreviewMIMEType) {
+          if (isStale()) return;
           compareToGetFileType(artworkPreviewMIMEType);
           console.log(
             '[CAST] Artwork previewMIMEType:',
@@ -144,20 +153,23 @@ const ArtworkPlayer = ({
           Sentry.addBreadcrumb({
             category: 'ArtworkPlayer',
             message: 'play artwork',
-            data: { previewURL, artworkPreviewMIMEType },
+            data: { previewURL: url, artworkPreviewMIMEType },
           });
           return;
         }
 
-        const contentType = await getContentTypeFromURL(previewURL);
+        const contentType = await getContentTypeFromURL(url);
+        if (isStale()) return;
+
         compareToGetFileType(contentType);
         console.log('[ArtworkPlayer] Content-Type:', contentType);
         Sentry.addBreadcrumb({
           category: 'ArtworkPlayer',
           message: 'play artwork',
-          data: { previewURL, contentType },
+          data: { previewURL: url, contentType },
         });
       } catch (error) {
+        if (isStale()) return;
         console.log(
           '[ArtworkPlayer] Error detect preview type',
           JSON.stringify(error)
@@ -175,10 +187,17 @@ const ArtworkPlayer = ({
           console.error(err);
         })
         .finally(() => {
-          setDisplayPreviewURL(previewURL);
+          // Only apply result if this effect instance is still current
+          if (!cancelled && previewURL === currentURL) {
+            setDisplayPreviewURL(previewURL);
+          }
         });
     }
-  }, [previewURL]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [previewURL, artworkPreviewMIMEType]);
 
   useEffect(() => {
     // Unmute video when user click on the screen
