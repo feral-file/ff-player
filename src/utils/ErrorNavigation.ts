@@ -34,3 +34,7 @@ export function handleOverheatingError() {
       navigateToErrorPageAction(ErrorType.Overheating);
     });
 }
+
+export function handleServiceFailedError() {
+  navigateToErrorPageAction(ErrorType.ServiceFailed);
+}

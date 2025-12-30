@@ -5,7 +5,10 @@ import {
   CustomEventName,
   WatchdogEvent,
 } from '@/models/custom_event';
-import { handleOverheatingError } from '@/utils/ErrorNavigation';
+import {
+  handleOverheatingError,
+  handleServiceFailedError,
+} from '@/utils/ErrorNavigation';
 
 const pingCommand = 'ping';
 
@@ -139,6 +142,13 @@ export class CDPRequestHandler {
       switch (event) {
         case WatchdogEvent.CriticalCPUTemperature.toString(): {
           handleOverheatingError();
+          return JSON.stringify({
+            message: { ok: true },
+          });
+        }
+
+        case WatchdogEvent.ServiceFailed.toString(): {
+          handleServiceFailedError();
           return JSON.stringify({
             message: { ok: true },
           });
