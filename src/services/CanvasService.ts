@@ -170,7 +170,7 @@ class CanvasService {
       console.log('[CanvasService] Processing default playlist message');
       const reply = canvasService.processMessage(messageData);
 
-      if (reply?.ok) {
+      if (reply.ok) {
         console.log('[CanvasService] Default playlist cast successfully');
       } else {
         console.error(
@@ -183,16 +183,14 @@ class CanvasService {
     }
   }
 
-  public processMessage(
-    messageData: Record<string, unknown>
-  ): Reply | undefined {
+  public processMessage(messageData: Record<string, unknown>): Reply {
     const commandStr = messageData.command;
     if (!commandStr) {
       console.error(
         '[CAST] Command not found in the message:',
         JSON.stringify(messageData)
       );
-      return;
+      return { ok: false };
     }
 
     const command = CastCommand[commandStr as keyof typeof CastCommand];

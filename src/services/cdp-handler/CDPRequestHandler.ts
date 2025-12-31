@@ -1,5 +1,5 @@
 import { canvasService } from '../CanvasService';
-import { WebSocketMessage } from '@/models';
+import { Reply, WebSocketMessage } from '@/models';
 import {
   ConnectivityEventDetail,
   CustomEventName,
@@ -81,42 +81,29 @@ export class CDPRequestHandler {
       }
 
       if (wsMessage.command) {
-        return this.handleCommandRequest(wsMessage, event.messageID as string);
+        return this.handleCommandRequest(wsMessage);
       }
 
       throw new Error(`Invalid message: ${JSON.stringify(wsMessage)}`);
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error('[CDP] Error handling CDP request:', error);
-      return JSON.stringify({
-        messageID: event.messageID,
-        message: { ok: false, error: errMsg },
-      });
+      return JSON.stringify({ ok: false, error: errMsg });
     }
   }
 
-  private handleCommandRequest(
-    wsMessage: Record<string, unknown>,
-    messageID?: string
-  ) {
+  private handleCommandRequest(wsMessage: Record<string, unknown>) {
     console.log('[CDP Handler] Command request received');
     const command = wsMessage.command as string;
-    let reply: WebSocketMessage | null = null;
+    let reply: Reply;
     switch (command) {
       case pingCommand: {
-        reply = {
-          messageID,
-          message: { ok: true },
-        };
+        reply = { ok: true };
         break;
       }
 
       default: {
-        const responseMessage = canvasService.processMessage(wsMessage);
-        reply = {
-          messageID,
-          message: responseMessage,
-        };
+        reply = canvasService.processMessage(wsMessage);
         break;
       }
     }
