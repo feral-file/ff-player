@@ -1,5 +1,6 @@
 export enum WatchdogEvent {
   CriticalCPUTemperature = 'CriticalCPUTemperature',
+  ServiceFailed = 'ServiceFailed',
 }
 
 export enum CustomEventName {

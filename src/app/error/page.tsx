@@ -32,16 +32,33 @@ const ErrorPage = () => {
 
     if (!errorType) return;
 
-    if (errorType === ErrorType.Overheating.toString()) {
-      const playingArtworkTitle = getPlayingArtworkTitle();
-      setTitle('System Overheating Detected');
-      setMessage(
-        `The device temperature has exceeded safe operating levels` +
-          (playingArtworkTitle ? ` while viewing ${playingArtworkTitle}` : '') +
-          `. To prevent damage, playback has been paused. Please reboot the device to continue viewing the artwork.`
-      );
+    switch (errorType) {
+      case ErrorType.Overheating.toString(): {
+        const playingArtworkTitle = getPlayingArtworkTitle();
+        setTitle('System Overheating Detected');
+        setMessage(
+          `The device temperature has exceeded safe operating levels` +
+            (playingArtworkTitle
+              ? ` while viewing ${playingArtworkTitle}`
+              : '') +
+            `. To prevent damage, playback has been paused. Please reboot the device to continue viewing the artwork.`
+        );
+        break;
+      }
+
+      case ErrorType.ServiceFailed.toString(): {
+        setTitle('Service Failed');
+        setMessage(
+          'FF1 encountered an unexpected issue and has stopped working. Please reboot the device. If the problem persists, contact support@feralfile.com for assistance.'
+        );
+        break;
+      }
+
+      default: {
+        console.error('[ErrorPage] Unknown error type');
+        break;
+      }
     }
-    // More error types in the future as needed
   }, [searchParams]);
 
   return (
