@@ -111,26 +111,6 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
 
-    const checkCriticalTempToHandleCastCommand = async () => {
-      try {
-        const criticalTempValue = await DeviceManager.getItem(
-          LocalStorageItem.criticalTemp
-        );
-        const isOverheating = criticalTempValue === 'true';
-
-        if (isOverheating) {
-          return;
-        }
-
-        console.log('[AppWrapper] process cast info');
-        console.log('AppWrapper castState', castState);
-
-        handleCastCommand();
-      } catch (error) {
-        console.error('[AppWrapper] Error checking critical temp:', error);
-      }
-    };
-
     const handleCastCommand = () => {
       switch (castInfo.castCommand) {
         case CastCommand.displayPlaylist: {
@@ -153,9 +133,11 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       }
     };
 
-    checkCriticalTempToHandleCastCommand().catch((error: unknown) => {
-      console.error('[AppWrapper] Error checking critical temp:', error);
-    });
+    if (pathname === '/error') {
+      return;
+    }
+
+    handleCastCommand();
   }, [castInfo, pathname, castState, router]);
 
   return (
