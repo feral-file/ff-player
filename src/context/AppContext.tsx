@@ -27,6 +27,7 @@ import useCursorPositions, {
   CursorPosition,
 } from '@/services/custom-hooks/useCursorPositions';
 import { recalculateStartTimeForIndex } from '@/utils/playlist';
+import { useRouter } from 'next/navigation';
 interface AppContextProps {
   children: ReactNode;
 }
@@ -65,6 +66,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const { castInfo, setCastInfo } = useCastInfo();
   const { displaySettings, setDisplaySettings } = useDeviceSettings();
   const { cursorPositions } = useCursorPositions();
+  const router = useRouter();
   const isOnline = useNetworkManger();
   const isFirstRender = useRef(true);
 
@@ -94,6 +96,13 @@ export const AppProvider = ({ children }: AppContextProps) => {
     const displaySettings = await DeviceManager.getDeviceDisplaySettings();
     if (displaySettings) {
       setDisplaySettings(displaySettings);
+    }
+  };
+
+  const navigateToHomePage = () => {
+    if (window.location.pathname !== '/') {
+      console.log('navigate to home page');
+      router.push('/');
     }
   };
 
@@ -143,9 +152,14 @@ export const AppProvider = ({ children }: AppContextProps) => {
         setIsFallbackPlaylist(true);
         await DeviceManager.removeItem(LocalStorageItem.criticalTemp);
         return;
-      } else if (castInfo.castCommand?.toString() === 'castDaily') {
+      }
+
+      if (castInfo.castCommand?.toString() === 'castDaily') {
         setIsFallbackPlaylist(true);
-      } else if (castInfo.playlist?.items && castInfo.index !== undefined) {
+        return;
+      }
+
+      if (castInfo.playlist?.items && castInfo.index !== undefined) {
         // Recalculate startTime based on current index to ensure correct display
         console.log(
           '[AppContext] Recalculating startTime for index:',
@@ -162,9 +176,9 @@ export const AppProvider = ({ children }: AppContextProps) => {
         console.log('[AppContext] New startTime calculated:', newStartTime);
       }
 
-      await DeviceManager.removeItem(LocalStorageItem.criticalTemp);
       setCastInfo(castInfo);
       canvasService.setCastInfo(castInfo, false);
+      navigateToHomePage();
     } else {
       // Cast default playlist
       console.log('[AppContext] No castInfo found, fetching default playlist');
@@ -176,6 +190,9 @@ export const AppProvider = ({ children }: AppContextProps) => {
     console.log('[AppContext] Fallback default playlist');
     canvasService
       .castPlaylistByURL(appRemoteConfig.defaultPlaylistURL)
+      .then(() => {
+        navigateToHomePage();
+      })
       .catch((error: unknown) => {
         console.error('[AppContext] Error fetching default playlist:', error);
       });
