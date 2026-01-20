@@ -24,7 +24,10 @@ import {
   MoveToArtworkReply as MoveToItemReply,
   DisplaySettings,
   ViewMode,
+  SetSleepModeRequest,
+  SetSleepModeReply,
 } from '@/models';
+import { CustomEventName, NavigateEventDetail } from '@/models/custom_event';
 import DeviceManager from '@/utils/DeviceManager';
 import {
   CursorPositionListener,
@@ -243,6 +246,8 @@ class CanvasService {
           );
         case CastCommand.moveToArtwork:
           return this.moveToArtwork(requestJson as MoveToItemRequest);
+        case CastCommand.setSleepMode:
+          return this.setSleepMode(requestJson as SetSleepModeRequest);
         default:
           console.error(`[CAST] Unknown command: ${command}`);
           return { ok: false };
@@ -286,7 +291,6 @@ class CanvasService {
 
         items: activeCastInfo?.playlist?.items,
         index: activeCastInfo?.index,
-        isPaused: activeCastInfo?.isPaused,
 
         deviceSettings: {
           scaling:
@@ -294,6 +298,9 @@ class CanvasService {
             DisplaySettings.defaultScaling,
           orientation: DeviceManager.getCachedViewMode() ?? ViewMode.landscape,
         },
+
+        isPaused: window.location.pathname === '/sleep' ,
+        sleepMode: window.location.pathname === '/sleep' ,
       };
     } catch (error) {
       console.error('[CanvasService] Error getting status:', error);
@@ -314,6 +321,24 @@ class CanvasService {
   public disconnect(): DisconnectReplyV2 {
     console.log('[CanvasService] Disconnect');
     this.setCastInfo(null);
+    return { ok: true };
+  }
+
+  public setSleepMode(request: SetSleepModeRequest): SetSleepModeReply {
+    console.log('[CanvasService] Set sleep mode', request.sleepMode);
+    const path = request.sleepMode ? '/sleep' : '/';
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent<NavigateEventDetail>(
+          CustomEventName.Navigate as string,
+          {
+            detail: { path },
+          }
+        )
+      );
+    }
+
     return { ok: true };
   }
 

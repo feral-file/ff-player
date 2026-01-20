@@ -5,7 +5,7 @@ export enum WatchdogEvent {
 
 export enum CustomEventName {
   ConnectivityChange = 'connectivityChange',
-  NavigateToError = 'navigateToError',
+  Navigate = 'navigate',
   WatchdogEvent = 'watchdogEvent',
 }
 
@@ -17,6 +17,6 @@ export interface WatchdogEventDetail {
   event: WatchdogEvent;
 }
 
-export interface NavigateToErrorEventDetail {
+export interface NavigateEventDetail {
   path: string;
 }
