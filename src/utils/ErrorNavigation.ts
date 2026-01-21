@@ -1,7 +1,7 @@
 import { LocalStorageItem } from '@/constants';
 import {
   CustomEventName,
-  NavigateToErrorEventDetail,
+  NavigateEventDetail,
 } from '@/models/custom_event';
 import { ErrorType } from '@/models/error.model';
 import DeviceManager from './DeviceManager';
@@ -13,8 +13,8 @@ export function navigateToErrorPageAction(errorType: string) {
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(
-      new CustomEvent<NavigateToErrorEventDetail>(
-        CustomEventName.NavigateToError,
+      new CustomEvent<NavigateEventDetail>(
+        CustomEventName.Navigate,
         {
           detail: { path: `/error?${params.toString()}` },
         }

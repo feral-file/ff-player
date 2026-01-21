@@ -56,6 +56,8 @@ export interface CheckDeviceStatusReply extends Reply {
     scaling?: Scaling;
     orientation?: ViewMode;
   };
+
+  sleepMode?: boolean;
 }
 
 export interface DisplayPlaylistRequest {
@@ -119,3 +121,8 @@ export interface UpdateCursorPositionsRequest extends Request {
   positions: CursorPosition[];
 }
 export type UpdateCursorPositionsReply = Reply;
+
+export interface SetSleepModeRequest extends Request {
+  sleepMode: boolean;
+}
+export type SetSleepModeReply = Reply;

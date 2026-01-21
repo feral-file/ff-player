@@ -16,6 +16,7 @@ export enum CastCommand {
   cursorUpdate = 'cursorUpdate',
   displayPlaylist = 'displayPlaylist',
   refreshPlaylist = 'refreshPlaylist',
+  setSleepMode = 'setSleepMode',
 }
 
 export interface CastInfo {

@@ -7,7 +7,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import {
   CustomEventName,
-  NavigateToErrorEventDetail,
+  NavigateEventDetail,
 } from '@/models/custom_event';
 import { LocalStorageItem } from '@/constants';
 import DP1ScheduleService from '@/services/DP1ScheduleService';
@@ -35,21 +35,22 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   const [castState, setCastState] = useState<CastState>(CastState.None);
 
   useEffect(() => {
-    const navigateToError = (event: Event) => {
-      const { path } = (event as CustomEvent<NavigateToErrorEventDetail>)
-        .detail;
-      if (path) {
-        router.replace(path);
+    const navigate = (event: Event) => {
+      try {
+        const { path } = (event as CustomEvent<NavigateEventDetail>)
+          .detail;
+        if (path && typeof path === 'string') {
+          router.replace(path);
+        }
+      } catch (error) {
+        console.error('[AppWrapper] Error navigating to error page:', error);
       }
     };
 
-    window.addEventListener(CustomEventName.NavigateToError, navigateToError);
+    window.addEventListener(CustomEventName.Navigate, navigate);
 
     return () => {
-      window.removeEventListener(
-        CustomEventName.NavigateToError,
-        navigateToError
-      );
+      window.removeEventListener(CustomEventName.Navigate, navigate);
     };
   }, []);
 
@@ -133,7 +134,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       }
     };
 
-    if (pathname === '/error') {
+    if (pathname === '/error' || pathname === '/sleep') {
       return;
     }
 
