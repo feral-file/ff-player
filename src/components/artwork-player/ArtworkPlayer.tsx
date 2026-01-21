@@ -55,6 +55,7 @@ const ArtworkPlayer = ({
   const [displaySoftwareURL, setDisplaySoftwareURL] =
     useState<string>(previewURL);
   const [loading, setLoading] = useState<boolean>(true);
+  const [showLoading, setShowLoading] = useState<boolean>(false);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [showMessageModal, setShowMessageModal] = useState<boolean>(false);
   const [messageModalText, setMessageModalText] = useState<string | null>(null);
@@ -64,6 +65,7 @@ const ArtworkPlayer = ({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [iframeKey, setIframeKey] = useState(0);
   const webGLRecoveryIntervalRef = useRef<NodeJS.Timeout>();
+  const loadingDelayRef = useRef<NodeJS.Timeout>();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isWebGLContextLost = useRef<boolean>(false);
 
@@ -182,6 +184,19 @@ const ArtworkPlayer = ({
     if (previewURL) {
       setOpacity(0);
       setPreviewType(null);
+      setLoading(true);
+      setShowLoading(false);
+
+      if (loadingDelayRef.current) {
+        clearTimeout(loadingDelayRef.current);
+      }
+
+      loadingDelayRef.current = setTimeout(() => {
+        if (!cancelled && previewURL === currentURL) {
+          setShowLoading(true);
+        }
+      }, 2000);
+
       detectPreviewType(previewURL)
         .catch((err: unknown) => {
           console.error(err);
@@ -196,6 +211,10 @@ const ArtworkPlayer = ({
 
     return () => {
       cancelled = true;
+      if (loadingDelayRef.current) {
+        clearTimeout(loadingDelayRef.current);
+        loadingDelayRef.current = undefined;
+      }
     };
   }, [previewURL, artworkPreviewMIMEType]);
 
@@ -230,6 +249,11 @@ const ArtworkPlayer = ({
     // window.focus();
     iframeRef.current?.focus();
     setLoading(false);
+    setShowLoading(false);
+    if (loadingDelayRef.current) {
+      clearTimeout(loadingDelayRef.current);
+      loadingDelayRef.current = undefined;
+    }
   };
 
   // Video playback handling (after CORS loading)
@@ -567,6 +591,10 @@ const ArtworkPlayer = ({
       if (webGLRecoveryIntervalRef.current) {
         clearInterval(webGLRecoveryIntervalRef.current);
       }
+      if (loadingDelayRef.current) {
+        clearTimeout(loadingDelayRef.current);
+        loadingDelayRef.current = undefined;
+      }
     };
   }, []);
 
@@ -611,7 +639,10 @@ const ArtworkPlayer = ({
           height: '100vh',
         }}>
         <CursorLayer ref={cursorRef} />
-        {(previewType === null || loading) && <Loading />}
+        {(previewType === PreviewHTMLTag.video ||
+          previewType === PreviewHTMLTag.audio) &&
+          loading &&
+          showLoading && <Loading />}
         {displayPreviewURL && previewType === PreviewHTMLTag.image && (
           <div
             style={{
