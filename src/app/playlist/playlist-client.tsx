@@ -44,23 +44,47 @@ export default function PlaylistClient() {
   }, []);
 
   useEffect(() => {
+    console.log('[PlaylistClient] currentIndex useEffect triggered', {
+      currentIndex,
+      playlistLength: playlist.length,
+      indexRefCurrent: indexRef.current,
+      willSkip: currentIndex < 0 || playlist.length === 0 || indexRef.current === currentIndex,
+    });
+
     if (currentIndex < 0) {
+      console.log('[PlaylistClient] currentIndex < 0, skipping');
       return;
     }
 
     if (playlist.length === 0) {
+      console.log('[PlaylistClient] playlist.length === 0, skipping');
       return;
     }
 
     if (indexRef.current === currentIndex) {
+      console.log('[PlaylistClient] indexRef.current === currentIndex, skipping (already processed)');
       return;
     }
+
+    console.log('[PlaylistClient] Processing new artwork index', {
+      currentIndex,
+      previousIndexRef: indexRef.current,
+      playlistLength: playlist.length,
+    });
 
     indexRef.current = currentIndex;
 
     const index = currentIndex % playlist.length;
     const currentItem = playlist[index];
     currentItemRef.current = currentItem;
+
+    console.log('[PlaylistClient] Loading artwork', {
+      calculatedIndex: index,
+      itemId: currentItem.id,
+      itemSource: currentItem.source,
+      itemDuration: currentItem.duration,
+      isPaused: castInfo?.isPaused,
+    });
 
     handleItemDisplayPreference(currentItem, playlistDefaultsSettings).catch(
       (error: unknown) => {
@@ -81,6 +105,11 @@ export default function PlaylistClient() {
 
     // Setup data for ArtworkPlayer component
     setCastPreviewURL(currentItem.source);
+    console.log('[PlaylistClient] Set preview URL and starting interval', {
+      previewURL: currentItem.source,
+      duration: currentItem.duration ?? 0,
+      isPaused: castInfo?.isPaused,
+    });
 
     if (!castInfo?.isPaused) {
       startInterval(currentItem.duration ?? 0);
@@ -209,19 +238,43 @@ export default function PlaylistClient() {
   const handleMoveToArtwork = () => {
     const index = castInfo?.index ?? 0;
     const startTime = castInfo?.startTime ?? Date.now();
+    console.log('[PlaylistClient] handleMoveToArtwork called', index);
     setStartTime(startTime);
     clearTimer();
     setCurrentIndex(index);
   };
 
   const handleUpdateIndex = () => {
-    setCurrentIndex(castInfo?.index ?? 0);
+    const newIndex = castInfo?.index ?? 0;
+    console.log('[PlaylistClient] handleUpdateIndex called', {
+      newIndex,
+      previousIndex: currentIndex,
+      playlistLength: playlist.length,
+      castInfoIndex: castInfo?.index,
+    });
+    setCurrentIndex(newIndex);
   };
 
   const handleRefreshPlaylist = () => {
+    console.log('[PlaylistClient] handleRefreshPlaylist called', {
+      currentIndex,
+      currentItemId: currentItemRef.current?.id,
+      currentPlaylistLength: playlist.length,
+      queuedPlaylistExists: queuedPlaylistRef.current !== null,
+    });
+
     // Queue the refreshed playlist to swap at the end of the current item's duration
     const newItems = castInfo?.playlist?.items ?? [];
+    console.log('[PlaylistClient] New playlist items received', {
+      newItemsCount: newItems.length,
+      newItems: newItems.map(item => ({
+        id: item.id,
+        title: item.title,
+      })),
+    });
+
     if (!newItems.length) {
+      console.log('[PlaylistClient] handleRefreshPlaylist: No new items, returning early');
       return;
     }
 
@@ -229,21 +282,47 @@ export default function PlaylistClient() {
       ...item,
       duration: item.duration ?? 0,
     }));
+
+    console.log('[PlaylistClient] Playlist queued successfully', {
+      queuedItemsCount: queuedPlaylistRef.current.length,
+      currentItemId: currentItemRef.current?.id,
+      currentItemDuration: currentItemRef.current?.duration,
+    });
   };
 
   const startInterval = (duration: number) => {
+    console.log('[PlaylistClient] startInterval called', {
+      duration,
+      currentItemId: currentItemRef.current?.id,
+      hasExistingInterval: intervalRef.current !== undefined,
+    });
+
     if (intervalRef.current) {
+      console.log('[PlaylistClient] Clearing existing interval');
       clearInterval(intervalRef.current);
     }
 
     if (duration === 0 || duration === NO_DURATION_VALUE) {
+      console.log('[PlaylistClient] Duration is 0 or NO_DURATION_VALUE, not starting interval');
       return;
     }
+
+    console.log('[PlaylistClient] Setting up new interval', {
+      duration,
+      intervalMs: duration * 1000,
+    });
 
     intervalRef.current = setInterval(() => {
       const currentCastInfo = canvasService.getCastInfo();
       // If a refreshed playlist has been queued, swap it in exactly at the boundary
       if (queuedPlaylistRef.current?.length) {
+        console.log('[PlaylistClient] Interval fired: Swapping queued playlist', {
+          queuedItemsCount: queuedPlaylistRef.current.length,
+          currentIndex,
+          currentItemId: currentItemRef.current?.id,
+          currentPlaylistLength: playlist.length,
+        });
+
         const newPlaylist = queuedPlaylistRef.current;
         queuedPlaylistRef.current = null;
 
@@ -252,26 +331,40 @@ export default function PlaylistClient() {
         let nextIndex = 0;
         if (currentId) {
           const foundIdx = newPlaylist.findIndex(i => i.id === currentId);
+          console.log('[PlaylistClient] Finding next index by current item ID', {
+            currentId,
+            foundIdx,
+            newPlaylistLength: newPlaylist.length,
+          });
           if (foundIdx >= 0) {
             nextIndex = (foundIdx + 1) % newPlaylist.length;
+            console.log('[PlaylistClient] Found current item in new playlist, next index:', nextIndex);
           } else {
             nextIndex =
               currentIndex >= 0 ? currentIndex % newPlaylist.length : 0;
+            console.log('[PlaylistClient] Current item not found in new playlist, using currentIndex fallback:', {
+              currentIndex,
+              calculatedNextIndex: nextIndex,
+            });
           }
+        } else {
+          console.log('[PlaylistClient] No current item ID, defaulting to index 0');
         }
 
         const newStartTime = recalculateStartTimeForIndex(
           newPlaylist,
           nextIndex
         );
-        console.log('Use queued playlist');
-        console.log('Current index: ', currentIndex);
-        console.log('Next index: ', nextIndex);
+        console.log('[PlaylistClient] Recalculated start time for new playlist');
 
         indexRef.current = -1;
         setCurrentIndex(-1);
         setPlaylist(newPlaylist);
         setStartTime(newStartTime);
+        console.log('[PlaylistClient] Updated state and triggering updateIndex command', {
+          nextIndex,
+          newPlaylistLength: newPlaylist.length,
+        });
         canvasService.setCastInfo({
           ...currentCastInfo,
           castCommand: CastCommand.updateIndex,
@@ -300,12 +393,19 @@ export default function PlaylistClient() {
   useEffect(() => {
     console.log(
       '[PlaylistClient] process cast info',
-      JSON.stringify(castInfo?.castCommand)
+      JSON.stringify(castInfo?.castCommand),
+      {
+        castCommand: castInfo?.castCommand,
+        index: castInfo?.index,
+        startTime: castInfo?.startTime,
+        playlistItemsCount: castInfo?.playlist?.items?.length,
+      }
     );
     if (castInfo) {
       const handleCastCommand = () => {
         switch (castInfo.castCommand) {
           case CastCommand.refreshPlaylist: {
+            console.log('[PlaylistClient] Processing refreshPlaylist command');
             handleRefreshPlaylist();
             break;
           }
@@ -362,6 +462,10 @@ export default function PlaylistClient() {
             break;
           }
           case CastCommand.updateIndex: {
+            console.log('[PlaylistClient] Processing updateIndex command', {
+              castInfoIndex: castInfo.index,
+              currentIndex,
+            });
             handleUpdateIndex();
             break;
           }
