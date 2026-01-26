@@ -186,10 +186,12 @@ export default function PlaylistClient() {
     });
 
     // Apply queued playlist first if it exists
-    applyQueuedPlaylistIfExists();
+    const result = applyQueuedPlaylistIfExists();
+    if (!result.applied) {
+      const startTime = castInfo?.startTime ?? Date.now();
+      setStartTime(startTime);
+    }
 
-    const startTime = castInfo?.startTime ?? Date.now();
-    setStartTime(startTime);
     let duration = remainTimeRef.current;
     if (
       duration === 0 &&
