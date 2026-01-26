@@ -524,6 +524,8 @@ class CanvasService {
       return;
     }
 
+    console.log('newPlaylist', newPlaylist.items?.length);
+
     this.setCastInfo({
       ...(this.castInfo ?? {}),
       playlist: newPlaylist,

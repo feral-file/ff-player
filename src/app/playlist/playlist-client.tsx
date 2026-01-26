@@ -157,10 +157,14 @@ export default function PlaylistClient() {
     });
 
     const startTime = castInfo?.startTime ?? Date.now();
-    const currentPlaylistItem = playlist[currentIndex];
-    const currentArtwork = dp1Items.find(a => a.id === currentPlaylistItem.id);
-    if (currentArtwork) {
-      startInterval(currentArtwork.duration ?? 0);
+    
+    // Safely access current item
+    if (currentIndex >= 0 && currentIndex < playlist.length) {
+      const currentPlaylistItem = playlist[currentIndex];
+      const currentArtwork = dp1Items.find(a => a.id === currentPlaylistItem.id);
+      if (currentArtwork) {
+        startInterval(currentArtwork.duration ?? 0);
+      }
     }
 
     setStartTime(startTime);
@@ -175,16 +179,25 @@ export default function PlaylistClient() {
   };
 
   const handleResumeCasting = () => {
-    console.log('handleResumeCasting');
+    console.log('[PlaylistClient] handleResumeCasting called', {
+      currentIndex,
+      playlistLength: playlist.length,
+      queuedPlaylistExists: queuedPlaylistRef.current !== null,
+    });
+
+    // Apply queued playlist first if it exists
+    applyQueuedPlaylistIfExists();
+
     const startTime = castInfo?.startTime ?? Date.now();
     setStartTime(startTime);
     let duration = remainTimeRef.current;
     if (
       duration === 0 &&
-      castInfo?.playlist?.items?.length &&
-      currentIndex >= 0
+      playlist.length &&
+      currentIndex >= 0 &&
+      currentIndex < playlist.length
     ) {
-      duration = castInfo.playlist.items[currentIndex].duration ?? 0;
+      duration = playlist[currentIndex].duration ?? 0;
     }
 
     startInterval(duration);
@@ -198,7 +211,10 @@ export default function PlaylistClient() {
     const result = applyQueuedPlaylistIfExists(index);
     const targetIndex = result.applied && result.nextIndex !== undefined ? result.nextIndex : index;
 
-    setStartTime(startTime);
+    if (!result.applied) {
+      setStartTime(startTime);
+    }
+
     clearTimer();
     setCurrentIndex(targetIndex);
   };
@@ -211,7 +227,10 @@ export default function PlaylistClient() {
     const result = applyQueuedPlaylistIfExists(index);
     const targetIndex = result.applied && result.nextIndex !== undefined ? result.nextIndex : index;
 
-    setStartTime(startTime);
+    if (!result.applied) {
+      setStartTime(startTime);
+    }
+
     clearTimer();
     setCurrentIndex(targetIndex);
   };
@@ -234,7 +253,10 @@ export default function PlaylistClient() {
       });
     }
 
-    setStartTime(startTime);
+    if (!result.applied) {
+      setStartTime(startTime);
+    }
+
     clearTimer();
     setCurrentIndex(targetIndex);
   };
