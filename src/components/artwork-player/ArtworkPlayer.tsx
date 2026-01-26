@@ -639,7 +639,11 @@ const ArtworkPlayer = ({
           height: '100vh',
         }}>
         <CursorLayer ref={cursorRef} />
-        {(previewType === PreviewHTMLTag.video ||
+        {/* This condition shows the loading indicator only when loading is true, the 2s delay has elapsed (showLoading),
+        and we’re either still detecting the MIME/type (previewType === null) or we’ve determined it’s a slow‑loading media type (video/audio).
+        This matches the UX intent: no spinner for fast types (image/iframe/object) and no spinner before the 2s threshold. */}
+        {(previewType === null ||
+         previewType === PreviewHTMLTag.video ||
           previewType === PreviewHTMLTag.audio) &&
           loading &&
           showLoading && <Loading />}
