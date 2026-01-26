@@ -643,8 +643,8 @@ const ArtworkPlayer = ({
         and we’re either still detecting the MIME/type (previewType === null) or we’ve determined it’s a slow‑loading media type (video/audio).
         This matches the UX intent: no spinner for fast types (image/iframe/object) and no spinner before the 2s threshold. */}
         {(previewType === null ||
-         previewType === PreviewHTMLTag.video ||
-          previewType === PreviewHTMLTag.audio) &&
+         previewType === PreviewHTMLTag.video.toString() ||
+          previewType === PreviewHTMLTag.audio.toString()) &&
           loading &&
           showLoading && <Loading />}
         {displayPreviewURL && previewType === PreviewHTMLTag.image && (
