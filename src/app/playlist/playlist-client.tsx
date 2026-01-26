@@ -44,47 +44,23 @@ export default function PlaylistClient() {
   }, []);
 
   useEffect(() => {
-    console.log('[PlaylistClient] currentIndex useEffect triggered', {
-      currentIndex,
-      playlistLength: playlist.length,
-      indexRefCurrent: indexRef.current,
-      willSkip: currentIndex < 0 || playlist.length === 0 || indexRef.current === currentIndex,
-    });
-
     if (currentIndex < 0) {
-      console.log('[PlaylistClient] currentIndex < 0, skipping');
       return;
     }
 
     if (playlist.length === 0) {
-      console.log('[PlaylistClient] playlist.length === 0, skipping');
       return;
     }
 
     if (indexRef.current === currentIndex) {
-      console.log('[PlaylistClient] indexRef.current === currentIndex, skipping (already processed)');
       return;
     }
-
-    console.log('[PlaylistClient] Processing new artwork index', {
-      currentIndex,
-      previousIndexRef: indexRef.current,
-      playlistLength: playlist.length,
-    });
 
     indexRef.current = currentIndex;
 
     const index = currentIndex % playlist.length;
     const currentItem = playlist[index];
     currentItemRef.current = currentItem;
-
-    console.log('[PlaylistClient] Loading artwork', {
-      calculatedIndex: index,
-      itemId: currentItem.id,
-      itemSource: currentItem.source,
-      itemDuration: currentItem.duration,
-      isPaused: castInfo?.isPaused,
-    });
 
     handleItemDisplayPreference(currentItem, playlistDefaultsSettings).catch(
       (error: unknown) => {
@@ -105,11 +81,6 @@ export default function PlaylistClient() {
 
     // Setup data for ArtworkPlayer component
     setCastPreviewURL(currentItem.source);
-    console.log('[PlaylistClient] Set preview URL and starting interval', {
-      previewURL: currentItem.source,
-      duration: currentItem.duration ?? 0,
-      isPaused: castInfo?.isPaused,
-    });
 
     if (!castInfo?.isPaused) {
       startInterval(currentItem.duration ?? 0);
@@ -222,11 +193,6 @@ export default function PlaylistClient() {
   const handleNext = () => {
     const index = castInfo?.index ?? 0;
     const startTime = castInfo?.startTime ?? Date.now();
-    console.log('[PlaylistClient] handleNext called', {
-      index,
-      currentPlaylistLength: playlist.length,
-      queuedPlaylistExists: queuedPlaylistRef.current !== null,
-    });
 
     // Apply queued playlist immediately if it exists
     const result = applyQueuedPlaylistIfExists(index);
@@ -240,11 +206,6 @@ export default function PlaylistClient() {
   const handlePrevious = () => {
     const index = castInfo?.index ?? 0;
     const startTime = castInfo?.startTime ?? Date.now();
-    console.log('[PlaylistClient] handlePrevious called', {
-      index,
-      currentPlaylistLength: playlist.length,
-      queuedPlaylistExists: queuedPlaylistRef.current !== null,
-    });
 
     // Apply queued playlist immediately if it exists
     const result = applyQueuedPlaylistIfExists(index);
@@ -258,11 +219,6 @@ export default function PlaylistClient() {
   const handleMoveToArtwork = () => {
     const index = castInfo?.index ?? 0;
     const startTime = castInfo?.startTime ?? Date.now();
-    console.log('[PlaylistClient] handleMoveToArtwork called', {
-      index,
-      currentPlaylistLength: playlist.length,
-      queuedPlaylistExists: queuedPlaylistRef.current !== null,
-    });
 
     // Apply queued playlist immediately if it exists, using the target index
     const result = applyQueuedPlaylistIfExists(index);
@@ -285,13 +241,6 @@ export default function PlaylistClient() {
 
   const handleUpdateIndex = () => {
     const newIndex = castInfo?.index ?? 0;
-    console.log('[PlaylistClient] handleUpdateIndex called', {
-      newIndex,
-      previousIndex: currentIndex,
-      playlistLength: playlist.length,
-      castInfoIndex: castInfo?.index,
-      queuedPlaylistExists: queuedPlaylistRef.current !== null,
-    });
 
     // Apply queued playlist immediately if it exists
     const result = applyQueuedPlaylistIfExists(newIndex);
@@ -333,12 +282,6 @@ export default function PlaylistClient() {
     }
 
     const newStartTime = recalculateStartTimeForIndex(newPlaylist, nextIndex);
-    console.log('[PlaylistClient] Applied queued playlist', {
-      nextIndex,
-      newPlaylistLength: newPlaylist.length,
-      newStartTime,
-      targetIndexProvided: targetIndex !== undefined,
-    });
 
     // Reset indexRef to force useEffect to run
     indexRef.current = -1;
@@ -356,25 +299,10 @@ export default function PlaylistClient() {
   };
 
   const handleRefreshPlaylist = () => {
-    console.log('[PlaylistClient] handleRefreshPlaylist called', {
-      currentIndex,
-      currentItemId: currentItemRef.current?.id,
-      currentPlaylistLength: playlist.length,
-      queuedPlaylistExists: queuedPlaylistRef.current !== null,
-    });
-
     // Queue the refreshed playlist to swap at the end of the current item's duration
     const newItems = castInfo?.playlist?.items ?? [];
-    console.log('[PlaylistClient] New playlist items received', {
-      newItemsCount: newItems.length,
-      newItems: newItems.map(item => ({
-        id: item.id,
-        title: item.title,
-      })),
-    });
 
     if (!newItems.length) {
-      console.log('[PlaylistClient] handleRefreshPlaylist: No new items, returning early');
       return;
     }
 
@@ -382,54 +310,25 @@ export default function PlaylistClient() {
       ...item,
       duration: item.duration ?? 0,
     }));
-
-    console.log('[PlaylistClient] Playlist queued successfully', {
-      queuedItemsCount: queuedPlaylistRef.current.length,
-      currentItemId: currentItemRef.current?.id,
-      currentItemDuration: currentItemRef.current?.duration,
-    });
   };
 
   const startInterval = (duration: number) => {
-    console.log('[PlaylistClient] startInterval called', {
-      duration,
-      currentItemId: currentItemRef.current?.id,
-      hasExistingInterval: intervalRef.current !== undefined,
-    });
-
     if (intervalRef.current) {
-      console.log('[PlaylistClient] Clearing existing interval');
       clearInterval(intervalRef.current);
     }
 
     if (duration === 0 || duration === NO_DURATION_VALUE) {
-      console.log('[PlaylistClient] Duration is 0 or NO_DURATION_VALUE, not starting interval');
       return;
     }
-
-    console.log('[PlaylistClient] Setting up new interval', {
-      duration,
-      intervalMs: duration * 1000,
-    });
 
     intervalRef.current = setInterval(() => {
       const currentCastInfo = canvasService.getCastInfo();
       // If a refreshed playlist has been queued, swap it in exactly at the boundary
       if (queuedPlaylistRef.current?.length) {
-        console.log('[PlaylistClient] Interval fired: Swapping queued playlist', {
-          queuedItemsCount: queuedPlaylistRef.current.length,
-          currentIndex,
-          currentItemId: currentItemRef.current?.id,
-          currentPlaylistLength: playlist.length,
-        });
 
         // Use the helper function to apply the queued playlist
         const result = applyQueuedPlaylistIfExists();
         if (result.applied && result.nextIndex !== undefined) {
-          console.log('[PlaylistClient] Updated state and triggering updateIndex command', {
-            nextIndex: result.nextIndex,
-            newPlaylistLength: result.newPlaylist?.length,
-          });
           canvasService.setCastInfo({
             ...currentCastInfo,
             castCommand: CastCommand.updateIndex,
@@ -459,19 +358,12 @@ export default function PlaylistClient() {
   useEffect(() => {
     console.log(
       '[PlaylistClient] process cast info',
-      JSON.stringify(castInfo?.castCommand),
-      {
-        castCommand: castInfo?.castCommand,
-        index: castInfo?.index,
-        startTime: castInfo?.startTime,
-        playlistItemsCount: castInfo?.playlist?.items?.length,
-      }
+      JSON.stringify(castInfo?.castCommand)
     );
     if (castInfo) {
       const handleCastCommand = () => {
         switch (castInfo.castCommand) {
           case CastCommand.refreshPlaylist: {
-            console.log('[PlaylistClient] Processing refreshPlaylist command');
             handleRefreshPlaylist();
             break;
           }
@@ -528,10 +420,6 @@ export default function PlaylistClient() {
             break;
           }
           case CastCommand.updateIndex: {
-            console.log('[PlaylistClient] Processing updateIndex command', {
-              castInfoIndex: castInfo.index,
-              currentIndex,
-            });
             handleUpdateIndex();
             break;
           }

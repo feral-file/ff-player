@@ -517,27 +517,12 @@ class CanvasService {
 
   private refreshPlaylist(newPlaylist: DP1Call) {
     const currentPlaylist = this.castInfo?.playlist;
-    console.log('[CanvasService] refreshPlaylist called', {
-      currentPlaylistItemsCount: currentPlaylist?.items?.length ?? 0,
-      newPlaylistItemsCount: newPlaylist.items?.length ?? 0,
-      currentIndex: this.castInfo?.index ?? -1,
-      currentStartTime: this.castInfo?.startTime,
-    });
-
     if (currentPlaylist && deepEqual(currentPlaylist, newPlaylist)) {
       console.log(
         '[CanvasService] New playlist is the same as the current playlist'
       );
       return;
     }
-
-    console.log('[CanvasService] Setting refreshPlaylist command', {
-      newPlaylistItemsCount: newPlaylist.items?.length,
-      newPlaylistItems: newPlaylist.items?.map(item => ({
-        id: item.id,
-        duration: item.duration,
-      })),
-    });
 
     this.setCastInfo({
       ...(this.castInfo ?? {}),
