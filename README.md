@@ -51,8 +51,8 @@ Open `http://localhost:3000` to view the app.
 
 ## Runtime Configuration
 
-- `public/configs/display.json` provides `duration` (version check interval) and `defaultPlaylistURL`.
-- `public/version.json` provides the current app version for reload checks.
+- `https://raw.githubusercontent.com/bitmark-inc/feral-file-docs/main/configs/display.json` provides `duration` (version check interval) and `defaultPlaylistURL`.
+- `https://display.feralfile.com/version.json` provides the current app version for reload checks.
 
 In production these files are typically served by the host/CDN; in local dev, stubs live in `public/`.
 
