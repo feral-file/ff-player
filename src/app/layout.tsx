@@ -3,7 +3,6 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { AppProvider } from '../context/AppContext';
 import AppWrapper from '@/components/AppWrapper';
-import LostConnectionModal from '@/components/LostConnectionModal';
 import { Suspense } from 'react';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -24,10 +23,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <AppProvider>
           <Suspense>
-            <AppWrapper>
-              <LostConnectionModal></LostConnectionModal>
-              {children}
-            </AppWrapper>
+            <AppWrapper>{children}</AppWrapper>
           </Suspense>
         </AppProvider>
       </body>
