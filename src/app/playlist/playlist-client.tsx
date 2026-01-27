@@ -157,10 +157,14 @@ export default function PlaylistClient() {
     });
 
     const startTime = castInfo?.startTime ?? Date.now();
-    const currentPlaylistItem = playlist[currentIndex];
-    const currentArtwork = dp1Items.find(a => a.id === currentPlaylistItem.id);
-    if (currentArtwork) {
-      startInterval(currentArtwork.duration ?? 0);
+    
+    // Safely access current item
+    if (currentIndex >= 0 && currentIndex < playlist.length) {
+      const currentPlaylistItem = playlist[currentIndex];
+      const currentArtwork = dp1Items.find(a => a.id === currentPlaylistItem.id);
+      if (currentArtwork) {
+        startInterval(currentArtwork.duration ?? 0);
+      }
     }
 
     setStartTime(startTime);
@@ -175,16 +179,27 @@ export default function PlaylistClient() {
   };
 
   const handleResumeCasting = () => {
-    console.log('handleResumeCasting');
-    const startTime = castInfo?.startTime ?? Date.now();
-    setStartTime(startTime);
+    console.log('[PlaylistClient] handleResumeCasting called', {
+      currentIndex,
+      playlistLength: playlist.length,
+      queuedPlaylistExists: queuedPlaylistRef.current !== null,
+    });
+
+    // Apply queued playlist first if it exists
+    const result = applyQueuedPlaylistIfExists();
+    if (!result.applied) {
+      const startTime = castInfo?.startTime ?? Date.now();
+      setStartTime(startTime);
+    }
+
     let duration = remainTimeRef.current;
     if (
       duration === 0 &&
-      castInfo?.playlist?.items?.length &&
-      currentIndex >= 0
+      playlist.length &&
+      currentIndex >= 0 &&
+      currentIndex < playlist.length
     ) {
-      duration = castInfo.playlist.items[currentIndex].duration ?? 0;
+      duration = playlist[currentIndex].duration ?? 0;
     }
 
     startInterval(duration);
@@ -193,34 +208,124 @@ export default function PlaylistClient() {
   const handleNext = () => {
     const index = castInfo?.index ?? 0;
     const startTime = castInfo?.startTime ?? Date.now();
-    setStartTime(startTime);
+
+    // Apply queued playlist immediately if it exists
+    const result = applyQueuedPlaylistIfExists(index);
+    const targetIndex = result.applied && result.nextIndex !== undefined ? result.nextIndex : index;
+
+    if (!result.applied) {
+      setStartTime(startTime);
+    }
+
     clearTimer();
-    setCurrentIndex(index);
+    setCurrentIndex(targetIndex);
   };
 
   const handlePrevious = () => {
     const index = castInfo?.index ?? 0;
     const startTime = castInfo?.startTime ?? Date.now();
-    setStartTime(startTime);
+
+    // Apply queued playlist immediately if it exists
+    const result = applyQueuedPlaylistIfExists(index);
+    const targetIndex = result.applied && result.nextIndex !== undefined ? result.nextIndex : index;
+
+    if (!result.applied) {
+      setStartTime(startTime);
+    }
+
     clearTimer();
-    setCurrentIndex(index);
+    setCurrentIndex(targetIndex);
   };
 
   const handleMoveToArtwork = () => {
     const index = castInfo?.index ?? 0;
     const startTime = castInfo?.startTime ?? Date.now();
-    setStartTime(startTime);
+
+    // Apply queued playlist immediately if it exists, using the target index
+    const result = applyQueuedPlaylistIfExists(index);
+    
+    // Use the calculated index from the applied playlist if available, otherwise use the original index
+    const targetIndex = result.applied && result.nextIndex !== undefined ? result.nextIndex : index;
+    
+    if (result.applied) {
+      console.log('[PlaylistClient] Playlist applied, using calculated index', {
+        calculatedIndex: result.nextIndex,
+        originalIndex: index,
+        finalTargetIndex: targetIndex,
+      });
+    }
+
+    if (!result.applied) {
+      setStartTime(startTime);
+    }
+
     clearTimer();
-    setCurrentIndex(index);
+    setCurrentIndex(targetIndex);
   };
 
   const handleUpdateIndex = () => {
-    setCurrentIndex(castInfo?.index ?? 0);
+    const newIndex = castInfo?.index ?? 0;
+
+    // Apply queued playlist immediately if it exists
+    const result = applyQueuedPlaylistIfExists(newIndex);
+    const targetIndex = result.applied && result.nextIndex !== undefined ? result.nextIndex : newIndex;
+
+    setCurrentIndex(targetIndex);
+  };
+
+  const applyQueuedPlaylistIfExists = (targetIndex?: number): { applied: boolean; nextIndex?: number; newPlaylist?: DP1Item[] } => {
+    if (!queuedPlaylistRef.current?.length) {
+      return { applied: false };
+    }
+
+    console.log('[PlaylistClient] Applying queued playlist immediately', {
+      queuedItemsCount: queuedPlaylistRef.current.length,
+      currentPlaylistLength: playlist.length,
+      targetIndex,
+      currentIndex,
+    });
+
+    const newPlaylist = queuedPlaylistRef.current;
+    queuedPlaylistRef.current = null;
+
+    // If targetIndex is provided, use it; otherwise calculate based on current item
+    let nextIndex = targetIndex ?? 0;
+    if (targetIndex === undefined) {
+      const currentId = currentItemRef.current?.id;
+      if (currentId) {
+        const foundIdx = newPlaylist.findIndex(i => i.id === currentId);
+        if (foundIdx >= 0) {
+          nextIndex = (foundIdx + 1) % newPlaylist.length;
+        } else {
+          nextIndex = currentIndex >= 0 ? currentIndex % newPlaylist.length : 0;
+        }
+      }
+    } else {
+      // Ensure targetIndex is valid for the new playlist
+      nextIndex = targetIndex % newPlaylist.length;
+    }
+
+    const newStartTime = recalculateStartTimeForIndex(newPlaylist, nextIndex);
+
+    // Reset indexRef to force useEffect to run
+    indexRef.current = -1;
+
+    // Only reset currentIndex if no targetIndex was provided (for automatic progression)
+    // If targetIndex was provided, let the caller set it
+    if (targetIndex === undefined) {
+      setCurrentIndex(-1);
+    }
+
+    setPlaylist(newPlaylist);
+    setStartTime(newStartTime);
+
+    return { applied: true, nextIndex, newPlaylist };
   };
 
   const handleRefreshPlaylist = () => {
     // Queue the refreshed playlist to swap at the end of the current item's duration
     const newItems = castInfo?.playlist?.items ?? [];
+
     if (!newItems.length) {
       return;
     }
@@ -244,39 +349,16 @@ export default function PlaylistClient() {
       const currentCastInfo = canvasService.getCastInfo();
       // If a refreshed playlist has been queued, swap it in exactly at the boundary
       if (queuedPlaylistRef.current?.length) {
-        const newPlaylist = queuedPlaylistRef.current;
-        queuedPlaylistRef.current = null;
 
-        // Determine next index in the new playlist
-        const currentId = currentItemRef.current?.id;
-        let nextIndex = 0;
-        if (currentId) {
-          const foundIdx = newPlaylist.findIndex(i => i.id === currentId);
-          if (foundIdx >= 0) {
-            nextIndex = (foundIdx + 1) % newPlaylist.length;
-          } else {
-            nextIndex =
-              currentIndex >= 0 ? currentIndex % newPlaylist.length : 0;
-          }
+        // Use the helper function to apply the queued playlist
+        const result = applyQueuedPlaylistIfExists();
+        if (result.applied && result.nextIndex !== undefined) {
+          canvasService.setCastInfo({
+            ...currentCastInfo,
+            castCommand: CastCommand.updateIndex,
+            index: result.nextIndex,
+          });
         }
-
-        const newStartTime = recalculateStartTimeForIndex(
-          newPlaylist,
-          nextIndex
-        );
-        console.log('Use queued playlist');
-        console.log('Current index: ', currentIndex);
-        console.log('Next index: ', nextIndex);
-
-        indexRef.current = -1;
-        setCurrentIndex(-1);
-        setPlaylist(newPlaylist);
-        setStartTime(newStartTime);
-        canvasService.setCastInfo({
-          ...currentCastInfo,
-          castCommand: CastCommand.updateIndex,
-          index: nextIndex,
-        });
 
         return;
       }
