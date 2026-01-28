@@ -397,6 +397,7 @@ export default function PlaylistClient() {
             setCurrentIndex(-1);
             setPlaylistDefaultsSettings(null);
             currentItemRef.current = undefined;
+            queuedPlaylistRef.current = null;
 
             if (castInfo.playlist?.items?.length) {
               if (castInfo.playlist.defaults?.display) {
