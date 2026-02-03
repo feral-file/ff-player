@@ -18,6 +18,7 @@ import {
   MIMETypeImage,
   MIMETypeObject,
   MIMETypePdf,
+  MIMETypeSvg,
   MIMETypeVideo,
   MIMETypeUseStream as MIMETypeStreamVideo,
   MITETypeIframe,
@@ -94,6 +95,9 @@ const ArtworkPlayer = ({
       setIsStreaming(true);
     } else if (MITETypeIframe.includes(type)) {
       setPreviewType(PreviewHTMLTag.iframe);
+    } else if (type.match(MIMETypeSvg)) {
+      // SVG files (especially with scripts) should use object tag for security
+      setPreviewType(PreviewHTMLTag.object);
     } else if (FileUseObject.includes(type) || type.match(MIMETypeObject)) {
       setPreviewType(PreviewHTMLTag.object);
     } else if (FileUseVideo.includes(type) || type.match(MIMETypeVideo)) {
@@ -670,7 +674,6 @@ const ArtworkPlayer = ({
           <object
             style={{ width: '100%', height: '100%' }}
             data={displayPreviewURL}
-            type="text/html"
             onLoad={loadedSource}>
             Not supported
           </object>

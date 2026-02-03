@@ -37,6 +37,7 @@ export const MIMETypeUseStream: string[] = [
 export const MIMETypeVideo = 'video/*';
 export const MIMETypeAudio = 'audio/*';
 export const MIMETypeImage = 'image/*';
+export const MIMETypeSvg = 'image/svg*';
 export const MIMETypeObject = 'text/csv';
 export const MIMETypePdf = 'application/pdf';
 export const MITETypeIframe = ['html', 'text/html', 'text/plain'];
