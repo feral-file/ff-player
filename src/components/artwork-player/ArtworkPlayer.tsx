@@ -674,7 +674,6 @@ const ArtworkPlayer = ({
           <object
             style={{ width: '100%', height: '100%' }}
             data={displayPreviewURL}
-            type="text/html"
             onLoad={loadedSource}>
             Not supported
           </object>
