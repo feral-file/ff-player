@@ -48,86 +48,298 @@ const ArtworkPlayer = ({
   artworkPreviewMIMEType?: string;
   displayPreferences: DP1DisplayPreference;
 }) => {
-  const FADE_IN_OUT_DURATION_MS = 350;
+  const FADE_IN_OUT_DURATION_MS = 650;
   const { context } = useAppContext();
-  const [opacity, setOpacity] = useState(1);
-  const [displayPreviewURL, setDisplayPreviewURL] = useState<string>('');
-  const [previewType, setPreviewType] = useState<string | null>(null);
-  const [displaySoftwareURL, setDisplaySoftwareURL] =
-    useState<string>(previewURL);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [showLoading, setShowLoading] = useState<boolean>(false);
-  const [isStreaming, setIsStreaming] = useState<boolean>(false);
+  type ArtworkSlot = {
+    previewURL: string;
+    displayPreviewURL: string;
+    displaySoftwareURL: string;
+    previewType: PreviewHTMLTag | null;
+    isStreaming: boolean;
+    isLoading: boolean;
+    opacity: number;
+    iframeKey: number;
+  };
+
+  const [slots, setSlots] = useState<[ArtworkSlot | null, ArtworkSlot | null]>([
+    null,
+    null,
+  ]);
+  const [activeSlotIndex, setActiveSlotIndex] = useState(0);
+  const [incomingSlotIndex, setIncomingSlotIndex] = useState<number | null>(
+    null
+  );
+  const [showLoadingIndicator, setShowLoadingIndicator] =
+    useState<boolean>(false);
   const [showMessageModal, setShowMessageModal] = useState<boolean>(false);
   const [messageModalText, setMessageModalText] = useState<string | null>(null);
   const [messageModalTitle, setMessageModalTitle] = useState<string | null>(
     null
   );
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [iframeKey, setIframeKey] = useState(0);
+  const transitionTimeoutRef = useRef<NodeJS.Timeout>();
+  const iframeRefs = [
+    useRef<HTMLIFrameElement>(null),
+    useRef<HTMLIFrameElement>(null),
+  ];
   const webGLRecoveryIntervalRef = useRef<NodeJS.Timeout>();
   const loadingDelayRef = useRef<NodeJS.Timeout>();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isWebGLContextLost = useRef<boolean>(false);
 
   // Media loading refs
-  const imageRef = useRef<HTMLImageElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const imageRefs = [
+    useRef<HTMLImageElement | null>(null),
+    useRef<HTMLImageElement | null>(null),
+  ];
+  const videoRefs = [
+    useRef<HTMLVideoElement | null>(null),
+    useRef<HTMLVideoElement | null>(null),
+  ];
+  const audioRefs = [
+    useRef<HTMLAudioElement | null>(null),
+    useRef<HTMLAudioElement | null>(null),
+  ];
 
   const { displaySettings } = useArtworkSettings(displayPreferences);
 
   // Media loader for CORS handling
-  const mediaLoader = useRef(createMediaLoader());
+  const mediaLoaders = [
+    useRef(createMediaLoader()),
+    useRef(createMediaLoader()),
+  ];
 
   // Cursor layer handle
   const cursorRef = useRef<CursorLayerHandle>(null);
 
-  function compareToGetFileType(type: string) {
-    setIsStreaming(false);
+  const slotsRef = useRef(slots);
+  const activeSlotIndexRef = useRef(activeSlotIndex);
+  const incomingSlotIndexRef = useRef(incomingSlotIndex);
+
+  useEffect(() => {
+    slotsRef.current = slots;
+  }, [slots]);
+
+  useEffect(() => {
+    activeSlotIndexRef.current = activeSlotIndex;
+  }, [activeSlotIndex]);
+
+  useEffect(() => {
+    incomingSlotIndexRef.current = incomingSlotIndex;
+  }, [incomingSlotIndex]);
+
+  const determinePreviewType = (type: string) => {
+    let previewType = PreviewHTMLTag.iframe;
+    let isStreaming = false;
+
     if (!type) {
-      return;
+      return { previewType, isStreaming };
     }
-    type = type.toLowerCase();
 
-    if (MIMETypeStreamVideo.includes(type)) {
-      setPreviewType(PreviewHTMLTag.video);
-      setIsStreaming(true);
-    } else if (MITETypeIframe.includes(type)) {
-      setPreviewType(PreviewHTMLTag.iframe);
-    } else if (type.match(MIMETypeSvg)) {
-      // SVG files (especially with scripts) should use object tag for security
-      setPreviewType(PreviewHTMLTag.object);
-    } else if (FileUseObject.includes(type) || type.match(MIMETypeObject)) {
-      setPreviewType(PreviewHTMLTag.object);
-    } else if (FileUseVideo.includes(type) || type.match(MIMETypeVideo)) {
-      setPreviewType(PreviewHTMLTag.video);
-    } else if (FileUseAudio.includes(type) || type.match(MIMETypeAudio)) {
-      setPreviewType(PreviewHTMLTag.audio);
-    } else if (FileUseImage.includes(type) || type.match(MIMETypeImage)) {
-      setPreviewType(PreviewHTMLTag.image);
-    } else if (FileUseIframePDF.includes(type) || type.match(MIMETypePdf)) {
-      setPreviewType(PreviewHTMLTag.iframePDF);
-    } else {
-      setPreviewType(PreviewHTMLTag.iframe);
+    const normalizedType = type.toLowerCase();
+
+    if (MIMETypeStreamVideo.includes(normalizedType)) {
+      previewType = PreviewHTMLTag.video;
+      isStreaming = true;
+    } else if (MITETypeIframe.includes(normalizedType)) {
+      previewType = PreviewHTMLTag.iframe;
+    } else if (
+      FileUseObject.includes(normalizedType) ||
+      normalizedType.match(MIMETypeObject)
+    ) {
+      previewType = PreviewHTMLTag.object;
+    } else if (
+      FileUseVideo.includes(normalizedType) ||
+      normalizedType.match(MIMETypeVideo)
+    ) {
+      previewType = PreviewHTMLTag.video;
+    } else if (
+      FileUseAudio.includes(normalizedType) ||
+      normalizedType.match(MIMETypeAudio)
+    ) {
+      previewType = PreviewHTMLTag.audio;
+    } else if (
+      FileUseImage.includes(normalizedType) ||
+      normalizedType.match(MIMETypeImage)
+    ) {
+      previewType = PreviewHTMLTag.image;
+    } else if (
+      FileUseIframePDF.includes(normalizedType) ||
+      normalizedType.match(MIMETypePdf)
+    ) {
+      previewType = PreviewHTMLTag.iframePDF;
     }
-  }
 
-  const reTryToPlayVideo = () => {
-    if (videoRef.current) {
-      videoRef.current.muted = true;
-      videoRef.current.play().catch((error: unknown) => {
+    return { previewType, isStreaming };
+  };
+
+  const getDisplaySoftwareURL = (
+    url: string,
+    previewType: PreviewHTMLTag | null,
+    displaySettings?: DP1DisplayPreference
+  ) => {
+    if (!url) {
+      return '';
+    }
+
+    if (
+      previewType === PreviewHTMLTag.iframe &&
+      displaySettings &&
+      !url.includes('base64')
+    ) {
+      const displayMode =
+        displaySettings.scaling === Scaling.Fill ? 'crop' : 'fit';
+      const queryParam = `&display_mode=${displayMode}`;
+      const nextURL = new URL(url);
+      nextURL.search += queryParam;
+      return nextURL.toString();
+    }
+
+    return url;
+  };
+
+  const reTryToPlayVideo = (slotIndex: number) => {
+    const videoElement = videoRefs[slotIndex].current;
+    if (videoElement) {
+      videoElement.muted = true;
+      videoElement.play().catch((error: unknown) => {
         console.log('[ArtworkPlayer] Error play video', JSON.stringify(error));
         Sentry.captureMessage('[ArtworkPlayer] Error play video');
       });
     }
   };
 
-  const unmuteVideo = () => {
-    if (previewType === PreviewHTMLTag.video && videoRef.current) {
-      videoRef.current.muted = false;
-      document.removeEventListener('click', unmuteVideo);
+  const handleUnmuteClick = () => {
+    const activeIndex = activeSlotIndexRef.current;
+    const videoElement = videoRefs[activeIndex].current;
+    const slot = slotsRef.current[activeIndex];
+    if (slot?.previewType === PreviewHTMLTag.video && videoElement) {
+      videoElement.muted = false;
+      document.removeEventListener('click', handleUnmuteClick);
     }
+  };
+
+  const updateSlot = (slotIndex: number, updates: Partial<ArtworkSlot>) => {
+    setSlots(prev => {
+      const slot = prev[slotIndex];
+      if (!slot) {
+        return prev;
+      }
+
+      const next = [...prev] as [ArtworkSlot | null, ArtworkSlot | null];
+      next[slotIndex] = { ...slot, ...updates };
+      return next;
+    });
+  };
+
+  const updateSlotIfCurrent = (
+    slotIndex: number,
+    url: string,
+    updates: Partial<ArtworkSlot>
+  ) => {
+    setSlots(prev => {
+      const slot = prev[slotIndex];
+      if (!slot || slot.previewURL !== url) {
+        return prev;
+      }
+
+      const next = [...prev] as [ArtworkSlot | null, ArtworkSlot | null];
+      next[slotIndex] = { ...slot, ...updates };
+      return next;
+    });
+  };
+
+  const focusSlotIframe = (slotIndex: number) => {
+    const slot = slotsRef.current[slotIndex];
+    if (
+      slot?.previewType === PreviewHTMLTag.iframe ||
+      slot?.previewType === PreviewHTMLTag.iframePDF
+    ) {
+      window.focus();
+    }
+  };
+
+  const startCrossfade = (incomingIndex: number) => {
+    const activeIndex = activeSlotIndexRef.current;
+
+    if (activeIndex === incomingIndex) {
+      return;
+    }
+
+    setSlots(prev => {
+      const next = [...prev] as [ArtworkSlot | null, ArtworkSlot | null];
+      const activeSlot = next[activeIndex];
+      const incomingSlot = next[incomingIndex];
+      if (activeSlot) {
+        next[activeIndex] = { ...activeSlot, opacity: 0 };
+      }
+      if (incomingSlot) {
+        next[incomingIndex] = { ...incomingSlot, opacity: 1 };
+      }
+      return next;
+    });
+
+    if (transitionTimeoutRef.current) {
+      clearTimeout(transitionTimeoutRef.current);
+    }
+
+    transitionTimeoutRef.current = setTimeout(() => {
+      setSlots(prev => {
+        const next = [...prev] as [ArtworkSlot | null, ArtworkSlot | null];
+        next[activeIndex] = null;
+        return next;
+      });
+      setActiveSlotIndex(incomingIndex);
+      setIncomingSlotIndex(null);
+      focusSlotIframe(incomingIndex);
+    }, FADE_IN_OUT_DURATION_MS);
+  };
+
+  const markSlotLoaded = (slotIndex: number) => {
+    const activeIndex = activeSlotIndexRef.current;
+    const incomingIndex = incomingSlotIndexRef.current;
+    const hasActive = Boolean(slotsRef.current[activeIndex]);
+
+    updateSlot(slotIndex, { isLoading: false, opacity: 1 });
+    console.log('[ArtworkPlayer] loaded source');
+
+    if (!hasActive || activeIndex === slotIndex) {
+      setActiveSlotIndex(slotIndex);
+      setIncomingSlotIndex(null);
+      focusSlotIframe(slotIndex);
+      return;
+    }
+
+    if (incomingIndex === slotIndex) {
+      startCrossfade(slotIndex);
+    }
+  };
+
+  const handleIframeLoad = (slotIndex: number) => {
+    console.log('[ArtworkPlayer] Iframe loaded');
+    if (isWebGLAvailable()) {
+      setShowMessageModal(false);
+      markSlotLoaded(slotIndex);
+    } else {
+      handleWebGLLost();
+    }
+  };
+
+  const handleLoadIframeError = (slotIndex: number) => {
+    setMessageModalTitle(
+      'The artwork cannot be displayed correctly on this device.'
+    );
+    setShowMessageModal(true);
+    if (incomingSlotIndexRef.current === slotIndex) {
+      setSlots(prev => {
+        const next = [...prev] as [ArtworkSlot | null, ArtworkSlot | null];
+        next[slotIndex] = null;
+        return next;
+      });
+      setIncomingSlotIndex(null);
+      return;
+    }
+
+    updateSlot(slotIndex, { isLoading: false, opacity: 1 });
   };
 
   // Update cursor positions when they change in context
@@ -140,6 +352,27 @@ const ArtworkPlayer = ({
   useEffect(() => {
     let cancelled = false;
     const currentURL = previewURL;
+    const activeIndex = activeSlotIndexRef.current;
+    const hasActive = Boolean(slotsRef.current[activeIndex]?.displayPreviewURL);
+    const targetIndex = hasActive ? (activeIndex === 0 ? 1 : 0) : activeIndex;
+    const nextIframeKey = (slotsRef.current[targetIndex]?.iframeKey ?? 0) + 1;
+
+    setSlots(prev => {
+      const next = [...prev] as [ArtworkSlot | null, ArtworkSlot | null];
+      next[targetIndex] = {
+        previewURL: currentURL,
+        displayPreviewURL: '',
+        displaySoftwareURL: '',
+        previewType: null,
+        isStreaming: false,
+        isLoading: true,
+        opacity: 0,
+        iframeKey: nextIframeKey,
+      };
+      return next;
+    });
+
+    setIncomingSlotIndex(hasActive ? targetIndex : null);
 
     const detectPreviewType = async (url: string) => {
       console.log(
@@ -151,7 +384,13 @@ const ArtworkPlayer = ({
       try {
         if (artworkPreviewMIMEType) {
           if (isStale()) return;
-          compareToGetFileType(artworkPreviewMIMEType);
+          const { previewType, isStreaming } = determinePreviewType(
+            artworkPreviewMIMEType
+          );
+          updateSlotIfCurrent(targetIndex, currentURL, {
+            previewType,
+            isStreaming,
+          });
           console.log(
             '[CAST] Artwork previewMIMEType:',
             artworkPreviewMIMEType
@@ -167,7 +406,11 @@ const ArtworkPlayer = ({
         const contentType = await getContentTypeFromURL(url);
         if (isStale()) return;
 
-        compareToGetFileType(contentType);
+        const { previewType, isStreaming } = determinePreviewType(contentType);
+        updateSlotIfCurrent(targetIndex, currentURL, {
+          previewType,
+          isStreaming,
+        });
         console.log('[ArtworkPlayer] Content-Type:', contentType);
         Sentry.addBreadcrumb({
           category: 'ArtworkPlayer',
@@ -181,26 +424,13 @@ const ArtworkPlayer = ({
           JSON.stringify(error)
         );
         Sentry.captureException(error);
-        setPreviewType(PreviewHTMLTag.iframe);
+        updateSlotIfCurrent(targetIndex, currentURL, {
+          previewType: PreviewHTMLTag.iframe,
+        });
       }
     };
 
     if (previewURL) {
-      setOpacity(0);
-      setPreviewType(null);
-      setLoading(true);
-      setShowLoading(false);
-
-      if (loadingDelayRef.current) {
-        clearTimeout(loadingDelayRef.current);
-      }
-
-      loadingDelayRef.current = setTimeout(() => {
-        if (!cancelled && previewURL === currentURL) {
-          setShowLoading(true);
-        }
-      }, 2000);
-
       detectPreviewType(previewURL)
         .catch((err: unknown) => {
           console.error(err);
@@ -208,7 +438,10 @@ const ArtworkPlayer = ({
         .finally(() => {
           // Only apply result if this effect instance is still current
           if (!cancelled && previewURL === currentURL) {
-            setDisplayPreviewURL(previewURL);
+            updateSlotIfCurrent(targetIndex, currentURL, {
+              displayPreviewURL: previewURL,
+              displaySoftwareURL: previewURL,
+            });
           }
         });
     }
@@ -223,70 +456,45 @@ const ArtworkPlayer = ({
   }, [previewURL, artworkPreviewMIMEType]);
 
   useEffect(() => {
-    // Unmute video when user click on the screen
-    if (previewType === PreviewHTMLTag.video && videoRef.current) {
-      document.addEventListener('click', unmuteVideo);
+    const activeIndex = activeSlotIndexRef.current;
+    const slot = slotsRef.current[activeIndex];
+    if (slot?.previewType === PreviewHTMLTag.video) {
+      document.addEventListener('click', handleUnmuteClick);
     }
 
     return () => {
-      if (previewType === PreviewHTMLTag.video && videoRef.current) {
-        document.removeEventListener('click', unmuteVideo);
-      }
+      document.removeEventListener('click', handleUnmuteClick);
     };
-  }, [previewType, videoRef]);
+  }, [activeSlotIndex, slots[0]?.previewType, slots[1]?.previewType]);
 
-  const handleIframeLoad = () => {
-    console.log('[ArtworkPlayer] Iframe loaded');
-    if (isWebGLAvailable()) {
-      setShowMessageModal(false);
-      loadedSource();
-    } else {
-      handleWebGLLost();
-    }
-  };
-
-  const loadedSource = () => {
-    setOpacity(1);
-    console.log('[ArtworkPlayer] loaded source');
-    // When an iframe is present in a page, the parent window might not receive keydown events because the iframe itself captures these events when it is focused.
-    // This is work around to focus the parent window.
-    // window.focus();
-    iframeRef.current?.focus();
-    setLoading(false);
-    setShowLoading(false);
-    if (loadingDelayRef.current) {
-      clearTimeout(loadingDelayRef.current);
-      loadingDelayRef.current = undefined;
-    }
-  };
-
-  // Video playback handling (after CORS loading)
+  // Video playback handling (after CORS loading) for slot 0
   useEffect(() => {
-    const videoElement = videoRef.current;
-    if (previewType !== PreviewHTMLTag.video || !videoElement) {
+    const slot = slots[0];
+    const videoElement = videoRefs[0].current;
+    if (!slot || slot.previewType !== PreviewHTMLTag.video || !videoElement) {
       return;
     }
-
-    setOpacity(1);
 
     const handleVideoPlay = () => {
       videoElement
         .play()
         .catch((error: unknown) => {
           console.log('Error play video', error);
-          reTryToPlayVideo();
+          reTryToPlayVideo(0);
         })
         .finally(() => {
-          setLoading(false);
+          if (slot.isStreaming) {
+            markSlotLoaded(0);
+          }
         });
     };
 
     let hlsInstance: Hls | null = null;
 
     if (
-      isStreaming &&
+      slot.isStreaming &&
       Hls.isSupported() &&
-      displayPreviewURL.endsWith('.m3u8')
+      slot.displayPreviewURL.endsWith('.m3u8')
     ) {
       hlsInstance = new Hls({
         maxBufferSize: 60 * 1000 * 1000,
@@ -297,7 +505,7 @@ const ArtworkPlayer = ({
       hlsInstance.attachMedia(videoElement);
       hlsInstance.on(Hls.Events.MEDIA_ATTACHED, () => {
         hlsInstance?.loadSource(
-          `${displayPreviewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
+          `${slot.displayPreviewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
         );
         handleVideoPlay();
       });
@@ -327,11 +535,90 @@ const ArtworkPlayer = ({
       videoElement.removeEventListener('loadeddata', handleVideoPlay);
       hlsInstance?.destroy();
     };
-  }, [previewType, isStreaming, displayPreviewURL]);
+  }, [
+    slots[0]?.previewType,
+    slots[0]?.isStreaming,
+    slots[0]?.displayPreviewURL,
+  ]);
 
-  // Universal media loading with CORS handling
+  // Video playback handling (after CORS loading) for slot 1
   useEffect(() => {
-    if (!displayPreviewURL) {
+    const slot = slots[1];
+    const videoElement = videoRefs[1].current;
+    if (!slot || slot.previewType !== PreviewHTMLTag.video || !videoElement) {
+      return;
+    }
+
+    const handleVideoPlay = () => {
+      videoElement
+        .play()
+        .catch((error: unknown) => {
+          console.log('Error play video', error);
+          reTryToPlayVideo(1);
+        })
+        .finally(() => {
+          if (slot.isStreaming) {
+            markSlotLoaded(1);
+          }
+        });
+    };
+
+    let hlsInstance: Hls | null = null;
+
+    if (
+      slot.isStreaming &&
+      Hls.isSupported() &&
+      slot.displayPreviewURL.endsWith('.m3u8')
+    ) {
+      hlsInstance = new Hls({
+        maxBufferSize: 60 * 1000 * 1000,
+        maxBufferLength: 30,
+        liveSyncDuration: 10,
+      });
+
+      hlsInstance.attachMedia(videoElement);
+      hlsInstance.on(Hls.Events.MEDIA_ATTACHED, () => {
+        hlsInstance?.loadSource(
+          `${slot.displayPreviewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
+        );
+        handleVideoPlay();
+      });
+
+      hlsInstance.on(Hls.Events.ERROR, function (event, data) {
+        switch (data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            if (data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL) {
+              console.log('Buffer stall detected, attempting to recover...');
+              hlsInstance?.recoverMediaError();
+            }
+            break;
+          default:
+            console.error('An unrecoverable error occurred');
+            hlsInstance?.destroy();
+            break;
+        }
+      });
+    } else {
+      // For non-streaming videos, play after loadeddata event
+      videoElement.addEventListener('loadeddata', handleVideoPlay);
+    }
+
+    return () => {
+      videoElement.removeEventListener('loadeddata', handleVideoPlay);
+      hlsInstance?.destroy();
+    };
+  }, [
+    slots[1]?.previewType,
+    slots[1]?.isStreaming,
+    slots[1]?.displayPreviewURL,
+  ]);
+
+  // Universal media loading with CORS handling (slot 0)
+  useEffect(() => {
+    const slot = slots[0];
+    if (!slot?.displayPreviewURL) {
       return;
     }
 
@@ -347,13 +634,13 @@ const ArtworkPlayer = ({
           console.error(`[ArtworkPlayer] ${mediaType} load failed:`, error);
           Sentry.captureMessage(`[ArtworkPlayer] ${mediaType} load failed`, {
             level: 'error',
-            extra: { displayPreviewURL, mediaType },
+            extra: { displayPreviewURL: slot.displayPreviewURL, mediaType },
           });
         };
 
-      if (previewType === PreviewHTMLTag.image && imageRef.current) {
-        const imageElement = imageRef.current;
-        imageElement.onload = loadedSource;
+      if (slot.previewType === PreviewHTMLTag.image && imageRefs[0].current) {
+        const imageElement = imageRefs[0].current;
+        imageElement.onload = () => markSlotLoaded(0);
         imageElement.onerror = () => {
           handleMediaError('image')(new Error('Image load failed'));
         };
@@ -362,21 +649,21 @@ const ArtworkPlayer = ({
           imageElement.onerror = null;
         });
 
-        await mediaLoader.current.loadMedia({
-          url: displayPreviewURL,
+        await mediaLoaders[0].current.loadMedia({
+          url: slot.displayPreviewURL,
           mediaType: 'image',
           element: imageElement,
-          onLoad: loadedSource,
+          onLoad: () => markSlotLoaded(0),
           onError: handleMediaError('image'),
           signal: abortController.signal,
         });
       } else if (
-        previewType === PreviewHTMLTag.video &&
-        videoRef.current &&
-        !isStreaming // Only load video if not streaming
+        slot.previewType === PreviewHTMLTag.video &&
+        videoRefs[0].current &&
+        !slot.isStreaming
       ) {
-        const videoElement = videoRef.current;
-        videoElement.onloadeddata = loadedSource;
+        const videoElement = videoRefs[0].current;
+        videoElement.onloadeddata = () => markSlotLoaded(0);
         videoElement.onerror = () => {
           handleMediaError('video')(new Error('Video load failed'));
         };
@@ -385,18 +672,21 @@ const ArtworkPlayer = ({
           videoElement.onerror = null;
         });
 
-        console.log('[ArtworkPlayer] loading video', displayPreviewURL);
-        await mediaLoader.current.loadMedia({
-          url: displayPreviewURL,
+        console.log('[ArtworkPlayer] loading video', slot.displayPreviewURL);
+        await mediaLoaders[0].current.loadMedia({
+          url: slot.displayPreviewURL,
           mediaType: 'video',
           element: videoElement,
-          onLoad: loadedSource,
+          onLoad: () => markSlotLoaded(0),
           onError: handleMediaError('video'),
           signal: abortController.signal,
         });
-      } else if (previewType === PreviewHTMLTag.audio && audioRef.current) {
-        const audioElement = audioRef.current;
-        audioElement.onloadeddata = loadedSource;
+      } else if (
+        slot.previewType === PreviewHTMLTag.audio &&
+        audioRefs[0].current
+      ) {
+        const audioElement = audioRefs[0].current;
+        audioElement.onloadeddata = () => markSlotLoaded(0);
         audioElement.onerror = () => {
           handleMediaError('audio')(new Error('Audio load failed'));
         };
@@ -405,11 +695,11 @@ const ArtworkPlayer = ({
           audioElement.onerror = null;
         });
 
-        await mediaLoader.current.loadMedia({
-          url: displayPreviewURL,
+        await mediaLoaders[0].current.loadMedia({
+          url: slot.displayPreviewURL,
           mediaType: 'audio',
           element: audioElement,
-          onLoad: loadedSource,
+          onLoad: () => markSlotLoaded(0),
           onError: handleMediaError('audio'),
           signal: abortController.signal,
         });
@@ -424,35 +714,145 @@ const ArtworkPlayer = ({
       cleanupFns.forEach(cleanup => {
         cleanup();
       });
-      mediaLoader.current.cleanup();
+      mediaLoaders[0].current.cleanup();
     };
-  }, [displayPreviewURL, previewType]);
+  }, [
+    slots[0]?.displayPreviewURL,
+    slots[0]?.previewType,
+    slots[0]?.isStreaming,
+  ]);
+
+  // Universal media loading with CORS handling (slot 1)
+  useEffect(() => {
+    const slot = slots[1];
+    if (!slot?.displayPreviewURL) {
+      return;
+    }
+
+    let isCancelled = false;
+    const abortController = new AbortController();
+    const cleanupFns: (() => void)[] = [];
+
+    const loadMedia = async () => {
+      if (isCancelled) return;
+
+      const handleMediaError =
+        (mediaType: BlobLoadedMediaType) => (error: Error) => {
+          console.error(`[ArtworkPlayer] ${mediaType} load failed:`, error);
+          Sentry.captureMessage(`[ArtworkPlayer] ${mediaType} load failed`, {
+            level: 'error',
+            extra: { displayPreviewURL: slot.displayPreviewURL, mediaType },
+          });
+        };
+
+      if (slot.previewType === PreviewHTMLTag.image && imageRefs[1].current) {
+        const imageElement = imageRefs[1].current;
+        imageElement.onload = () => markSlotLoaded(1);
+        imageElement.onerror = () => {
+          handleMediaError('image')(new Error('Image load failed'));
+        };
+        cleanupFns.push(() => {
+          imageElement.onload = null;
+          imageElement.onerror = null;
+        });
+
+        await mediaLoaders[1].current.loadMedia({
+          url: slot.displayPreviewURL,
+          mediaType: 'image',
+          element: imageElement,
+          onLoad: () => markSlotLoaded(1),
+          onError: handleMediaError('image'),
+          signal: abortController.signal,
+        });
+      } else if (
+        slot.previewType === PreviewHTMLTag.video &&
+        videoRefs[1].current &&
+        !slot.isStreaming
+      ) {
+        const videoElement = videoRefs[1].current;
+        videoElement.onloadeddata = () => markSlotLoaded(1);
+        videoElement.onerror = () => {
+          handleMediaError('video')(new Error('Video load failed'));
+        };
+        cleanupFns.push(() => {
+          videoElement.onloadeddata = null;
+          videoElement.onerror = null;
+        });
+
+        console.log('[ArtworkPlayer] loading video', slot.displayPreviewURL);
+        await mediaLoaders[1].current.loadMedia({
+          url: slot.displayPreviewURL,
+          mediaType: 'video',
+          element: videoElement,
+          onLoad: () => markSlotLoaded(1),
+          onError: handleMediaError('video'),
+          signal: abortController.signal,
+        });
+      } else if (
+        slot.previewType === PreviewHTMLTag.audio &&
+        audioRefs[1].current
+      ) {
+        const audioElement = audioRefs[1].current;
+        audioElement.onloadeddata = () => markSlotLoaded(1);
+        audioElement.onerror = () => {
+          handleMediaError('audio')(new Error('Audio load failed'));
+        };
+        cleanupFns.push(() => {
+          audioElement.onloadeddata = null;
+          audioElement.onerror = null;
+        });
+
+        await mediaLoaders[1].current.loadMedia({
+          url: slot.displayPreviewURL,
+          mediaType: 'audio',
+          element: audioElement,
+          onLoad: () => markSlotLoaded(1),
+          onError: handleMediaError('audio'),
+          signal: abortController.signal,
+        });
+      }
+    };
+
+    void loadMedia();
+
+    return () => {
+      isCancelled = true;
+      abortController.abort();
+      cleanupFns.forEach(cleanup => {
+        cleanup();
+      });
+      mediaLoaders[1].current.cleanup();
+    };
+  }, [
+    slots[1]?.displayPreviewURL,
+    slots[1]?.previewType,
+    slots[1]?.isStreaming,
+  ]);
   // ---- End of universal media loading with CORS handling ----
 
   useEffect(() => {
-    if (context.isOnline) {
-      if (previewType === PreviewHTMLTag.video && videoRef.current) {
-        videoRef.current.play().catch((error: unknown) => {
+    slotsRef.current.forEach((slot, index) => {
+      const videoElement = videoRefs[index].current;
+      if (!slot || slot.previewType !== PreviewHTMLTag.video || !videoElement) {
+        return;
+      }
+
+      if (context.isOnline) {
+        videoElement.play().catch((error: unknown) => {
           console.log(
             '[ArtworkPlayer] Error play video',
             JSON.stringify(error)
           );
           Sentry.captureMessage('[ArtworkPlayer] Error play video');
         });
+      } else {
+        videoElement.pause();
       }
-    } else {
-      if (previewType === PreviewHTMLTag.video && videoRef.current) {
-        videoRef.current.pause();
-      }
-    }
-  }, [context.isOnline, previewType]);
+    });
+  }, [context.isOnline, slots[0]?.previewType, slots[1]?.previewType]);
 
   useEffect(() => {
-    if (
-      !displayPreviewURL ||
-      !context.deviceRotation?.viewMode ||
-      !displaySettings
-    ) {
+    if (!context.deviceRotation?.viewMode || !displaySettings) {
       return;
     }
 
@@ -460,37 +860,32 @@ const ArtworkPlayer = ({
       '[ArtworkPlayer] displaySettings',
       JSON.stringify(displaySettings)
     );
-    // Update URL when settings first load or when scaling changes
-    updateSoftwareURL(displaySettings);
-  }, [displayPreviewURL, displaySettings, context.deviceRotation?.viewMode]);
 
-  const updateSoftwareURL = (displaySettings: DP1DisplayPreference) => {
-    if (
-      previewType === PreviewHTMLTag.iframe &&
-      !displayPreviewURL.includes('base64')
-    ) {
-      const displayMode =
-        displaySettings.scaling === Scaling.Fill ? 'crop' : 'fit';
-      const queryParam = `&display_mode=${displayMode}`;
-      const url = new URL(displayPreviewURL);
-      url.search += queryParam;
-      setDisplaySoftwareURL(url.toString());
-    } else {
-      setDisplaySoftwareURL(displayPreviewURL);
-    }
-  };
+    setSlots(prev => {
+      const next = [...prev] as [ArtworkSlot | null, ArtworkSlot | null];
+      next.forEach((slot, index) => {
+        if (!slot?.displayPreviewURL) {
+          return;
+        }
 
-  const handleLoadIframeError = () => {
-    setOpacity(1);
-    setMessageModalTitle(
-      'The artwork cannot be displayed correctly on this device.'
-    );
-    setShowMessageModal(true);
-  };
+        next[index] = {
+          ...slot,
+          displaySoftwareURL: getDisplaySoftwareURL(
+            slot.displayPreviewURL,
+            slot.previewType,
+            displaySettings
+          ),
+        };
+      });
+      return next;
+    });
+  }, [displaySettings, context.deviceRotation?.viewMode]);
 
   const reloadIframe = () => {
     console.log('[ArtworkPlayer] reloadIframe');
-    setIframeKey(prevKey => prevKey + 1);
+    const activeIndex = activeSlotIndexRef.current;
+    const currentKey = slotsRef.current[activeIndex]?.iframeKey ?? 0;
+    updateSlot(activeIndex, { iframeKey: currentKey + 1 });
   };
 
   const getCurrentCanvas = () => {
@@ -514,7 +909,7 @@ const ArtworkPlayer = ({
     );
     setMessageModalTitle('Artwork Recovery in Progress');
     setShowMessageModal(true);
-    setOpacity(0);
+    updateSlot(activeSlotIndexRef.current, { opacity: 0 });
     startWebGLRecovery();
   };
 
@@ -595,9 +990,8 @@ const ArtworkPlayer = ({
       if (webGLRecoveryIntervalRef.current) {
         clearInterval(webGLRecoveryIntervalRef.current);
       }
-      if (loadingDelayRef.current) {
-        clearTimeout(loadingDelayRef.current);
-        loadingDelayRef.current = undefined;
+      if (transitionTimeoutRef.current) {
+        clearTimeout(transitionTimeoutRef.current);
       }
     };
   }, []);
@@ -618,40 +1012,56 @@ const ArtworkPlayer = ({
     };
   }, [previewURL]);
 
-  useEffect(() => {
-    console.log('[ArtworkPlayer] loading', loading);
-  }, [loading]);
+  const activeSlot = slots[activeSlotIndex];
+  const showLoading = showLoadingIndicator;
 
   useEffect(() => {
-    console.log('[ArtworkPlayer] previewType', previewType);
-  }, [previewType]);
+    if (!activeSlot || !activeSlot.previewType) {
+      setShowLoadingIndicator(false);
+      return;
+    }
 
-  return (
-    <>
+    const shouldDelayLoading =
+      activeSlot.previewType === PreviewHTMLTag.video ||
+      activeSlot.previewType === PreviewHTMLTag.audio;
+
+    if (!activeSlot.isLoading || !shouldDelayLoading) {
+      setShowLoadingIndicator(false);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setShowLoadingIndicator(true);
+    }, 2000);
+
+    return () => {
+      clearTimeout(timeoutId);
+      setShowLoadingIndicator(false);
+    };
+  }, [activeSlot?.isLoading, activeSlot?.previewType]);
+
+  const renderSlot = (slot: ArtworkSlot | null, slotIndex: number) => {
+    if (!slot || !slot.displayPreviewURL || !slot.previewType) {
+      return null;
+    }
+
+    return (
       <div
+        key={slot.previewURL}
         style={{
+          position: 'absolute',
+          inset: 0,
           display: 'flex',
-          backgroundColor: displaySettings?.background ?? '#000000',
           justifyContent: 'center',
-          position: 'relative',
-          transition: `opacity ${FADE_IN_OUT_DURATION_MS.toString()}ms, padding 0.2s ease`,
-          opacity: opacity,
-          padding: displaySettings?.margin
-            ? getDP1Margin(displaySettings.margin)
-            : '0px',
-          width: '100vw',
-          height: '100vh',
+          width: '100%',
+          height: '100%',
+          opacity: slot.opacity,
+          transition: `opacity ${FADE_IN_OUT_DURATION_MS.toString()}ms ease`,
+          willChange: 'opacity',
+          zIndex: slotIndex === activeSlotIndex ? 1 : 2,
+          pointerEvents: slot.opacity === 0 ? 'none' : 'auto',
         }}>
-        <CursorLayer ref={cursorRef} />
-        {/* This condition shows the loading indicator only when loading is true, the 2s delay has elapsed (showLoading),
-        and we’re either still detecting the MIME/type (previewType === null) or we’ve determined it’s a slow‑loading media type (video/audio).
-        This matches the UX intent: no spinner for fast types (image/iframe/object) and no spinner before the 2s threshold. */}
-        {(previewType === null ||
-         previewType === PreviewHTMLTag.video.toString() ||
-          previewType === PreviewHTMLTag.audio.toString()) &&
-          loading &&
-          showLoading && <Loading />}
-        {displayPreviewURL && previewType === PreviewHTMLTag.image && (
+        {slot.previewType === PreviewHTMLTag.image && (
           <div
             style={{
               width: '100%',
@@ -659,7 +1069,7 @@ const ArtworkPlayer = ({
             }}
             className={isCustomView ? styles.customRendering : ''}>
             <img
-              ref={imageRef}
+              ref={imageRefs[slotIndex]}
               style={{
                 width: '100%',
                 height: '100%',
@@ -670,17 +1080,18 @@ const ArtworkPlayer = ({
             />
           </div>
         )}
-        {displayPreviewURL && previewType === PreviewHTMLTag.object && (
+        {slot.previewType === PreviewHTMLTag.object && (
           <object
             style={{ width: '100%', height: '100%' }}
-            data={displayPreviewURL}
-            onLoad={loadedSource}>
+            data={slot.displayPreviewURL}
+            type="text/html"
+            onLoad={() => markSlotLoaded(slotIndex)}>
             Not supported
           </object>
         )}
-        {displayPreviewURL && previewType === PreviewHTMLTag.video && (
+        {slot.previewType === PreviewHTMLTag.video && (
           <video
-            ref={videoRef}
+            ref={videoRefs[slotIndex]}
             style={{
               width: '100%',
               height: '100%',
@@ -689,35 +1100,58 @@ const ArtworkPlayer = ({
             autoPlay={displaySettings?.autoPlay ?? true}
             loop={displaySettings?.loop ?? true}
             playsInline
-            crossOrigin="anonymous"
-            onLoad={loadedSource}></video>
+            crossOrigin="anonymous"></video>
         )}
-        {displayPreviewURL && previewType === PreviewHTMLTag.audio && (
+        {slot.previewType === PreviewHTMLTag.audio && (
           <audio
-            ref={audioRef}
+            ref={audioRefs[slotIndex]}
             autoPlay={displaySettings?.autoPlay ?? true}
-            loop={displaySettings?.loop ?? true}
-            onLoadedData={loadedSource}></audio>
+            loop={displaySettings?.loop ?? true}></audio>
         )}
-        {displaySoftwareURL && previewType === PreviewHTMLTag.iframe && (
-          <iframe
-            key={iframeKey}
-            ref={iframeRef}
-            className={styles.iframe}
-            src={displaySoftwareURL}
-            onLoad={handleIframeLoad}
-            onError={handleLoadIframeError}
-            sandbox="allow-same-origin allow-scripts"
-            tabIndex={0}></iframe>
-        )}
-        {displaySoftwareURL && previewType === PreviewHTMLTag.iframePDF && (
-          <iframe
-            className={styles.iframe}
-            src={displaySoftwareURL}
-            onLoad={handleIframeLoad}
-            onError={handleLoadIframeError}
-            tabIndex={0}></iframe>
-        )}
+        {slot.displaySoftwareURL &&
+          slot.previewType === PreviewHTMLTag.iframe && (
+            <iframe
+              key={slot.iframeKey}
+              ref={iframeRefs[slotIndex]}
+              className={styles.iframe}
+              src={slot.displaySoftwareURL}
+              onLoad={() => handleIframeLoad(slotIndex)}
+              onError={() => handleLoadIframeError(slotIndex)}
+              sandbox="allow-same-origin allow-scripts"
+              tabIndex={0}></iframe>
+          )}
+        {slot.displaySoftwareURL &&
+          slot.previewType === PreviewHTMLTag.iframePDF && (
+            <iframe
+              className={styles.iframe}
+              src={slot.displaySoftwareURL}
+              onLoad={() => handleIframeLoad(slotIndex)}
+              onError={() => handleLoadIframeError(slotIndex)}
+              tabIndex={0}></iframe>
+          )}
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <div
+        style={{
+          display: 'flex',
+          backgroundColor: displaySettings?.background ?? '#000000',
+          justifyContent: 'center',
+          position: 'relative',
+          transition: 'padding 0.2s ease',
+          padding: displaySettings?.margin
+            ? getDP1Margin(displaySettings.margin)
+            : '0px',
+          width: '100vw',
+          height: '100vh',
+          overflow: 'hidden',
+        }}>
+        <CursorLayer ref={cursorRef} />
+        {showLoading && <Loading />}
+        {slots.map((slot, index) => renderSlot(slot, index))}
       </div>
       {showMessageModal && (
         <MessageModal

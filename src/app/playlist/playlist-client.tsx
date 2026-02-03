@@ -2,7 +2,12 @@
 
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { useAppContext } from '@/context/AppContext';
-import { getIndex, recalculateStartTimeForIndex } from '@/utils/playlist';
+import {
+  calculateStartTime,
+  getArtworkStartTime,
+  getIndex,
+  recalculateStartTimeForIndex,
+} from '@/utils/playlist';
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import { useEffect, useRef, useState } from 'react';
@@ -536,6 +541,144 @@ export default function PlaylistClient() {
       handlePauseCasting();
     }
   }, [context.isOnline]);
+
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+
+      const tagName = target.tagName.toLowerCase();
+      return (
+        tagName === 'input' ||
+        tagName === 'textarea' ||
+        target.isContentEditable
+      );
+    };
+
+    const getCurrentItemDurationMs = () => {
+      if (currentIndex < 0 || currentIndex >= playlist.length) {
+        return 0;
+      }
+
+      return (playlist[currentIndex]?.duration ?? 0) * 1000;
+    };
+
+    const getCurrentItemElapsedMs = () => {
+      if (currentIndex < 0 || currentIndex >= playlist.length) {
+        return 0;
+      }
+
+      const playlistStartTime = startTime || castInfo?.startTime || Date.now();
+      const artworkStartTime = getArtworkStartTime(
+        playlist,
+        currentIndex,
+        playlistStartTime
+      );
+      return Math.max(0, Date.now() - artworkStartTime);
+    };
+
+    const handleNextFromKey = () => {
+      if (!playlist.length) {
+        return;
+      }
+
+      const nextIndex =
+        currentIndex >= 0 ? (currentIndex + 1) % playlist.length : 0;
+      const nextStartTime = recalculateStartTimeForIndex(playlist, nextIndex);
+      canvasService.setCastInfo({
+        ...(castInfo ?? {}),
+        castCommand: CastCommand.nextArtwork,
+        index: nextIndex,
+        startTime: nextStartTime,
+        isPaused: false,
+      });
+    };
+
+    const handlePreviousFromKey = () => {
+      if (!playlist.length) {
+        return;
+      }
+
+      const prevIndex =
+        currentIndex >= 0
+          ? (currentIndex - 1 + playlist.length) % playlist.length
+          : 0;
+      const nextStartTime = recalculateStartTimeForIndex(playlist, prevIndex);
+      canvasService.setCastInfo({
+        ...(castInfo ?? {}),
+        castCommand: CastCommand.previousArtwork,
+        index: prevIndex,
+        startTime: nextStartTime,
+        isPaused: false,
+      });
+    };
+
+    const handleTogglePause = () => {
+      if (!playlist.length || currentIndex < 0) {
+        return;
+      }
+
+      const durationMs = getCurrentItemDurationMs();
+      if (castInfo?.isPaused) {
+        const nextStartTime = calculateStartTime(
+          playlist,
+          currentIndex,
+          elapsedTimeRef.current
+        );
+        canvasService.setCastInfo({
+          ...(castInfo ?? {}),
+          castCommand: CastCommand.resumeCasting,
+          isPaused: false,
+          startTime: nextStartTime,
+        });
+        return;
+      }
+
+      const elapsedMs = durationMs
+        ? Math.min(durationMs, getCurrentItemElapsedMs())
+        : 0;
+      const remainMs = durationMs ? Math.max(0, durationMs - elapsedMs) : 0;
+      elapsedTimeRef.current = elapsedMs;
+      remainTimeRef.current = remainMs;
+
+      canvasService.setCastInfo({
+        ...(castInfo ?? {}),
+        castCommand: CastCommand.pauseCasting,
+        isPaused: true,
+        elapsedTime: elapsedMs,
+        remainTime: remainMs,
+      });
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+
+      if (event.code === 'ArrowRight') {
+        event.preventDefault();
+        handleNextFromKey();
+        return;
+      }
+
+      if (event.code === 'ArrowLeft') {
+        event.preventDefault();
+        handlePreviousFromKey();
+        return;
+      }
+
+      if (event.code === 'Space') {
+        event.preventDefault();
+        handleTogglePause();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [castInfo, currentIndex, playlist, startTime]);
 
   return (
     <>
