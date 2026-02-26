@@ -51,6 +51,21 @@ export default function PlaylistClient() {
     startTimeRef.current = startTime;
   }, [startTime]);
 
+  const isDebugOverlayEnabled = (
+    displayPreference?: DP1DisplayPreference | null
+  ): boolean => {
+    if (!displayPreference) {
+      return false;
+    }
+
+    if (displayPreference.debugOverlay) {
+      return true;
+    }
+
+    const keyboardShortcuts = displayPreference.interaction?.keyboard || [];
+    return keyboardShortcuts.includes('debugOverlay');
+  };
+
   const getArtistLabel = (item?: DP1Item): string => {
     if (!item) {
       return 'Unknown';
@@ -728,7 +743,7 @@ export default function PlaylistClient() {
   return (
     <>
       <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-        {currentItemDisplayPreference?.debugOverlay &&
+        {isDebugOverlayEnabled(currentItemDisplayPreference) &&
           currentItemRef.current && (
             <div
               style={{
