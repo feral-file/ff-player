@@ -51,6 +51,51 @@ export default function PlaylistClient() {
     startTimeRef.current = startTime;
   }, [startTime]);
 
+  const getArtistLabel = (item?: DP1Item): string => {
+    if (!item) {
+      return 'Unknown';
+    }
+
+    const record = item as unknown as Record<string, unknown>;
+    const raster = record.raster as Record<string, unknown> | undefined;
+    const rasterArtist =
+      typeof raster?.artistName === 'string' ? raster.artistName : undefined;
+
+    return rasterArtist || 'Unknown';
+  };
+
+  const getOwnerLabel = (item?: DP1Item): string => {
+    if (!item) {
+      return 'Unknown';
+    }
+
+    const record = item as unknown as Record<string, unknown>;
+    const owner = record.owner;
+    const ownerName = record.ownerName;
+    const ownerLabel = record.ownerLabel;
+
+    if (typeof ownerLabel === 'string' && ownerLabel.trim()) {
+      return ownerLabel;
+    }
+
+    if (typeof ownerName === 'string' && ownerName.trim()) {
+      return ownerName;
+    }
+
+    if (typeof owner === 'string' && owner.trim()) {
+      return owner;
+    }
+
+    if (owner && typeof owner === 'object') {
+      const ownerRecord = owner as Record<string, unknown>;
+      if (typeof ownerRecord.name === 'string' && ownerRecord.name.trim()) {
+        return ownerRecord.name;
+      }
+    }
+
+    return 'Unknown';
+  };
+
   useEffect(() => {
     return () => {
       clearTimer();
@@ -682,7 +727,33 @@ export default function PlaylistClient() {
 
   return (
     <>
-      <div style={{ width: '100%', height: '100%' }}>
+      <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+        {currentItemDisplayPreference?.debugOverlay &&
+          currentItemRef.current && (
+            <div
+              style={{
+                position: 'absolute',
+                right: '24px',
+                bottom: '24px',
+                zIndex: 10,
+                maxWidth: '40vw',
+                backgroundColor: 'rgba(0, 0, 0, 0.72)',
+                color: '#f5f5f5',
+                padding: '12px 14px',
+                borderRadius: '8px',
+                fontFamily: 'PP Mori, system-ui, sans-serif',
+                fontSize: '14px',
+                lineHeight: '1.35',
+                letterSpacing: '0.01em',
+              }}>
+              <div style={{ fontWeight: 600, marginBottom: '6px' }}>
+                Now Displaying
+              </div>
+              <div>Title: {currentItemRef.current.title || 'Untitled'}</div>
+              <div>Artist: {getArtistLabel(currentItemRef.current)}</div>
+              <div>Owner: {getOwnerLabel(currentItemRef.current)}</div>
+            </div>
+          )}
         {currentItemDisplayPreference && (
           <ArtworkPlayer
             previewURL={castPreviewURL ?? ''}
