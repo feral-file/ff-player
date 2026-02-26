@@ -66,9 +66,17 @@ export default function PlaylistClient() {
     return keyboardShortcuts.includes('debugOverlay');
   };
 
-  const getArtistLabel = (item?: DP1Item): string => {
+  const getArtistLabel = (
+    item?: DP1Item,
+    displayPreference?: DP1DisplayPreference | null
+  ): string => {
     if (!item) {
       return 'Unknown';
+    }
+
+    const displayArtist = displayPreference?.debugArtist;
+    if (typeof displayArtist === 'string' && displayArtist.trim()) {
+      return displayArtist;
     }
 
     const record = item as unknown as Record<string, unknown>;
@@ -79,9 +87,17 @@ export default function PlaylistClient() {
     return rasterArtist || 'Unknown';
   };
 
-  const getOwnerLabel = (item?: DP1Item): string => {
+  const getOwnerLabel = (
+    item?: DP1Item,
+    displayPreference?: DP1DisplayPreference | null
+  ): string => {
     if (!item) {
       return 'Unknown';
+    }
+
+    const displayOwner = displayPreference?.debugOwner;
+    if (typeof displayOwner === 'string' && displayOwner.trim()) {
+      return displayOwner;
     }
 
     const record = item as unknown as Record<string, unknown>;
@@ -765,8 +781,20 @@ export default function PlaylistClient() {
                 Now Displaying
               </div>
               <div>Title: {currentItemRef.current.title || 'Untitled'}</div>
-              <div>Artist: {getArtistLabel(currentItemRef.current)}</div>
-              <div>Owner: {getOwnerLabel(currentItemRef.current)}</div>
+              <div>
+                Artist:{' '}
+                {getArtistLabel(
+                  currentItemRef.current,
+                  currentItemDisplayPreference
+                )}
+              </div>
+              <div>
+                Owner:{' '}
+                {getOwnerLabel(
+                  currentItemRef.current,
+                  currentItemDisplayPreference
+                )}
+              </div>
             </div>
           )}
         {currentItemDisplayPreference && (

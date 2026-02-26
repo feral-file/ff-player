@@ -70,6 +70,8 @@ export interface DP1DisplayPreference {
   autoPlay?: boolean;
   loop?: boolean;
   debugOverlay?: boolean;
+  debugArtist?: string;
+  debugOwner?: string;
   interaction?: {
     keyboard?: string[];
     mouse?: {
