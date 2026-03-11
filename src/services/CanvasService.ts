@@ -311,8 +311,8 @@ class CanvasService {
         isPaused: window.location.pathname === '/sleep' ,
         sleepMode: window.location.pathname === '/sleep' ,
 
-        loopMode: activeCastInfo?.loopMode,
-        shuffle: activeCastInfo?.shuffle,
+        loopMode: activeCastInfo?.loopMode ?? LoopMode.none,
+        shuffle: activeCastInfo?.shuffle ?? false,
       };
     } catch (error) {
       console.error('[CanvasService] Error getting status:', error);
