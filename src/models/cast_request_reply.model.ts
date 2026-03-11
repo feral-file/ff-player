@@ -2,7 +2,7 @@ import { CursorPosition } from '@/services/custom-hooks/useCursorPositions';
 import { TokenDisplaySettings } from './display_settings.model';
 import { ErrorType } from './error.model';
 import { DP1Call, DP1Intent, DP1Item, Scaling } from './dp1.model';
-import { CastCommand, ViewMode } from '.';
+import { CastCommand, LoopMode, ViewMode } from '.';
 
 export interface PlayArtwork {
   id: string;
@@ -58,6 +58,8 @@ export interface CheckDeviceStatusReply extends Reply {
   };
 
   sleepMode?: boolean;
+  loopMode?: LoopMode;
+  shuffle?: boolean;
 }
 
 export interface DisplayPlaylistRequest {
@@ -126,3 +128,13 @@ export interface SetSleepModeRequest extends Request {
   sleepMode: boolean;
 }
 export type SetSleepModeReply = Reply;
+
+export interface SetShuffleRequest extends Request {
+  enabled: boolean;
+}
+export type SetShuffleReply = Reply;
+
+export interface SetLoopRequest extends Request {
+  mode: string; // 'none' | 'playlist' | 'one'
+}
+export type SetLoopReply = Reply;

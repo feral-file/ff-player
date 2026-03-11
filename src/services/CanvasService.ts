@@ -26,7 +26,11 @@ import {
   ViewMode,
   SetSleepModeRequest,
   SetSleepModeReply,
+  SetShuffleRequest,
+  SetLoopRequest,
 } from '@/models';
+import { LoopMode } from '@/models/cast_info.model';
+import { DP1Item } from '@/models/dp1.model';
 import { CustomEventName, NavigateEventDetail } from '@/models/custom_event';
 import DeviceManager from '@/utils/DeviceManager';
 import {
@@ -49,6 +53,7 @@ import { DP1Service } from './DP1Service';
 class CanvasService {
   private castInfo: CastInfo | null = null;
   private static instance: CanvasService | null;
+  private originalPlaylistItems: DP1Item[] | null = null;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
 
   // Cursor positions
@@ -248,6 +253,10 @@ class CanvasService {
           return this.moveToArtwork(requestJson as MoveToItemRequest);
         case CastCommand.setSleepMode:
           return this.setSleepMode(requestJson as SetSleepModeRequest);
+        case CastCommand.setShuffle:
+          return this.setShuffle(requestJson as SetShuffleRequest);
+        case CastCommand.setLoop:
+          return this.setLoop(requestJson as SetLoopRequest);
         default:
           console.error(`[CAST] Unknown command: ${command}`);
           return { ok: false };
@@ -301,6 +310,9 @@ class CanvasService {
 
         isPaused: window.location.pathname === '/sleep' ,
         sleepMode: window.location.pathname === '/sleep' ,
+
+        loopMode: activeCastInfo?.loopMode,
+        shuffle: activeCastInfo?.shuffle,
       };
     } catch (error) {
       console.error('[CanvasService] Error getting status:', error);
@@ -472,6 +484,9 @@ class CanvasService {
       return { ok: false };
     }
 
+    // Clear any stored original playlist from a previous shuffle session
+    this.originalPlaylistItems = null;
+
     console.log('[CanvasService] Display playlist');
     this.setCastInfo({
       castCommand: CastCommand.displayPlaylist,
@@ -510,6 +525,70 @@ class CanvasService {
       request.scheduleTime.replace('Z', '')
     ).catch((error: unknown) => {
       console.error('[CanvasService] Error storing scheduled task:', error);
+    });
+
+    return { ok: true };
+  }
+
+  private setShuffle(request: SetShuffleRequest): Reply {
+    const currentItems = this.castInfo?.playlist?.items;
+    if (!currentItems?.length || !this.castInfo?.playlist) {
+      console.error('[CanvasService] No playlist to shuffle');
+      return { ok: false };
+    }
+
+    const enabled = (request as unknown as { enabled: boolean }).enabled;
+
+    // Identify the currently playing item so it can be anchored in the new order
+    const currentIndex = this.castInfo.index ?? 0;
+    const currentRealIndex = currentIndex % currentItems.length;
+    const currentItem = currentItems[currentRealIndex];
+
+    if (enabled) {
+      if (!this.originalPlaylistItems) {
+        this.originalPlaylistItems = [...currentItems];
+      }
+      // Shuffle everything except the current item, keep it at position 0
+      const remaining = currentItems.filter((_, i) => i !== currentRealIndex);
+      for (let i = remaining.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
+      }
+      this.setCastInfo({
+        ...this.castInfo,
+        castCommand: CastCommand.setShuffle,
+        shuffle: true,
+        index: 0,
+        playlist: { ...this.castInfo.playlist, items: [currentItem, ...remaining] },
+      });
+    } else {
+      const restored = this.originalPlaylistItems ?? currentItems;
+      this.originalPlaylistItems = null;
+      // Find the current item's position in the restored original order
+      const newIndex = Math.max(0, restored.findIndex(item => item.id === currentItem.id));
+      this.setCastInfo({
+        ...this.castInfo,
+        castCommand: CastCommand.setShuffle,
+        shuffle: false,
+        index: newIndex,
+        playlist: { ...this.castInfo.playlist, items: restored },
+      });
+    }
+
+    return { ok: true };
+  }
+
+  private setLoop(request: SetLoopRequest): Reply {
+    const rawMode = (request as unknown as { mode: string }).mode;
+    const mode = (Object.values(LoopMode) as string[]).includes(rawMode)
+      ? (rawMode as LoopMode)
+      : LoopMode.none;
+
+    console.log('[CanvasService] setLoop', mode);
+    this.setCastInfo({
+      ...this.castInfo,
+      castCommand: CastCommand.setLoop,
+      loopMode: mode,
     });
 
     return { ok: true };
