@@ -57,8 +57,10 @@ jobs:
           echo "{\"version\": \"$(git rev-parse HEAD)\"}" > out/version.json
 
       - name: Publish to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/pages-action@v1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy out --project-name=${{ vars.CLOUDFLARE_PROJECT_ID }} --commit-dirty=true
+          projectName: ${{ vars.CLOUDFLARE_PROJECT_ID }}
+          directory: out
+          wranglerVersion: '3'
