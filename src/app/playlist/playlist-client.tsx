@@ -161,9 +161,10 @@ export default function PlaylistClient() {
 
     const startTime = castInfo?.startTime ?? Date.now();
 
-    // Safely access current item
-    if (currentIndex >= 0 && currentIndex < playlist.length) {
-      const currentPlaylistItem = playlist[currentIndex];
+    // Safely access current item (normalize in case currentIndex was grown by LoopMode.one)
+    const normalizedIndex = currentIndex >= 0 ? currentIndex % playlist.length : -1;
+    if (normalizedIndex >= 0) {
+      const currentPlaylistItem = playlist[normalizedIndex];
       const currentArtwork = dp1Items.find(a => a.id === currentPlaylistItem.id);
       if (currentArtwork) {
         startInterval(currentArtwork.duration ?? 0);
@@ -190,19 +191,23 @@ export default function PlaylistClient() {
 
     // Apply queued playlist first if it exists
     const result = applyQueuedPlaylistIfExists();
-    if (!result.applied) {
-      const startTime = castInfo?.startTime ?? Date.now();
-      setStartTime(startTime);
+    if (result.applied) {
+      // Navigate to the calculated next item; the useEffect will call startInterval
+      // with the correct duration. Returning early avoids a redundant startInterval
+      // call with a potentially stale duration.
+      if (result.nextIndex !== undefined) {
+        setCurrentIndex(result.nextIndex);
+      }
+      return;
     }
 
+    const startTime = castInfo?.startTime ?? Date.now();
+    setStartTime(startTime);
+
     let duration = remainTimeRef.current;
-    if (
-      duration === 0 &&
-      playlist.length &&
-      currentIndex >= 0 &&
-      currentIndex < playlist.length
-    ) {
-      duration = playlist[currentIndex].duration ?? 0;
+    if (duration === 0 && playlist.length && currentIndex >= 0) {
+      const normalizedIndex = currentIndex % playlist.length;
+      duration = playlist[normalizedIndex].duration ?? 0;
     }
 
     startInterval(duration);
@@ -304,8 +309,7 @@ export default function PlaylistClient() {
         }
       }
     } else {
-      // Ensure targetIndex is valid for the new playlist
-      nextIndex = targetIndex % newPlaylist.length;
+      nextIndex = Math.max(0, targetIndex) % newPlaylist.length;
     }
 
     const newStartTime = recalculateStartTimeForIndex(newPlaylist, nextIndex);
@@ -369,6 +373,32 @@ export default function PlaylistClient() {
       const currentCastInfo = canvasService.getCastInfo();
       const currentLoopMode = loopModeRef.current;
 
+      // Loop-one: replay the same item.
+      if (currentLoopMode === LoopMode.one) {
+        // Always resolve the current item's index against the castInfo playlist
+        // (which may already be shuffled/reordered by CanvasService) using the
+        // item ID as the source of truth. indexRef.current reflects the OLD
+        // playlist order and must not be used directly here.
+        const castInfoItems = currentCastInfo?.playlist?.items ?? playlist;
+        let realIndex = -1;
+        if (currentItemRef.current) {
+          realIndex = castInfoItems.findIndex(
+            i => i.id === currentItemRef.current?.id,
+          );
+        }
+        if (realIndex < 0 && indexRef.current >= 0) {
+          realIndex = Math.min(indexRef.current, castInfoItems.length - 1);
+        }
+        if (realIndex < 0) realIndex = 0; // ultimate safe fallback
+        indexRef.current = -1;
+        canvasService.setCastInfo({
+          ...currentCastInfo,
+          castCommand: CastCommand.updateIndex,
+          index: realIndex,
+        });
+        return;
+      }
+
       // If a refreshed/shuffled playlist has been queued, swap it in at the boundary
       if (queuedPlaylistRef.current?.length) {
         const result = applyQueuedPlaylistIfExists();
@@ -382,19 +412,10 @@ export default function PlaylistClient() {
         return;
       }
 
-      // Loop-one: replay the same item by advancing by playlist.length so the
-      // useEffect detects a new currentIndex value while mapping to the same item.
-      if (currentLoopMode === LoopMode.one) {
-        canvasService.setCastInfo({
-          ...currentCastInfo,
-          castCommand: CastCommand.updateIndex,
-          index: indexRef.current + playlist.length,
-        });
-        return;
-      }
-
       // Loop-none: stop when the last item finishes instead of wrapping.
-      if (currentLoopMode === LoopMode.none) {
+      // If indexRef is -1 (uninitialized), skip the stop check — we don't know
+      // the position yet, so it's safer to let getIndex() run below.
+      if (currentLoopMode === LoopMode.none && indexRef.current >= 0) {
         const currentRealIndex = indexRef.current % playlist.length;
         if (currentRealIndex >= playlist.length - 1) {
           clearTimer();
