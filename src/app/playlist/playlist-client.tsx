@@ -39,6 +39,13 @@ export default function PlaylistClient() {
   const queuedPlaylistRef = useRef<DP1Item[] | null>(null);
   // Default matches the mobile app's initial state (LoopMode button starts as "none")
   const loopModeRef = useRef<LoopMode>(LoopMode.none);
+  // Mutable mirror of startTime state so the setInterval closure always reads the
+  // latest value without needing to be recreated on every startTime change.
+  const startTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    startTimeRef.current = startTime;
+  }, [startTime]);
 
   useEffect(() => {
     return () => {
@@ -390,9 +397,18 @@ export default function PlaylistClient() {
           realIndex = Math.min(indexRef.current, castInfoItems.length - 1);
         }
         if (realIndex < 0) realIndex = 0; // ultimate safe fallback
+
+        // Reset the timeline anchor so that if loop mode changes later,
+        // getIndex(playlist, startTimeRef.current) still returns realIndex
+        // rather than a position N loops ahead in wall-clock time.
+        const newStartTime = recalculateStartTimeForIndex(castInfoItems, realIndex);
+        startTimeRef.current = newStartTime;
+        setStartTime(newStartTime);
+
         indexRef.current = -1;
         canvasService.setCastInfo({
           ...currentCastInfo,
+          startTime: newStartTime,
           castCommand: CastCommand.updateIndex,
           index: realIndex,
         });
@@ -423,7 +439,7 @@ export default function PlaylistClient() {
         }
       }
 
-      const index = getIndex(playlist, startTime);
+      const index = getIndex(playlist, startTimeRef.current);
       canvasService.setCastInfo({
         ...currentCastInfo,
         castCommand: CastCommand.updateIndex,

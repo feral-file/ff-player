@@ -545,9 +545,7 @@ class CanvasService {
     const currentItem = currentItems[currentRealIndex];
 
     if (enabled) {
-      if (!this.originalPlaylistItems) {
-        this.originalPlaylistItems = [...currentItems];
-      }
+      this.originalPlaylistItems ??= [...currentItems];
       // Shuffle everything except the current item, keep it at position 0
       const remaining = currentItems.filter((_, i) => i !== currentRealIndex);
       for (let i = remaining.length - 1; i > 0; i--) {
