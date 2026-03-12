@@ -4,6 +4,7 @@ import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { useAppContext } from '@/context/AppContext';
 import { getIndex, recalculateStartTimeForIndex } from '@/utils/playlist';
 import { CastCommand } from '@/models';
+import { LoopMode } from '@/models/cast_info.model';
 import { useEffect, useRef, useState } from 'react';
 import {
   defaultDP1DisplayPreference,
@@ -36,6 +37,15 @@ export default function PlaylistClient() {
   const currentItemRef = useRef<DP1Item>();
   // A queued playlist to be swapped in when the current item's timer ends
   const queuedPlaylistRef = useRef<DP1Item[] | null>(null);
+  // Default matches the mobile app's initial state (LoopMode button starts as "none")
+  const loopModeRef = useRef<LoopMode>(LoopMode.none);
+  // Mutable mirror of startTime state so the setInterval closure always reads the
+  // latest value without needing to be recreated on every startTime change.
+  const startTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    startTimeRef.current = startTime;
+  }, [startTime]);
 
   useEffect(() => {
     return () => {
@@ -157,10 +167,11 @@ export default function PlaylistClient() {
     });
 
     const startTime = castInfo?.startTime ?? Date.now();
-    
-    // Safely access current item
-    if (currentIndex >= 0 && currentIndex < playlist.length) {
-      const currentPlaylistItem = playlist[currentIndex];
+
+    // Safely access current item (normalize in case currentIndex was grown by LoopMode.one)
+    const normalizedIndex = currentIndex >= 0 ? currentIndex % playlist.length : -1;
+    if (normalizedIndex >= 0) {
+      const currentPlaylistItem = playlist[normalizedIndex];
       const currentArtwork = dp1Items.find(a => a.id === currentPlaylistItem.id);
       if (currentArtwork) {
         startInterval(currentArtwork.duration ?? 0);
@@ -187,19 +198,23 @@ export default function PlaylistClient() {
 
     // Apply queued playlist first if it exists
     const result = applyQueuedPlaylistIfExists();
-    if (!result.applied) {
-      const startTime = castInfo?.startTime ?? Date.now();
-      setStartTime(startTime);
+    if (result.applied) {
+      // Navigate to the calculated next item; the useEffect will call startInterval
+      // with the correct duration. Returning early avoids a redundant startInterval
+      // call with a potentially stale duration.
+      if (result.nextIndex !== undefined) {
+        setCurrentIndex(result.nextIndex);
+      }
+      return;
     }
 
+    const startTime = castInfo?.startTime ?? Date.now();
+    setStartTime(startTime);
+
     let duration = remainTimeRef.current;
-    if (
-      duration === 0 &&
-      playlist.length &&
-      currentIndex >= 0 &&
-      currentIndex < playlist.length
-    ) {
-      duration = playlist[currentIndex].duration ?? 0;
+    if (duration === 0 && playlist.length && currentIndex >= 0) {
+      const normalizedIndex = currentIndex % playlist.length;
+      duration = playlist[normalizedIndex].duration ?? 0;
     }
 
     startInterval(duration);
@@ -243,10 +258,10 @@ export default function PlaylistClient() {
 
     // Apply queued playlist immediately if it exists, using the target index
     const result = applyQueuedPlaylistIfExists(index);
-    
+
     // Use the calculated index from the applied playlist if available, otherwise use the original index
     const targetIndex = result.applied && result.nextIndex !== undefined ? result.nextIndex : index;
-    
+
     if (result.applied) {
       console.log('[PlaylistClient] Playlist applied, using calculated index', {
         calculatedIndex: result.nextIndex,
@@ -301,8 +316,7 @@ export default function PlaylistClient() {
         }
       }
     } else {
-      // Ensure targetIndex is valid for the new playlist
-      nextIndex = targetIndex % newPlaylist.length;
+      nextIndex = Math.max(0, targetIndex) % newPlaylist.length;
     }
 
     const newStartTime = recalculateStartTimeForIndex(newPlaylist, nextIndex);
@@ -336,6 +350,23 @@ export default function PlaylistClient() {
     }));
   };
 
+  const handleSetShuffle = () => {
+    const newItems = castInfo?.playlist?.items;
+    if (!newItems?.length) return;
+
+    // Queue the new order; the current item keeps playing uninterrupted.
+    // applyQueuedPlaylistIfExists() fires at the next item boundary and picks
+    // up the correct next index automatically.
+    queuedPlaylistRef.current = newItems.map(item => ({
+      ...item,
+      duration: item.duration ?? 0,
+    }));
+  };
+
+  const handleSetLoop = () => {
+    loopModeRef.current = castInfo?.loopMode ?? LoopMode.none;
+  };
+
   const startInterval = (duration: number) => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -347,10 +378,45 @@ export default function PlaylistClient() {
 
     intervalRef.current = setInterval(() => {
       const currentCastInfo = canvasService.getCastInfo();
-      // If a refreshed playlist has been queued, swap it in exactly at the boundary
-      if (queuedPlaylistRef.current?.length) {
+      const currentLoopMode = loopModeRef.current;
 
-        // Use the helper function to apply the queued playlist
+      // Loop-one: replay the same item.
+      if (currentLoopMode === LoopMode.one) {
+        // Always resolve the current item's index against the castInfo playlist
+        // (which may already be shuffled/reordered by CanvasService) using the
+        // item ID as the source of truth. indexRef.current reflects the OLD
+        // playlist order and must not be used directly here.
+        const castInfoItems = currentCastInfo?.playlist?.items ?? playlist;
+        let realIndex = -1;
+        if (currentItemRef.current) {
+          realIndex = castInfoItems.findIndex(
+            i => i.id === currentItemRef.current?.id,
+          );
+        }
+        if (realIndex < 0 && indexRef.current >= 0) {
+          realIndex = Math.min(indexRef.current, castInfoItems.length - 1);
+        }
+        if (realIndex < 0) realIndex = 0; // ultimate safe fallback
+
+        // Reset the timeline anchor so that if loop mode changes later,
+        // getIndex(playlist, startTimeRef.current) still returns realIndex
+        // rather than a position N loops ahead in wall-clock time.
+        const newStartTime = recalculateStartTimeForIndex(castInfoItems, realIndex);
+        startTimeRef.current = newStartTime;
+        setStartTime(newStartTime);
+
+        indexRef.current = -1;
+        canvasService.setCastInfo({
+          ...currentCastInfo,
+          startTime: newStartTime,
+          castCommand: CastCommand.updateIndex,
+          index: realIndex,
+        });
+        return;
+      }
+
+      // If a refreshed/shuffled playlist has been queued, swap it in at the boundary
+      if (queuedPlaylistRef.current?.length) {
         const result = applyQueuedPlaylistIfExists();
         if (result.applied && result.nextIndex !== undefined) {
           canvasService.setCastInfo({
@@ -359,11 +425,21 @@ export default function PlaylistClient() {
             index: result.nextIndex,
           });
         }
-
         return;
       }
 
-      const index = getIndex(playlist, startTime);
+      // Loop-none: stop when the last item finishes instead of wrapping.
+      // If indexRef is -1 (uninitialized), skip the stop check — we don't know
+      // the position yet, so it's safer to let getIndex() run below.
+      if (currentLoopMode === LoopMode.none && indexRef.current >= 0) {
+        const currentRealIndex = indexRef.current % playlist.length;
+        if (currentRealIndex >= playlist.length - 1) {
+          clearTimer();
+          return;
+        }
+      }
+
+      const index = getIndex(playlist, startTimeRef.current);
       canvasService.setCastInfo({
         ...currentCastInfo,
         castCommand: CastCommand.updateIndex,
@@ -446,6 +522,14 @@ export default function PlaylistClient() {
           }
           case CastCommand.updateIndex: {
             handleUpdateIndex();
+            break;
+          }
+          case CastCommand.setShuffle: {
+            handleSetShuffle();
+            break;
+          }
+          case CastCommand.setLoop: {
+            handleSetLoop();
             break;
           }
         }

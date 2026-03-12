@@ -21,6 +21,8 @@ const useCastInfo = () => {
         CastCommand.updateDuration,
         CastCommand.updateIndex,
         CastCommand.refreshPlaylist,
+        CastCommand.setShuffle,
+        CastCommand.setLoop,
       ].includes(castInfo.castCommand)
     );
   };

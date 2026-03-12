@@ -1,5 +1,11 @@
 import { DP1Call } from './dp1.model';
 
+export enum LoopMode {
+  none = 'none',
+  playlist = 'playlist',
+  one = 'one',
+}
+
 export enum CastCommand {
   connect = 'connect',
   disconnect = 'disconnect',
@@ -17,6 +23,8 @@ export enum CastCommand {
   displayPlaylist = 'displayPlaylist',
   refreshPlaylist = 'refreshPlaylist',
   setSleepMode = 'setSleepMode',
+  setShuffle = 'setShuffle',
+  setLoop = 'setLoop',
 }
 
 export interface CastInfo {
@@ -29,6 +37,10 @@ export interface CastInfo {
   elapsedTime?: number;
   remainTime?: number;
   playlistId?: string;
+
+  // Playback modes
+  loopMode?: LoopMode;
+  shuffle?: boolean;
 
   // DP1
   playlist?: DP1Call;
