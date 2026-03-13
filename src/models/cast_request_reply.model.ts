@@ -138,3 +138,7 @@ export interface SetLoopRequest extends Request {
   mode: string; // 'none' | 'playlist' | 'one'
 }
 export type SetLoopReply = Reply;
+
+
+export type DisplayDefaultPlaylistRequest = Request;
+export type DisplayDefaultPlaylistReply = Reply;

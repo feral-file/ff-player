@@ -25,6 +25,7 @@ export enum CastCommand {
   setSleepMode = 'setSleepMode',
   setShuffle = 'setShuffle',
   setLoop = 'setLoop',
+  displayDefaultPlaylist = 'displayDefaultPlaylist',
 }
 
 export interface CastInfo {

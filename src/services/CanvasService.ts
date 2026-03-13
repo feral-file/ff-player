@@ -28,6 +28,7 @@ import {
   SetSleepModeReply,
   SetShuffleRequest,
   SetLoopRequest,
+  DisplayDefaultPlaylistReply,
 } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import { DP1Item } from '@/models/dp1.model';
@@ -49,6 +50,7 @@ import DP1ScheduleService from './DP1ScheduleService';
 import { calculateStartTime } from '@/utils/playlist';
 import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
+import RemoteConfigService from './remoteConfigService';
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -219,7 +221,10 @@ class CanvasService {
   private commandHandler(command: CastCommand, requestJson: unknown): Reply {
     console.log('[CAST] commandHandler:', JSON.stringify(command));
     try {
-      if (command === CastCommand.displayPlaylist) {
+      if (
+        command === CastCommand.displayPlaylist ||
+        command === CastCommand.displayDefaultPlaylist
+      ) {
         DeviceManager.removeItem(LocalStorageItem.criticalTemp).catch(
           (error: unknown) => {
             console.error(
@@ -257,6 +262,8 @@ class CanvasService {
           return this.setShuffle(requestJson as SetShuffleRequest);
         case CastCommand.setLoop:
           return this.setLoop(requestJson as SetLoopRequest);
+        case CastCommand.displayDefaultPlaylist:
+          return this.displayDefaultPlaylist();
         default:
           console.error(`[CAST] Unknown command: ${command}`);
           return { ok: false };
@@ -308,8 +315,8 @@ class CanvasService {
           orientation: DeviceManager.getCachedViewMode() ?? ViewMode.landscape,
         },
 
-        isPaused: window.location.pathname === '/sleep' ,
-        sleepMode: window.location.pathname === '/sleep' ,
+        isPaused: window.location.pathname === '/sleep',
+        sleepMode: window.location.pathname === '/sleep',
 
         loopMode: activeCastInfo?.loopMode ?? LoopMode.none,
         shuffle: activeCastInfo?.shuffle ?? false,
@@ -557,13 +564,19 @@ class CanvasService {
         castCommand: CastCommand.setShuffle,
         shuffle: true,
         index: 0,
-        playlist: { ...this.castInfo.playlist, items: [currentItem, ...remaining] },
+        playlist: {
+          ...this.castInfo.playlist,
+          items: [currentItem, ...remaining],
+        },
       });
     } else {
       const restored = this.originalPlaylistItems ?? currentItems;
       this.originalPlaylistItems = null;
       // Find the current item's position in the restored original order
-      const newIndex = Math.max(0, restored.findIndex(item => item.id === currentItem.id));
+      const newIndex = Math.max(
+        0,
+        restored.findIndex(item => item.id === currentItem.id)
+      );
       this.setCastInfo({
         ...this.castInfo,
         castCommand: CastCommand.setShuffle,
@@ -608,6 +621,20 @@ class CanvasService {
       playlist: newPlaylist,
       castCommand: CastCommand.refreshPlaylist,
     });
+  }
+
+  private displayDefaultPlaylist(): DisplayDefaultPlaylistReply {
+    new RemoteConfigService()
+      .getAppRemoteConfig()
+      .then(config => this.castPlaylistByURL(config.defaultPlaylistURL))
+      .catch((error: unknown) => {
+        console.error(
+          '[CanvasService] Error displaying default playlist:',
+          error
+        );
+        return { ok: false };
+      });
+    return { ok: true };
   }
 }
 
