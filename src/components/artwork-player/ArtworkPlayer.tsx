@@ -142,6 +142,8 @@ const ArtworkPlayer = ({
       isStreaming = true;
     } else if (MITETypeIframe.includes(normalizedType)) {
       previewType = PreviewHTMLTag.iframe;
+    } else if (normalizedType.match(MIMETypeSvg)) {
+      previewType = PreviewHTMLTag.object;
     } else if (
       FileUseObject.includes(normalizedType) ||
       normalizedType.match(MIMETypeObject)
@@ -1084,7 +1086,6 @@ const ArtworkPlayer = ({
           <object
             style={{ width: '100%', height: '100%' }}
             data={slot.displayPreviewURL}
-            type="text/html"
             onLoad={() => markSlotLoaded(slotIndex)}>
             Not supported
           </object>
