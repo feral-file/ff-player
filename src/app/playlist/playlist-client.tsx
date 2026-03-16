@@ -58,7 +58,7 @@ export default function PlaylistClient() {
       return true;
     }
 
-    const keyboardShortcuts = displayPreference.interaction?.keyboard || [];
+    const keyboardShortcuts = displayPreference.interaction?.keyboard ?? [];
     return keyboardShortcuts.includes('debugOverlay');
   };
 
@@ -80,7 +80,7 @@ export default function PlaylistClient() {
     const rasterArtist =
       typeof raster?.artistName === 'string' ? raster.artistName : undefined;
 
-    return rasterArtist || 'Unknown';
+    return rasterArtist?.trim() ? rasterArtist : 'Unknown';
   };
 
   const getOwnerLabel = (
@@ -627,7 +627,12 @@ export default function PlaylistClient() {
               <div style={{ fontWeight: 600, marginBottom: '6px' }}>
                 Now Displaying
               </div>
-              <div>Title: {currentItemRef.current.title || 'Untitled'}</div>
+              <div>
+                Title:{' '}
+                {currentItemRef.current.title?.trim()
+                  ? currentItemRef.current.title
+                  : 'Untitled'}
+              </div>
               <div>
                 Artist:{' '}
                 {getArtistLabel(
