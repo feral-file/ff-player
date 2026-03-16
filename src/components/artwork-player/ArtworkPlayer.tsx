@@ -50,7 +50,7 @@ const ArtworkPlayer = ({
 }) => {
   const FADE_IN_OUT_DURATION_MS = 650;
   const { context } = useAppContext();
-  type ArtworkSlot = {
+  interface ArtworkSlot {
     previewURL: string;
     displayPreviewURL: string;
     displaySoftwareURL: string;
@@ -59,7 +59,7 @@ const ArtworkPlayer = ({
     isLoading: boolean;
     opacity: number;
     iframeKey: number;
-  };
+  }
 
   const [slots, setSlots] = useState<[ArtworkSlot | null, ArtworkSlot | null]>([
     null,
@@ -240,7 +240,7 @@ const ArtworkPlayer = ({
   ) => {
     setSlots(prev => {
       const slot = prev[slotIndex];
-      if (!slot || slot.previewURL !== url) {
+      if (slot?.previewURL !== url) {
         return prev;
       }
 
@@ -642,7 +642,9 @@ const ArtworkPlayer = ({
 
       if (slot.previewType === PreviewHTMLTag.image && imageRefs[0].current) {
         const imageElement = imageRefs[0].current;
-        imageElement.onload = () => markSlotLoaded(0);
+        imageElement.onload = () => {
+          markSlotLoaded(0);
+        };
         imageElement.onerror = () => {
           handleMediaError('image')(new Error('Image load failed'));
         };
@@ -655,7 +657,9 @@ const ArtworkPlayer = ({
           url: slot.displayPreviewURL,
           mediaType: 'image',
           element: imageElement,
-          onLoad: () => markSlotLoaded(0),
+          onLoad: () => {
+            markSlotLoaded(0);
+          },
           onError: handleMediaError('image'),
           signal: abortController.signal,
         });
@@ -665,7 +669,9 @@ const ArtworkPlayer = ({
         !slot.isStreaming
       ) {
         const videoElement = videoRefs[0].current;
-        videoElement.onloadeddata = () => markSlotLoaded(0);
+        videoElement.onloadeddata = () => {
+          markSlotLoaded(0);
+        };
         videoElement.onerror = () => {
           handleMediaError('video')(new Error('Video load failed'));
         };
@@ -679,7 +685,9 @@ const ArtworkPlayer = ({
           url: slot.displayPreviewURL,
           mediaType: 'video',
           element: videoElement,
-          onLoad: () => markSlotLoaded(0),
+          onLoad: () => {
+            markSlotLoaded(0);
+          },
           onError: handleMediaError('video'),
           signal: abortController.signal,
         });
@@ -688,7 +696,9 @@ const ArtworkPlayer = ({
         audioRefs[0].current
       ) {
         const audioElement = audioRefs[0].current;
-        audioElement.onloadeddata = () => markSlotLoaded(0);
+        audioElement.onloadeddata = () => {
+          markSlotLoaded(0);
+        };
         audioElement.onerror = () => {
           handleMediaError('audio')(new Error('Audio load failed'));
         };
@@ -701,7 +711,9 @@ const ArtworkPlayer = ({
           url: slot.displayPreviewURL,
           mediaType: 'audio',
           element: audioElement,
-          onLoad: () => markSlotLoaded(0),
+          onLoad: () => {
+            markSlotLoaded(0);
+          },
           onError: handleMediaError('audio'),
           signal: abortController.signal,
         });
@@ -749,7 +761,9 @@ const ArtworkPlayer = ({
 
       if (slot.previewType === PreviewHTMLTag.image && imageRefs[1].current) {
         const imageElement = imageRefs[1].current;
-        imageElement.onload = () => markSlotLoaded(1);
+        imageElement.onload = () => {
+          markSlotLoaded(1);
+        };
         imageElement.onerror = () => {
           handleMediaError('image')(new Error('Image load failed'));
         };
@@ -762,7 +776,9 @@ const ArtworkPlayer = ({
           url: slot.displayPreviewURL,
           mediaType: 'image',
           element: imageElement,
-          onLoad: () => markSlotLoaded(1),
+          onLoad: () => {
+            markSlotLoaded(1);
+          },
           onError: handleMediaError('image'),
           signal: abortController.signal,
         });
@@ -772,7 +788,9 @@ const ArtworkPlayer = ({
         !slot.isStreaming
       ) {
         const videoElement = videoRefs[1].current;
-        videoElement.onloadeddata = () => markSlotLoaded(1);
+        videoElement.onloadeddata = () => {
+          markSlotLoaded(1);
+        };
         videoElement.onerror = () => {
           handleMediaError('video')(new Error('Video load failed'));
         };
@@ -786,7 +804,9 @@ const ArtworkPlayer = ({
           url: slot.displayPreviewURL,
           mediaType: 'video',
           element: videoElement,
-          onLoad: () => markSlotLoaded(1),
+          onLoad: () => {
+            markSlotLoaded(1);
+          },
           onError: handleMediaError('video'),
           signal: abortController.signal,
         });
@@ -795,7 +815,9 @@ const ArtworkPlayer = ({
         audioRefs[1].current
       ) {
         const audioElement = audioRefs[1].current;
-        audioElement.onloadeddata = () => markSlotLoaded(1);
+        audioElement.onloadeddata = () => {
+          markSlotLoaded(1);
+        };
         audioElement.onerror = () => {
           handleMediaError('audio')(new Error('Audio load failed'));
         };
@@ -808,7 +830,9 @@ const ArtworkPlayer = ({
           url: slot.displayPreviewURL,
           mediaType: 'audio',
           element: audioElement,
-          onLoad: () => markSlotLoaded(1),
+          onLoad: () => {
+            markSlotLoaded(1);
+          },
           onError: handleMediaError('audio'),
           signal: abortController.signal,
         });
@@ -1018,7 +1042,7 @@ const ArtworkPlayer = ({
   const showLoading = showLoadingIndicator;
 
   useEffect(() => {
-    if (!activeSlot || !activeSlot.previewType) {
+    if (!activeSlot?.previewType) {
       setShowLoadingIndicator(false);
       return;
     }
@@ -1043,7 +1067,7 @@ const ArtworkPlayer = ({
   }, [activeSlot?.isLoading, activeSlot?.previewType]);
 
   const renderSlot = (slot: ArtworkSlot | null, slotIndex: number) => {
-    if (!slot || !slot.displayPreviewURL || !slot.previewType) {
+    if (!slot?.displayPreviewURL || !slot.previewType) {
       return null;
     }
 
@@ -1086,7 +1110,9 @@ const ArtworkPlayer = ({
           <object
             style={{ width: '100%', height: '100%' }}
             data={slot.displayPreviewURL}
-            onLoad={() => markSlotLoaded(slotIndex)}>
+            onLoad={() => {
+              markSlotLoaded(slotIndex);
+            }}>
             Not supported
           </object>
         )}
@@ -1116,8 +1142,12 @@ const ArtworkPlayer = ({
               ref={iframeRefs[slotIndex]}
               className={styles.iframe}
               src={slot.displaySoftwareURL}
-              onLoad={() => handleIframeLoad(slotIndex)}
-              onError={() => handleLoadIframeError(slotIndex)}
+              onLoad={() => {
+                handleIframeLoad(slotIndex);
+              }}
+              onError={() => {
+                handleLoadIframeError(slotIndex);
+              }}
               sandbox="allow-same-origin allow-scripts"
               tabIndex={0}></iframe>
           )}
@@ -1126,8 +1156,12 @@ const ArtworkPlayer = ({
             <iframe
               className={styles.iframe}
               src={slot.displaySoftwareURL}
-              onLoad={() => handleIframeLoad(slotIndex)}
-              onError={() => handleLoadIframeError(slotIndex)}
+              onLoad={() => {
+                handleIframeLoad(slotIndex);
+              }}
+              onError={() => {
+                handleLoadIframeError(slotIndex);
+              }}
               tabIndex={0}></iframe>
           )}
       </div>

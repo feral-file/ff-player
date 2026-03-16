@@ -7,6 +7,7 @@ import {
   recalculateStartTimeForIndex,
 } from '@/utils/playlist';
 import { canvasService } from '@/services/CanvasService';
+import { isKeyboardTransportEnabled } from './keyboardTransport';
 
 interface UseKeyboardTransportControlsParams {
   castInfo?: CastInfo;
@@ -18,24 +19,6 @@ interface UseKeyboardTransportControlsParams {
   remainTimeRef: MutableRefObject<number>;
 }
 
-const isKeyboardTransportEnabled = (
-  displayPreference?: DP1DisplayPreference | null
-): boolean => {
-  const keyboardShortcuts = displayPreference?.interaction?.keyboard ?? [];
-  const hasExplicitOptIn =
-    keyboardShortcuts.includes('transport') ||
-    keyboardShortcuts.includes('transportControls') ||
-    keyboardShortcuts.includes('nextArtwork') ||
-    keyboardShortcuts.includes('previousArtwork') ||
-    keyboardShortcuts.includes('togglePause');
-
-  const isLocalTestingHost =
-    typeof window !== 'undefined' &&
-    ['localhost', '127.0.0.1'].includes(window.location.hostname);
-
-  return hasExplicitOptIn || isLocalTestingHost;
-};
-
 export const useKeyboardTransportControls = ({
   castInfo,
   playlist,
@@ -46,7 +29,9 @@ export const useKeyboardTransportControls = ({
   remainTimeRef,
 }: UseKeyboardTransportControlsParams) => {
   useEffect(() => {
-    if (!isKeyboardTransportEnabled(displayPreference)) {
+    const hostname =
+      typeof window !== 'undefined' ? window.location.hostname : undefined;
+    if (!isKeyboardTransportEnabled(displayPreference, hostname)) {
       return;
     }
 
