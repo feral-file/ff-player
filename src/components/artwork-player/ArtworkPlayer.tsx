@@ -35,6 +35,7 @@ import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
 import { useArtworkSettings } from '@/services/custom-hooks/useArtworkSettings';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
+const SLOT_INDICES = [0, 1] as const;
 
 const ArtworkPlayer = ({
   previewURL,
@@ -469,167 +470,106 @@ const ArtworkPlayer = ({
     };
   }, [activeSlotIndex, slots[0]?.previewType, slots[1]?.previewType]);
 
-  // Video playback handling (after CORS loading) for slot 0
+  // Video playback handling (after CORS loading)
   useEffect(() => {
-    const slot = slots[0];
-    const videoElement = videoRefs[0].current;
-    if (!slot || slot.previewType !== PreviewHTMLTag.video || !videoElement) {
-      return;
-    }
+    const cleanupFns: (() => void)[] = [];
 
-    const handleVideoPlay = () => {
-      videoElement
-        .play()
-        .catch((error: unknown) => {
-          console.log('Error play video', error);
-          reTryToPlayVideo(0);
-        })
-        .finally(() => {
-          if (slot.isStreaming) {
-            markSlotLoaded(0);
+    SLOT_INDICES.forEach(slotIndex => {
+      const slot = slots[slotIndex];
+      const videoElement = videoRefs[slotIndex].current;
+      if (!slot || slot.previewType !== PreviewHTMLTag.video || !videoElement) {
+        return;
+      }
+
+      const handleVideoPlay = () => {
+        videoElement
+          .play()
+          .catch((error: unknown) => {
+            console.log('Error play video', error);
+            reTryToPlayVideo(slotIndex);
+          })
+          .finally(() => {
+            if (slot.isStreaming) {
+              markSlotLoaded(slotIndex);
+            }
+          });
+      };
+
+      let hlsInstance: Hls | null = null;
+
+      if (
+        slot.isStreaming &&
+        Hls.isSupported() &&
+        slot.displayPreviewURL.endsWith('.m3u8')
+      ) {
+        hlsInstance = new Hls({
+          maxBufferSize: 60 * 1000 * 1000,
+          maxBufferLength: 30,
+          liveSyncDuration: 10,
+        });
+
+        hlsInstance.attachMedia(videoElement);
+        hlsInstance.on(Hls.Events.MEDIA_ATTACHED, () => {
+          hlsInstance?.loadSource(
+            `${slot.displayPreviewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
+          );
+          handleVideoPlay();
+        });
+
+        hlsInstance.on(Hls.Events.ERROR, function (event, data) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              if (data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL) {
+                console.log('Buffer stall detected, attempting to recover...');
+                hlsInstance?.recoverMediaError();
+              }
+              break;
+            default:
+              console.error('An unrecoverable error occurred');
+              hlsInstance?.destroy();
+              break;
           }
         });
-    };
+      } else {
+        // For non-streaming videos, play after loadeddata event
+        videoElement.addEventListener('loadeddata', handleVideoPlay);
+      }
 
-    let hlsInstance: Hls | null = null;
-
-    if (
-      slot.isStreaming &&
-      Hls.isSupported() &&
-      slot.displayPreviewURL.endsWith('.m3u8')
-    ) {
-      hlsInstance = new Hls({
-        maxBufferSize: 60 * 1000 * 1000,
-        maxBufferLength: 30,
-        liveSyncDuration: 10,
+      cleanupFns.push(() => {
+        videoElement.removeEventListener('loadeddata', handleVideoPlay);
+        hlsInstance?.destroy();
       });
-
-      hlsInstance.attachMedia(videoElement);
-      hlsInstance.on(Hls.Events.MEDIA_ATTACHED, () => {
-        hlsInstance?.loadSource(
-          `${slot.displayPreviewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
-        );
-        handleVideoPlay();
-      });
-
-      hlsInstance.on(Hls.Events.ERROR, function (event, data) {
-        switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
-            break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
-            if (data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL) {
-              console.log('Buffer stall detected, attempting to recover...');
-              hlsInstance?.recoverMediaError();
-            }
-            break;
-          default:
-            console.error('An unrecoverable error occurred');
-            hlsInstance?.destroy();
-            break;
-        }
-      });
-    } else {
-      // For non-streaming videos, play after loadeddata event
-      videoElement.addEventListener('loadeddata', handleVideoPlay);
-    }
+    });
 
     return () => {
-      videoElement.removeEventListener('loadeddata', handleVideoPlay);
-      hlsInstance?.destroy();
+      cleanupFns.forEach(cleanup => {
+        cleanup();
+      });
     };
   }, [
     slots[0]?.previewType,
     slots[0]?.isStreaming,
     slots[0]?.displayPreviewURL,
-  ]);
-
-  // Video playback handling (after CORS loading) for slot 1
-  useEffect(() => {
-    const slot = slots[1];
-    const videoElement = videoRefs[1].current;
-    if (!slot || slot.previewType !== PreviewHTMLTag.video || !videoElement) {
-      return;
-    }
-
-    const handleVideoPlay = () => {
-      videoElement
-        .play()
-        .catch((error: unknown) => {
-          console.log('Error play video', error);
-          reTryToPlayVideo(1);
-        })
-        .finally(() => {
-          if (slot.isStreaming) {
-            markSlotLoaded(1);
-          }
-        });
-    };
-
-    let hlsInstance: Hls | null = null;
-
-    if (
-      slot.isStreaming &&
-      Hls.isSupported() &&
-      slot.displayPreviewURL.endsWith('.m3u8')
-    ) {
-      hlsInstance = new Hls({
-        maxBufferSize: 60 * 1000 * 1000,
-        maxBufferLength: 30,
-        liveSyncDuration: 10,
-      });
-
-      hlsInstance.attachMedia(videoElement);
-      hlsInstance.on(Hls.Events.MEDIA_ATTACHED, () => {
-        hlsInstance?.loadSource(
-          `${slot.displayPreviewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`
-        );
-        handleVideoPlay();
-      });
-
-      hlsInstance.on(Hls.Events.ERROR, function (event, data) {
-        switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
-            break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
-            if (data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL) {
-              console.log('Buffer stall detected, attempting to recover...');
-              hlsInstance?.recoverMediaError();
-            }
-            break;
-          default:
-            console.error('An unrecoverable error occurred');
-            hlsInstance?.destroy();
-            break;
-        }
-      });
-    } else {
-      // For non-streaming videos, play after loadeddata event
-      videoElement.addEventListener('loadeddata', handleVideoPlay);
-    }
-
-    return () => {
-      videoElement.removeEventListener('loadeddata', handleVideoPlay);
-      hlsInstance?.destroy();
-    };
-  }, [
     slots[1]?.previewType,
     slots[1]?.isStreaming,
     slots[1]?.displayPreviewURL,
   ]);
 
-  // Universal media loading with CORS handling (slot 0)
+  // Universal media loading with CORS handling
   useEffect(() => {
-    const slot = slots[0];
-    if (!slot?.displayPreviewURL) {
-      return;
-    }
+    const effectCleanupFns: (() => void)[] = [];
 
-    let isCancelled = false;
-    const abortController = new AbortController();
-    const cleanupFns: (() => void)[] = [];
+    SLOT_INDICES.forEach(slotIndex => {
+      const slot = slots[slotIndex];
+      if (!slot?.displayPreviewURL) {
+        return;
+      }
 
-    const loadMedia = async () => {
-      if (isCancelled) return;
+      let isCancelled = false;
+      const abortController = new AbortController();
+      const mediaCleanupFns: (() => void)[] = [];
 
       const handleMediaError =
         (mediaType: BlobLoadedMediaType) => (error: Error) => {
@@ -640,216 +580,113 @@ const ArtworkPlayer = ({
           });
         };
 
-      if (slot.previewType === PreviewHTMLTag.image && imageRefs[0].current) {
-        const imageElement = imageRefs[0].current;
-        imageElement.onload = () => {
-          markSlotLoaded(0);
-        };
-        imageElement.onerror = () => {
-          handleMediaError('image')(new Error('Image load failed'));
-        };
-        cleanupFns.push(() => {
-          imageElement.onload = null;
-          imageElement.onerror = null;
-        });
+      const markCurrentSlotLoaded = () => {
+        markSlotLoaded(slotIndex);
+      };
 
-        await mediaLoaders[0].current.loadMedia({
-          url: slot.displayPreviewURL,
-          mediaType: 'image',
-          element: imageElement,
-          onLoad: () => {
-            markSlotLoaded(0);
-          },
-          onError: handleMediaError('image'),
-          signal: abortController.signal,
-        });
-      } else if (
-        slot.previewType === PreviewHTMLTag.video &&
-        videoRefs[0].current &&
-        !slot.isStreaming
-      ) {
-        const videoElement = videoRefs[0].current;
-        videoElement.onloadeddata = () => {
-          markSlotLoaded(0);
-        };
-        videoElement.onerror = () => {
-          handleMediaError('video')(new Error('Video load failed'));
-        };
-        cleanupFns.push(() => {
-          videoElement.onloadeddata = null;
-          videoElement.onerror = null;
-        });
+      const loadMedia = async () => {
+        if (isCancelled) {
+          return;
+        }
 
-        console.log('[ArtworkPlayer] loading video', slot.displayPreviewURL);
-        await mediaLoaders[0].current.loadMedia({
-          url: slot.displayPreviewURL,
-          mediaType: 'video',
-          element: videoElement,
-          onLoad: () => {
-            markSlotLoaded(0);
-          },
-          onError: handleMediaError('video'),
-          signal: abortController.signal,
-        });
-      } else if (
-        slot.previewType === PreviewHTMLTag.audio &&
-        audioRefs[0].current
-      ) {
-        const audioElement = audioRefs[0].current;
-        audioElement.onloadeddata = () => {
-          markSlotLoaded(0);
-        };
-        audioElement.onerror = () => {
-          handleMediaError('audio')(new Error('Audio load failed'));
-        };
-        cleanupFns.push(() => {
-          audioElement.onloadeddata = null;
-          audioElement.onerror = null;
-        });
+        if (
+          slot.previewType === PreviewHTMLTag.image &&
+          imageRefs[slotIndex].current
+        ) {
+          const imageElement = imageRefs[slotIndex].current;
+          imageElement.onload = markCurrentSlotLoaded;
+          imageElement.onerror = () => {
+            handleMediaError('image')(new Error('Image load failed'));
+          };
+          mediaCleanupFns.push(() => {
+            imageElement.onload = null;
+            imageElement.onerror = null;
+          });
 
-        await mediaLoaders[0].current.loadMedia({
-          url: slot.displayPreviewURL,
-          mediaType: 'audio',
-          element: audioElement,
-          onLoad: () => {
-            markSlotLoaded(0);
-          },
-          onError: handleMediaError('audio'),
-          signal: abortController.signal,
-        });
-      }
-    };
+          await mediaLoaders[slotIndex].current.loadMedia({
+            url: slot.displayPreviewURL,
+            mediaType: 'image',
+            element: imageElement,
+            onLoad: markCurrentSlotLoaded,
+            onError: handleMediaError('image'),
+            signal: abortController.signal,
+          });
+          return;
+        }
 
-    void loadMedia();
+        if (
+          slot.previewType === PreviewHTMLTag.video &&
+          videoRefs[slotIndex].current &&
+          !slot.isStreaming
+        ) {
+          const videoElement = videoRefs[slotIndex].current;
+          videoElement.onloadeddata = markCurrentSlotLoaded;
+          videoElement.onerror = () => {
+            handleMediaError('video')(new Error('Video load failed'));
+          };
+          mediaCleanupFns.push(() => {
+            videoElement.onloadeddata = null;
+            videoElement.onerror = null;
+          });
+
+          console.log('[ArtworkPlayer] loading video', slot.displayPreviewURL);
+          await mediaLoaders[slotIndex].current.loadMedia({
+            url: slot.displayPreviewURL,
+            mediaType: 'video',
+            element: videoElement,
+            onLoad: markCurrentSlotLoaded,
+            onError: handleMediaError('video'),
+            signal: abortController.signal,
+          });
+          return;
+        }
+
+        if (
+          slot.previewType === PreviewHTMLTag.audio &&
+          audioRefs[slotIndex].current
+        ) {
+          const audioElement = audioRefs[slotIndex].current;
+          audioElement.onloadeddata = markCurrentSlotLoaded;
+          audioElement.onerror = () => {
+            handleMediaError('audio')(new Error('Audio load failed'));
+          };
+          mediaCleanupFns.push(() => {
+            audioElement.onloadeddata = null;
+            audioElement.onerror = null;
+          });
+
+          await mediaLoaders[slotIndex].current.loadMedia({
+            url: slot.displayPreviewURL,
+            mediaType: 'audio',
+            element: audioElement,
+            onLoad: markCurrentSlotLoaded,
+            onError: handleMediaError('audio'),
+            signal: abortController.signal,
+          });
+        }
+      };
+
+      void loadMedia();
+
+      effectCleanupFns.push(() => {
+        isCancelled = true;
+        abortController.abort();
+        mediaCleanupFns.forEach(cleanup => {
+          cleanup();
+        });
+        mediaLoaders[slotIndex].current.cleanup();
+      });
+    });
 
     return () => {
-      isCancelled = true;
-      abortController.abort();
-      cleanupFns.forEach(cleanup => {
+      effectCleanupFns.forEach(cleanup => {
         cleanup();
       });
-      mediaLoaders[0].current.cleanup();
     };
   }, [
     slots[0]?.displayPreviewURL,
     slots[0]?.previewType,
     slots[0]?.isStreaming,
-  ]);
-
-  // Universal media loading with CORS handling (slot 1)
-  useEffect(() => {
-    const slot = slots[1];
-    if (!slot?.displayPreviewURL) {
-      return;
-    }
-
-    let isCancelled = false;
-    const abortController = new AbortController();
-    const cleanupFns: (() => void)[] = [];
-
-    const loadMedia = async () => {
-      if (isCancelled) return;
-
-      const handleMediaError =
-        (mediaType: BlobLoadedMediaType) => (error: Error) => {
-          console.error(`[ArtworkPlayer] ${mediaType} load failed:`, error);
-          Sentry.captureMessage(`[ArtworkPlayer] ${mediaType} load failed`, {
-            level: 'error',
-            extra: { displayPreviewURL: slot.displayPreviewURL, mediaType },
-          });
-        };
-
-      if (slot.previewType === PreviewHTMLTag.image && imageRefs[1].current) {
-        const imageElement = imageRefs[1].current;
-        imageElement.onload = () => {
-          markSlotLoaded(1);
-        };
-        imageElement.onerror = () => {
-          handleMediaError('image')(new Error('Image load failed'));
-        };
-        cleanupFns.push(() => {
-          imageElement.onload = null;
-          imageElement.onerror = null;
-        });
-
-        await mediaLoaders[1].current.loadMedia({
-          url: slot.displayPreviewURL,
-          mediaType: 'image',
-          element: imageElement,
-          onLoad: () => {
-            markSlotLoaded(1);
-          },
-          onError: handleMediaError('image'),
-          signal: abortController.signal,
-        });
-      } else if (
-        slot.previewType === PreviewHTMLTag.video &&
-        videoRefs[1].current &&
-        !slot.isStreaming
-      ) {
-        const videoElement = videoRefs[1].current;
-        videoElement.onloadeddata = () => {
-          markSlotLoaded(1);
-        };
-        videoElement.onerror = () => {
-          handleMediaError('video')(new Error('Video load failed'));
-        };
-        cleanupFns.push(() => {
-          videoElement.onloadeddata = null;
-          videoElement.onerror = null;
-        });
-
-        console.log('[ArtworkPlayer] loading video', slot.displayPreviewURL);
-        await mediaLoaders[1].current.loadMedia({
-          url: slot.displayPreviewURL,
-          mediaType: 'video',
-          element: videoElement,
-          onLoad: () => {
-            markSlotLoaded(1);
-          },
-          onError: handleMediaError('video'),
-          signal: abortController.signal,
-        });
-      } else if (
-        slot.previewType === PreviewHTMLTag.audio &&
-        audioRefs[1].current
-      ) {
-        const audioElement = audioRefs[1].current;
-        audioElement.onloadeddata = () => {
-          markSlotLoaded(1);
-        };
-        audioElement.onerror = () => {
-          handleMediaError('audio')(new Error('Audio load failed'));
-        };
-        cleanupFns.push(() => {
-          audioElement.onloadeddata = null;
-          audioElement.onerror = null;
-        });
-
-        await mediaLoaders[1].current.loadMedia({
-          url: slot.displayPreviewURL,
-          mediaType: 'audio',
-          element: audioElement,
-          onLoad: () => {
-            markSlotLoaded(1);
-          },
-          onError: handleMediaError('audio'),
-          signal: abortController.signal,
-        });
-      }
-    };
-
-    void loadMedia();
-
-    return () => {
-      isCancelled = true;
-      abortController.abort();
-      cleanupFns.forEach(cleanup => {
-        cleanup();
-      });
-      mediaLoaders[1].current.cleanup();
-    };
-  }, [
     slots[1]?.displayPreviewURL,
     slots[1]?.previewType,
     slots[1]?.isStreaming,
