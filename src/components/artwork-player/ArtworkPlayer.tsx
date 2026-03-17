@@ -293,6 +293,7 @@ const ArtworkPlayer = ({
       });
       setActiveSlotIndex(incomingIndex);
       setIncomingSlotIndex(null);
+      transitionTimeoutRef.current = undefined;
       focusSlotIframe(incomingIndex);
     }, FADE_IN_OUT_DURATION_MS);
   };
@@ -902,6 +903,29 @@ const ArtworkPlayer = ({
       setShowLoadingIndicator(false);
     };
   }, [activeSlot?.isLoading, activeSlot?.previewType]);
+
+  useEffect(() => {
+    if (incomingSlotIndex !== null) {
+      return;
+    }
+
+    setSlots(prev => {
+      const hasNonActiveSlot = SLOT_INDICES.some(
+        index => index !== activeSlotIndex && prev[index]
+      );
+      if (!hasNonActiveSlot) {
+        return prev;
+      }
+
+      const next = [...prev] as [ArtworkSlot | null, ArtworkSlot | null];
+      SLOT_INDICES.forEach(index => {
+        if (index !== activeSlotIndex) {
+          next[index] = null;
+        }
+      });
+      return next;
+    });
+  }, [activeSlotIndex, incomingSlotIndex]);
 
   const renderSlot = (slot: ArtworkSlot | null, slotIndex: number) => {
     if (!slot?.displayPreviewURL || !slot.previewType) {
