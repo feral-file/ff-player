@@ -115,6 +115,7 @@ const ArtworkPlayer = ({
   const slotsRef = useRef(slots);
   const activeSlotIndexRef = useRef(activeSlotIndex);
   const incomingSlotIndexRef = useRef(incomingSlotIndex);
+  const transitionTokenRef = useRef(0);
 
   useEffect(() => {
     slotsRef.current = slots;
@@ -285,7 +286,14 @@ const ArtworkPlayer = ({
       clearTimeout(transitionTimeoutRef.current);
     }
 
+    transitionTokenRef.current += 1;
+    const transitionToken = transitionTokenRef.current;
+
     transitionTimeoutRef.current = setTimeout(() => {
+      if (transitionToken !== transitionTokenRef.current) {
+        return;
+      }
+
       setSlots(prev => {
         const next = [...prev] as [ArtworkSlot | null, ArtworkSlot | null];
         next[activeIndex] = null;
@@ -307,6 +315,22 @@ const ArtworkPlayer = ({
     console.log('[ArtworkPlayer] loaded source');
 
     if (!hasActive || activeIndex === slotIndex) {
+      if (transitionTimeoutRef.current) {
+        clearTimeout(transitionTimeoutRef.current);
+        transitionTimeoutRef.current = undefined;
+      }
+      transitionTokenRef.current += 1;
+
+      setSlots(prev => {
+        const next = [...prev] as [ArtworkSlot | null, ArtworkSlot | null];
+        SLOT_INDICES.forEach(index => {
+          if (index !== slotIndex) {
+            next[index] = null;
+          }
+        });
+        return next;
+      });
+
       setActiveSlotIndex(slotIndex);
       setIncomingSlotIndex(null);
       focusSlotIframe(slotIndex);
@@ -903,29 +927,6 @@ const ArtworkPlayer = ({
       setShowLoadingIndicator(false);
     };
   }, [activeSlot?.isLoading, activeSlot?.previewType]);
-
-  useEffect(() => {
-    if (incomingSlotIndex !== null) {
-      return;
-    }
-
-    setSlots(prev => {
-      const hasNonActiveSlot = SLOT_INDICES.some(
-        index => index !== activeSlotIndex && prev[index]
-      );
-      if (!hasNonActiveSlot) {
-        return prev;
-      }
-
-      const next = [...prev] as [ArtworkSlot | null, ArtworkSlot | null];
-      SLOT_INDICES.forEach(index => {
-        if (index !== activeSlotIndex) {
-          next[index] = null;
-        }
-      });
-      return next;
-    });
-  }, [activeSlotIndex, incomingSlotIndex]);
 
   const renderSlot = (slot: ArtworkSlot | null, slotIndex: number) => {
     if (!slot?.displayPreviewURL || !slot.previewType) {
