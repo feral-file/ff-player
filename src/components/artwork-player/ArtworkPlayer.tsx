@@ -310,11 +310,18 @@ const ArtworkPlayer = ({
     const activeIndex = activeSlotIndexRef.current;
     const incomingIndex = incomingSlotIndexRef.current;
     const hasActive = Boolean(slotsRef.current[activeIndex]);
+    const isActiveSlot = activeIndex === slotIndex;
+
+    // Ignore late load events from the currently active slot while a new slot
+    // is transitioning in. Otherwise we can cancel the in-flight transition.
+    if (incomingIndex !== null && isActiveSlot) {
+      return;
+    }
 
     updateSlot(slotIndex, { isLoading: false, opacity: 1 });
     console.log('[ArtworkPlayer] loaded source');
 
-    if (!hasActive || activeIndex === slotIndex) {
+    if (!hasActive || isActiveSlot) {
       if (transitionTimeoutRef.current) {
         clearTimeout(transitionTimeoutRef.current);
         transitionTimeoutRef.current = undefined;
