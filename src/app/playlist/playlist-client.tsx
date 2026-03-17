@@ -16,7 +16,6 @@ import { NO_DURATION_VALUE } from '@/constants';
 import { canvasService } from '@/services/CanvasService';
 import { DP1Service } from '@/services/DP1Service';
 import * as Sentry from '@sentry/nextjs';
-import { useKeyboardTransportControls } from './useKeyboardTransportControls';
 
 export default function PlaylistClient() {
   const { context } = useAppContext();
@@ -46,82 +45,6 @@ export default function PlaylistClient() {
   useEffect(() => {
     startTimeRef.current = startTime;
   }, [startTime]);
-
-  const isDebugOverlayEnabled = (
-    displayPreference?: DP1DisplayPreference | null
-  ): boolean => {
-    if (!displayPreference) {
-      return false;
-    }
-
-    if (displayPreference.debugOverlay) {
-      return true;
-    }
-
-    const keyboardShortcuts = displayPreference.interaction?.keyboard ?? [];
-    return keyboardShortcuts.includes('debugOverlay');
-  };
-
-  const getArtistLabel = (
-    item?: DP1Item,
-    displayPreference?: DP1DisplayPreference | null
-  ): string => {
-    if (!item) {
-      return 'Unknown';
-    }
-
-    const displayArtist = displayPreference?.debugArtist;
-    if (typeof displayArtist === 'string' && displayArtist.trim()) {
-      return displayArtist;
-    }
-
-    const record = item as unknown as Record<string, unknown>;
-    const raster = record.raster as Record<string, unknown> | undefined;
-    const rasterArtist =
-      typeof raster?.artistName === 'string' ? raster.artistName : undefined;
-
-    return rasterArtist?.trim() ? rasterArtist : 'Unknown';
-  };
-
-  const getOwnerLabel = (
-    item?: DP1Item,
-    displayPreference?: DP1DisplayPreference | null
-  ): string => {
-    if (!item) {
-      return 'Unknown';
-    }
-
-    const displayOwner = displayPreference?.debugOwner;
-    if (typeof displayOwner === 'string' && displayOwner.trim()) {
-      return displayOwner;
-    }
-
-    const record = item as unknown as Record<string, unknown>;
-    const owner = record.owner;
-    const ownerName = record.ownerName;
-    const ownerLabel = record.ownerLabel;
-
-    if (typeof ownerLabel === 'string' && ownerLabel.trim()) {
-      return ownerLabel;
-    }
-
-    if (typeof ownerName === 'string' && ownerName.trim()) {
-      return ownerName;
-    }
-
-    if (typeof owner === 'string' && owner.trim()) {
-      return owner;
-    }
-
-    if (owner && typeof owner === 'object') {
-      const ownerRecord = owner as Record<string, unknown>;
-      if (typeof ownerRecord.name === 'string' && ownerRecord.name.trim()) {
-        return ownerRecord.name;
-      }
-    }
-
-    return 'Unknown';
-  };
 
   useEffect(() => {
     return () => {
@@ -244,12 +167,11 @@ export default function PlaylistClient() {
 
     const startTime = castInfo?.startTime ?? Date.now();
 
-    // Safely access current item
-    if (currentIndex >= 0 && currentIndex < playlist.length) {
-      const currentPlaylistItem = playlist[currentIndex];
-      const currentArtwork = dp1Items.find(
-        a => a.id === currentPlaylistItem.id
-      );
+    // Safely access current item (normalize in case currentIndex was grown by LoopMode.one)
+    const normalizedIndex = currentIndex >= 0 ? currentIndex % playlist.length : -1;
+    if (normalizedIndex >= 0) {
+      const currentPlaylistItem = playlist[normalizedIndex];
+      const currentArtwork = dp1Items.find(a => a.id === currentPlaylistItem.id);
       if (currentArtwork) {
         startInterval(currentArtwork.duration ?? 0);
       }
@@ -303,10 +225,7 @@ export default function PlaylistClient() {
 
     // Apply queued playlist immediately if it exists
     const result = applyQueuedPlaylistIfExists(index);
-    const targetIndex =
-      result.applied && result.nextIndex !== undefined
-        ? result.nextIndex
-        : index;
+    const targetIndex = result.applied && result.nextIndex !== undefined ? result.nextIndex : index;
 
     if (!result.applied) {
       setStartTime(startTime);
@@ -322,10 +241,7 @@ export default function PlaylistClient() {
 
     // Apply queued playlist immediately if it exists
     const result = applyQueuedPlaylistIfExists(index);
-    const targetIndex =
-      result.applied && result.nextIndex !== undefined
-        ? result.nextIndex
-        : index;
+    const targetIndex = result.applied && result.nextIndex !== undefined ? result.nextIndex : index;
 
     if (!result.applied) {
       setStartTime(startTime);
@@ -343,10 +259,7 @@ export default function PlaylistClient() {
     const result = applyQueuedPlaylistIfExists(index);
 
     // Use the calculated index from the applied playlist if available, otherwise use the original index
-    const targetIndex =
-      result.applied && result.nextIndex !== undefined
-        ? result.nextIndex
-        : index;
+    const targetIndex = result.applied && result.nextIndex !== undefined ? result.nextIndex : index;
 
     if (result.applied) {
       console.log('[PlaylistClient] Playlist applied, using calculated index', {
@@ -369,17 +282,12 @@ export default function PlaylistClient() {
 
     // Apply queued playlist immediately if it exists
     const result = applyQueuedPlaylistIfExists(newIndex);
-    const targetIndex =
-      result.applied && result.nextIndex !== undefined
-        ? result.nextIndex
-        : newIndex;
+    const targetIndex = result.applied && result.nextIndex !== undefined ? result.nextIndex : newIndex;
 
     setCurrentIndex(targetIndex);
   };
 
-  const applyQueuedPlaylistIfExists = (
-    targetIndex?: number
-  ): { applied: boolean; nextIndex?: number; newPlaylist?: DP1Item[] } => {
+  const applyQueuedPlaylistIfExists = (targetIndex?: number): { applied: boolean; nextIndex?: number; newPlaylist?: DP1Item[] } => {
     if (!queuedPlaylistRef.current?.length) {
       return { applied: false };
     }
@@ -472,7 +380,44 @@ export default function PlaylistClient() {
 
     intervalRef.current = setInterval(() => {
       const currentCastInfo = canvasService.getCastInfo();
-      // If a refreshed playlist has been queued, swap it in exactly at the boundary
+      const currentLoopMode = loopModeRef.current;
+
+      // Loop-one: replay the same item.
+      if (currentLoopMode === LoopMode.one) {
+        // Always resolve the current item's index against the castInfo playlist
+        // (which may already be shuffled/reordered by CanvasService) using the
+        // item ID as the source of truth. indexRef.current reflects the OLD
+        // playlist order and must not be used directly here.
+        const castInfoItems = currentCastInfo?.playlist?.items ?? playlist;
+        let realIndex = -1;
+        if (currentItemRef.current) {
+          realIndex = castInfoItems.findIndex(
+            i => i.id === currentItemRef.current?.id,
+          );
+        }
+        if (realIndex < 0 && indexRef.current >= 0) {
+          realIndex = Math.min(indexRef.current, castInfoItems.length - 1);
+        }
+        if (realIndex < 0) realIndex = 0; // ultimate safe fallback
+
+        // Reset the timeline anchor so that if loop mode changes later,
+        // getIndex(playlist, startTimeRef.current) still returns realIndex
+        // rather than a position N loops ahead in wall-clock time.
+        const newStartTime = recalculateStartTimeForIndex(castInfoItems, realIndex);
+        startTimeRef.current = newStartTime;
+        setStartTime(newStartTime);
+
+        indexRef.current = -1;
+        canvasService.setCastInfo({
+          ...currentCastInfo,
+          startTime: newStartTime,
+          castCommand: CastCommand.updateIndex,
+          index: realIndex,
+        });
+        return;
+      }
+
+      // If a refreshed/shuffled playlist has been queued, swap it in at the boundary
       if (queuedPlaylistRef.current?.length) {
         // Use the helper function to apply the queued playlist
         const result = applyQueuedPlaylistIfExists();
@@ -593,62 +538,9 @@ export default function PlaylistClient() {
     }
   }, [context.isOnline]);
 
-  useKeyboardTransportControls({
-    castInfo: castInfo ?? undefined,
-    playlist,
-    currentIndex,
-    startTime,
-    displayPreference: currentItemDisplayPreference,
-    elapsedTimeRef,
-    remainTimeRef,
-  });
-
   return (
     <>
-      <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-        {isDebugOverlayEnabled(currentItemDisplayPreference) &&
-          currentItemRef.current && (
-            <div
-              style={{
-                position: 'absolute',
-                right: '24px',
-                bottom: '24px',
-                zIndex: 10,
-                maxWidth: '40vw',
-                backgroundColor: 'rgba(0, 0, 0, 0.72)',
-                color: '#f5f5f5',
-                padding: '12px 14px',
-                borderRadius: '8px',
-                fontFamily: 'PP Mori, system-ui, sans-serif',
-                fontSize: '14px',
-                lineHeight: '1.35',
-                letterSpacing: '0.01em',
-              }}>
-              <div style={{ fontWeight: 600, marginBottom: '6px' }}>
-                Now Displaying
-              </div>
-              <div>
-                Title:{' '}
-                {currentItemRef.current.title?.trim()
-                  ? currentItemRef.current.title
-                  : 'Untitled'}
-              </div>
-              <div>
-                Artist:{' '}
-                {getArtistLabel(
-                  currentItemRef.current,
-                  currentItemDisplayPreference
-                )}
-              </div>
-              <div>
-                Owner:{' '}
-                {getOwnerLabel(
-                  currentItemRef.current,
-                  currentItemDisplayPreference
-                )}
-              </div>
-            </div>
-          )}
+      <div style={{ width: '100%', height: '100%' }}>
         {currentItemDisplayPreference && (
           <ArtworkPlayer
             previewURL={castPreviewURL ?? ''}
