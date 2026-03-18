@@ -538,17 +538,19 @@ const ArtworkPlayer = ({
       }
 
       const handleVideoPlay = () => {
-        videoElement
-          .play()
-          .catch((error: unknown) => {
-            console.log('Error play video', error);
-            reTryToPlayVideo(slotIndex);
-          })
-          .finally(() => {
-            if (slot.isStreaming) {
-              markSlotLoaded(slotIndex);
-            }
-          });
+        videoElement.play().catch((error: unknown) => {
+          console.log('Error play video', error);
+          reTryToPlayVideo(slotIndex);
+        });
+      };
+
+      let hasMarkedLoaded = false;
+      const handleVideoLoadedData = () => {
+        if (hasMarkedLoaded) {
+          return;
+        }
+        hasMarkedLoaded = true;
+        markSlotLoaded(slotIndex);
       };
 
       let hlsInstance: Hls | null = null;
@@ -593,8 +595,11 @@ const ArtworkPlayer = ({
         videoElement.addEventListener('loadeddata', handleVideoPlay);
       }
 
+      videoElement.addEventListener('loadeddata', handleVideoLoadedData);
+
       cleanupFns.push(() => {
         videoElement.removeEventListener('loadeddata', handleVideoPlay);
+        videoElement.removeEventListener('loadeddata', handleVideoLoadedData);
         hlsInstance?.destroy();
       });
     });
@@ -675,12 +680,10 @@ const ArtworkPlayer = ({
           !slot.isStreaming
         ) {
           const videoElement = videoRefs[slotIndex].current;
-          videoElement.onloadeddata = markCurrentSlotLoaded;
           videoElement.onerror = () => {
             handleMediaError('video')(new Error('Video load failed'));
           };
           mediaCleanupFns.push(() => {
-            videoElement.onloadeddata = null;
             videoElement.onerror = null;
           });
 
