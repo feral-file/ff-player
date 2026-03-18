@@ -318,10 +318,10 @@ const ArtworkPlayer = ({
       return;
     }
 
-    updateSlot(slotIndex, { isLoading: false, opacity: 1 });
-    console.log('[ArtworkPlayer] loaded source');
-
     if (!hasActive || isActiveSlot) {
+      updateSlot(slotIndex, { isLoading: false, opacity: 1 });
+      console.log('[ArtworkPlayer] loaded source');
+
       if (transitionTimeoutRef.current) {
         clearTimeout(transitionTimeoutRef.current);
         transitionTimeoutRef.current = undefined;
@@ -345,6 +345,9 @@ const ArtworkPlayer = ({
     }
 
     if (incomingIndex === slotIndex) {
+      // Keep incoming slot hidden until crossfade starts to avoid a pre-fade flash.
+      updateSlot(slotIndex, { isLoading: false });
+      console.log('[ArtworkPlayer] loaded source');
       startCrossfade(slotIndex);
     }
   };
