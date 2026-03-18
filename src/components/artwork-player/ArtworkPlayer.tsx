@@ -390,7 +390,31 @@ const ArtworkPlayer = ({
   useEffect(() => {
     let cancelled = false;
     const currentURL = previewURL;
-    const activeIndex = activeSlotIndexRef.current;
+    const previousActiveIndex = activeSlotIndexRef.current;
+    const previousIncomingIndex = incomingSlotIndexRef.current;
+    const visibleIncomingSlot =
+      previousIncomingIndex !== null
+        ? slotsRef.current[previousIncomingIndex]
+        : null;
+
+    let activeIndex = previousActiveIndex;
+    if (previousIncomingIndex !== null && visibleIncomingSlot?.opacity === 1) {
+      if (transitionTimeoutRef.current) {
+        clearTimeout(transitionTimeoutRef.current);
+        transitionTimeoutRef.current = undefined;
+      }
+      transitionTokenRef.current += 1;
+
+      setSlots(prev => {
+        const next = [...prev] as [ArtworkSlot | null, ArtworkSlot | null];
+        next[previousActiveIndex] = null;
+        return next;
+      });
+      setActiveSlotIndex(previousIncomingIndex);
+      setIncomingSlotIndex(null);
+      activeIndex = previousIncomingIndex;
+    }
+
     const hasActive = Boolean(slotsRef.current[activeIndex]?.displayPreviewURL);
     const targetIndex = hasActive ? (activeIndex === 0 ? 1 : 0) : activeIndex;
     const nextIframeKey = (slotsRef.current[targetIndex]?.iframeKey ?? 0) + 1;
@@ -642,7 +666,6 @@ const ArtworkPlayer = ({
             url: slot.displayPreviewURL,
             mediaType: 'image',
             element: imageElement,
-            onLoad: markCurrentSlotLoaded,
             onError: handleMediaError('image'),
             signal: abortController.signal,
           });
@@ -669,7 +692,6 @@ const ArtworkPlayer = ({
             url: slot.displayPreviewURL,
             mediaType: 'video',
             element: videoElement,
-            onLoad: markCurrentSlotLoaded,
             onError: handleMediaError('video'),
             signal: abortController.signal,
           });
@@ -694,7 +716,6 @@ const ArtworkPlayer = ({
             url: slot.displayPreviewURL,
             mediaType: 'audio',
             element: audioElement,
-            onLoad: markCurrentSlotLoaded,
             onError: handleMediaError('audio'),
             signal: abortController.signal,
           });
