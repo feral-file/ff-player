@@ -405,11 +405,8 @@ const ArtworkPlayer = ({
       }
       transitionTokenRef.current += 1;
 
-      setSlots(prev => {
-        const next = [...prev] as [ArtworkSlot | null, ArtworkSlot | null];
-        next[previousActiveIndex] = null;
-        return next;
-      });
+      // Promote the visible incoming slot first; keep the old slot around
+      // until the next transition completes to avoid transient black frames.
       setActiveSlotIndex(previousIncomingIndex);
       setIncomingSlotIndex(null);
       activeIndex = previousIncomingIndex;
