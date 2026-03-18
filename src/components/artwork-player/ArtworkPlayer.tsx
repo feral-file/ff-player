@@ -108,6 +108,7 @@ const ArtworkPlayer = ({
     useRef(createMediaLoader()),
     useRef(createMediaLoader()),
   ];
+  const mediaLoadKeysRef = useRef<[string | null, string | null]>([null, null]);
 
   // Cursor layer handle
   const cursorRef = useRef<CursorLayerHandle>(null);
@@ -348,7 +349,18 @@ const ArtworkPlayer = ({
       // Keep incoming slot hidden until crossfade starts to avoid a pre-fade flash.
       updateSlot(slotIndex, { isLoading: false });
       console.log('[ArtworkPlayer] loaded source');
-      startCrossfade(slotIndex);
+      const slot = slotsRef.current[slotIndex];
+      if (slot?.previewType === PreviewHTMLTag.video) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (incomingSlotIndexRef.current === slotIndex) {
+              startCrossfade(slotIndex);
+            }
+          });
+        });
+      } else {
+        startCrossfade(slotIndex);
+      }
     }
   };
 
@@ -625,8 +637,15 @@ const ArtworkPlayer = ({
     SLOT_INDICES.forEach(slotIndex => {
       const slot = slots[slotIndex];
       if (!slot?.displayPreviewURL) {
+        mediaLoadKeysRef.current[slotIndex] = null;
         return;
       }
+
+      const mediaLoadKey = `${slot.previewType ?? 'none'}|${slot.displayPreviewURL}`;
+      if (mediaLoadKeysRef.current[slotIndex] === mediaLoadKey) {
+        return;
+      }
+      mediaLoadKeysRef.current[slotIndex] = mediaLoadKey;
 
       let isCancelled = false;
       const abortController = new AbortController();
@@ -719,7 +738,10 @@ const ArtworkPlayer = ({
             onError: handleMediaError('audio'),
             signal: abortController.signal,
           });
+          return;
         }
+
+        mediaLoadKeysRef.current[slotIndex] = null;
       };
 
       void loadMedia();
