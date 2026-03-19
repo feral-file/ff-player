@@ -263,6 +263,38 @@ const ArtworkPlayer = ({
     }
   };
 
+  const startCrossfadeForReadySlot = (slotIndex: number) => {
+    const slot = slotsRef.current[slotIndex];
+    if (slot?.previewType !== PreviewHTMLTag.video) {
+      startCrossfade(slotIndex);
+      return;
+    }
+
+    const videoElement = videoRefs[slotIndex].current;
+    if (!videoElement) {
+      startCrossfade(slotIndex);
+      return;
+    }
+
+    if (
+      'requestVideoFrameCallback' in videoElement &&
+      typeof videoElement.requestVideoFrameCallback === 'function'
+    ) {
+      videoElement.requestVideoFrameCallback(() => {
+        if (incomingSlotIndexRef.current === slotIndex) {
+          startCrossfade(slotIndex);
+        }
+      });
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      if (incomingSlotIndexRef.current === slotIndex) {
+        startCrossfade(slotIndex);
+      }
+    });
+  };
+
   const startCrossfade = (incomingIndex: number) => {
     const activeIndex = activeSlotIndexRef.current;
 
@@ -349,18 +381,7 @@ const ArtworkPlayer = ({
       // Keep incoming slot hidden until crossfade starts to avoid a pre-fade flash.
       updateSlot(slotIndex, { isLoading: false });
       console.log('[ArtworkPlayer] loaded source');
-      const slot = slotsRef.current[slotIndex];
-      if (slot?.previewType === PreviewHTMLTag.video) {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            if (incomingSlotIndexRef.current === slotIndex) {
-              startCrossfade(slotIndex);
-            }
-          });
-        });
-      } else {
-        startCrossfade(slotIndex);
-      }
+      startCrossfadeForReadySlot(slotIndex);
     }
   };
 
