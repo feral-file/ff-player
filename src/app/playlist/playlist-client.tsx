@@ -37,8 +37,7 @@ export default function PlaylistClient() {
   const currentItemRef = useRef<DP1Item>();
   // A queued playlist to be swapped in when the current item's timer ends
   const queuedPlaylistRef = useRef<DP1Item[] | null>(null);
-  // Default matches the mobile app's initial state (LoopMode button starts as "none")
-  const loopModeRef = useRef<LoopMode>(LoopMode.none);
+  const loopModeRef = useRef<LoopMode>(LoopMode.playlist);
   // Mutable mirror of startTime state so the setInterval closure always reads the
   // latest value without needing to be recreated on every startTime change.
   const startTimeRef = useRef<number>(0);
@@ -364,7 +363,7 @@ export default function PlaylistClient() {
   };
 
   const handleSetLoop = () => {
-    loopModeRef.current = castInfo?.loopMode ?? LoopMode.none;
+    loopModeRef.current = castInfo?.loopMode ?? LoopMode.playlist;
   };
 
   const startInterval = (duration: number) => {
@@ -426,17 +425,6 @@ export default function PlaylistClient() {
           });
         }
         return;
-      }
-
-      // Loop-none: stop when the last item finishes instead of wrapping.
-      // If indexRef is -1 (uninitialized), skip the stop check — we don't know
-      // the position yet, so it's safer to let getIndex() run below.
-      if (currentLoopMode === LoopMode.none && indexRef.current >= 0) {
-        const currentRealIndex = indexRef.current % playlist.length;
-        if (currentRealIndex >= playlist.length - 1) {
-          clearTimer();
-          return;
-        }
       }
 
       const index = getIndex(playlist, startTimeRef.current);

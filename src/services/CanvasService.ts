@@ -318,7 +318,7 @@ class CanvasService {
         isPaused: window.location.pathname === '/sleep',
         sleepMode: window.location.pathname === '/sleep',
 
-        loopMode: activeCastInfo?.loopMode ?? LoopMode.none,
+        loopMode: activeCastInfo?.loopMode ?? LoopMode.playlist,
         shuffle: activeCastInfo?.shuffle ?? false,
       };
     } catch (error) {
@@ -593,7 +593,7 @@ class CanvasService {
     const rawMode = (request as unknown as { mode: string }).mode;
     const mode = (Object.values(LoopMode) as string[]).includes(rawMode)
       ? (rawMode as LoopMode)
-      : LoopMode.none;
+      : LoopMode.playlist;
 
     console.log('[CanvasService] setLoop', mode);
     this.setCastInfo({
