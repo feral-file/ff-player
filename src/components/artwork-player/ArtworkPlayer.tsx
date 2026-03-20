@@ -48,7 +48,7 @@ const ArtworkPlayer = ({
   artworkPreviewMIMEType?: string;
   displayPreferences: DP1DisplayPreference;
 }) => {
-  const FADE_IN_OUT_DURATION_MS = 350;
+  const FADE_IN_OUT_DURATION_MS = 650;
   const { context } = useAppContext();
   const [opacity, setOpacity] = useState(1);
   const [displayPreviewURL, setDisplayPreviewURL] = useState<string>('');
@@ -83,34 +83,50 @@ const ArtworkPlayer = ({
   // Cursor layer handle
   const cursorRef = useRef<CursorLayerHandle>(null);
 
-  function compareToGetFileType(type: string) {
-    setIsStreaming(false);
+  function getPreviewTypeConfig(type: string): {
+    previewType: PreviewHTMLTag;
+    isStreaming: boolean;
+  } {
     if (!type) {
-      return;
+      return { previewType: PreviewHTMLTag.iframe, isStreaming: false };
     }
+
     type = type.toLowerCase();
 
     if (MIMETypeStreamVideo.includes(type)) {
-      setPreviewType(PreviewHTMLTag.video);
-      setIsStreaming(true);
-    } else if (MITETypeIframe.includes(type)) {
-      setPreviewType(PreviewHTMLTag.iframe);
-    } else if (type.match(MIMETypeSvg)) {
-      // SVG files (especially with scripts) should use object tag for security
-      setPreviewType(PreviewHTMLTag.object);
-    } else if (FileUseObject.includes(type) || type.match(MIMETypeObject)) {
-      setPreviewType(PreviewHTMLTag.object);
-    } else if (FileUseVideo.includes(type) || type.match(MIMETypeVideo)) {
-      setPreviewType(PreviewHTMLTag.video);
-    } else if (FileUseAudio.includes(type) || type.match(MIMETypeAudio)) {
-      setPreviewType(PreviewHTMLTag.audio);
-    } else if (FileUseImage.includes(type) || type.match(MIMETypeImage)) {
-      setPreviewType(PreviewHTMLTag.image);
-    } else if (FileUseIframePDF.includes(type) || type.match(MIMETypePdf)) {
-      setPreviewType(PreviewHTMLTag.iframePDF);
-    } else {
-      setPreviewType(PreviewHTMLTag.iframe);
+      return { previewType: PreviewHTMLTag.video, isStreaming: true };
     }
+
+    if (MITETypeIframe.includes(type)) {
+      return { previewType: PreviewHTMLTag.iframe, isStreaming: false };
+    }
+
+    if (type.match(MIMETypeSvg)) {
+      // SVG files (especially with scripts) should use object tag.
+      return { previewType: PreviewHTMLTag.object, isStreaming: false };
+    }
+
+    if (FileUseObject.includes(type) || type.match(MIMETypeObject)) {
+      return { previewType: PreviewHTMLTag.object, isStreaming: false };
+    }
+
+    if (FileUseVideo.includes(type) || type.match(MIMETypeVideo)) {
+      return { previewType: PreviewHTMLTag.video, isStreaming: false };
+    }
+
+    if (FileUseAudio.includes(type) || type.match(MIMETypeAudio)) {
+      return { previewType: PreviewHTMLTag.audio, isStreaming: false };
+    }
+
+    if (FileUseImage.includes(type) || type.match(MIMETypeImage)) {
+      return { previewType: PreviewHTMLTag.image, isStreaming: false };
+    }
+
+    if (FileUseIframePDF.includes(type) || type.match(MIMETypePdf)) {
+      return { previewType: PreviewHTMLTag.iframePDF, isStreaming: false };
+    }
+
+    return { previewType: PreviewHTMLTag.iframe, isStreaming: false };
   }
 
   const reTryToPlayVideo = () => {
@@ -141,6 +157,25 @@ const ArtworkPlayer = ({
     let cancelled = false;
     const currentURL = previewURL;
 
+    let fadeOutDone = false;
+    let pendingPreviewConfig: {
+      previewType: PreviewHTMLTag;
+      isStreaming: boolean;
+    } | null = null;
+    let pendingDisplayURL: string | null = null;
+
+    let fadeTimer: NodeJS.Timeout | undefined;
+
+    const applyPendingIfReady = () => {
+      if (cancelled) return;
+      if (!fadeOutDone) return;
+      if (!pendingPreviewConfig || !pendingDisplayURL) return;
+
+      setIsStreaming(pendingPreviewConfig.isStreaming);
+      setPreviewType(pendingPreviewConfig.previewType);
+      setDisplayPreviewURL(pendingDisplayURL);
+    };
+
     const detectPreviewType = async (url: string) => {
       console.log(
         '[ArtworkPlayer] detectPreviewType',
@@ -151,7 +186,7 @@ const ArtworkPlayer = ({
       try {
         if (artworkPreviewMIMEType) {
           if (isStale()) return;
-          compareToGetFileType(artworkPreviewMIMEType);
+          pendingPreviewConfig = getPreviewTypeConfig(artworkPreviewMIMEType);
           console.log(
             '[CAST] Artwork previewMIMEType:',
             artworkPreviewMIMEType
@@ -167,7 +202,7 @@ const ArtworkPlayer = ({
         const contentType = await getContentTypeFromURL(url);
         if (isStale()) return;
 
-        compareToGetFileType(contentType);
+        pendingPreviewConfig = getPreviewTypeConfig(contentType);
         console.log('[ArtworkPlayer] Content-Type:', contentType);
         Sentry.addBreadcrumb({
           category: 'ArtworkPlayer',
@@ -181,15 +216,27 @@ const ArtworkPlayer = ({
           JSON.stringify(error)
         );
         Sentry.captureException(error);
-        setPreviewType(PreviewHTMLTag.iframe);
+        pendingPreviewConfig = {
+          previewType: PreviewHTMLTag.iframe,
+          isStreaming: false,
+        };
       }
     };
 
     if (previewURL) {
       setOpacity(0);
-      setPreviewType(null);
       setLoading(true);
       setShowLoading(false);
+
+      // Avoid playing two heavy media at once:
+      // pause the currently mounted media immediately; we unmount it after the fade-out.
+      if (previewType === PreviewHTMLTag.video) {
+        videoRef.current?.pause();
+      }
+
+      if (previewType === PreviewHTMLTag.audio) {
+        audioRef.current?.pause();
+      }
 
       if (loadingDelayRef.current) {
         clearTimeout(loadingDelayRef.current);
@@ -201,15 +248,22 @@ const ArtworkPlayer = ({
         }
       }, 2000);
 
+      fadeTimer = setTimeout(() => {
+        if (cancelled || previewURL !== currentURL) return;
+        fadeOutDone = true;
+        // Unmount the previous media so any active HLS/video/audio gets cleaned up.
+        setPreviewType(null);
+        applyPendingIfReady();
+      }, FADE_IN_OUT_DURATION_MS);
+
       detectPreviewType(previewURL)
         .catch((err: unknown) => {
           console.error(err);
         })
         .finally(() => {
-          // Only apply result if this effect instance is still current
-          if (!cancelled && previewURL === currentURL) {
-            setDisplayPreviewURL(previewURL);
-          }
+          if (cancelled || previewURL !== currentURL) return;
+          pendingDisplayURL = previewURL;
+          applyPendingIfReady();
         });
     }
 
@@ -218,6 +272,10 @@ const ArtworkPlayer = ({
       if (loadingDelayRef.current) {
         clearTimeout(loadingDelayRef.current);
         loadingDelayRef.current = undefined;
+      }
+
+      if (fadeTimer) {
+        clearTimeout(fadeTimer);
       }
     };
   }, [previewURL, artworkPreviewMIMEType]);
@@ -647,7 +705,7 @@ const ArtworkPlayer = ({
         and we’re either still detecting the MIME/type (previewType === null) or we’ve determined it’s a slow‑loading media type (video/audio).
         This matches the UX intent: no spinner for fast types (image/iframe/object) and no spinner before the 2s threshold. */}
         {(previewType === null ||
-         previewType === PreviewHTMLTag.video.toString() ||
+          previewType === PreviewHTMLTag.video.toString() ||
           previewType === PreviewHTMLTag.audio.toString()) &&
           loading &&
           showLoading && <Loading />}
