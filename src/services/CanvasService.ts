@@ -52,6 +52,10 @@ import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
 import RemoteConfigService from './remoteConfigService';
 
+const validLoopModes = new Set<string>(Object.values(LoopMode));
+const coerceLoopMode = (raw: string | undefined): LoopMode =>
+  raw && validLoopModes.has(raw) ? (raw as LoopMode) : LoopMode.playlist;
+
 class CanvasService {
   private castInfo: CastInfo | null = null;
   private static instance: CanvasService | null;
@@ -318,7 +322,7 @@ class CanvasService {
         isPaused: window.location.pathname === '/sleep',
         sleepMode: window.location.pathname === '/sleep',
 
-        loopMode: activeCastInfo?.loopMode ?? LoopMode.none,
+        loopMode: coerceLoopMode(activeCastInfo?.loopMode),
         shuffle: activeCastInfo?.shuffle ?? false,
       };
     } catch (error) {
@@ -591,9 +595,7 @@ class CanvasService {
 
   private setLoop(request: SetLoopRequest): Reply {
     const rawMode = (request as unknown as { mode: string }).mode;
-    const mode = (Object.values(LoopMode) as string[]).includes(rawMode)
-      ? (rawMode as LoopMode)
-      : LoopMode.none;
+    const mode = coerceLoopMode(rawMode);
 
     console.log('[CanvasService] setLoop', mode);
     this.setCastInfo({
