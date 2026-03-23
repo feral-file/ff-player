@@ -363,7 +363,10 @@ export default function PlaylistClient() {
   };
 
   const handleSetLoop = () => {
-    loopModeRef.current = castInfo?.loopMode ?? LoopMode.playlist;
+    const validLoopModes = new Set<string>(Object.values(LoopMode));
+    const raw = castInfo?.loopMode as string | undefined;
+    loopModeRef.current =
+      raw && validLoopModes.has(raw) ? (raw as LoopMode) : LoopMode.playlist;
   };
 
   const startInterval = (duration: number) => {
