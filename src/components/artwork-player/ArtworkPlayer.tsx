@@ -68,7 +68,7 @@ function createSlotLayer(previewURL: string, iframeKey: number): SlotLayer {
 }
 
 function isEmbeddedHeavy(t: PreviewHTMLTag | null): boolean {
-  return t === PreviewHTMLTag.iframe;
+  return t === PreviewHTMLTag.iframe || t === PreviewHTMLTag.object;
 }
 
 const ArtworkPlayer = ({
@@ -215,10 +215,6 @@ const ArtworkPlayer = ({
     const el = videoRefs[slotIndex].current;
     if (el) {
       el.muted = true;
-      console.log(
-        'reTryToPlayVideo(slotIndex) called with muted true',
-        slotIndex
-      );
       el.play().catch((error: unknown) => {
         console.log('[ArtworkPlayer] Error play video', JSON.stringify(error));
         Sentry.captureMessage('[ArtworkPlayer] Error play video');
@@ -406,7 +402,6 @@ const ArtworkPlayer = ({
       loadingDelayRef.current = undefined;
     }
 
-    console.log('useLayoutEffect(readySlot) called with readySlot', readySlot);
     iframeRefs[readySlot].current?.focus();
 
     const other = (readySlot === 0 ? 1 : 0) as SlotIndex;
@@ -1004,17 +999,10 @@ const ArtworkPlayer = ({
     if (!slot?.displayPreviewURL || !slot.previewType) {
       return null;
     }
+
     const z =
       topSlotIndex === slotIndex ? 3 : slotOpacity[slotIndex] > 0 ? 2 : 0;
 
-    console.log(
-      'renderSlot(slotIndex) called with slotIndex',
-      slotIndex,
-      'and zIndex',
-      z,
-      'previewURL',
-      slot.previewURL
-    );
     return (
       <div
         key={`${slot.previewURL}-${String(slot.iframeKey)}`}
