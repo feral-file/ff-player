@@ -722,10 +722,16 @@ const ArtworkPlayer = ({
           audioRefs[slotIndex].current
         ) {
           const el = audioRefs[slotIndex].current;
+          // createMediaLoader().loadMedia sets src only; it never invokes onLoad (see mediaLoader.ts).
+          const handleAudioReady = () => {
+            loadedSource(slotIndex);
+          };
+          el.addEventListener('loadeddata', handleAudioReady);
           el.onerror = () => {
             handleMediaError('audio')(new Error('Audio load failed'));
           };
           mediaCleanupFns.push(() => {
+            el.removeEventListener('loadeddata', handleAudioReady);
             el.onerror = null;
           });
           await mediaLoaders.current[slotIndex].loadMedia({
