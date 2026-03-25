@@ -2,9 +2,28 @@
 
 This document explains the transition model currently implemented in `src/components/artwork-player/ArtworkPlayer.tsx`.
 
+## Overview
+
+Artwork transitions in ArtworkPlayer to use a 2-slot overlay model with safer media lifecycle handling and improved transition stability.
+
+- Implemented two-slot transition pipeline (slots[0|1]) with per-slot state:
+  - previewURL, previewType, displayPreviewURL, displaySoftwareURL, isStreaming, loading, iframeKey
+- Added per-slot opacity/z-order transition control:
+  - slotOpacity, activeSlot, topSlotIndex
+- Added stale-transition guards:
+  - incomingSlotRef, pendingReadySlotRef, transitionTokenRef, timeout cancellation
+- Kept heavy embedded content (iframe, object) on sequential handoff to reduce performance/GPU pressure.
+- Added per-slot media/HLS bookkeeping:
+  - hlsInstancesRef, hlsLoadedURLRef, playedVideoURLRef
+- Split streaming video setup by slot (avoid cross-slot teardown/re-attach side effects).
+- Split media loading by slot (avoid one slot cleanup retriggering the other slot’s media pipeline).
+- Unified video play gating in a reusable helper (playVideoForSlot) so target-slot and duplicate-play checks are consistent.
+- Non-streaming video now uses media-loader path + loadeddata playback hook.
+
 ## 1) Core model: two slots (A/B)
 
 Code references:
+
 - `ArtworkPlayer.tsx` lines `43-76` (`SLOT_INDICES`, `SlotIndex`, `SlotLayer`, helpers)
 - `ArtworkPlayer.tsx` lines `90-146` (slot state + refs)
 
@@ -26,6 +45,7 @@ The other slot is used as incoming during transitions.
 ## 2) Transition state refs
 
 Code references:
+
 - `ArtworkPlayer.tsx` lines `112-145` (`transitionTokenRef`, `transitionTimeoutRef`, `pendingReadySlotRef`, `incomingSlotRef`, `slotsRef`, `activeSlotRef`)
 
 Important refs used to keep transitions deterministic:
@@ -40,6 +60,7 @@ These prevent old async callbacks from taking over new transitions.
 ## 3) Start of a new artwork request (`previewURL` changed)
 
 Code references:
+
 - `ArtworkPlayer.tsx` lines `498-615` (`previewURL` effect)
 - `ArtworkPlayer.tsx` lines `503-521` (cancel previous token + collapse stale overlay)
 - `ArtworkPlayer.tsx` lines `532-547` (choose incoming slot and create layer)
@@ -61,6 +82,7 @@ This avoids stale overlays and old artwork callbacks from blocking new content.
 ## 4) Media readiness and single-load behavior
 
 Code references:
+
 - `ArtworkPlayer.tsx` lines `263-299` (`markSlotReady`, `loadedSource`)
 - `ArtworkPlayer.tsx` lines `393-487` (ready-consume transition effect)
 - `ArtworkPlayer.tsx` lines `135-138` and `209-216` (`mediaLoaders`, `hlsInstancesRef`, `hlsLoadedURLRef`, `playedVideoURLRef`, teardown reset)
@@ -94,6 +116,7 @@ Video duplicate-start guard:
 ## 5) Sequential vs overlap
 
 Code references:
+
 - `ArtworkPlayer.tsx` lines `430-487` (mode decision + sequential/overlap branches)
 
 The transition mode is decided when incoming slot is ready:
@@ -128,6 +151,7 @@ Safety comes from two guards:
 ## 7) Online/offline playback safety
 
 Code references:
+
 - `ArtworkPlayer.tsx` lines `786-819` (only play visible target slot videos, pause hidden/offline)
 
 The online effect now:
@@ -140,6 +164,7 @@ This prevents hidden outgoing video from resuming and flashing.
 ## 8) Stale callback protection summary
 
 Code references:
+
 - `ArtworkPlayer.tsx` lines `281-284` (ignore stale ready slot URL)
 - `ArtworkPlayer.tsx` lines `289-294` (incoming-slot stale check)
 - `ArtworkPlayer.tsx` lines `441-443`, `456-457`, `477-478` (token timeout guards)
@@ -152,4 +177,3 @@ A callback is ignored if any of these are true:
 - `transitionTokenRef` changed before timeout callback executes
 
 This is the main mechanism that prevents old transitions from reappearing.
-
