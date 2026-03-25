@@ -161,6 +161,7 @@ const CursorLayer = forwardRef<CursorLayerHandle>((_, ref) => {
         position: 'absolute',
         inset: 0,
         pointerEvents: 'none',
+        zIndex: 100,
       }}>
       <div
         ref={cursorRef}
