@@ -45,7 +45,7 @@ const useDeviceRotation = () => {
     console.log('viewMode', viewMode);
 
     if (viewMode) {
-      DeviceManager.setViewMode(viewMode);
+      void DeviceManager.setViewMode(viewMode);
     }
   }, [viewMode]);
 

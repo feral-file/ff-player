@@ -1,0 +1,12 @@
+---
+alwaysApply: true
+---
+
+# Review Workflow Rule
+
+When implementation is complete and checks have been run, execute a review loop until the reviewer qualifies the change. Do not commit, push, or create a PR before `Verdict: accept`.
+
+1. Produce a compact handoff: goal, scope, files changed, decisions, trade-offs, checks run, and known limitations.
+2. Invoke the reviewer sub-agent with fresh context and the shared contract in `prompts/code-review.md`.
+3. Give it the handoff, `git diff --stat`, `git diff`, and relevant verification output.
+4. If the verdict is `revise`, address findings, rerun checks, and review again.
