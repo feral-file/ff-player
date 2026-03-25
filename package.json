@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "ci:verify": "npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {
     "@sentry/nextjs": "^8.22.0",
@@ -38,7 +42,8 @@
     "globals": "^15.9.0",
     "prettier": "^3.3.3",
     "typescript": "^5.5.4",
-    "typescript-eslint": "^8.0.1"
+    "typescript-eslint": "^8.0.1",
+    "vitest": "^4.1.1"
   },
   "overrides": {
     "eslint": "^9.9.0"

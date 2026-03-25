@@ -1,0 +1,35 @@
+---
+description: TypeScript coding style and durable comment expectations for ff-player
+globs:
+  - "src/**/*.{ts,tsx}"
+  - "*.md"
+alwaysApply: true
+---
+
+# TypeScript Coding Style Rule
+
+Follow the spirit of Effective Go and Go Code Review Comments, adapted to this TypeScript codebase.
+
+## 1) Code shape
+- Prefer small, focused functions or hooks with one clear responsibility.
+- Keep control flow straightforward; prefer early returns over deep nesting.
+- Use explicit types when inference would hide intent at a boundary or shared seam.
+- Name things by responsibility instead of implementation detail.
+- Avoid unnecessary abstractions for single call sites unless they clarify a real boundary.
+
+## 2) Components, services, and utilities
+- Keep components focused on rendering and local interaction; move non-trivial playback, scheduling, or persistence logic into services, hooks, or helpers.
+- Keep services narrow and purpose-driven instead of accumulating unrelated responsibilities.
+- Prefer helpers that can be exercised without browser globals when the behavior does not truly need them.
+
+## 3) Comment philosophy
+- Prefer more comment context than usual when logic is non-obvious or likely to be amended later by another agentic coding session.
+- Comments should act as durable engineering memory for future amendments.
+- Store design intent, trade-offs, constraints, invariants, failure modes, and operational assumptions in comments when they matter to safe modification.
+- If a simpler-looking implementation was intentionally avoided, say why.
+- Do not add comments that merely restate what the code already says.
+
+## 4) Preferred posture for future-friendly code
+- Optimize for safe amendment by future contributors and agents, not for cleverness.
+- When behavior depends on timing, media loading, browser quirks, persisted recovery, or device command ordering, leave enough context in comments for the next session to reason safely.
+- If a TODO remains, it must be specific and actionable; use `TBD by repo owner` only for unresolved top-level architecture or API policy.

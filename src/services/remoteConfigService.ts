@@ -11,9 +11,7 @@ class RemoteConfigService {
   private appRemoteConfig: AppRemoteConfig | null = null;
 
   public async getAppRemoteConfig() {
-    if (!this.appRemoteConfig) {
-      this.appRemoteConfig = await this.fetchConfig();
-    }
+    this.appRemoteConfig ??= await this.fetchConfig();
 
     return this.appRemoteConfig;
   }

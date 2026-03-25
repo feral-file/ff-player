@@ -15,10 +15,18 @@ export function useDeviceSettings() {
       newSettings: DisplaySettings
     ) => {
       if (isSaveToDevice) {
-        setDisplaySettings(prev => ({
-          ...prev,
-          ...newSettings,
-        }));
+        setDisplaySettings(prev => {
+          // Preserve the DisplaySettings instance so future amendments keep the
+          // class behavior and defaults instead of silently degrading to a
+          // plain object merge.
+          const mergedSettings = new DisplaySettings(
+            prev?.scaling ?? newSettings.scaling
+          );
+
+          Object.assign(mergedSettings, prev, newSettings);
+
+          return mergedSettings;
+        });
       }
     };
 
@@ -30,7 +38,7 @@ export function useDeviceSettings() {
 
   useEffect(() => {
     if (displaySettings) {
-      DeviceManager.setDeviceDisplaySettings(displaySettings);
+      void DeviceManager.setDeviceDisplaySettings(displaySettings);
     }
   }, [displaySettings]);
 

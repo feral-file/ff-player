@@ -1,0 +1,30 @@
+---
+description: Domain vocabulary consistency rule for ff-player
+alwaysApply: true
+globs:
+  - "src/**/*.{ts,tsx}"
+  - "README.md"
+  - "docs/**"
+---
+
+# Domain Vocabulary Rule
+
+This rule governs naming consistency only.
+
+## 1) Preserve existing domain language
+- Use the established repository terms consistently: `FF1`, `FF Player`, `DP1`, `playlist`, `artwork`, `cast`, `display settings`, `schedule`, `remote config`.
+- When a concept already has a model, service, or storage shape in this repo, prefer that canonical term over introducing a synonym.
+
+## 2) Public and shared contract naming
+- Avoid renaming persisted keys, service payload fields, environment variables, or route-facing data shapes without an explicit design note.
+- If a shared term is flawed but must change, update affected docs, types, and verification in the same change.
+
+## 3) New naming
+- File names: `PascalCase.tsx` for React components, `camelCase.ts` or existing local convention for utilities/hooks/services.
+- Types and enums: `PascalCase`.
+- Functions and variables: `camelCase`.
+- Booleans: predicate-style (`is*`, `has*`, `can*`, `should*`).
+
+## 4) Forbidden naming behavior
+- Do not introduce near-duplicate synonyms for existing domain concepts in the same layer.
+- Do not hide playback or device meaning behind generic names like `data`, `info`, `helper`, or `manager` when a concrete domain noun exists.
