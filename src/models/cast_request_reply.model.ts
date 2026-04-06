@@ -139,6 +139,5 @@ export interface SetLoopRequest extends Request {
 }
 export type SetLoopReply = Reply;
 
-
 export type DisplayDefaultPlaylistRequest = Request;
 export type DisplayDefaultPlaylistReply = Reply;

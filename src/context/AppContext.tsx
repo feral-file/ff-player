@@ -18,7 +18,7 @@ import RemoteConfigService, {
 import { AppSettings, LocalStorageItem } from '@/constants';
 import DeviceManager from '@/utils/DeviceManager';
 import useCastInfo from '@/services/custom-hooks/useCastInfo';
-import { CastInfo, CastCommand } from '@/models';
+import { CastInfo, CastCommand, LoopMode } from '@/models';
 import { canvasService } from '@/services/CanvasService';
 import { useDeviceSettings } from '@/services/custom-hooks/useDeviceSettings';
 import { DisplaySettings } from '@/models/display_settings.model';
@@ -136,6 +136,8 @@ export const AppProvider = ({ children }: AppContextProps) => {
           index: 0,
           isPaused: false,
           playlistId: bootPlaylist.id,
+          loopMode: LoopMode.playlist,
+          shuffle: false,
         };
       }
     }
