@@ -1,7 +1,23 @@
+import { LoopMode } from '@/models/cast_info.model';
 import { DP1Item } from '@/models/dp1.model';
 
-export function getIndex(playlistItems: DP1Item[], startTime: number): number {
-  // Return first artwork if duration is 0
+/**
+ * Map wall-clock elapsed time since playlist `startTime` to the active item index.
+ *
+ * - {@link LoopMode.playlist}: time wraps modulo full playlist duration (repeat all).
+ * - {@link LoopMode.none}: after one full pass, index stays on the last item.
+ * - {@link LoopMode.one}: same non-wrapping timeline as `none` here; the playlist
+ *   client handles per-slot replay and usually resets `startTime` before the clamp applies.
+ */
+export function getIndex(
+  playlistItems: DP1Item[],
+  startTime: number,
+  loopMode: LoopMode = LoopMode.playlist
+): number {
+  if (!playlistItems.length) {
+    return 0;
+  }
+
   let index = 0;
   const currentTime = Date.now();
   let elapsedTime = currentTime - startTime;
@@ -11,7 +27,19 @@ export function getIndex(playlistItems: DP1Item[], startTime: number): number {
     0
   );
 
-  elapsedTime = elapsedTime % totalDuration;
+  if (totalDuration <= 0) {
+    return 0;
+  }
+
+  if (loopMode === LoopMode.playlist) {
+    elapsedTime = elapsedTime % totalDuration;
+  } else {
+    // Repeat off (`none`) or repeat one (`one`): no wrap. Past one full pass, clamp to
+    // the last slot. Repeat-one normally resets the timeline before this matters.
+    if (elapsedTime >= totalDuration) {
+      return playlistItems.length - 1;
+    }
+  }
 
   for (let i = 0; i < playlistItems.length; i++) {
     const item = playlistItems[i];
@@ -23,6 +51,60 @@ export function getIndex(playlistItems: DP1Item[], startTime: number): number {
   }
 
   return index;
+}
+
+/**
+ * If repeat-off has finished one full cycle, wall-clock elapsed exceeds the playlist
+ * length while the UI still shows the last item. Switching to repeat-all would apply
+ * modulo to that large elapsed and jump to an arbitrary index.
+ *
+ * Re-anchor so {@link getIndex} with {@link LoopMode.playlist} still resolves to the
+ * **last** item, at the correct phase **inside that item's duration slot**: we use
+ * `posInLastMs % lastDurMs` so any extra dwell past the nominal slot end is folded
+ * back into the slot. Repeat-all then runs out the **remainder** of that slot before
+ * modulo wraps to the first item.
+ */
+export function reanchorStartTimeForNoneToPlaylist(
+  items: DP1Item[],
+  playlistStartTimeMs: number,
+  nowMs: number
+): number | null {
+  if (!items.length) {
+    return null;
+  }
+  const totalMs = items.reduce(
+    (acc, item) => acc + (item.duration ?? 0) * 1000,
+    0
+  );
+  if (totalMs <= 0) {
+    return null;
+  }
+  const elapsed = nowMs - playlistStartTimeMs;
+  if (elapsed < totalMs) {
+    return null;
+  }
+
+  const lastIdx = items.length - 1;
+  let totalBeforeLastMs = 0;
+  for (let i = 0; i < lastIdx; i++) {
+    totalBeforeLastMs += (items[i].duration ?? 0) * 1000;
+  }
+  const lastDurMs = (items[lastIdx].duration ?? 0) * 1000;
+  const startOfLastWallMs = playlistStartTimeMs + totalBeforeLastMs;
+  const posInLastMs = nowMs - startOfLastWallMs;
+
+  let posWithinLastMs = 0;
+  if (lastDurMs > 0 && posInLastMs > 0) {
+    const rem = posInLastMs % lastDurMs;
+    // rem === 0 means wall clock sits on a slot boundary (end of last item). Treat as
+    // the last instant inside the slot so repeat-all wraps next, instead of replaying
+    // a full last slot from offset 0.
+    posWithinLastMs =
+      rem === 0 ? Math.max(0, lastDurMs - 1) : rem;
+  }
+
+  const offsetInCycleMs = totalBeforeLastMs + posWithinLastMs;
+  return nowMs - offsetInCycleMs;
 }
 
 export function calculateStartTime(

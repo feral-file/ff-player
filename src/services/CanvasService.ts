@@ -30,7 +30,7 @@ import {
   SetLoopRequest,
   DisplayDefaultPlaylistReply,
 } from '@/models';
-import { LoopMode } from '@/models/cast_info.model';
+import { coerceLoopMode, LoopMode } from '@/models/cast_info.model';
 import { DP1Item } from '@/models/dp1.model';
 import { CustomEventName, NavigateEventDetail } from '@/models/custom_event';
 import DeviceManager from '@/utils/DeviceManager';
@@ -47,14 +47,13 @@ import {
   Scaling,
 } from '@/models/dp1.model';
 import DP1ScheduleService from './DP1ScheduleService';
-import { calculateStartTime } from '@/utils/playlist';
+import {
+  calculateStartTime,
+  reanchorStartTimeForNoneToPlaylist,
+} from '@/utils/playlist';
 import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
 import RemoteConfigService from './remoteConfigService';
-
-const validLoopModes = new Set<string>(Object.values(LoopMode));
-const coerceLoopMode = (raw: string | undefined): LoopMode =>
-  raw && validLoopModes.has(raw) ? (raw as LoopMode) : LoopMode.playlist;
 
 class CanvasService {
   private castInfo: CastInfo | null = null;
@@ -499,6 +498,7 @@ class CanvasService {
     this.originalPlaylistItems = null;
 
     console.log('[CanvasService] Display playlist');
+    // New playlist session: reset repeat/shuffle so prior cast state does not carry over.
     this.setCastInfo({
       castCommand: CastCommand.displayPlaylist,
       playlist: {
@@ -513,6 +513,8 @@ class CanvasService {
       index: 0,
       isPaused: false,
       playlistId: request.dp1CallData.id,
+      loopMode: LoopMode.playlist,
+      shuffle: false,
     });
     return { ok: true };
   }
@@ -596,12 +598,32 @@ class CanvasService {
   private setLoop(request: SetLoopRequest): Reply {
     const rawMode = (request as unknown as { mode: string }).mode;
     const mode = coerceLoopMode(rawMode);
+    const prev = coerceLoopMode(this.castInfo?.loopMode as string | undefined);
+
+    let startTime = this.castInfo?.startTime;
+
+    if (
+      mode === LoopMode.playlist &&
+      prev === LoopMode.none &&
+      this.castInfo?.playlist?.items?.length &&
+      startTime !== undefined
+    ) {
+      const anchored = reanchorStartTimeForNoneToPlaylist(
+        this.castInfo.playlist.items,
+        startTime,
+        Date.now()
+      );
+      if (anchored !== null) {
+        startTime = anchored;
+      }
+    }
 
     console.log('[CanvasService] setLoop', mode);
     this.setCastInfo({
       ...this.castInfo,
       castCommand: CastCommand.setLoop,
       loopMode: mode,
+      ...(startTime !== undefined ? { startTime } : {}),
     });
 
     return { ok: true };
