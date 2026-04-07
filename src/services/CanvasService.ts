@@ -607,6 +607,10 @@ class CanvasService {
       items?.reduce((acc, item) => acc + (item.duration ?? 0) * 1000, 0) ?? 0;
 
     if (items?.length && startTime !== undefined && totalMs > 0) {
+      // Re-anchor from wall clock only. Cast-level pause/resume is not wired from the FF
+      // app today; timeline helpers assume playback time tracks Date.now() - startTime.
+      // When pause is supported end-to-end, revisit: frozen offset from remainTime /
+      // elapsedTime, or defer re-anchor until resume (TBD).
       const now = Date.now();
 
       if (mode === LoopMode.playlist && prev === LoopMode.none) {
