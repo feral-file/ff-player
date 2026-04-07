@@ -162,7 +162,11 @@ export const AppProvider = ({ children }: AppContextProps) => {
       }
 
       if (castInfo.playlist?.items && castInfo.index !== undefined) {
-        // Recalculate startTime based on current index to ensure correct display
+        // Recovery (reload / restore from device): always anchor the timeline at the
+        // *start* of the current item's slot. That intentionally overwrites any
+        // persisted startTime (including after setLoop re-anchor) so playback restarts
+        // the current artwork from the beginning — same-session timing stays precise in
+        // CanvasService until the next restore.
         console.log(
           '[AppContext] Recalculating startTime for index:',
           castInfo.index
