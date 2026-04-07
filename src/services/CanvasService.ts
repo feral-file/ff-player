@@ -50,6 +50,7 @@ import DP1ScheduleService from './DP1ScheduleService';
 import {
   calculateStartTime,
   reanchorStartTimeForNoneToPlaylist,
+  reanchorStartTimeForPlaylistToNone,
 } from '@/utils/playlist';
 import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
@@ -601,20 +602,26 @@ class CanvasService {
     const prev = coerceLoopMode(this.castInfo?.loopMode as string | undefined);
 
     let startTime = this.castInfo?.startTime;
+    const items = this.castInfo?.playlist?.items;
+    const totalMs =
+      items?.reduce((acc, item) => acc + (item.duration ?? 0) * 1000, 0) ?? 0;
 
-    if (
-      mode === LoopMode.playlist &&
-      prev === LoopMode.none &&
-      this.castInfo?.playlist?.items?.length &&
-      startTime !== undefined
-    ) {
-      const anchored = reanchorStartTimeForNoneToPlaylist(
-        this.castInfo.playlist.items,
-        startTime,
-        Date.now()
-      );
-      if (anchored !== null) {
-        startTime = anchored;
+    if (items?.length && startTime !== undefined && totalMs > 0) {
+      const now = Date.now();
+
+      if (mode === LoopMode.playlist && prev === LoopMode.none) {
+        const anchored = reanchorStartTimeForNoneToPlaylist(
+          items,
+          startTime,
+          now
+        );
+        if (anchored !== null) {
+          startTime = anchored;
+        }
+      }
+
+      if (mode === LoopMode.none && prev === LoopMode.playlist) {
+        startTime = reanchorStartTimeForPlaylistToNone(startTime, now, totalMs);
       }
     }
 

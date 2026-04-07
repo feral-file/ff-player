@@ -5,6 +5,7 @@ import {
   calculateStartTime,
   getIndex,
   reanchorStartTimeForNoneToPlaylist,
+  reanchorStartTimeForPlaylistToNone,
 } from './playlist';
 
 function createItem(id: string, duration: number): DP1Item {
@@ -44,6 +45,42 @@ describe('playlist timing helpers', () => {
     expect(
       getIndex(playlistItems, Date.parse('2024-12-31T23:59:10.000Z'))
     ).toBe(1);
+  });
+
+  it('reanchorStartTimeForPlaylistToNone preserves playlist phase when elapsed past one cycle', () => {
+    const playlistItems = [
+      createItem('artwork-1', 10),
+      createItem('artwork-2', 20),
+      createItem('artwork-3', 30),
+    ];
+    const totalMs = 60_000;
+    const startMs = Date.parse('2025-01-01T00:00:00.000Z');
+    const nowMs = startMs + 75_000;
+
+    vi.useFakeTimers();
+    vi.setSystemTime(nowMs);
+
+    expect(getIndex(playlistItems, startMs, LoopMode.playlist)).toBe(1);
+    expect(getIndex(playlistItems, startMs, LoopMode.none)).toBe(2);
+
+    const anchored = reanchorStartTimeForPlaylistToNone(
+      startMs,
+      nowMs,
+      totalMs
+    );
+    expect(getIndex(playlistItems, anchored, LoopMode.none)).toBe(1);
+    expect(getIndex(playlistItems, anchored, LoopMode.playlist)).toBe(1);
+
+    vi.useRealTimers();
+  });
+
+  it('reanchorStartTimeForPlaylistToNone is identity when still within first cycle', () => {
+    const totalMs = 60_000;
+    const startMs = Date.parse('2025-01-01T00:00:00.000Z');
+    const nowMs = startMs + 35_000;
+    expect(reanchorStartTimeForPlaylistToNone(startMs, nowMs, totalMs)).toBe(
+      startMs
+    );
   });
 
   it('reanchorStartTimeForNoneToPlaylist returns null during the first pass', () => {

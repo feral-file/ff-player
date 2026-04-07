@@ -107,6 +107,29 @@ export function reanchorStartTimeForNoneToPlaylist(
   return nowMs - offsetInCycleMs;
 }
 
+/**
+ * When leaving repeat-all for repeat-off, wall-clock `now - startTime` may be ≥ one full
+ * cycle while the visible item is still mid-pass (repeat-all uses modulo). Without
+ * re-anchoring, {@link getIndex} with {@link LoopMode.none} clamps to the last item.
+ * Set `startTime` so `now - startTime` equals the same remainder in `[0, total)` as
+ * playlist modulo — index and phase match the instant before the mode change.
+ */
+export function reanchorStartTimeForPlaylistToNone(
+  playlistStartTimeMs: number,
+  nowMs: number,
+  totalPlaylistDurationMs: number
+): number {
+  if (totalPlaylistDurationMs <= 0) {
+    return playlistStartTimeMs;
+  }
+  const elapsed = nowMs - playlistStartTimeMs;
+  let offsetInCycle = elapsed % totalPlaylistDurationMs;
+  if (offsetInCycle < 0) {
+    offsetInCycle += totalPlaylistDurationMs;
+  }
+  return nowMs - offsetInCycle;
+}
+
 export function calculateStartTime(
   dp1Items: DP1Item[],
   index: number,
