@@ -4,6 +4,7 @@ import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { useAppContext } from '@/context/AppContext';
 import {
   getIndex,
+  isRepeatOffPastEnd,
   recalculateStartTimeForIndex,
   remainingMsInActiveSlot,
 } from '@/utils/playlist';
@@ -111,6 +112,12 @@ export default function PlaylistClient() {
     setCastPreviewURL(currentItem.source);
 
     if (!castInfo?.isPaused) {
+      if (
+        loopModeRef.current === LoopMode.none &&
+        isRepeatOffPastEnd(playlist, startTimeRef.current)
+      ) {
+        return;
+      }
       startInterval(currentItem.duration ?? 0);
     }
   }, [currentIndex, playlist]);
@@ -367,6 +374,7 @@ export default function PlaylistClient() {
 
     setPlaylist(newPlaylist);
     setStartTime(newStartTime);
+    canvasService.setPlaybackTimelineItems(newPlaylist);
 
     return { applied: true, nextIndex, newPlaylist };
   };
@@ -444,6 +452,14 @@ export default function PlaylistClient() {
           index: result.nextIndex,
         });
       }
+      return;
+    }
+
+    if (
+      currentLoopMode === LoopMode.none &&
+      isRepeatOffPastEnd(playlistLocal, startTimeRef.current)
+    ) {
+      clearTimer();
       return;
     }
 

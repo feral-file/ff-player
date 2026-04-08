@@ -54,6 +54,29 @@ export function getIndex(
 }
 
 /**
+ * True when repeat-off (`none`) playback has finished the full playlist once: wall
+ * elapsed is at or past the sum of slot durations. {@link getIndex} then clamps to the
+ * last item forever; the UI should not keep a repeating interval firing in that state.
+ */
+export function isRepeatOffPastEnd(
+  playlistItems: DP1Item[],
+  startTimeMs: number,
+  nowMs: number = Date.now()
+): boolean {
+  if (!playlistItems.length) {
+    return false;
+  }
+  const totalMs = playlistItems.reduce(
+    (acc, item) => acc + (item.duration ?? 0) * 1000,
+    0
+  );
+  if (totalMs <= 0) {
+    return false;
+  }
+  return nowMs - startTimeMs >= totalMs;
+}
+
+/**
  * Milliseconds remaining until the end of the slot {@link getIndex} would select at
  * `nowMs`. Same phase math as `getIndex` so the playlist client can reschedule its
  * interval after `setLoop` rewrites `startTime` (avoids a stale full-slot timer when the

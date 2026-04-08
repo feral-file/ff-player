@@ -184,6 +184,9 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
       setCastInfo(castInfo);
       canvasService.setCastInfo(castInfo, false);
+      if (castInfo.playlist?.items?.length) {
+        canvasService.setPlaybackTimelineItems(castInfo.playlist.items);
+      }
       navigateToHomePage();
     } else {
       // Cast default playlist

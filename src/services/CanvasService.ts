@@ -60,6 +60,12 @@ class CanvasService {
   private castInfo: CastInfo | null = null;
   private static instance: CanvasService | null;
   private originalPlaylistItems: DP1Item[] | null = null;
+  /**
+   * Item order/durations that drive `startTime` / `getIndex` on the device until the
+   * playlist client applies a queued shuffle or refresh. `castInfo.playlist` can already
+   * hold the next playlist while the screen still plays the previous one.
+   */
+  private playbackTimelineItems: DP1Item[] | null = null;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
 
   // Cursor positions
@@ -147,9 +153,17 @@ class CanvasService {
   public setCastInfo(castInfo: CastInfo | null, notify = true) {
     console.log('[CanvasService] Setting castInfo:', notify);
     this.castInfo = castInfo;
+    if (castInfo === null) {
+      this.playbackTimelineItems = null;
+    }
     if (notify) {
       this.onCastInfoChange?.(this.castInfo);
     }
+  }
+
+  /** Called when the playlist client applies a queued playlist at an item boundary. */
+  public setPlaybackTimelineItems(items: DP1Item[]): void {
+    this.playbackTimelineItems = items.length ? [...items] : null;
   }
 
   public executeScheduledDP1Task(dp1CallData: DP1Call): void {
@@ -499,15 +513,18 @@ class CanvasService {
     this.originalPlaylistItems = null;
 
     console.log('[CanvasService] Display playlist');
+    const mappedItems = request.dp1CallData.items.map(item => ({
+      ...item,
+      duration: item.duration ?? NO_DURATION_VALUE,
+    }));
+    // Timeline matches cast playlist until shuffle/refresh queues a swap on the client.
+    this.playbackTimelineItems = mappedItems;
     // New playlist session: reset repeat/shuffle so prior cast state does not carry over.
     this.setCastInfo({
       castCommand: CastCommand.displayPlaylist,
       playlist: {
         ...request.dp1CallData,
-        items: request.dp1CallData.items.map(item => ({
-          ...item,
-          duration: item.duration ?? NO_DURATION_VALUE,
-        })),
+        items: mappedItems,
       },
       playlistUrl: request.playlistUrl,
       startTime: Date.now(),
@@ -602,7 +619,8 @@ class CanvasService {
     const prev = coerceLoopMode(this.castInfo?.loopMode as string | undefined);
 
     let startTime = this.castInfo?.startTime;
-    const items = this.castInfo?.playlist?.items;
+    const items =
+      this.playbackTimelineItems ?? this.castInfo?.playlist?.items;
     const totalMs =
       items?.reduce((acc, item) => acc + (item.duration ?? 0) * 1000, 0) ?? 0;
 

@@ -4,6 +4,7 @@ import { DP1License, type DP1Item } from '@/models/dp1.model';
 import {
   calculateStartTime,
   getIndex,
+  isRepeatOffPastEnd,
   reanchorStartTimeForNoneToPlaylist,
   reanchorStartTimeForPlaylistToNone,
   remainingMsInActiveSlot,
@@ -177,6 +178,21 @@ describe('playlist timing helpers', () => {
     // After the remaining 15s of the last slot, repeat-all wraps to the first item.
     vi.setSystemTime(nowMs + 15_000);
     expect(getIndex(playlistItems, anchored, LoopMode.playlist)).toBe(0);
+    vi.useRealTimers();
+  });
+
+  it('isRepeatOffPastEnd is false within first pass and true after full playlist elapsed', () => {
+    const playlistItems = [
+      createItem('artwork-1', 10),
+      createItem('artwork-2', 20),
+      createItem('artwork-3', 30),
+    ];
+    const startMs = Date.parse('2025-01-01T00:00:00.000Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(startMs + 59_999);
+    expect(isRepeatOffPastEnd(playlistItems, startMs)).toBe(false);
+    vi.setSystemTime(startMs + 60_000);
+    expect(isRepeatOffPastEnd(playlistItems, startMs)).toBe(true);
     vi.useRealTimers();
   });
 
