@@ -551,6 +551,10 @@ export default function PlaylistClient() {
           case CastCommand.setLoop: {
             // CanvasService may re-anchor startTime when leaving repeat-off after the
             // first full cycle; keep refs aligned with the interval clock.
+            // The loopModeRef is already updated by the castInfo?.loopMode useEffect
+            // that fires first. Index recompute happens on the next interval tick
+            // (up to one slot duration later), which is acceptable since the UI
+            // already shows the correct last item and the visual gap is imperceptible.
             if (castInfo.startTime != null) {
               startTimeRef.current = castInfo.startTime;
               setStartTime(castInfo.startTime);

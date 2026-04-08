@@ -112,6 +112,62 @@ describe('playlist timing helpers', () => {
     expect(getIndex(playlistItems, start, LoopMode.none)).toBe(1);
   });
 
+  it('getIndex with LoopMode.one clamps to last item like none (client resets startTime before this matters)', () => {
+    // LoopMode.one uses the same non-wrapping branch as LoopMode.none in getIndex.
+    // The playlist client normally resets startTime every slot, so the clamp only
+    // applies if the client somehow misses a reset. Verifying it here guards against
+    // accidental removal of the clamp.
+    const playlistItems = [
+      createItem('artwork-1', 10),
+      createItem('artwork-2', 20),
+      createItem('artwork-3', 30),
+    ];
+
+    vi.useFakeTimers();
+    const start = Date.parse('2025-01-01T00:00:00.000Z');
+
+    // Mid-playlist: normal resolution.
+    vi.setSystemTime(start + 15_000);
+    expect(getIndex(playlistItems, start, LoopMode.one)).toBe(1);
+
+    // After one full pass (65s): clamps to last item, no wrap.
+    vi.setSystemTime(start + 65_000);
+    expect(getIndex(playlistItems, start, LoopMode.one)).toBe(2);
+  });
+
+  it('reanchorStartTimeForNoneToPlaylist on exact slot boundary keeps last item and wraps on next ms', () => {
+    // Exercises the rem === 0 branch: when wall-clock lands exactly on a slot boundary
+    // (posInLastMs is a multiple of lastDurMs), treat it as (lastDurMs - 1) so
+    // repeat-all wraps on the NEXT tick instead of replaying a full last slot.
+    const playlistItems = [
+      createItem('artwork-1', 10),
+      createItem('artwork-2', 20),
+      createItem('artwork-3', 30),
+    ];
+    const startMs = Date.parse('2025-01-01T00:00:00.000Z');
+    // Exactly 1 full cycle (60s) → posInLastMs = 30_000 = lastDurMs, rem === 0.
+    const nowMs = startMs + 60_000;
+    const anchored = reanchorStartTimeForNoneToPlaylist(
+      playlistItems,
+      startMs,
+      nowMs
+    );
+    expect(anchored).not.toBeNull();
+    if (anchored === null) {
+      throw new Error('expected anchored start time');
+    }
+
+    vi.useFakeTimers();
+
+    // At the exact boundary, repeat-all still shows the last item.
+    vi.setSystemTime(nowMs);
+    expect(getIndex(playlistItems, anchored, LoopMode.playlist)).toBe(2);
+
+    // One ms later: modulo wraps to the first item.
+    vi.setSystemTime(nowMs + 1);
+    expect(getIndex(playlistItems, anchored, LoopMode.playlist)).toBe(0);
+  });
+
   it('calculateStartTime subtracts prior durations and elapsed item time', () => {
     const playlistItems = [
       createItem('artwork-1', 5),

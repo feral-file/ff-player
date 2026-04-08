@@ -135,7 +135,7 @@ export interface SetShuffleRequest extends Request {
 export type SetShuffleReply = Reply;
 
 export interface SetLoopRequest extends Request {
-  mode: string; // 'none' | 'playlist' | 'one'
+  mode: LoopMode;
 }
 export type SetLoopReply = Reply;
 

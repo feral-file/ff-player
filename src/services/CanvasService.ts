@@ -596,8 +596,7 @@ class CanvasService {
   }
 
   private setLoop(request: SetLoopRequest): Reply {
-    const rawMode = (request as unknown as { mode: string }).mode;
-    const mode = coerceLoopMode(rawMode);
+    const mode = coerceLoopMode(request.mode);
     const prev = coerceLoopMode(this.castInfo?.loopMode as string | undefined);
 
     let startTime = this.castInfo?.startTime;
