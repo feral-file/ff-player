@@ -1,6 +1,11 @@
 import { LoopMode } from '@/models/cast_info.model';
 import { DP1Item } from '@/models/dp1.model';
 
+export interface PendingIntervalOverride {
+  targetIndex: number;
+  durationSeconds: number;
+}
+
 /**
  * Map wall-clock elapsed time since playlist `startTime` to the active item index.
  *
@@ -12,15 +17,15 @@ import { DP1Item } from '@/models/dp1.model';
 export function getIndex(
   playlistItems: DP1Item[],
   startTime: number,
-  loopMode: LoopMode = LoopMode.playlist
+  loopMode: LoopMode = LoopMode.playlist,
+  nowMs: number = Date.now()
 ): number {
   if (!playlistItems.length) {
     return 0;
   }
 
   let index = 0;
-  const currentTime = Date.now();
-  let elapsedTime = currentTime - startTime;
+  let elapsedTime = nowMs - startTime;
 
   const totalDuration = playlistItems.reduce(
     (acc, item) => acc + (item.duration ?? 0) * 1000,
@@ -105,6 +110,157 @@ export function reanchorStartTimeForNoneToPlaylist(
 
   const offsetInCycleMs = totalBeforeLastMs + posWithinLastMs;
   return nowMs - offsetInCycleMs;
+}
+
+/**
+ * Return the remaining milliseconds until the current slot should advance.
+ *
+ * For repeat-all we normalize into the active cycle. For repeat-off / repeat-one,
+ * once wall-clock time has already exhausted the playlist we return 0 because there
+ * is no automatic wrap to schedule from this helper.
+ */
+export function getRemainingDurationMs(
+  items: DP1Item[],
+  playlistStartTimeMs: number,
+  loopMode: LoopMode = LoopMode.playlist,
+  nowMs: number = Date.now()
+): number {
+  if (!items.length) {
+    return 0;
+  }
+
+  const totalMs = items.reduce(
+    (acc, item) => acc + (item.duration ?? 0) * 1000,
+    0
+  );
+  if (totalMs <= 0) {
+    return 0;
+  }
+
+  let elapsedMs = nowMs - playlistStartTimeMs;
+
+  if (loopMode === LoopMode.playlist) {
+    elapsedMs = ((elapsedMs % totalMs) + totalMs) % totalMs;
+  } else if (elapsedMs >= totalMs) {
+    return 0;
+  }
+
+  for (const item of items) {
+    const itemMs = (item.duration ?? 0) * 1000;
+    if (elapsedMs < itemMs) {
+      return Math.max(0, itemMs - elapsedMs);
+    }
+    elapsedMs -= itemMs;
+  }
+
+  return 0;
+}
+
+/**
+ * Resolve the active slot and the time remaining in that slot using a single
+ * wall-clock sample. This keeps index and timer cadence aligned on exact
+ * boundaries where a 1ms drift would otherwise change the result.
+ */
+export function getPlaybackPosition(
+  items: DP1Item[],
+  playlistStartTimeMs: number,
+  loopMode: LoopMode = LoopMode.playlist,
+  nowMs: number = Date.now()
+): { index: number; remainingDurationMs: number } {
+  return {
+    index: getIndex(items, playlistStartTimeMs, loopMode, nowMs),
+    remainingDurationMs: getRemainingDurationMs(
+      items,
+      playlistStartTimeMs,
+      loopMode,
+      nowMs
+    ),
+  };
+}
+
+/**
+ * Decide how PlaylistClient should hand off timer cadence after a setLoop command
+ * has re-anchored the playback timeline.
+ */
+export function planSetLoopTimerHandoff(
+  currentIndex: number,
+  nextIndex: number,
+  remainingDurationMs: number,
+  isPaused: boolean,
+  hasQueuedPlaylistPending = false
+): {
+  shouldClearTimer: boolean;
+  restartDurationSeconds: number | null;
+  pendingOverride: PendingIntervalOverride | null;
+  resumeDurationSeconds: number | null;
+} {
+  if (hasQueuedPlaylistPending) {
+    return {
+      shouldClearTimer: false,
+      restartDurationSeconds: null,
+      pendingOverride: null,
+      resumeDurationSeconds: null,
+    };
+  }
+
+  const durationSeconds = remainingDurationMs / 1000;
+
+  if (isPaused) {
+    return {
+      shouldClearTimer: false,
+      restartDurationSeconds: null,
+      pendingOverride: null,
+      resumeDurationSeconds: durationSeconds,
+    };
+  }
+
+  if (nextIndex !== currentIndex) {
+    return {
+      shouldClearTimer: true,
+      restartDurationSeconds: null,
+      pendingOverride: {
+        targetIndex: nextIndex,
+        durationSeconds,
+      },
+      resumeDurationSeconds: durationSeconds,
+    };
+  }
+
+  return {
+    shouldClearTimer: true,
+    restartDurationSeconds: durationSeconds,
+    pendingOverride: null,
+    resumeDurationSeconds: durationSeconds,
+  };
+}
+
+/**
+ * Consume a pending interval override only when the expected index becomes active.
+ * Any other index transition discards the override so stale cadence cannot leak into
+ * an unrelated command path.
+ */
+export function consumePendingIntervalOverride(
+  pendingOverride: PendingIntervalOverride | null,
+  activeIndex: number
+): {
+  durationSeconds: number | null;
+  remainingOverride: PendingIntervalOverride | null;
+} {
+  if (!pendingOverride) {
+    return { durationSeconds: null, remainingOverride: null };
+  }
+
+  if (pendingOverride.targetIndex === activeIndex) {
+    return {
+      durationSeconds: pendingOverride.durationSeconds,
+      remainingOverride: null,
+    };
+  }
+
+  return {
+    durationSeconds: null,
+    remainingOverride: null,
+  };
 }
 
 export function calculateStartTime(

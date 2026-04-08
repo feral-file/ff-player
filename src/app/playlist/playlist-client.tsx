@@ -2,7 +2,14 @@
 
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { useAppContext } from '@/context/AppContext';
-import { getIndex, recalculateStartTimeForIndex } from '@/utils/playlist';
+import {
+  consumePendingIntervalOverride,
+  getIndex,
+  getPlaybackPosition,
+  PendingIntervalOverride,
+  planSetLoopTimerHandoff,
+  recalculateStartTimeForIndex,
+} from '@/utils/playlist';
 import { CastCommand } from '@/models';
 import { coerceLoopMode, LoopMode } from '@/models/cast_info.model';
 import { useEffect, useRef, useState } from 'react';
@@ -41,6 +48,9 @@ export default function PlaylistClient() {
   // Mutable mirror of startTime state so the setInterval closure always reads the
   // latest value without needing to be recreated on every startTime change.
   const startTimeRef = useRef<number>(0);
+  // When an external command re-anchors playback mid-slot, the next interval must
+  // start from the remaining slot time rather than the artwork's full duration.
+  const nextIntervalDurationRef = useRef<PendingIntervalOverride | null>(null);
 
   useEffect(() => {
     startTimeRef.current = startTime;
@@ -100,7 +110,13 @@ export default function PlaylistClient() {
     setCastPreviewURL(currentItem.source);
 
     if (!castInfo?.isPaused) {
-      startInterval(currentItem.duration ?? 0);
+      const { durationSeconds, remainingOverride } =
+        consumePendingIntervalOverride(
+          nextIntervalDurationRef.current,
+          currentIndex
+        );
+      nextIntervalDurationRef.current = remainingOverride;
+      startInterval(durationSeconds ?? (currentItem.duration ?? 0));
     }
   }, [currentIndex, playlist]);
 
@@ -194,6 +210,7 @@ export default function PlaylistClient() {
 
   const handlePauseCasting = () => {
     console.log('handlePauseCasting');
+    nextIntervalDurationRef.current = null;
     clearTimer();
     elapsedTimeRef.current = castInfo?.elapsedTime ?? 0;
     remainTimeRef.current = castInfo?.remainTime ?? 0;
@@ -231,6 +248,7 @@ export default function PlaylistClient() {
   };
 
   const handleNext = () => {
+    nextIntervalDurationRef.current = null;
     const index = castInfo?.index ?? 0;
     const startTime = castInfo?.startTime ?? Date.now();
 
@@ -250,6 +268,7 @@ export default function PlaylistClient() {
   };
 
   const handlePrevious = () => {
+    nextIntervalDurationRef.current = null;
     const index = castInfo?.index ?? 0;
     const startTime = castInfo?.startTime ?? Date.now();
 
@@ -269,6 +288,7 @@ export default function PlaylistClient() {
   };
 
   const handleMoveToArtwork = () => {
+    nextIntervalDurationRef.current = null;
     const index = castInfo?.index ?? 0;
     const startTime = castInfo?.startTime ?? Date.now();
 
@@ -298,6 +318,7 @@ export default function PlaylistClient() {
   };
 
   const handleUpdateIndex = () => {
+    nextIntervalDurationRef.current = null;
     const newIndex = castInfo?.index ?? 0;
 
     // Apply queued playlist immediately if it exists
@@ -485,6 +506,7 @@ export default function PlaylistClient() {
           }
           case CastCommand.displayPlaylist: {
             // Reset data for new playlist arrival
+            nextIntervalDurationRef.current = null;
             indexRef.current = -1;
             setCurrentIndex(-1);
             setPlaylistDefaultsSettings(null);
@@ -550,14 +572,55 @@ export default function PlaylistClient() {
           }
           case CastCommand.setLoop: {
             // CanvasService may re-anchor startTime when leaving repeat-off after the
-            // first full cycle; keep refs aligned with the interval clock.
-            // The loopModeRef is already updated by the castInfo?.loopMode useEffect
-            // that fires first. Index recompute happens on the next interval tick
-            // (up to one slot duration later), which is acceptable since the UI
-            // already shows the correct last item and the visual gap is imperceptible.
-            if (castInfo.startTime != null) {
+            // first full cycle. Recompute the active slot immediately and restart the
+            // interval from the slot remainder so exact-boundary none->playlist wraps
+            // do not wait for the stale pre-anchor timer cadence.
+            if (
+              castInfo.startTime != null &&
+              castInfo.playlist?.items?.length
+            ) {
               startTimeRef.current = castInfo.startTime;
               setStartTime(castInfo.startTime);
+
+              const nextLoopMode = coerceLoopMode(
+                castInfo.loopMode as string | undefined
+              );
+              const { index: nextIndex, remainingDurationMs: nextIntervalDurationMs } =
+                getPlaybackPosition(
+                  castInfo.playlist.items,
+                  castInfo.startTime,
+                  nextLoopMode
+                );
+
+              const timerPlan = planSetLoopTimerHandoff(
+                currentIndex,
+                nextIndex,
+                nextIntervalDurationMs,
+                castInfo.isPaused ?? false,
+                Boolean(queuedPlaylistRef.current?.length)
+              );
+
+              if (timerPlan.shouldClearTimer) {
+                // Stop the pre-anchor cadence before handing off to either the
+                // immediate restart path or the next-index effect path.
+                clearTimer();
+              }
+
+              if (timerPlan.resumeDurationSeconds != null) {
+                remainTimeRef.current = timerPlan.resumeDurationSeconds;
+              }
+              nextIntervalDurationRef.current = timerPlan.pendingOverride;
+
+              if (timerPlan.restartDurationSeconds !== null) {
+                startInterval(timerPlan.restartDurationSeconds);
+              }
+
+              if (
+                timerPlan.pendingOverride !== null &&
+                nextIndex !== currentIndex
+              ) {
+                setCurrentIndex(nextIndex);
+              }
             }
             break;
           }
