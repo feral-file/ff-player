@@ -2,7 +2,11 @@
 
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { useAppContext } from '@/context/AppContext';
-import { getIndex, recalculateStartTimeForIndex } from '@/utils/playlist';
+import {
+  getIndex,
+  recalculateStartTimeForIndex,
+  remainingMsInActiveSlot,
+} from '@/utils/playlist';
 import { CastCommand } from '@/models';
 import { coerceLoopMode, LoopMode } from '@/models/cast_info.model';
 import { useEffect, useRef, useState } from 'react';
@@ -31,13 +35,20 @@ export default function PlaylistClient() {
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const [startTime, setStartTime] = useState<number>(0);
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>();
+  const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(
+    undefined
+  );
+  const playlistRef = useRef(playlist);
+  playlistRef.current = playlist;
+  const tickFnRef = useRef<() => void>(() => undefined);
   const elapsedTimeRef = useRef<number>(0);
   const remainTimeRef = useRef<number>(0);
   const currentItemRef = useRef<DP1Item>();
   // A queued playlist to be swapped in when the current item's timer ends
   const queuedPlaylistRef = useRef<DP1Item[] | null>(null);
   const loopModeRef = useRef<LoopMode>(LoopMode.playlist);
+  /** Loop mode last applied from a castInfo update (for setLoop transition detection). */
+  const lastAppliedLoopModeRef = useRef<LoopMode>(LoopMode.playlist);
   // Mutable mirror of startTime state so the setInterval closure always reads the
   // latest value without needing to be recreated on every startTime change.
   const startTimeRef = useRef<number>(0);
@@ -387,87 +398,113 @@ export default function PlaylistClient() {
     }));
   };
 
-  const startInterval = (duration: number) => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
+  const runPlaylistIntervalTick = () => {
+    const playlistLocal = playlistRef.current;
+    const currentCastInfo = canvasService.getCastInfo();
+    const currentLoopMode = loopModeRef.current;
+
+    // Loop-one: replay the same item.
+    if (currentLoopMode === LoopMode.one) {
+      const castInfoItems =
+        currentCastInfo?.playlist?.items ?? playlistLocal;
+      let realIndex = -1;
+      if (currentItemRef.current) {
+        realIndex = castInfoItems.findIndex(
+          i => i.id === currentItemRef.current?.id
+        );
+      }
+      if (realIndex < 0 && indexRef.current >= 0) {
+        realIndex = Math.min(indexRef.current, castInfoItems.length - 1);
+      }
+      if (realIndex < 0) realIndex = 0;
+
+      const newStartTime = recalculateStartTimeForIndex(
+        castInfoItems,
+        realIndex
+      );
+      startTimeRef.current = newStartTime;
+      setStartTime(newStartTime);
+
+      indexRef.current = -1;
+      canvasService.setCastInfo({
+        ...currentCastInfo,
+        startTime: newStartTime,
+        castCommand: CastCommand.updateIndex,
+        index: realIndex,
+      });
+      return;
     }
+
+    if (queuedPlaylistRef.current?.length) {
+      const result = applyQueuedPlaylistIfExists();
+      if (result.applied && result.nextIndex !== undefined) {
+        canvasService.setCastInfo({
+          ...currentCastInfo,
+          castCommand: CastCommand.updateIndex,
+          index: result.nextIndex,
+        });
+      }
+      return;
+    }
+
+    const index = getIndex(
+      playlistLocal,
+      startTimeRef.current,
+      loopModeRef.current
+    );
+    canvasService.setCastInfo({
+      ...currentCastInfo,
+      castCommand: CastCommand.updateIndex,
+      index,
+    });
+  };
+
+  tickFnRef.current = runPlaylistIntervalTick;
+
+  const clearTimer = () => {
+    if (intervalRef.current !== undefined) {
+      clearInterval(intervalRef.current);
+      clearTimeout(intervalRef.current);
+      intervalRef.current = undefined;
+    }
+  };
+
+  const startInterval = (duration: number) => {
+    clearTimer();
 
     if (duration === 0 || duration === NO_DURATION_VALUE) {
       return;
     }
 
     intervalRef.current = setInterval(() => {
-      const currentCastInfo = canvasService.getCastInfo();
-      const currentLoopMode = loopModeRef.current;
-
-      // Loop-one: replay the same item.
-      if (currentLoopMode === LoopMode.one) {
-        // Always resolve the current item's index against the castInfo playlist
-        // (which may already be shuffled/reordered by CanvasService) using the
-        // item ID as the source of truth. indexRef.current reflects the OLD
-        // playlist order and must not be used directly here.
-        const castInfoItems = currentCastInfo?.playlist?.items ?? playlist;
-        let realIndex = -1;
-        if (currentItemRef.current) {
-          realIndex = castInfoItems.findIndex(
-            i => i.id === currentItemRef.current?.id
-          );
-        }
-        if (realIndex < 0 && indexRef.current >= 0) {
-          realIndex = Math.min(indexRef.current, castInfoItems.length - 1);
-        }
-        if (realIndex < 0) realIndex = 0; // ultimate safe fallback
-
-        // Reset the timeline anchor so that if loop mode changes later,
-        // getIndex(playlist, startTimeRef.current) still returns realIndex
-        // rather than a position N loops ahead in wall-clock time.
-        const newStartTime = recalculateStartTimeForIndex(
-          castInfoItems,
-          realIndex
-        );
-        startTimeRef.current = newStartTime;
-        setStartTime(newStartTime);
-
-        indexRef.current = -1;
-        canvasService.setCastInfo({
-          ...currentCastInfo,
-          startTime: newStartTime,
-          castCommand: CastCommand.updateIndex,
-          index: realIndex,
-        });
-        return;
-      }
-
-      // If a refreshed/shuffled playlist has been queued, swap it in at the boundary
-      if (queuedPlaylistRef.current?.length) {
-        const result = applyQueuedPlaylistIfExists();
-        if (result.applied && result.nextIndex !== undefined) {
-          canvasService.setCastInfo({
-            ...currentCastInfo,
-            castCommand: CastCommand.updateIndex,
-            index: result.nextIndex,
-          });
-        }
-        return;
-      }
-
-      const index = getIndex(
-        playlist,
-        startTimeRef.current,
-        loopModeRef.current
-      );
-      canvasService.setCastInfo({
-        ...currentCastInfo,
-        castCommand: CastCommand.updateIndex,
-        index,
-      });
+      tickFnRef.current();
     }, duration * 1000);
   };
 
-  const clearTimer = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = undefined;
+  /**
+   * After CanvasService re-anchors `startTime` on a none↔playlist setLoop, rebuild the
+   * slot timer from the true phase. Otherwise the previous interval still waits a full
+   * prior slot duration (bad when the new remainder is ~0 at a none→playlist boundary).
+   * Only for those transitions: other modes do not re-anchor `startTime`, and
+   * `remainingMsInActiveSlot` for `one`/`none` with multi-cycle wall time does not match
+   * playlist modulo phase.
+   */
+  const rescheduleSlotTimerAfterLoopChange = (
+    items: DP1Item[],
+    startTimeMs: number,
+    loopMode: LoopMode
+  ) => {
+    clearTimer();
+    const remainMs = remainingMsInActiveSlot(items, startTimeMs, loopMode);
+    const nearBoundaryMs = 16;
+    if (remainMs <= nearBoundaryMs) {
+      const delayMs = Math.max(0, remainMs);
+      intervalRef.current = window.setTimeout(() => {
+        intervalRef.current = undefined;
+        tickFnRef.current();
+      }, delayMs) as unknown as ReturnType<typeof setInterval>;
+    } else {
+      startInterval(remainMs / 1000);
     }
   };
 
@@ -477,6 +514,8 @@ export default function PlaylistClient() {
       JSON.stringify(castInfo?.castCommand)
     );
     if (castInfo) {
+      const loopModeBeforeThisCastInfo = lastAppliedLoopModeRef.current;
+
       const handleCastCommand = () => {
         switch (castInfo.castCommand) {
           case CastCommand.refreshPlaylist: {
@@ -549,17 +588,42 @@ export default function PlaylistClient() {
             break;
           }
           case CastCommand.setLoop: {
-            // CanvasService may re-anchor startTime when leaving repeat-off after the
-            // first full cycle; keep refs aligned with the interval clock.
+            // CanvasService re-anchors startTime only for none↔playlist; align refs and
+            // reschedule the timer only for those transitions so we do not clobber the
+            // interval with wrong remainder math (e.g. playlist→one with long elapsed).
             if (castInfo.startTime != null) {
               startTimeRef.current = castInfo.startTime;
               setStartTime(castInfo.startTime);
+            }
+            const nextLoopMode = coerceLoopMode(
+              castInfo.loopMode as string | undefined
+            );
+            const isNonePlaylistTransition =
+              (loopModeBeforeThisCastInfo === LoopMode.none &&
+                nextLoopMode === LoopMode.playlist) ||
+              (loopModeBeforeThisCastInfo === LoopMode.playlist &&
+                nextLoopMode === LoopMode.none);
+            if (
+              isNonePlaylistTransition &&
+              !castInfo.isPaused &&
+              castInfo.playlist?.items?.length &&
+              castInfo.startTime != null
+            ) {
+              rescheduleSlotTimerAfterLoopChange(
+                castInfo.playlist.items,
+                castInfo.startTime,
+                nextLoopMode
+              );
             }
             break;
           }
         }
       };
       handleCastCommand();
+
+      lastAppliedLoopModeRef.current = coerceLoopMode(
+        castInfo.loopMode as string | undefined
+      );
     }
   }, [castInfo]);
 

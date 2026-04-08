@@ -6,6 +6,7 @@ import {
   getIndex,
   reanchorStartTimeForNoneToPlaylist,
   reanchorStartTimeForPlaylistToNone,
+  remainingMsInActiveSlot,
 } from './playlist';
 
 function createItem(id: string, duration: number): DP1Item {
@@ -98,6 +99,53 @@ describe('playlist timing helpers', () => {
     vi.setSystemTime(nowMs);
     expect(getIndex(playlistItems, startMs, LoopMode.playlist)).toBe(2);
     expect(getIndex(playlistItems, startMs, LoopMode.none)).toBe(2);
+    vi.useRealTimers();
+  });
+
+  it('remainingMsInActiveSlot matches getIndex slot remainder (playlist mode)', () => {
+    const playlistItems = [
+      createItem('artwork-1', 10),
+      createItem('artwork-2', 20),
+      createItem('artwork-3', 30),
+    ];
+    const startMs = Date.parse('2025-01-01T00:00:00.000Z');
+    const nowMs = startMs + 25_000;
+    vi.useFakeTimers();
+    vi.setSystemTime(nowMs);
+    expect(getIndex(playlistItems, startMs, LoopMode.playlist)).toBe(1);
+    expect(
+      remainingMsInActiveSlot(playlistItems, startMs, LoopMode.playlist, nowMs)
+    ).toBe(5_000);
+    vi.useRealTimers();
+  });
+
+  it('after none→playlist re-anchor at last-slot boundary, remainder is ~1ms in playlist mode', () => {
+    const playlistItems = [
+      createItem('artwork-1', 10),
+      createItem('artwork-2', 20),
+      createItem('artwork-3', 30),
+    ];
+    const startMs = Date.parse('2025-01-01T00:00:00.000Z');
+    const nowMs = startMs + 90_000;
+    const anchored = reanchorStartTimeForNoneToPlaylist(
+      playlistItems,
+      startMs,
+      nowMs
+    );
+    expect(anchored).not.toBeNull();
+    if (anchored === null) {
+      throw new Error('expected anchored start time');
+    }
+    vi.useFakeTimers();
+    vi.setSystemTime(nowMs);
+    expect(
+      remainingMsInActiveSlot(
+        playlistItems,
+        anchored,
+        LoopMode.playlist,
+        nowMs
+      )
+    ).toBe(1);
     vi.useRealTimers();
   });
 

@@ -54,6 +54,59 @@ export function getIndex(
 }
 
 /**
+ * Milliseconds remaining until the end of the slot {@link getIndex} would select at
+ * `nowMs`. Same phase math as `getIndex` so the playlist client can reschedule its
+ * interval after `setLoop` rewrites `startTime` (avoids a stale full-slot timer when the
+ * true remainder is ~0, e.g. none→playlist on a last-slot boundary).
+ */
+export function remainingMsInActiveSlot(
+  playlistItems: DP1Item[],
+  startTimeMs: number,
+  loopMode: LoopMode,
+  nowMs: number = Date.now()
+): number {
+  if (!playlistItems.length) {
+    return 0;
+  }
+
+  let elapsedTime = nowMs - startTimeMs;
+
+  const totalDuration = playlistItems.reduce(
+    (acc, item) => acc + (item.duration ?? 0) * 1000,
+    0
+  );
+
+  if (totalDuration <= 0) {
+    return 0;
+  }
+
+  if (loopMode === LoopMode.playlist) {
+    elapsedTime = elapsedTime % totalDuration;
+  } else {
+    if (elapsedTime >= totalDuration) {
+      const lastIdx = playlistItems.length - 1;
+      let beforeLastMs = 0;
+      for (const item of playlistItems.slice(0, lastIdx)) {
+        beforeLastMs += (item.duration ?? 0) * 1000;
+      }
+      const lastDurMs = (playlistItems[lastIdx].duration ?? 0) * 1000;
+      const intoLastMs = elapsedTime - beforeLastMs;
+      return Math.max(0, lastDurMs - intoLastMs);
+    }
+  }
+
+  for (const item of playlistItems) {
+    const itemMs = (item.duration ?? 0) * 1000;
+    if (elapsedTime < itemMs) {
+      return itemMs - elapsedTime;
+    }
+    elapsedTime -= itemMs;
+  }
+
+  return 0;
+}
+
+/**
  * If repeat-off has finished one full cycle, wall-clock elapsed exceeds the playlist
  * length while the UI still shows the last item. Switching to repeat-all would apply
  * modulo to that large elapsed and jump to an arbitrary index.
