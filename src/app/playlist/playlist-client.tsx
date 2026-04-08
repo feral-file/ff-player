@@ -6,9 +6,11 @@ import {
   consumePendingIntervalOverride,
   getIndex,
   getPlaybackPosition,
+  getRemainingDurationMs,
   PendingIntervalOverride,
   planSetLoopTimerHandoff,
   recalculateStartTimeForIndex,
+  resolveRepeatOneRestartMs,
 } from '@/utils/playlist';
 import { CastCommand } from '@/models';
 import { coerceLoopMode, LoopMode } from '@/models/cast_info.model';
@@ -472,6 +474,20 @@ export default function PlaylistClient() {
         return;
       }
 
+      // Repeat-off: once wall-clock has passed the full playlist, stay parked on the
+      // last item without re-emitting updateIndex on every timer tick.
+      if (currentLoopMode === LoopMode.none) {
+        const remainingMs = getRemainingDurationMs(
+          playlist,
+          startTimeRef.current,
+          LoopMode.none
+        );
+        if (remainingMs === 0) {
+          clearTimer();
+          return;
+        }
+      }
+
       const index = getIndex(
         playlist,
         startTimeRef.current,
@@ -585,12 +601,19 @@ export default function PlaylistClient() {
               const nextLoopMode = coerceLoopMode(
                 castInfo.loopMode as string | undefined
               );
-              const { index: nextIndex, remainingDurationMs: nextIntervalDurationMs } =
+              const { index: nextIndex, remainingDurationMs: rawRemainingMs } =
                 getPlaybackPosition(
                   castInfo.playlist.items,
                   castInfo.startTime,
                   nextLoopMode
                 );
+
+              const nextIntervalDurationMs = resolveRepeatOneRestartMs(
+                castInfo.playlist.items,
+                nextIndex,
+                rawRemainingMs,
+                nextLoopMode
+              );
 
               const timerPlan = planSetLoopTimerHandoff(
                 currentIndex,

@@ -9,6 +9,7 @@ import {
   getRemainingDurationMs,
   planSetLoopTimerHandoff,
   reanchorStartTimeForNoneToPlaylist,
+  resolveRepeatOneRestartMs,
 } from './playlist';
 
 function createItem(id: string, duration: number): DP1Item {
@@ -245,6 +246,23 @@ describe('playlist timing helpers', () => {
       index: 2,
       remainingDurationMs: 1,
     });
+  });
+
+  it('resolveRepeatOneRestartMs uses full slot duration when exhausted timeline reports 0 ms', () => {
+    const playlistItems = [
+      createItem('artwork-1', 10),
+      createItem('artwork-2', 20),
+      createItem('artwork-3', 30),
+    ];
+    expect(
+      resolveRepeatOneRestartMs(playlistItems, 2, 0, LoopMode.one)
+    ).toBe(30_000);
+    expect(
+      resolveRepeatOneRestartMs(playlistItems, 2, 5_000, LoopMode.one)
+    ).toBe(5_000);
+    expect(
+      resolveRepeatOneRestartMs(playlistItems, 2, 0, LoopMode.playlist)
+    ).toBe(0);
   });
 
   it('planSetLoopTimerHandoff restarts immediately when the active index stays the same', () => {

@@ -179,6 +179,28 @@ export function getPlaybackPosition(
 }
 
 /**
+ * When switching to {@link LoopMode.one} after a non-wrapping timeline already
+ * exceeds the full playlist duration, {@link getPlaybackPosition} reports 0 ms
+ * remaining. Repeat-one still needs a positive interval; use the slot's full
+ * duration as the restart cadence.
+ */
+export function resolveRepeatOneRestartMs(
+  items: DP1Item[],
+  resolvedIndex: number,
+  remainingMs: number,
+  nextLoopMode: LoopMode
+): number {
+  if (nextLoopMode !== LoopMode.one || remainingMs > 0) {
+    return remainingMs;
+  }
+  if (resolvedIndex < 0 || resolvedIndex >= items.length) {
+    return remainingMs;
+  }
+  const fullMs = (items[resolvedIndex].duration ?? 0) * 1000;
+  return fullMs > 0 ? fullMs : remainingMs;
+}
+
+/**
  * Decide how PlaylistClient should hand off timer cadence after a setLoop command
  * has re-anchored the playback timeline.
  */
