@@ -458,6 +458,17 @@ export default function PlaylistClient() {
           castCommand: CastCommand.updateIndex,
           index: realIndex,
         });
+
+        // The first repeat-one tick may have been scheduled from a partial remainder
+        // (setLoop handoff). Subsequent replays must use the full slot duration or the
+        // same short cadence keeps firing and replays arrive too early.
+        const fullSlotSec = castInfoItems[realIndex]?.duration ?? 0;
+        if (fullSlotSec > 0 && fullSlotSec !== NO_DURATION_VALUE) {
+          clearTimer();
+          startInterval(fullSlotSec);
+        } else {
+          clearTimer();
+        }
         return;
       }
 
@@ -620,7 +631,8 @@ export default function PlaylistClient() {
                 nextIndex,
                 nextIntervalDurationMs,
                 castInfo.isPaused ?? false,
-                Boolean(queuedPlaylistRef.current?.length)
+                Boolean(queuedPlaylistRef.current?.length) &&
+                  intervalRef.current !== undefined
               );
 
               if (timerPlan.shouldClearTimer) {

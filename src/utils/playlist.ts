@@ -203,6 +203,10 @@ export function resolveRepeatOneRestartMs(
 /**
  * Decide how PlaylistClient should hand off timer cadence after a setLoop command
  * has re-anchored the playback timeline.
+ *
+ * @param hasQueuedPlaylistPending Pass true only when a queued swap is waiting **and**
+ * an interval is still driving slot boundaries. If repeat-off exhausted and cleared the
+ * timer, pass false so setLoop can still install repeat-all cadence despite a pending queue.
  */
 export function planSetLoopTimerHandoff(
   currentIndex: number,

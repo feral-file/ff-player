@@ -295,7 +295,7 @@ describe('playlist timing helpers', () => {
     });
   });
 
-  it('planSetLoopTimerHandoff defers to the current playback flow while a queued playlist is pending', () => {
+  it('planSetLoopTimerHandoff defers when queue is pending and a slot timer is still active (call-site passes both)', () => {
     expect(planSetLoopTimerHandoff(2, 0, 15_000, false, true)).toEqual({
       shouldClearTimer: false,
       restartDurationSeconds: null,
