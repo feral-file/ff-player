@@ -26,7 +26,8 @@ import { CDPRequestHandler } from '@/services/cdp-handler/CDPRequestHandler';
 import useCursorPositions, {
   CursorPosition,
 } from '@/services/custom-hooks/useCursorPositions';
-import { recalculateStartTimeForIndex } from '@/utils/playlist';
+import { normalizePlaylistIndex } from '@/utils/playlist';
+import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
 import { useRouter } from 'next/navigation';
 interface AppContextProps {
   children: ReactNode;
@@ -132,7 +133,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
         castInfo = {
           castCommand: CastCommand.displayPlaylist,
           playlist: bootPlaylist,
-          startTime: Date.now(),
           index: 0,
           isPaused: false,
           playlistId: bootPlaylist.id,
@@ -159,25 +159,22 @@ export const AppProvider = ({ children }: AppContextProps) => {
         return;
       }
 
-      if (castInfo.playlist?.items && castInfo.index !== undefined) {
-        // Recalculate startTime based on current index to ensure correct display
-        console.log(
-          '[AppContext] Recalculating startTime for index:',
-          castInfo.index
+      if (castInfo.playlist?.items?.length && castInfo.index !== undefined) {
+        const normalizedIndex = normalizePlaylistIndex(
+          castInfo.index,
+          castInfo.playlist.items.length
         );
-        const newStartTime = recalculateStartTimeForIndex(
-          castInfo.playlist.items,
-          castInfo.index
-        );
-        castInfo = {
-          ...castInfo,
-          startTime: newStartTime,
-        };
-        console.log('[AppContext] New startTime calculated:', newStartTime);
+        if (normalizedIndex !== castInfo.index) {
+          castInfo = {
+            ...castInfo,
+            index: normalizedIndex,
+          };
+        }
       }
 
-      setCastInfo(castInfo);
-      canvasService.setCastInfo(castInfo, false);
+      const cleanCastInfo = stripLegacyCastPlaybackTimeline(castInfo);
+      setCastInfo(cleanCastInfo);
+      canvasService.setCastInfo(cleanCastInfo, false);
       navigateToHomePage();
     } else {
       // Cast default playlist
