@@ -9,6 +9,8 @@
     "lint": "bash ./scripts/lint-changed.sh",
     "lint:all": "eslint .",
     "post-implement-check": "bash ./scripts/lint-changed.sh --fix",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "verify": "npm run lint && npm run build"
   },
   "dependencies": {
@@ -36,13 +38,15 @@
     "@types/uuid": "^10.0.0",
     "eslint": "^9.9.0",
     "eslint-config-next": "^14.2.5",
+    "eslint-formatter-rdjson": "^1.0.6",
     "eslint-plugin-jsdoc": "^62.9.0",
     "eslint-plugin-prettier": "^5.2.1",
     "eslint-plugin-react-hooks": "^4.6.2",
     "globals": "^15.9.0",
     "prettier": "^3.3.3",
     "typescript": "^5.5.4",
-    "typescript-eslint": "^8.0.1"
+    "typescript-eslint": "^8.0.1",
+    "vitest": "^3.2.4"
   },
   "overrides": {
     "eslint": "^9.9.0"
