@@ -10,28 +10,34 @@ alwaysApply: true
 # Testing and Verification Rule
 
 ## 1) Required sequence
-1. Isolate behavior in small testable units first.
-2. Add or update unit tests around the changed behavior when the touched path has a practical harness.
+1. Isolate behavior in small testable units first when a practical harness exists.
+2. Add or update unit tests around changed behavior when the touched path can be covered without standing up the whole app.
 3. Implement wiring after edge cases and invariants are clear.
-4. Run repo verification before calling the task done.
+4. Run `npm run post-implement-check` immediately after implementation.
+5. Fix remaining changed-file lint findings before the final review loop.
+6. Run a separate review loop over the full diff.
+7. Run `npm run verify` before calling the task done.
 
 ## 2) Verification expectations
-- Required repo-wide verification:
-  - `npm run lint`
-  - `npm run typecheck`
-  - `npm run test`
-  - `npm run build`
+- Required repo verification path:
+  - `npm run post-implement-check`
+  - reviewer loop after lint is clean
+  - `npm run verify`
+- `npm run post-implement-check` is the changed-files-only lint pass against `main`.
+- `npm run verify` is the canonical changed-file lint plus build verification command before handoff.
 - Current unit-test baseline:
   - Vitest is available for fast unit tests against pure helpers and small service logic.
-  - Prefer starting with deterministic utilities, parser/normalizer code, scheduling math, and command handlers before browser-heavy integration paths.
+  - Prefer starting with deterministic utilities, parser or normalizer code, scheduling math, and command handlers before browser-heavy integration paths.
 - If a change affects command handling, scheduling, persistence, or media orchestration and a focused unit test can be added without standing up the whole app, add it.
 - When the repo still lacks a practical automated harness for a changed path, do not claim coverage that does not exist; call the gap out explicitly.
 
 ## 3) Constraints
 - Do not ship behavior changes without automated verification when the change can reasonably be covered.
-- Do not rely on CI comments or autofixers as proof of quality.
+- Do not treat CI comments or autofixers as proof of correctness.
 - Do not skip build verification for changes that affect routes, runtime config, model shapes, or app bootstrapping.
+- Untouched files outside the changed diff do not need to be cleaned up just to satisfy the lint gate.
 
 ## 4) CI alignment
-- If a required local verification step exists, CI should enforce it where practical.
-- When adding new guardrails, prefer making them blocking checks instead of advisory comments only.
+- CI mirrors the same verification surface in split form.
+- The lint workflow is advisory and should report inline feedback for changed files without blocking the PR.
+- Build and test checks remain the blocking verification surface where configured.

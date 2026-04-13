@@ -13,10 +13,13 @@ Review the current change as a production-focused reviewer for FF Player.
 ## Review posture
 
 - Prefer findings over summary.
+- Step back from the diff and restate the underlying problem and why it matters before judging the implementation.
+- Review from first principles: decide whether this is the best solution for the real problem, not only whether the patch is internally consistent.
 - Focus on concrete risks, not style nitpicks already enforced by tooling.
 - Do not bias toward minimal-change solutions when a clearer delete-or-refactor alternative is obviously better.
 - Call out missing tests when behavior branches, state recovery, media orchestration, scheduling, or command handling changed.
 - Treat unclear durable comments on non-obvious logic as a maintainability risk when future amendments could break the behavior.
+- Evaluate how the chosen solution affects the existing flow, including what it simplifies, what it makes riskier, and what future changes it may constrain.
 - Respect that repository-wide architecture and API design are currently `TBD by repo owner`; review against existing seams rather than inventing new top-level doctrine.
 
 ## Output format
