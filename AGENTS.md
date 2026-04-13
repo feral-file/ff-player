@@ -42,6 +42,7 @@ Repo contract for coding agents and automation working in `ff-player`.
 7. Add or update contextual doc comments on touched exported services, hooks, utilities, and non-obvious flows. Comments should explain usage, why the code exists, important constraints, and trade-offs that future sessions must preserve.
 8. Keep changed code small and easy to reason about. The changed-file lint gate enforces file length, function length, and parameter-count limits.
 9. Run a separate reviewer loop over the full diff after lint is clean. If agent reviewers are available, use a dedicated reviewer sub-agent rather than self-approving the implementation pass.
+The reviewer should step back, reason from first principles about why the task matters, judge whether the chosen solution is actually the best way to solve the underlying problem, and check how that solution changes or constrains the current playback and recovery flows.
 10. Run `npm run verify` before handoff.
 11. If playback, cast recovery, or display settings changed, do a manual smoke pass for the affected route or flow and include that evidence in the handoff.
 
@@ -59,7 +60,7 @@ Repo contract for coding agents and automation working in `ff-player`.
 - Changed React code passes `react-hooks/exhaustive-deps`.
 - Touched exported APIs and non-obvious flows have contextual doc comments that explain usage, constraints, and trade-offs.
 - Changed code stays within the file/function/parameter limits enforced by ESLint.
-- A separate reviewer loop has reviewed the full diff after lint issues were fixed.
+- A separate reviewer loop has reviewed the full diff after lint issues were fixed, and it has evaluated the solution itself from the problem statement rather than only checking the patch mechanically.
 - `npm run verify` passes locally.
 - Manual smoke coverage is noted for user-visible playback changes.
 - The review handoff follows `docs/review-workflow.md`.
