@@ -1,88 +1,71 @@
-# AGENTS.md -- FF Player Contract
+# AGENTS.md
 
-This file defines repository-level constraints for coding agents and human collaborators. Detailed implementation behavior lives in `.cursor/rules/`.
+Repo contract for coding agents and automation working in `ff-player`.
 
-## Repository overview
-- Project: FF Player, the playback and casting client for FF1 devices.
-- Runtime surface: Next.js app router frontend with device-facing playback, scheduling, remote-config, and casting flows.
-- Primary code areas: `src/app/`, `src/components/`, `src/context/`, `src/services/`, `src/utils/`, `src/models/`.
+## Repo scope
 
-## Architecture and API design status
-- Architecture rule details: `TBD by repo owner`.
-- API design rule details: `TBD by repo owner`.
-- Until those sections are filled in, preserve existing module seams, route contracts, service boundaries, and data shapes unless the task explicitly calls for changing them.
+`ff-player` is the FF1 playback client. It boots the player UI, restores persisted device state, fetches DP1 playlists, applies cast commands, and renders mixed-media artwork playback routes.
 
-## Non-negotiables
-- Prefer replacing or deleting flawed code paths over narrow local tweaks when a clearer design is available.
-- Do not preserve legacy behavior, compatibility shims, migrations, or transitional branches unless explicitly requested.
-- Keep route rendering, UI orchestration, playback/device services, persistence helpers, and remote adapters separated where practical.
-- Prefer stateless, testable functions/services by default; introduce mutable shared state only when lifecycle or playback coordination truly requires it.
-- Follow the spirit of standard Go guidance by default, adapted to TypeScript: small focused units, clear naming, explicit control flow, simple error handling, and responsibility-aligned module boundaries.
-- Prefer richer code comments for non-obvious logic when they will help future agentic coding sessions amend the code safely.
-- Those comments should preserve intent, design context, trade-offs, constraints, invariants, failure modes, and reasons a simpler-looking alternative was not chosen.
-- Treat comments as durable engineering context for future amendments, not as line-by-line narration of syntax.
+## Read this first
 
-## Spec-driven workflow (required for substantial changes)
-Before implementing any major feature, flow change, architectural refactor, or contract change:
-1. Read the relevant docs in `docs/` if they exist, then read `README.md` and the affected code paths.
-2. Summarize the current behavior, constraints, and invariants.
-3. Write or update a short spec/design note when the change is substantial.
-4. Break the work into concrete tasks and define how it will be verified.
-5. Only then begin implementation.
+- `README.md` for local setup and runtime context.
+- `docs/verification.md` for the required local verification path.
+- `docs/review-workflow.md` for review handoff, fix-and-rerun, and definition-of-done rules.
+- `docs/ARTWORK_TRANSITION_SEQUENTIAL_LOGIC.md` before changing artwork transition timing or sequencing behavior.
+- `.github/pull_request_template.md` before opening a PR.
 
-Canonical large-change sequence:
-`spec -> design -> tasks -> tests -> implementation -> verification -> review`
+## Major surfaces
 
-If no relevant spec exists for a substantial change, do not jump straight to implementation.
+- `src/context/AppContext.tsx`: boot flow, fallback playlist behavior, persisted recovery, and app-wide initialization.
+- `src/services/CanvasService.ts`: cast-command handling, playback orchestration, scheduling hooks, and display-setting updates.
+- `src/services/DP1Service.ts` and `src/services/DP1ScheduleService.ts`: DP1 playlist loading and scheduled playback support.
+- `src/utils/DeviceManager.ts`: persisted device state, migration behavior, and storage compatibility.
+- `src/components/artwork-player/ArtworkPlayer.tsx`: artwork rendering and runtime playback behavior.
+- `src/services/custom-hooks/*`: synchronization hooks for cast info, display settings, device rotation, cursor state, and connectivity.
 
-## ExecPlans
+## Non-negotiable rules
 
-When writing a big feature, major flow change, significant refactor, or handling a vague command with unclear requirements, use an execution plan as described in `PLANS.md`.
+- Preserve playback recovery behavior unless the task explicitly changes it.
+- Treat cast payloads, DP1 data handling, and persisted storage keys as compatibility-sensitive surfaces.
+- Keep changes in the owning layer instead of spreading logic across hooks, components, and services.
+- Update the relevant doc in the same change when behavior, workflow, or verification expectations change.
+- Use the repository issue template for issues and `.github/pull_request_template.md` for PRs.
 
-Use `PLANS.md` only when the work is large enough or vague enough that it needs research, branching design exploration, and staged delivery. Do not use `PLANS.md` for small direct code changes, narrow fixes, isolated workflow updates, or when the user already provided a detailed plan with concrete steps and TODOs.
+## Required sequence
 
-## Required development sequence (behavior changes)
-1. Write or update small, testable units first.
-2. Add or update tests when a harness exists for the changed behavior.
-3. Add integration coverage for cross-boundary behavior where practical.
-4. Implement until verification passes.
-5. Run verification:
-   - `npm run lint`
-   - `npm run typecheck`
-   - `npm run build`
-6. If the current repo lacks a practical automated test harness for the touched path, record that gap clearly instead of pretending it is covered.
+1. Read the relevant docs and owning files before editing.
+2. If the task changes behavior, document the intended contract before or alongside code changes.
+3. Make the smallest change that solves the task in the correct layer.
+4. Run `npm run post-implement-check` to auto-fix and lint files changed against `main`.
+5. Fix any remaining lint issues until the changed-file lint is clean.
+6. For changed React code, `react-hooks/exhaustive-deps` is mandatory even if older untouched files still carry debt elsewhere in the repo.
+7. Add or update contextual doc comments on touched exported services, hooks, utilities, and non-obvious flows. Comments should explain usage, why the code exists, important constraints, and trade-offs that future sessions must preserve.
+8. Keep changed code small and easy to reason about. The changed-file lint gate enforces file length, function length, and parameter-count limits.
+9. Run a separate reviewer loop over the full diff after lint is clean. If agent reviewers are available, use a dedicated reviewer sub-agent rather than self-approving the implementation pass.
+10. Run `npm run verify` before handoff.
+11. If playback, cast recovery, or display settings changed, do a manual smoke pass for the affected route or flow and include that evidence in the handoff.
 
-## Rule references (authoritative detail)
-- `.cursor/rules/01-master-design.mdc`
-- `.cursor/rules/10-typescript-coding-style.mdc`
-- `.cursor/rules/20-domain-vocabulary.mdc`
-- `.cursor/rules/35-testing-tdd.mdc`
-- `.cursor/rules/review-workflow.mdc`
+## Stop and ask the user when
+
+- The change affects DP1/cast message shape, persisted storage format, or route-level runtime contracts.
+- The work changes boot recovery, fallback playlist behavior, or device-default behavior.
+- The task needs a new environment variable, deployment contract, or CI policy change beyond the immediate issue.
+- The code suggests multiple valid architectural directions and there is no authoritative doc choosing one.
 
 ## Definition of done
-A task is complete only when:
-1. The requested behavior is implemented.
-2. Relevant verification passes cleanly, or any blocked checks are called out explicitly.
-3. Documentation is updated when behavior, workflows, or repo constraints changed.
-4. Review has qualified the change.
-5. The change is ready to merge without relying on unstated follow-up work.
 
-## Review workflow (implement -> review loop -> commit/push/PR)
+- Code, docs, and workflow guidance stay consistent with the implemented behavior.
+- `npm run post-implement-check` passes for files changed against `main`.
+- Changed React code passes `react-hooks/exhaustive-deps`.
+- Touched exported APIs and non-obvious flows have contextual doc comments that explain usage, constraints, and trade-offs.
+- Changed code stays within the file/function/parameter limits enforced by ESLint.
+- A separate reviewer loop has reviewed the full diff after lint issues were fixed.
+- `npm run verify` passes locally.
+- Manual smoke coverage is noted for user-visible playback changes.
+- The review handoff follows `docs/review-workflow.md`.
 
-After implementation, run a review loop until the reviewer qualifies the change. Only after the reviewer says **Verdict: accept** should you commit, push, or create a PR.
+## Issues and PRs
 
-1. Create a compact handoff: goal, scope, files changed, key decisions, tests added or updated, checks run, and known limitations.
-2. Invoke the reviewer sub-agent with fresh context. Give it the handoff, the diff, and any lint/typecheck/build or focused test output. The reviewer follows `prompts/code-review.md` and ends with **Verdict: accept** or **Verdict: revise**.
-3. If Verdict: revise, address the findings, re-run verification, update the handoff, and invoke the reviewer again.
-
-Do not commit, push, or create a PR before the reviewer has accepted.
-
-## Commit message format
-Use Conventional Commits:
-- `<type>(<optional-scope>): <description>`
-- Types: `feat`, `fix`, `refactor`, `test`, `chore`, `docs`, `build`, `ci`, `perf`, `style`
-- Use `!` for breaking changes.
-
-## Review guidelines
-
-The single source of truth for review priority, posture, test/docs sufficiency, and output format is `prompts/code-review.md`.
+- When creating a GitHub issue, use the repository issue templates in `.github/ISSUE_TEMPLATE/` and complete every requested section.
+- When creating a PR, use `.github/pull_request_template.md` and keep the description aligned with the template fields.
+- Do not replace the template structure with free-form prose; add extra context only after the required sections are filled in.
