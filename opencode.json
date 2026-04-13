@@ -1,0 +1,32 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md"],
+  "agent": {
+    "reviewer": {
+      "description": "Read-only code reviewer. Use after implementation for a fresh-context review of diff, touched files, and verification output. Reports findings by severity; does not edit unless asked.",
+      "mode": "subagent",
+      "prompt": "{file:./prompts/code-review.md}",
+      "tools": {
+        "write": false,
+        "edit": false
+      }
+    },
+    "planner": {
+      "description": "Research and planning sub-agent for large, vague changes. Use when multiple materially different designs are possible and a plan is needed before implementation.",
+      "mode": "subagent",
+      "prompt": "Read AGENTS.md, PLANS.md, and the relevant Cursor rules before planning. Summarize current context, constraints, design branches, trade-offs, and verification. Respect that repository-wide architecture and API design are currently TBD by repo owner.",
+      "tools": {
+        "write": false,
+        "edit": false
+      }
+    }
+  },
+  "command": {
+    "review": {
+      "description": "Run a fresh-context code review using the shared review contract",
+      "template": "Review the current changes using prompts/code-review.md.\n\nUse this evidence:\n- Diff: !`git diff --stat`\n- Full diff: !`git diff`\n- Verification: run or paste the relevant lint, typecheck, build, and focused test output.\n\nIf a handoff was provided, use it as context. Report findings in the required format and end with Verdict: accept or Verdict: revise. Do not edit files unless explicitly asked.",
+      "agent": "reviewer",
+      "subtask": true
+    }
+  }
+}

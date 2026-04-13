@@ -1,0 +1,13 @@
+---
+alwaysApply: true
+---
+
+# Review Workflow Rule
+
+When implementation is complete and changed-file lint is clean, execute a separate review loop over the full diff before human handoff.
+
+1. Produce a compact handoff: the problem, why it matters, the chosen scope, files changed, decisions, trade-offs, checks run, and known limitations.
+2. Invoke the reviewer sub-agent with fresh context and the shared contract in `prompts/code-review.md`.
+3. Give it the handoff, `git diff --stat`, `git diff`, and relevant verification output.
+4. The reviewer must step back from the patch, restate the underlying problem, reason from first principles about whether the current solution is the best fit, and review how it affects the existing playback and recovery flows rather than only checking the diff mechanically.
+5. If the verdict is `revise`, address findings, rerun `npm run post-implement-check`, and review again before the final `npm run verify` handoff.

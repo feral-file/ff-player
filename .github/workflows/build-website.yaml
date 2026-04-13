@@ -12,10 +12,38 @@ on:
       - 'tsconfig.json'
       - 'next.config.mjs'
       - 'public/**'
+      - 'eslint.config.mjs'
+      - 'sentry*.ts'
+      - '.env.local.sample'
+      - '.github/workflows/build-website.yaml'
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'next.config.mjs'
+      - 'public/**'
+      - 'eslint.config.mjs'
+      - 'sentry*.ts'
+      - '.env.local.sample'
+      - '.github/workflows/build-website.yaml'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: build-website-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       matrix:
         environment: [Development, Production]
@@ -34,7 +62,7 @@ jobs:
           cache-dependency-path: ./package-lock.json
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Set environment variables for ${{ matrix.environment }}
         run: |
@@ -80,7 +108,7 @@ jobs:
           fi
 
       - name: Add GitHub comment with warnings if any
-        if: steps.check_env_vars.outputs.warnings != '[]'
+        if: github.event_name == 'pull_request' && steps.check_env_vars.outputs.warnings != '[]'
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

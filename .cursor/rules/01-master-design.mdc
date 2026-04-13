@@ -1,0 +1,38 @@
+---
+description: Core architecture boundaries and non-negotiable system constraints for ff-player
+globs:
+  - "src/**"
+  - ".github/workflows/**"
+  - "AGENTS.md"
+alwaysApply: true
+---
+
+# Core Architecture Rule
+
+Use this rule for structural decisions and repo-wide constraints.
+
+## 1) Non-negotiable constraints
+- Prefer replacing or deleting flawed code paths over narrow local fixes when a clearer design is available.
+- Do not preserve legacy behavior, compatibility shims, or transitional branches unless explicitly requested.
+- Keep route rendering, UI orchestration, playback/device services, persistence helpers, and remote adapters separated where practical.
+- Prefer stateless, testable utilities and service helpers by default; introduce mutable shared state only when playback lifecycle or device coordination truly requires it.
+- Follow standard Go engineering instincts, adapted to TypeScript: simple control flow, explicit names, narrow responsibilities, and comments that preserve intent instead of narrating syntax.
+- For non-obvious logic, prefer richer comments that preserve design intent, constraints, invariants, failure modes, trade-offs, and amendment context for future agentic coding sessions.
+
+## 2) Current repository posture
+- `src/app/**` owns route entrypoints, page shells, and top-level app integration.
+- `src/components/**` should stay focused on rendering and local UI orchestration.
+- `src/services/**` should own playback, scheduling, cast handling, and remote/system coordination.
+- `src/utils/**` should stay small, dependency-light, and easy to test.
+- `src/models/**` should define shared data shapes and domain-facing types.
+
+## 3) Boundary enforcement
+- Do not bury playback or cast side effects inside large component render paths when they can live in services or dedicated hooks.
+- Keep cross-file assumptions explicit when components, services, and storage helpers rely on the same timing, device, or persistence contract.
+- If a change requires coordinated behavior across routing, media playback, and persistence, document the coupling in code comments near the seam.
+- Avoid introducing new hidden global mutable state or singleton-style flow ownership without a design note.
+
+## 4) Architecture TBD handling
+- Repository-wide architecture guidance is still `TBD by repo owner`.
+- Do not invent a new top-level architecture doctrine and present it as settled fact.
+- When a task exposes an architectural gap, document the local constraint and leave repo-level direction marked as TBD.

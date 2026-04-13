@@ -54,10 +54,11 @@ Open `http://localhost:3000` to view the app.
 Use the canonical local verification command before review handoff:
 
 ```bash
+npm run post-implement-check
 npm run verify
 ```
 
-This runs the repo-wide ESLint gate and the production Next.js build. See [`docs/verification.md`](docs/verification.md) for the verification contract and CI parity details.
+Use `npm run post-implement-check` first to auto-fix and lint only the files changed against `main`, then run `npm run verify` for the changed-file lint plus production build path. Changed React code must satisfy `react-hooks/exhaustive-deps`, and changed code is also held to file/function/parameter size limits. Untouched legacy files can stay as-is until they are part of a feature change. See [`docs/verification.md`](docs/verification.md) for the verification contract and CI parity details.
 
 ## Runtime Configuration
 

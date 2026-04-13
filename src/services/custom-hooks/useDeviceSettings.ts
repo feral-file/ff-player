@@ -5,6 +5,10 @@ import { canvasService } from '../CanvasService';
 import DeviceManager from '@/utils/DeviceManager';
 import { DisplaySettings } from '@/models/display_settings.model';
 
+/**
+ * Merges incoming display settings into the last saved instance without
+ * dropping the `DisplaySettings` prototype used by downstream persistence.
+ */
 function mergeDisplaySettings(
   previousSettings: DisplaySettings | null,
   nextSettings: DisplaySettings
@@ -18,6 +22,10 @@ function mergeDisplaySettings(
   );
 }
 
+/**
+ * Mirrors display-setting updates from the canvas service into local state and
+ * persisted device storage so restart recovery keeps the latest values.
+ */
 export function useDeviceSettings() {
   const [displaySettings, setDisplaySettings] =
     useState<DisplaySettings | null>(null);
