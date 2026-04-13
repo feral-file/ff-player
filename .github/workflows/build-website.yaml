@@ -8,7 +8,10 @@ on:
     paths:
       - 'src/**'
       - 'package.json'
+      - 'package-lock.json'
       - 'tsconfig.json'
+      - 'next.config.mjs'
+      - 'public/**'
 
 jobs:
   build:

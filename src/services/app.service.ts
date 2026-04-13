@@ -3,20 +3,16 @@ import axios from 'axios';
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class AppService {
   private static instance: AppService | null = null;
-  private static currentVersion: string;
+  private static currentVersion: string | null = null;
 
   public static getInstance(): AppService {
-    if (!AppService.instance) {
-      AppService.instance = new AppService();
-    }
+    AppService.instance ??= new AppService();
 
     return AppService.instance;
   }
 
   public static async getCurrentVersion() {
-    if (!this.currentVersion) {
-      this.currentVersion = await this.getVersion();
-    }
+    this.currentVersion ??= await this.getVersion();
 
     return this.currentVersion;
   }

@@ -5,6 +5,19 @@ import { canvasService } from '../CanvasService';
 import DeviceManager from '@/utils/DeviceManager';
 import { DisplaySettings } from '@/models/display_settings.model';
 
+function mergeDisplaySettings(
+  previousSettings: DisplaySettings | null,
+  nextSettings: DisplaySettings
+): DisplaySettings {
+  const prototype = Object.getPrototypeOf(nextSettings) as object | null;
+
+  return Object.assign(
+    Object.create(prototype) as DisplaySettings,
+    previousSettings ?? {},
+    nextSettings
+  );
+}
+
 export function useDeviceSettings() {
   const [displaySettings, setDisplaySettings] =
     useState<DisplaySettings | null>(null);
@@ -15,10 +28,9 @@ export function useDeviceSettings() {
       newSettings: DisplaySettings
     ) => {
       if (isSaveToDevice) {
-        setDisplaySettings(prev => ({
-          ...prev,
-          ...newSettings,
-        }));
+        setDisplaySettings(previousSettings =>
+          mergeDisplaySettings(previousSettings, newSettings)
+        );
       }
     };
 
@@ -30,7 +42,7 @@ export function useDeviceSettings() {
 
   useEffect(() => {
     if (displaySettings) {
-      DeviceManager.setDeviceDisplaySettings(displaySettings);
+      void DeviceManager.setDeviceDisplaySettings(displaySettings);
     }
   }, [displaySettings]);
 

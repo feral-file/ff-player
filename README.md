@@ -49,6 +49,16 @@ yarn dev
 
 Open `http://localhost:3000` to view the app.
 
+## Verification
+
+Use the canonical local verification command before review handoff:
+
+```bash
+npm run verify
+```
+
+This runs the repo-wide ESLint gate and the production Next.js build. See [`docs/verification.md`](docs/verification.md) for the verification contract and CI parity details.
+
 ## Runtime Configuration
 
 - `https://raw.githubusercontent.com/bitmark-inc/feral-file-docs/main/configs/display.json` provides `duration` (version check interval) and `defaultPlaylistURL`.
@@ -74,3 +84,5 @@ In production these files are typically served by the host/CDN; in local dev, st
 ## Contributing
 
 Contributions are welcome. Please fork the repository and submit a pull request with your changes. Ensure your code follows the project's coding standards and includes appropriate tests.
+
+For AI-assisted changes or repo workflow updates, start with [`AGENTS.md`](AGENTS.md) and [`docs/review-workflow.md`](docs/review-workflow.md).
