@@ -1,9 +1,13 @@
 import axios from 'axios';
 
+/**
+ * Caches the current app version so repeated checks share one network read and
+ * compare against a stable in-memory value for the lifetime of the session.
+ */
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class AppService {
   private static instance: AppService | null = null;
-  private static currentVersion: string | undefined;
+  private static currentVersion: string | null = null;
 
   public static getInstance(): AppService {
     AppService.instance ??= new AppService();

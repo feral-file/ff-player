@@ -1,0 +1,44 @@
+---
+description: Shared repository workflow contract aligned with Codex, Cursor, and Claude Code
+alwaysApply: true
+globs:
+  - "src/**"
+  - "docs/**"
+  - ".github/**"
+  - "package.json"
+  - "scripts/**"
+  - "AGENTS.md"
+  - "CLAUDE.md"
+---
+
+# Shared Repo Agent Contract
+
+Use `AGENTS.md`, `docs/verification.md`, and `docs/review-workflow.md` as the source of truth for repository workflow.
+
+## Required sequence
+
+1. Read the relevant docs and owning files before editing.
+2. If the task changes behavior, document the intended contract before or alongside code changes.
+3. Make the smallest change that solves the task in the correct layer.
+4. Run `npm run post-implement-check` after implementation.
+5. Fix remaining lint findings on changed files before starting the final review loop.
+6. For changed React code, treat `react-hooks/exhaustive-deps` as mandatory even if untouched files elsewhere still have debt.
+7. Add or update contextual comments on touched exported services, hooks, utilities, and non-obvious flows so future agent sessions can understand usage, constraints, and trade-offs safely.
+8. Keep changed code small enough to satisfy the repo size rules for files, functions, and parameter lists.
+9. Run a separate reviewer loop over the full diff after lint is clean.
+10. Run `npm run verify` before handoff.
+
+## Scope and safety rules
+
+- Preserve playback recovery behavior unless the task explicitly changes it.
+- Treat cast payloads, DP1 data handling, and persisted storage keys as compatibility-sensitive.
+- Keep changes in the owning layer instead of spreading logic across hooks, components, and services.
+- Update the relevant doc in the same change when behavior, workflow, or verification expectations change.
+- Use the repository issue template for issues and `.github/pull_request_template.md` for PRs.
+
+## Escalate to the user when
+
+- The change affects DP1 or cast payload shape, persisted storage format, or route-level runtime contracts.
+- The work changes boot recovery, fallback playlist behavior, or device-default behavior.
+- The task needs a new environment variable, deployment contract, or CI policy change beyond the immediate issue.
+- Multiple valid architectural directions exist and no authoritative doc chooses one.

@@ -2,6 +2,7 @@
 import { fixupPluginRules } from '@eslint/compat';
 import { FlatCompat } from '@eslint/eslintrc';
 import eslint from '@eslint/js';
+import jsdoc from 'eslint-plugin-jsdoc';
 import tseslint from 'typescript-eslint';
 
 // NOTE: This is a workaround for ESLint plugins that have not been updated to use the new ESLint 9 flat config format.
@@ -42,10 +43,60 @@ export default tseslint.config(
         ecmaFeatures: { jsx: true },
       },
     },
+    plugins: {
+      jsdoc,
+    },
     rules: {
-      'react-hooks/rules-of-hooks': 'off',
-      'react-hooks/exhaustive-deps': 'off',
+      'curly': ['error', 'all'],
+      'eqeqeq': ['error', 'always'],
+      'max-lines': [
+        'error',
+        { max: 500, skipBlankLines: true, skipComments: true },
+      ],
+      'max-lines-per-function': [
+        'error',
+        { max: 80, skipBlankLines: true, skipComments: true },
+      ],
+      'max-params': ['error', 4],
+      'no-unneeded-ternary': 'error',
+      'no-useless-return': 'error',
+      'object-shorthand': ['error', 'always'],
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'error',
       '@next/next/no-img-element': 'off',
+    },
+  },
+  {
+    files: [
+      'src/services/**/*.ts',
+      'src/services/**/*.tsx',
+      'src/utils/**/*.ts',
+      'src/utils/**/*.tsx',
+      'src/context/**/*.ts',
+      'src/context/**/*.tsx',
+    ],
+    plugins: {
+      jsdoc,
+    },
+    rules: {
+      'jsdoc/check-alignment': 'error',
+      'jsdoc/check-indentation': 'error',
+      'jsdoc/require-description': 'error',
+      'jsdoc/require-description-complete-sentence': 'error',
+      'jsdoc/require-jsdoc': [
+        'error',
+        {
+          contexts: [
+            'ClassDeclaration',
+            'ExportDefaultDeclaration > FunctionDeclaration',
+            'ExportNamedDeclaration > FunctionDeclaration',
+          ],
+          require: {
+            ClassDeclaration: true,
+            FunctionDeclaration: true,
+          },
+        },
+      ],
     },
   },
   {

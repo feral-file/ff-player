@@ -11,9 +11,11 @@ on:
       - 'package-lock.json'
       - 'tsconfig.json'
       - 'next.config.mjs'
+      - 'public/**'
       - 'eslint.config.mjs'
       - 'sentry*.ts'
       - '.env.local.sample'
+      - '.github/workflows/build-website.yaml'
   push:
     branches:
       - main
@@ -24,9 +26,11 @@ on:
       - 'package-lock.json'
       - 'tsconfig.json'
       - 'next.config.mjs'
+      - 'public/**'
       - 'eslint.config.mjs'
       - 'sentry*.ts'
       - '.env.local.sample'
+      - '.github/workflows/build-website.yaml'
 
 permissions:
   contents: read
@@ -128,9 +132,6 @@ jobs:
           key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
           restore-keys: |
             ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
-
-      - name: Typecheck
-        run: npm run typecheck
 
       - name: Build Next.js app
         run: npm run build

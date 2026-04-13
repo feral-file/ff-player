@@ -7,6 +7,10 @@ export interface AppRemoteConfig {
   defaultPlaylistURL: string;
 }
 
+/**
+ * Loads published runtime config for display defaults and falls back to local
+ * constants if the remote document is unavailable.
+ */
 class RemoteConfigService {
   private appRemoteConfig: AppRemoteConfig | null = null;
 

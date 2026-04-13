@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DP1License, type DP1Item } from '@/models/dp1.model';
 import { calculateStartTime, getIndex } from './playlist';
 
+/**
+ * Builds the smallest DP1 item shape needed for playlist timing tests so the
+ * assertions stay focused on scheduling behavior.
+ */
 function createItem(id: string, duration: number): DP1Item {
   return {
     id,

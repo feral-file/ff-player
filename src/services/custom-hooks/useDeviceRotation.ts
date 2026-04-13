@@ -26,9 +26,9 @@ const useDeviceRotation = () => {
         }
 
         setScreenRatio(minSize / AppSettings.STANDARD_HEIGHT);
-        if (newViewMode !== viewMode) {
-          setViewMode(newViewMode);
-        }
+        setViewMode(previousViewMode =>
+          previousViewMode === newViewMode ? previousViewMode : newViewMode
+        );
       };
 
       resizeHandler();

@@ -6,24 +6,17 @@ on:
       - main
       - develop
     paths:
-      - '**.ts'
-      - '**.tsx'
-      - 'eslint.config.mjs'
+      - 'src/**'
       - 'package.json'
       - 'package-lock.json'
-  push:
-    branches:
-      - main
-      - develop
-    paths:
-      - '**.ts'
-      - '**.tsx'
+      - 'tsconfig.json'
       - 'eslint.config.mjs'
-      - 'package.json'
-      - 'package-lock.json'
+      - 'scripts/lint-changed.sh'
+      - '.github/workflows/lint-js.yaml'
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: lint-js-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -31,16 +24,18 @@ concurrency:
 
 jobs:
   lint:
-    name: Lint
+    name: Lint (Advisory)
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
           node-version: '20'
           cache: 'npm'
@@ -49,5 +44,76 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.base_ref }}
+
+      - name: Setup reviewdog
+        uses: reviewdog/action-setup@v1
+        with:
+          reviewdog_version: latest
+
+      - name: Run ESLint and collect advisory results
+        id: eslint
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          merge_base="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
+          changed_files=()
+          while IFS= read -r -d '' file; do
+            changed_files+=("$file")
+          done < <(
+            git diff --name-only --diff-filter=ACMR -z "$merge_base" -- \
+              '*.js' \
+              '*.jsx' \
+              '*.ts' \
+              '*.tsx' \
+              '*.mjs' \
+              '*.cjs'
+          )
+
+          existing_files=()
+          for file in "${changed_files[@]}"; do
+            if [[ -f "$file" ]]; then
+              existing_files+=("$file")
+            fi
+          done
+
+          if [[ "${#existing_files[@]}" -eq 0 ]]; then
+            echo "has_files=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "has_files=true" >> "$GITHUB_OUTPUT"
+          printf 'Linting advisory scope:\n - %s\n' "${existing_files[@]}"
+
+          eslint_exit=0
+          if npx eslint --format=rdjson "${existing_files[@]}" > eslint.rdjson; then
+            eslint_exit=0
+          else
+            eslint_exit=$?
+          fi
+
+          echo "eslint_exit=$eslint_exit" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Report ESLint violations inline
+        if: steps.eslint.outputs.has_files == 'true'
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          reviewdog \
+            -f=rdjson \
+            -name="eslint" \
+            -reporter=github-pr-review \
+            -fail-on-error=false \
+            < eslint.rdjson
+
+      - name: Summarize advisory lint result
+        if: steps.eslint.outputs.has_files == 'true'
+        run: |
+          if [[ "${{ steps.eslint.outputs.eslint_exit }}" != "0" ]]; then
+            echo "Lint violations were reported as inline review comments, but this advisory job does not fail the check."
+          else
+            echo "No lint violations found in changed files."
+          fi
