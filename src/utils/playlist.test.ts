@@ -1,59 +1,82 @@
+import type { DP1Item } from '@/models/dp1.model';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DP1License, type DP1Item } from '@/models/dp1.model';
-import { calculateStartTime, getIndex } from './playlist';
+import {
+  normalizePlaylistIndex,
+  resolveItemIndexInNewItems,
+  resolveQueuedPlaylistNextIndex,
+} from './playlist';
 
-/**
- * Builds the smallest DP1 item shape needed for playlist timing tests so the
- * assertions stay focused on scheduling behavior.
- */
-function createItem(id: string, duration: number): DP1Item {
-  return {
-    id,
-    source: `https://example.com/${id}.jpg`,
-    duration,
-    license: DP1License.Open,
-  };
-}
+const item = (id: string): DP1Item =>
+  ({ id, source: '', license: {} }) as DP1Item;
 
-describe('playlist timing helpers', () => {
+describe('playlist index helpers', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it('getIndex wraps elapsed time across total playlist duration', () => {
-    const playlistItems = [
-      createItem('artwork-1', 10),
-      createItem('artwork-2', 20),
-      createItem('artwork-3', 30),
-    ];
+  it('normalizes indexes across playlist length', () => {
+    expect(normalizePlaylistIndex(5, 3)).toBe(2);
+    expect(normalizePlaylistIndex(-1, 3)).toBe(2);
+    expect(normalizePlaylistIndex(0, 0)).toBe(-1);
+  });
 
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2025-01-01T00:00:25.000Z'));
+  it('resolves prior index into new playlist by stable id', () => {
+    const prev = ['A', 'B', 'C', 'D', 'E'].map(id => item(id));
+    const next = ['C', 'B', 'D', 'E', 'A'].map(id => item(id));
+    expect(resolveItemIndexInNewItems(next, prev, 2)).toBe(0);
+  });
 
-    expect(getIndex(playlistItems, Date.parse('2025-01-01T00:00:00.000Z'))).toBe(
-      1
-    );
+  it('falls back when previous list is missing', () => {
+    const next = ['A', 'B'].map(id => item(id));
+    expect(resolveItemIndexInNewItems(next, undefined, 5)).toBe(1);
+  });
+
+  it('keeps remote target intent across deferred refresh via item id', () => {
+    const prev = ['A', 'B', 'C'].map(id => item(id));
+    const queued = ['C', 'A', 'D'].map(id => item(id));
+
     expect(
-      getIndex(playlistItems, Date.parse('2024-12-31T23:59:10.000Z'))
+      resolveQueuedPlaylistNextIndex({
+        targetIndex: 2,
+        queuedPlaylist: queued,
+        previousItems: prev,
+        hasDeferredRefresh: true,
+      })
+    ).toBe(0);
+  });
+
+  it('keeps the same current item in loop-one when queued playlist is applied', () => {
+    const queued = ['B', 'C', 'A'].map(id => item(id));
+
+    expect(
+      resolveQueuedPlaylistNextIndex({
+        queuedPlaylist: queued,
+        currentItemId: 'C',
+        keepCurrent: true,
+      })
     ).toBe(1);
   });
 
-  it('calculateStartTime subtracts prior durations and elapsed item time', () => {
-    const playlistItems = [
-      createItem('artwork-1', 5),
-      createItem('artwork-2', 8),
-      createItem('artwork-3', 13),
-    ];
+  it('advances to the next queued item when loop-one is not active', () => {
+    const queued = ['B', 'C', 'A'].map(id => item(id));
 
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2025-01-01T12:34:56.789Z'));
+    expect(
+      resolveQueuedPlaylistNextIndex({
+        queuedPlaylist: queued,
+        currentItemId: 'C',
+      })
+    ).toBe(2);
+  });
 
-    const expectedBaseTime = new Date('2025-01-01T12:34:56.789Z').setMilliseconds(
-      0
-    );
+  it('restarts from zero when deferred refresh removed the current item', () => {
+    const queued = ['B', 'C', 'A'].map(id => item(id));
 
-    expect(calculateStartTime(playlistItems, 2, 1500)).toBe(
-      expectedBaseTime - 5000 - 8000 - 1500
-    );
+    expect(
+      resolveQueuedPlaylistNextIndex({
+        queuedPlaylist: queued,
+        currentItemId: 'missing',
+        keepCurrent: true,
+      })
+    ).toBe(0);
   });
 });

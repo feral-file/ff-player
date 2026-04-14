@@ -4,14 +4,6 @@ import { ErrorType } from './error.model';
 import { DP1Call, DP1Intent, DP1Item, Scaling } from './dp1.model';
 import { CastCommand, LoopMode, ViewMode } from '.';
 
-export interface PlayArtwork {
-  id: string;
-  duration: number;
-  token?: {
-    id: string;
-  };
-}
-
 export interface CursorOffset {
   dx: number;
   dy: number;
@@ -70,25 +62,10 @@ export interface DisplayPlaylistRequest {
 }
 export type DisplayPlaylistReply = Reply;
 
-export type NextArtworkRequest = Request;
-export type NextArtworkReply = Reply;
-export type PreviousArtworkRequest = Request;
-export type PreviousArtworkReply = Reply;
-export type PauseCastingRequest = Request;
-export type PauseCastingReply = Reply;
-export type ResumeCastingRequest = Request;
-export type ResumeCastingReply = Reply;
 export interface MoveToArtworkRequest extends Request {
   index: number;
 }
 export type MoveToArtworkReply = Reply;
-export interface UpdateDurationRequest extends Request {
-  artworks: PlayArtwork[];
-}
-export interface UpdateDurationReply extends Reply {
-  startTime: number;
-  artworks: PlayArtwork[];
-}
 
 export type TapGestureRequest = Request;
 export interface DragGestureRequest extends Request {
@@ -138,7 +115,6 @@ export interface SetLoopRequest extends Request {
   mode: string; // 'none' | 'playlist' | 'one'
 }
 export type SetLoopReply = Reply;
-
 
 export type DisplayDefaultPlaylistRequest = Request;
 export type DisplayDefaultPlaylistReply = Reply;

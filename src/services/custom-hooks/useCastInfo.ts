@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { canvasService } from '../CanvasService';
 import { CastCommand, CastInfo } from '@/models';
+import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
 import DeviceManager from '@/utils/DeviceManager';
 
 const useCastInfo = () => {
@@ -14,11 +15,6 @@ const useCastInfo = () => {
       castInfo.castCommand &&
       [
         CastCommand.moveToArtwork,
-        CastCommand.pauseCasting,
-        CastCommand.resumeCasting,
-        CastCommand.nextArtwork,
-        CastCommand.previousArtwork,
-        CastCommand.updateDuration,
         CastCommand.updateIndex,
         CastCommand.refreshPlaylist,
         CastCommand.setShuffle,
@@ -51,13 +47,14 @@ const useCastInfo = () => {
       // TODO: Send cast info to app
     }
 
-    const castInfoToStore = castInfo;
-    if (castInfoToStore && isPlaylistControlCommand(castInfoToStore)) {
-      castInfoToStore.castCommand = CastCommand.displayPlaylist;
-    }
-
-    delete castInfoToStore?.elapsedTime;
-    delete castInfoToStore?.remainTime;
+    const castInfoToStore = castInfo
+      ? {
+          ...stripLegacyCastPlaybackTimeline(castInfo),
+          castCommand: isPlaylistControlCommand(castInfo)
+            ? CastCommand.displayPlaylist
+            : castInfo.castCommand,
+        }
+      : null;
 
     DeviceManager.setDeviceInfo(castInfoToStore).catch((error: unknown) => {
       console.error('[useCastInfo] Error saving castInfo:', error);

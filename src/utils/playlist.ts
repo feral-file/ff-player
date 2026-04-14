@@ -1,78 +1,105 @@
-import { DP1Item } from '@/models/dp1.model';
+import type { DP1Item } from '@/models/dp1.model';
 
-export function getIndex(playlistItems: DP1Item[], startTime: number): number {
-  // Return first artwork if duration is 0
-  let index = 0;
-  const currentTime = Date.now();
-  let elapsedTime = currentTime - startTime;
+/**
+ * Normalize a playlist index to the range of 0 to playlistLength - 1.
+ * @param index - The index to normalize.
+ * @param playlistLength - The length of the playlist.
+ * @returns The normalized index.
+ */
+export function normalizePlaylistIndex(
+  index: number,
+  playlistLength: number
+): number {
+  if (playlistLength <= 0) {
+    return -1;
+  }
 
-  const totalDuration = playlistItems.reduce(
-    (acc, item) => acc + (item.duration ?? 0) * 1000,
-    0
+  const normalizedIndex = index % playlistLength;
+  return normalizedIndex < 0
+    ? normalizedIndex + playlistLength
+    : normalizedIndex;
+}
+
+/**
+ * After replacing playlist items (refresh / reorder), map the previously active
+ * index onto the new list using item ids so getStatus stays aligned with the
+ * artwork still playing before the UI applies the queued list.
+ */
+export function resolveItemIndexInNewItems(
+  newItems: DP1Item[],
+  previousItems: DP1Item[] | undefined,
+  previousIndex: number | undefined
+): number {
+  if (newItems.length <= 0) {
+    return -1;
+  }
+  if (!previousItems?.length) {
+    return normalizePlaylistIndex(previousIndex ?? 0, newItems.length);
+  }
+
+  const curIdx = normalizePlaylistIndex(
+    previousIndex ?? 0,
+    previousItems.length
   );
-
-  elapsedTime = elapsedTime % totalDuration;
-
-  for (let i = 0; i < playlistItems.length; i++) {
-    const item = playlistItems[i];
-    elapsedTime -= (item.duration ?? 0) * 1000;
-    if (elapsedTime < 0) {
-      index = i;
-      break;
-    }
+  const id = previousItems[curIdx]?.id;
+  if (!id) {
+    return normalizePlaylistIndex(curIdx, newItems.length);
   }
 
-  return index;
+  const found = newItems.findIndex(item => item.id === id);
+  if (found >= 0) {
+    return found;
+  }
+
+  return normalizePlaylistIndex(curIdx, newItems.length);
 }
 
-export function calculateStartTime(
-  dp1Items: DP1Item[],
-  index: number,
-  elapsedTime?: number
-): number {
-  let startTime = new Date().setMilliseconds(0);
-  for (let i = 0; i < index; i++) {
-    startTime -= (dp1Items[i].duration ?? 0) * 1000;
-  }
-
-  if (elapsedTime) {
-    startTime -= elapsedTime;
-  }
-
-  return startTime;
+interface ResolveQueuedPlaylistNextIndexOptions {
+  targetIndex?: number;
+  queuedPlaylist: DP1Item[];
+  previousItems?: DP1Item[];
+  hasDeferredRefresh?: boolean;
+  currentItemId?: string;
+  keepCurrent?: boolean;
 }
 
-export function getArtworkStartTime(
-  dp1Items: DP1Item[],
-  index: number,
-  playlistStartTime: number
-): number {
-  // Start with the playlist's start time
-  let artworkStartTime = playlistStartTime;
-
-  // Add the duration of all previous artworks
-  for (let i = 0; i < index; i++) {
-    artworkStartTime += (dp1Items[i].duration ?? 0) * 1000;
+/**
+ * Resolve the index to use when a queued playlist is finally applied.
+ *
+ * If a remote command already chose a target index, keep that intent and remap it
+ * through item ids when the queued list came from a deferred refresh. Otherwise
+ * derive the next position from the current item and optionally keep that item
+ * selected (LoopMode.one) instead of advancing.
+ */
+export function resolveQueuedPlaylistNextIndex({
+  targetIndex,
+  queuedPlaylist,
+  previousItems,
+  hasDeferredRefresh = false,
+  currentItemId,
+  keepCurrent = false,
+}: ResolveQueuedPlaylistNextIndexOptions): number {
+  if (targetIndex !== undefined && hasDeferredRefresh) {
+    return resolveItemIndexInNewItems(
+      queuedPlaylist,
+      previousItems,
+      targetIndex
+    );
   }
 
-  return artworkStartTime;
-}
-
-export function recalculateStartTimeForIndex(
-  dp1Items: DP1Item[],
-  targetIndex: number
-): number {
-  if (targetIndex < 0 || targetIndex >= dp1Items.length) {
-    return new Date().setMilliseconds(0);
+  if (targetIndex !== undefined) {
+    return normalizePlaylistIndex(targetIndex, queuedPlaylist.length);
   }
 
-  const currentTime = Date.now();
-  let totalDurationBeforeIndex = 0;
-  for (let i = 0; i < targetIndex; i++) {
-    totalDurationBeforeIndex += (dp1Items[i].duration ?? 0) * 1000;
+  const currentPosInQueued = currentItemId
+    ? queuedPlaylist.findIndex(item => item.id === currentItemId)
+    : -1;
+
+  if (currentPosInQueued >= 0) {
+    return keepCurrent
+      ? currentPosInQueued
+      : normalizePlaylistIndex(currentPosInQueued + 1, queuedPlaylist.length);
   }
 
-  const newStartTime = currentTime - totalDurationBeforeIndex;
-
-  return newStartTime;
+  return 0;
 }
