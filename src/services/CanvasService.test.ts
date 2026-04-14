@@ -4,6 +4,7 @@ import type { CastInfo } from '@/models';
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import { afterEach, describe, expect, it } from 'vitest';
 import { canvasService } from './CanvasService';
+import DeviceManager from '@/utils/DeviceManager';
 
 const item = (id: string): DP1Item =>
   ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
@@ -28,16 +29,20 @@ const playlist = (
 
 const service = canvasService as unknown as {
   refreshPlaylist(newItems: DP1Item[] | undefined): { ok: boolean };
+  setShuffle(request: { enabled: boolean }): { ok: boolean };
   deferredRefreshPlaylist: DP1Call | null;
   originalPlaylistItems: DP1Item[] | null;
   castInfo: CastInfo | null;
+  queuedPlaylistPending: boolean;
 };
 
 describe('CanvasService deferred refresh', () => {
-  afterEach(() => {
+  afterEach(async () => {
     canvasService.setCastInfo(null, false);
     service.deferredRefreshPlaylist = null;
     service.originalPlaylistItems = null;
+    service.queuedPlaylistPending = false;
+    await DeviceManager.setDeferredRefreshPlaylist(null);
   });
 
   it('defers refresh when the current item is absent from the new playlist', () => {
@@ -247,6 +252,65 @@ describe('CanvasService deferred refresh', () => {
 
     expect(canvasService.getCastInfo()?.playlist?.defaults).toBeUndefined();
     expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
+  });
+
+  it('restores refreshed items when shuffle is turned off after a refresh', () => {
+    const oldPlaylist = playlist('old', ['A', 'B', 'C'].map(item), defaults('red'));
+    canvasService.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: oldPlaylist,
+        index: 1,
+        shuffle: false,
+      },
+      false
+    );
+
+    expect(service.setShuffle({ enabled: true })).toEqual({ ok: true });
+
+    const refreshedItems = ['A', 'B', 'D'].map(item);
+    expect(service.refreshPlaylist(refreshedItems)).toEqual({ ok: true });
+    expect(canvasService.getCastInfo()?.shuffle).toBe(true);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual([
+      'A',
+      'B',
+      'D',
+    ]);
+
+    expect(service.setShuffle({ enabled: false })).toEqual({ ok: true });
+    expect(canvasService.getCastInfo()?.shuffle).toBe(false);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual([
+      'A',
+      'B',
+      'D',
+    ]);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
+  it('keeps shuffled order when refresh matches the original playlist', () => {
+    const oldPlaylist = playlist('old', ['A', 'B', 'C'].map(item), defaults('red'));
+    canvasService.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: oldPlaylist,
+        index: 1,
+        shuffle: false,
+      },
+      false
+    );
+
+    expect(service.setShuffle({ enabled: true })).toEqual({ ok: true });
+    const shuffledItems =
+      canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id) ?? [];
+
+    expect(service.refreshPlaylist(['A', 'B', 'C'].map(item))).toEqual({ ok: true });
+
+    expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
+    expect(canvasService.hasDeferredRefreshPlaylist()).toBe(false);
+    expect(canvasService.getCastInfo()?.shuffle).toBe(true);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual(
+      shuffledItems
+    );
   });
 
   it('clears stale deferred refresh state when a later refresh is a no-op', () => {

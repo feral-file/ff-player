@@ -6,6 +6,7 @@ import indexedDBStorage from './IndexedDBStorage';
 
 const PRELOAD_KEYS: string[] = [
   LocalStorageItem.castInfo,
+  LocalStorageItem.deferredRefreshPlaylist,
   LocalStorageItem.displaySettings,
   LocalStorageItem.viewMode,
   LocalStorageItem.criticalTemp,
@@ -178,6 +179,41 @@ class DeviceManager {
     await indexedDBStorage.setItem(LocalStorageItem.castInfo, serialized);
   }
 
+  public async getDeferredRefreshPlaylist(): Promise<DP1Call | null> {
+    await this.ensureInitialized();
+    const payload = await this.fetchAndCache(LocalStorageItem.deferredRefreshPlaylist);
+    if (payload != null) {
+      try {
+        return JSON.parse(payload) as DP1Call;
+      } catch (error) {
+        console.error(
+          '[DeviceManager] Failed to parse deferred refresh playlist',
+          error
+        );
+      }
+    }
+    return null;
+  }
+
+  public async setDeferredRefreshPlaylist(
+    deferredRefreshPlaylist: DP1Call | null
+  ): Promise<void> {
+    const serialized = deferredRefreshPlaylist
+      ? JSON.stringify(deferredRefreshPlaylist)
+      : null;
+    this.cache.set(LocalStorageItem.deferredRefreshPlaylist, serialized);
+    await this.ensureInitialized();
+    if (serialized === null) {
+      await indexedDBStorage.removeItem(LocalStorageItem.deferredRefreshPlaylist);
+      this.removeFromLegacyStorage(LocalStorageItem.deferredRefreshPlaylist);
+      return;
+    }
+    await indexedDBStorage.setItem(
+      LocalStorageItem.deferredRefreshPlaylist,
+      serialized
+    );
+  }
+
   public async getBootPlaylist(): Promise<DP1Call | null> {
     await this.ensureInitialized();
     const bootPlaylist = await this.fetchAndCache(
@@ -229,6 +265,21 @@ class DeviceManager {
       } catch (error) {
         console.error(
           '[DeviceManager] Failed to parse cached cast info',
+          error
+        );
+      }
+    }
+    return null;
+  }
+
+  public getCachedDeferredRefreshPlaylist(): DP1Call | null {
+    const payload = this.getCachedValue(LocalStorageItem.deferredRefreshPlaylist);
+    if (payload) {
+      try {
+        return JSON.parse(payload) as DP1Call;
+      } catch (error) {
+        console.error(
+          '[DeviceManager] Failed to parse cached deferred refresh playlist',
           error
         );
       }

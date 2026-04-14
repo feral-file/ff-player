@@ -1,5 +1,11 @@
 import type { DP1Item } from '@/models/dp1.model';
 
+/**
+ * Normalize a playlist index to the range of 0 to playlistLength - 1.
+ * @param index - The index to normalize.
+ * @param playlistLength - The length of the playlist.
+ * @returns The normalized index.
+ */
 export function normalizePlaylistIndex(
   index: number,
   playlistLength: number
@@ -74,7 +80,11 @@ export function resolveQueuedPlaylistNextIndex({
   keepCurrent = false,
 }: ResolveQueuedPlaylistNextIndexOptions): number {
   if (targetIndex !== undefined && hasDeferredRefresh) {
-    return resolveItemIndexInNewItems(queuedPlaylist, previousItems, targetIndex);
+    return resolveItemIndexInNewItems(
+      queuedPlaylist,
+      previousItems,
+      targetIndex
+    );
   }
 
   if (targetIndex !== undefined) {

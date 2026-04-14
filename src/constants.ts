@@ -1,5 +1,6 @@
 export enum LocalStorageItem {
   castInfo = 'castInfo',
+  deferredRefreshPlaylist = 'deferredRefreshPlaylist',
   displaySettings = 'displaySettings',
   viewMode = 'viewMode',
   criticalTemp = 'criticalTemp',

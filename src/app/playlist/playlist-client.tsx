@@ -61,7 +61,12 @@ export default function PlaylistClient() {
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   const currentItemRef = useRef<DP1Item>();
+  const currentIndexRef = useRef<number>(-1);
+  const playlistLengthRef = useRef<number>(0);
   const loopModeRef = useRef<LoopMode>(LoopMode.playlist);
+
+  currentIndexRef.current = currentIndex;
+  playlistLengthRef.current = playlist.length;
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -119,7 +124,9 @@ export default function PlaylistClient() {
         };
 
         const currentItem = currentItemRef.current;
-        if (!currentItem) return;
+        if (!currentItem) {
+          return;
+        }
         if (currentItem.id === activeItemId && currentItem.ref === activeRef) {
           setCurrentItemDisplayPreference(merged);
         }
@@ -329,7 +336,7 @@ export default function PlaylistClient() {
       case CastCommand.refreshPlaylist:
       case CastCommand.setShuffle: {
         if (castInfo.playlist?.items?.length) {
-          if (currentIndex < 0 || playlist.length === 0) {
+          if (currentIndexRef.current < 0 || playlistLengthRef.current === 0) {
             applyQueuedPlaylistIfExists(castInfo.index);
           }
           break;
@@ -379,7 +386,7 @@ export default function PlaylistClient() {
         break;
       }
     }
-  }, [applyQueuedPlaylistIfExists, castInfo]);
+  }, [applyQueuedPlaylistIfExists, castInfo, clearTimer]);
 
   return (
     <>

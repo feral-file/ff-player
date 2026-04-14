@@ -11,6 +11,11 @@ interface LegacyCastPlaybackTimeline {
   remainTime?: number;
 }
 
+/**
+ * Strip legacy playback timeline fields from cast info.
+ * @param castInfo - The cast info to strip.
+ * @returns The stripped cast info.
+ */
 export function stripLegacyCastPlaybackTimeline(castInfo: CastInfo): CastInfo {
   const {
     startTime: _startTime,

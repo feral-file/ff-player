@@ -156,7 +156,7 @@ class CanvasService {
     console.log('[CanvasService] Setting castInfo:', notify);
     if (castInfo === null) {
       this.queuedPlaylistPending = false;
-      this.deferredRefreshPlaylist = null;
+      this.setDeferredRefreshPlaylist(null);
     }
     this.castInfo =
       castInfo === null ? null : stripLegacyCastPlaybackTimeline(castInfo);
@@ -175,11 +175,19 @@ class CanvasService {
 
   private setDeferredRefreshPlaylist(next: DP1Call | null) {
     this.deferredRefreshPlaylist = next;
+    void DeviceManager.setDeferredRefreshPlaylist(next).catch(
+      (error: unknown) => {
+        console.error(
+          '[CanvasService] Failed to persist deferred refresh playlist:',
+          error
+        );
+      }
+    );
   }
 
   /**
    * Called by the player when it is about to apply the queued playlist (i.e.
-   * the current item just ended and the new list should start). Atomically
+   * The current item just ended and the new list should start). Atomically
    * promotes the deferred refresh onto castInfo so getStatus reflects the new
    * playlist from the first frame of the new item.
    *
@@ -676,6 +684,7 @@ class CanvasService {
 
   private refreshPlaylist(newItems: DP1Item[] | undefined): Reply {
     const currentPlaylist = this.castInfo?.playlist;
+    const prior = this.castInfo;
     if (!currentPlaylist?.items?.length) {
       console.error(
         '[CanvasService] Cannot refresh playlist before an active playlist exists'
@@ -687,7 +696,11 @@ class CanvasService {
     // matches the artwork still playing until the player applies the queued list.
     // Refresh only replaces playlist items. Keep the current playlist metadata
     // and defaults untouched so the remote intent stays narrowly scoped.
-    const currentNormalizedItems = currentPlaylist.items.map(dp1Item => ({
+    const comparisonItems =
+      prior?.shuffle && this.originalPlaylistItems?.length
+        ? this.originalPlaylistItems
+        : currentPlaylist.items;
+    const currentNormalizedItems = comparisonItems.map(dp1Item => ({
       ...dp1Item,
       duration: dp1Item.duration ?? NO_DURATION_VALUE,
     }));
@@ -696,8 +709,13 @@ class CanvasService {
       duration: dp1Item.duration ?? NO_DURATION_VALUE,
     }));
     if (deepEqual(currentNormalizedItems, normalizedItems)) {
-      this.queuedPlaylistPending = false;
-      this.setDeferredRefreshPlaylist(null);
+      // A refresh that matches the canonical unshuffled list during an active
+      // shuffle session must not tear down the queued shuffled state or force
+      // the player back to the unshuffled order.
+      if (!(prior?.shuffle && this.originalPlaylistItems?.length)) {
+        this.queuedPlaylistPending = false;
+        this.setDeferredRefreshPlaylist(null);
+      }
       console.log(
         '[CanvasService] New playlist is the same as the current playlist'
       );
@@ -706,12 +724,17 @@ class CanvasService {
 
     console.log('newPlaylist', normalizedItems.length);
 
-    const prior = this.castInfo;
     if (!prior) {
       console.error(
         '[CanvasService] Cannot refresh playlist without active cast info'
       );
       return { ok: false };
+    }
+    if (prior.shuffle) {
+      // While shuffle is active, keep the unshuffled snapshot aligned with the
+      // latest refresh payload so toggling shuffle off restores the refreshed
+      // playlist instead of an older pre-refresh order.
+      this.originalPlaylistItems = [...normalizedItems];
     }
     const prevItems = currentPlaylist.items;
     const prevIndex = prior.index;
