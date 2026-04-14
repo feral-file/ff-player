@@ -1,7 +1,8 @@
 import { NO_DURATION_VALUE } from '@/constants';
 import { CastCommand } from '@/models';
 import type { CastInfo } from '@/models';
-import type { DP1Call, DP1Item } from '@/models/dp1.model';
+import { LoopMode } from '@/models/cast_info.model';
+import { DP1Action, type DP1Call, type DP1Item } from '@/models/dp1.model';
 import { afterEach, describe, expect, it } from 'vitest';
 import { canvasService } from './CanvasService';
 
@@ -35,6 +36,40 @@ const service = canvasService as unknown as {
   queuedPlaylistPending: boolean;
 };
 
+describe('CanvasService Now Display defaults', () => {
+  afterEach(() => {
+    canvasService.setCastInfo(null, false);
+  });
+
+  it('resets loop and shuffle when a fresh Now Display playlist is applied', () => {
+    canvasService.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: playlist('old', ['A'].map(item)),
+        index: 0,
+        shuffle: true,
+        loopMode: LoopMode.none,
+      },
+      false
+    );
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.displayPlaylist,
+      request: {
+        intent: { action: DP1Action.NowDisplay },
+        dp1_call: playlist('new', ['B', 'C'].map(item)),
+      },
+    });
+
+    expect(reply).toEqual({ ok: true });
+    const next = canvasService.getCastInfo();
+    expect(next?.shuffle).toBe(false);
+    expect(next?.loopMode).toBe(LoopMode.playlist);
+    expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['B', 'C']);
+  });
+});
+
+// eslint-disable-next-line max-lines-per-function -- Deferred refresh cases share helpers; split later if this file grows further.
 describe('CanvasService deferred refresh', () => {
   afterEach(() => {
     canvasService.setCastInfo(null, false);

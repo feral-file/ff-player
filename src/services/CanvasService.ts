@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- CanvasService is still the shared playback hub;
+keep the loop-mode patch local rather than splitting the class in this change. */
 import {
   Reply,
   CheckDeviceStatusReply,
@@ -52,14 +54,16 @@ import {
   normalizePlaylistIndex,
   resolveItemIndexInNewItems,
 } from '@/utils/playlist';
+import { coerceLoopMode } from '@/utils/loopMode';
 import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
 import RemoteConfigService from './remoteConfigService';
 
-const validLoopModes = new Set<string>(Object.values(LoopMode));
-const coerceLoopMode = (raw: string | undefined): LoopMode =>
-  raw && validLoopModes.has(raw) ? (raw as LoopMode) : LoopMode.playlist;
-
+/**
+ * Owns the in-browser FF1 playback session state that cast commands and route
+ * components share, including playlist order, loop/shuffle modes, and deferred
+ * refresh transitions.
+ */
 class CanvasService {
   private castInfo: CastInfo | null = null;
   private static instance: CanvasService | null;
@@ -562,6 +566,8 @@ class CanvasService {
     this.setDeferredRefreshPlaylist(null);
 
     console.log('[CanvasService] Display playlist');
+    // Each Now Display starts a new cast session surface: do not inherit prior
+    // shuffle / loop toggles from the previous playlist on the same device tab.
     this.setCastInfo({
       castCommand: CastCommand.displayPlaylist,
       playlist: {
@@ -574,6 +580,8 @@ class CanvasService {
       playlistUrl: request.playlistUrl,
       index: 0,
       playlistId: request.dp1CallData.id,
+      loopMode: LoopMode.playlist,
+      shuffle: false,
     });
     return { ok: true };
   }
@@ -672,6 +680,9 @@ class CanvasService {
     return { ok: true };
   }
 
+  // Keep deferred-refresh, shuffle restoration, and index remapping together
+  // because they all amend the same compatibility-sensitive cast contract.
+  // eslint-disable-next-line max-lines-per-function
   private refreshPlaylist(newItems: DP1Item[] | undefined): Reply {
     const currentPlaylist = this.castInfo?.playlist;
     const prior = this.castInfo;

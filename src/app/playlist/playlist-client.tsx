@@ -16,11 +16,11 @@ import { DP1Service } from '@/services/DP1Service';
 import {
   normalizePlaylistIndex,
   resolveQueuedPlaylistNextIndex,
+  resolveSequentialPlaylistAdvance,
 } from '@/utils/playlist';
+import { coerceLoopMode } from '@/utils/loopMode';
 import * as Sentry from '@sentry/nextjs';
 import { useCallback, useEffect, useRef, useState } from 'react';
-
-const validLoopModes = new Set<string>(Object.values(LoopMode));
 
 function reportPlaylistDisplayPreferenceError(
   phase: string,
@@ -47,6 +47,7 @@ function reportPlaylistDisplayPreferenceError(
   }
 }
 
+// eslint-disable-next-line max-lines-per-function
 export default function PlaylistClient() {
   const { context } = useAppContext();
   const castInfo = context.castInfo;
@@ -62,10 +63,12 @@ export default function PlaylistClient() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   const currentItemRef = useRef<DP1Item>();
   const currentIndexRef = useRef<number>(-1);
+  const playlistRef = useRef<DP1Item[]>([]);
   const playlistLengthRef = useRef<number>(0);
   const loopModeRef = useRef<LoopMode>(LoopMode.playlist);
 
   currentIndexRef.current = currentIndex;
+  playlistRef.current = playlist;
   playlistLengthRef.current = playlist.length;
 
   const clearTimer = useCallback(() => {
@@ -74,7 +77,6 @@ export default function PlaylistClient() {
       timerRef.current = undefined;
     }
   }, []);
-
   useEffect(() => {
     return () => {
       clearTimer();
@@ -137,7 +139,9 @@ export default function PlaylistClient() {
           { itemId: activeItemId, ref: activeRef }
         );
         const currentItem = currentItemRef.current;
-        if (!currentItem) return;
+        if (!currentItem) {
+          return;
+        }
         if (currentItem.id === activeItemId && currentItem.ref === activeRef) {
           setCurrentItemDisplayPreference(defaultDP1DisplayPreference);
         }
@@ -221,6 +225,11 @@ export default function PlaylistClient() {
       }
 
       timerRef.current = setTimeout(() => {
+        // The timeout is firing now, so the previous handle is no longer active.
+        // Clearing it lets later loop-mode changes detect a true "held on final
+        // artwork" state after repeat-off stops progression.
+        timerRef.current = undefined;
+
         if (loopModeRef.current === LoopMode.one) {
           // Apply queued playlist if any, staying on the same artwork.
           // keepCurrent=true: find the current item in the new list and loop it,
@@ -239,10 +248,16 @@ export default function PlaylistClient() {
           return;
         }
 
-        const nextIndex = normalizePlaylistIndex(
-          normalizedIndex + 1,
-          snapshot.length
-        );
+        const nextIndex = resolveSequentialPlaylistAdvance({
+          currentIndex: normalizedIndex,
+          playlistLength: snapshot.length,
+          loopMode: loopModeRef.current,
+        });
+        if (nextIndex === null) {
+          // Repeat-off holds the final artwork on screen until another command
+          // changes playback. Do not wrap or reschedule from this slot.
+          return;
+        }
 
         // Single-item playlist: nextIndex wraps back to the same position.
         // setCurrentIndex would be a no-op and React would not re-run the
@@ -289,6 +304,7 @@ export default function PlaylistClient() {
     scheduleCurrentItemTimer,
   ]);
 
+  // eslint-disable-next-line max-lines-per-function
   useEffect(() => {
     if (!castInfo) {
       clearTimer();
@@ -309,6 +325,7 @@ export default function PlaylistClient() {
 
     switch (castInfo.castCommand) {
       case CastCommand.displayPlaylist: {
+        loopModeRef.current = coerceLoopMode(castInfo.loopMode);
         if (castInfo.playlist?.items?.length) {
           setPlaylistDefaultsSettings(castInfo.playlist.defaults ?? null);
           setPlaylist(
@@ -379,14 +396,34 @@ export default function PlaylistClient() {
       }
 
       case CastCommand.setLoop: {
-        loopModeRef.current =
-          castInfo.loopMode && validLoopModes.has(castInfo.loopMode)
-            ? castInfo.loopMode
-            : LoopMode.playlist;
+        const nextLoopMode = coerceLoopMode(castInfo.loopMode);
+        const activePlaylist = playlistRef.current;
+        const isHoldingFinalArtwork =
+          timerRef.current === undefined &&
+          activePlaylist.length > 0 &&
+          currentIndexRef.current >= 0 &&
+          normalizePlaylistIndex(
+            currentIndexRef.current,
+            activePlaylist.length
+          ) ===
+            activePlaylist.length - 1;
+
+        loopModeRef.current = nextLoopMode;
+
+        if (nextLoopMode !== LoopMode.none && isHoldingFinalArtwork) {
+          // Leaving repeat-off while holding the last artwork should restart that
+          // artwork's slot timer so playback can continue from the held frame.
+          scheduleCurrentItemTimer(currentIndexRef.current, activePlaylist);
+        }
         break;
       }
     }
-  }, [applyQueuedPlaylistIfExists, castInfo, clearTimer]);
+  }, [
+    applyQueuedPlaylistIfExists,
+    castInfo,
+    clearTimer,
+    scheduleCurrentItemTimer,
+  ]);
 
   return (
     <>

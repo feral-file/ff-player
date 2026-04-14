@@ -1,3 +1,4 @@
+import { LoopMode } from '@/models/cast_info.model';
 import type { DP1Item } from '@/models/dp1.model';
 
 /**
@@ -102,4 +103,41 @@ export function resolveQueuedPlaylistNextIndex({
   }
 
   return 0;
+}
+
+interface ResolveSequentialPlaylistAdvanceOptions {
+  currentIndex: number;
+  playlistLength: number;
+  loopMode: LoopMode;
+}
+
+/**
+ * Resolve the next index for timer-driven sequential playback.
+ *
+ * `none` holds on the final artwork instead of wrapping, `playlist` wraps
+ * through the full list, and `one` keeps the current artwork selected.
+ */
+export function resolveSequentialPlaylistAdvance({
+  currentIndex,
+  playlistLength,
+  loopMode,
+}: ResolveSequentialPlaylistAdvanceOptions): number | null {
+  if (playlistLength <= 0) {
+    return null;
+  }
+
+  const normalizedIndex = normalizePlaylistIndex(currentIndex, playlistLength);
+  if (normalizedIndex < 0) {
+    return null;
+  }
+
+  if (loopMode === LoopMode.one) {
+    return normalizedIndex;
+  }
+
+  if (loopMode === LoopMode.none && normalizedIndex === playlistLength - 1) {
+    return null;
+  }
+
+  return normalizePlaylistIndex(normalizedIndex + 1, playlistLength);
 }

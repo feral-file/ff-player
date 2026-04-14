@@ -1,9 +1,11 @@
 import type { DP1Item } from '@/models/dp1.model';
+import { LoopMode } from '@/models/cast_info.model';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   normalizePlaylistIndex,
   resolveItemIndexInNewItems,
   resolveQueuedPlaylistNextIndex,
+  resolveSequentialPlaylistAdvance,
 } from './playlist';
 
 const item = (id: string): DP1Item =>
@@ -78,5 +80,37 @@ describe('playlist index helpers', () => {
         keepCurrent: true,
       })
     ).toBe(0);
+  });
+});
+
+describe('sequential playlist advance', () => {
+  it('holds on the final artwork when loop mode is none', () => {
+    expect(
+      resolveSequentialPlaylistAdvance({
+        currentIndex: 2,
+        playlistLength: 3,
+        loopMode: LoopMode.none,
+      })
+    ).toBeNull();
+  });
+
+  it('wraps when loop mode is playlist', () => {
+    expect(
+      resolveSequentialPlaylistAdvance({
+        currentIndex: 2,
+        playlistLength: 3,
+        loopMode: LoopMode.playlist,
+      })
+    ).toBe(0);
+  });
+
+  it('stays on the current artwork when loop mode is one', () => {
+    expect(
+      resolveSequentialPlaylistAdvance({
+        currentIndex: 2,
+        playlistLength: 3,
+        loopMode: LoopMode.one,
+      })
+    ).toBe(2);
   });
 });
