@@ -4,7 +4,6 @@ import type { CastInfo } from '@/models';
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import { afterEach, describe, expect, it } from 'vitest';
 import { canvasService } from './CanvasService';
-import DeviceManager from '@/utils/DeviceManager';
 
 const item = (id: string): DP1Item =>
   ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
@@ -37,12 +36,11 @@ const service = canvasService as unknown as {
 };
 
 describe('CanvasService deferred refresh', () => {
-  afterEach(async () => {
+  afterEach(() => {
     canvasService.setCastInfo(null, false);
     service.deferredRefreshPlaylist = null;
     service.originalPlaylistItems = null;
     service.queuedPlaylistPending = false;
-    await DeviceManager.setDeferredRefreshPlaylist(null);
   });
 
   it('defers refresh when the current item is absent from the new playlist', () => {

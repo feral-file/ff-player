@@ -26,10 +26,7 @@ import { CDPRequestHandler } from '@/services/cdp-handler/CDPRequestHandler';
 import useCursorPositions, {
   CursorPosition,
 } from '@/services/custom-hooks/useCursorPositions';
-import {
-  normalizePlaylistIndex,
-  resolveItemIndexInNewItems,
-} from '@/utils/playlist';
+import { normalizePlaylistIndex } from '@/utils/playlist';
 import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
 import { useRouter } from 'next/navigation';
 interface AppContextProps {
@@ -127,7 +124,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
     }
 
     let castInfo: CastInfo | null = null;
-
     // Only check for boot playlist if this is NOT a version update reload
     if (!isVersionUpdateReload) {
       const bootPlaylist = await DeviceManager.getBootPlaylist();
@@ -145,26 +141,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
     if (!castInfo) {
       castInfo = await DeviceManager.getCastInfo();
-      if (castInfo) {
-        const deferredRefreshPlaylist =
-          await DeviceManager.getDeferredRefreshPlaylist();
-        if (deferredRefreshPlaylist?.items?.length) {
-          castInfo = {
-            ...castInfo,
-            castCommand: CastCommand.displayPlaylist,
-            playlist: deferredRefreshPlaylist,
-            index: resolveItemIndexInNewItems(
-              deferredRefreshPlaylist.items,
-              castInfo.playlist?.items,
-              castInfo.index
-            ),
-            playlistId: deferredRefreshPlaylist.id ?? castInfo.playlistId,
-          };
-          await DeviceManager.setDeferredRefreshPlaylist(null);
-        }
-      }
-    } else {
-      await DeviceManager.setDeferredRefreshPlaylist(null);
     }
 
     if (castInfo) {
@@ -202,7 +178,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
       canvasService.setCastInfo(cleanCastInfo, false);
       navigateToHomePage();
     } else {
-      await DeviceManager.setDeferredRefreshPlaylist(null);
       // Cast default playlist
       console.log('[AppContext] No castInfo found, fetching default playlist');
       setIsFallbackPlaylist(true);

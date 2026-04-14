@@ -175,14 +175,6 @@ class CanvasService {
 
   private setDeferredRefreshPlaylist(next: DP1Call | null) {
     this.deferredRefreshPlaylist = next;
-    void DeviceManager.setDeferredRefreshPlaylist(next).catch(
-      (error: unknown) => {
-        console.error(
-          '[CanvasService] Failed to persist deferred refresh playlist:',
-          error
-        );
-      }
-    );
   }
 
   /**
@@ -635,7 +627,6 @@ class CanvasService {
         [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
       }
       this.queuedPlaylistPending = true;
-      this.setDeferredRefreshPlaylist(null);
       this.setCastInfo({
         ...this.castInfo,
         castCommand: CastCommand.setShuffle,
@@ -655,7 +646,6 @@ class CanvasService {
         restored.findIndex(item => item.id === currentItem.id)
       );
       this.queuedPlaylistPending = true;
-      this.setDeferredRefreshPlaylist(null);
       this.setCastInfo({
         ...this.castInfo,
         castCommand: CastCommand.setShuffle,
