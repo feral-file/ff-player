@@ -318,11 +318,6 @@ export default function PlaylistClient() {
       return;
     }
 
-    console.log(
-      '[PlaylistClient] process cast info',
-      JSON.stringify(castInfo.castCommand)
-    );
-
     switch (castInfo.castCommand) {
       case CastCommand.displayPlaylist: {
         loopModeRef.current = coerceLoopMode(castInfo.loopMode);
@@ -334,12 +329,11 @@ export default function PlaylistClient() {
               duration: item.duration ?? NO_DURATION_VALUE,
             }))
           );
-          setCurrentIndex(
-            normalizePlaylistIndex(
-              castInfo.index ?? 0,
-              castInfo.playlist.items.length
-            )
+          const startIndex = normalizePlaylistIndex(
+            castInfo.index ?? 0,
+            castInfo.playlist.items.length
           );
+          setCurrentIndex(startIndex);
         } else {
           setPlaylist([]);
           setCurrentIndex(-1);
@@ -353,7 +347,17 @@ export default function PlaylistClient() {
       case CastCommand.refreshPlaylist:
       case CastCommand.setShuffle: {
         if (castInfo.playlist?.items?.length) {
-          if (currentIndexRef.current < 0 || playlistLengthRef.current === 0) {
+          // Queued shuffle/refresh normally applies when the current slot timer
+          // fires. If there is no active slot timer (e.g. repeat-off hold on the
+          // final artwork after the last slot ended), still apply immediately so
+          // a new shuffled order is not stuck behind a timer that will never run.
+          const noActiveSlotTimer = timerRef.current === undefined;
+          const shouldApplyQueuedPlaylist =
+            currentIndexRef.current < 0 ||
+            playlistLengthRef.current === 0 ||
+            (canvasService.hasQueuedPlaylistPending() && noActiveSlotTimer);
+
+          if (shouldApplyQueuedPlaylist) {
             applyQueuedPlaylistIfExists(castInfo.index);
           }
           break;
