@@ -17,9 +17,15 @@ export interface DP1Call {
   title: string;
   slug?: string;
   created?: string;
+  note?: DP1Note;
   defaults?: DP1Defaults;
   items?: DP1Item[];
   signature?: string;
+}
+
+export interface DP1Note {
+  text: string;
+  display_duration?: number;
 }
 
 export enum DP1Action {
@@ -40,6 +46,7 @@ export interface DP1Item {
   title?: string;
   slug?: string;
   source: string;
+  note?: DP1Note;
   duration?: number;
   license: DP1License;
   ref?: string; // URL ipfs:// or https://... (content-addressed preferred)

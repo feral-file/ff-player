@@ -1,6 +1,7 @@
 'use client';
 
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
+import NoteCard from '@/components/note-card/NoteCard';
 import { useAppContext } from '@/context/AppContext';
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
@@ -9,6 +10,7 @@ import {
   DP1DisplayPreference,
   DP1Defaults,
   DP1Item,
+  DP1Note,
 } from '@/models/dp1.model';
 import { NO_DURATION_VALUE } from '@/constants';
 import { canvasService } from '@/services/CanvasService';
@@ -47,6 +49,10 @@ function reportPlaylistDisplayPreferenceError(
   }
 }
 
+function getNoteDurationMs(note: DP1Note): number {
+  return (note.display_duration ?? 20) * 1000;
+}
+
 export default function PlaylistClient() {
   const { context } = useAppContext();
   const castInfo = context.castInfo;
@@ -58,8 +64,12 @@ export default function PlaylistClient() {
     useState<DP1DisplayPreference | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
+  const [playlistNote, setPlaylistNote] = useState<DP1Note | null>(null);
+  const [activeNote, setActiveNote] = useState<DP1Note | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
+  const noteTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>();
+  const hasShownPlaylistNoteRef = useRef<boolean>(false);
   const currentItemRef = useRef<DP1Item>();
   const currentIndexRef = useRef<number>(-1);
   const playlistLengthRef = useRef<number>(0);
@@ -75,11 +85,19 @@ export default function PlaylistClient() {
     }
   }, []);
 
+  const clearNoteTimeout = useCallback(() => {
+    if (noteTimeoutRef.current) {
+      clearTimeout(noteTimeoutRef.current);
+      noteTimeoutRef.current = undefined;
+    }
+  }, []);
+
   useEffect(() => {
     return () => {
       clearTimer();
+      clearNoteTimeout();
     };
-  }, [clearTimer]);
+  }, [clearTimer, clearNoteTimeout]);
 
   const handleItemDisplayPreference = useCallback(
     async (dp1Item: DP1Item) => {
@@ -260,9 +278,59 @@ export default function PlaylistClient() {
     [applyQueuedPlaylistIfExists, clearTimer, publishCurrentIndex]
   );
 
+  /**
+   * After intermission notes finish, start the artwork display and per-item timer.
+   * Keeps the same scheduling model as the no-notes path (setTimeout per item duration).
+   */
+  const beginPlaybackAfterNotes = useCallback(
+    (normalizedIndex: number, snapshot: DP1Item[]) => {
+      clearNoteTimeout();
+      setActiveNote(null);
+      const n = normalizePlaylistIndex(normalizedIndex, snapshot.length);
+      const item = snapshot[n];
+      currentItemRef.current = item;
+      void handleItemDisplayPreference(item);
+      setCastPreviewURL(item.source);
+      scheduleCurrentItemTimer(n, snapshot);
+    },
+    [
+      clearNoteTimeout,
+      handleItemDisplayPreference,
+      scheduleCurrentItemTimer,
+    ]
+  );
+
+  /**
+   * Shows playlist-level and item-level intermission notes sequentially before artwork.
+   * Pauses the artwork duration timer until notes complete (clearTimer while notes run).
+   */
+  const showNotesBeforeItem = useCallback(
+    (notes: DP1Note[], normalizedIndex: number, snapshot: DP1Item[]) => {
+      const run = (queue: DP1Note[]) => {
+        const [note, ...remaining] = queue;
+        if (!note) {
+          beginPlaybackAfterNotes(normalizedIndex, snapshot);
+          return;
+        }
+        clearTimer();
+        clearNoteTimeout();
+        setCastPreviewURL(null);
+        setActiveNote(note);
+        const durationMs = getNoteDurationMs(note);
+        noteTimeoutRef.current = setTimeout(() => {
+          run(remaining);
+        }, durationMs);
+      };
+      run(notes);
+    },
+    [beginPlaybackAfterNotes, clearTimer, clearNoteTimeout]
+  );
+
   useEffect(() => {
     if (currentIndex < 0 || playlist.length === 0) {
       clearTimer();
+      clearNoteTimeout();
+      setActiveNote(null);
       return;
     }
 
@@ -272,6 +340,23 @@ export default function PlaylistClient() {
     );
     const currentItem = playlist[normalizedIndex];
     currentItemRef.current = currentItem;
+
+    const notesToShow: DP1Note[] = [];
+    if (normalizedIndex === 0 && !hasShownPlaylistNoteRef.current && playlistNote) {
+      notesToShow.push(playlistNote);
+      hasShownPlaylistNoteRef.current = true;
+    }
+    if (currentItem.note) {
+      notesToShow.push(currentItem.note);
+    }
+
+    if (notesToShow.length > 0) {
+      showNotesBeforeItem(notesToShow, normalizedIndex, playlist);
+      return () => {
+        clearTimer();
+        clearNoteTimeout();
+      };
+    }
 
     void handleItemDisplayPreference(currentItem);
     setCastPreviewURL(currentItem.source);
@@ -283,20 +368,26 @@ export default function PlaylistClient() {
   }, [
     currentIndex,
     playlist,
-    playlistDefaultsSettings,
+    playlistNote,
     clearTimer,
+    clearNoteTimeout,
     handleItemDisplayPreference,
     scheduleCurrentItemTimer,
+    showNotesBeforeItem,
   ]);
 
   useEffect(() => {
     if (!castInfo) {
       clearTimer();
+      clearNoteTimeout();
       currentItemRef.current = undefined;
       loopModeRef.current = LoopMode.playlist;
+      hasShownPlaylistNoteRef.current = false;
       setPlaylist([]);
       setCurrentIndex(-1);
       setPlaylistDefaultsSettings(null);
+      setPlaylistNote(null);
+      setActiveNote(null);
       setCurrentItemDisplayPreference(null);
       setCastPreviewURL(null);
       return;
@@ -310,6 +401,8 @@ export default function PlaylistClient() {
     switch (castInfo.castCommand) {
       case CastCommand.displayPlaylist: {
         if (castInfo.playlist?.items?.length) {
+          hasShownPlaylistNoteRef.current = false;
+          setPlaylistNote(castInfo.playlist.note ?? null);
           setPlaylistDefaultsSettings(castInfo.playlist.defaults ?? null);
           setPlaylist(
             castInfo.playlist.items.map(item => ({
@@ -327,6 +420,8 @@ export default function PlaylistClient() {
           setPlaylist([]);
           setCurrentIndex(-1);
           setPlaylistDefaultsSettings(null);
+          setPlaylistNote(null);
+          setActiveNote(null);
           setCurrentItemDisplayPreference(null);
           setCastPreviewURL(null);
         }
@@ -343,10 +438,13 @@ export default function PlaylistClient() {
         }
 
         clearTimer();
+        clearNoteTimeout();
         currentItemRef.current = undefined;
         setPlaylist([]);
         setCurrentIndex(-1);
         setPlaylistDefaultsSettings(null);
+        setPlaylistNote(null);
+        setActiveNote(null);
         setCurrentItemDisplayPreference(null);
         setCastPreviewURL(null);
         break;
@@ -386,16 +484,20 @@ export default function PlaylistClient() {
         break;
       }
     }
-  }, [applyQueuedPlaylistIfExists, castInfo, clearTimer]);
+  }, [applyQueuedPlaylistIfExists, castInfo, clearTimer, clearNoteTimeout]);
 
   return (
     <>
       <div style={{ width: '100%', height: '100%' }}>
-        {currentItemDisplayPreference && (
-          <ArtworkPlayer
-            previewURL={castPreviewURL ?? ''}
-            displayPreferences={currentItemDisplayPreference}
-          />
+        {activeNote ? (
+          <NoteCard note={activeNote} />
+        ) : (
+          currentItemDisplayPreference && (
+            <ArtworkPlayer
+              previewURL={castPreviewURL ?? ''}
+              displayPreferences={currentItemDisplayPreference}
+            />
+          )
         )}
       </div>
     </>
