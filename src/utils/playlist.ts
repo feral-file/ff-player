@@ -143,8 +143,8 @@ export function resolveSequentialPlaylistAdvance({
 }
 
 /**
- * Whether a queued shuffle/refresh should apply immediately on cast, rather than
- * waiting for the next slot timer.
+ * Whether a queued shuffle/refresh should promote the queued playlist on cast,
+ * rather than waiting for the next slot timer (which repeat-off hold may never schedule).
  *
  * Callers set `holdAfterFinalSlot` only after repeat-off intentionally stops at
  * the final artwork slot; do not infer this from timer absence alone (timer gaps

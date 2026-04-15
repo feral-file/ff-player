@@ -162,7 +162,7 @@ describe('PlaylistClient — hold completed final timed slot', () => {
     teardownPlaylistWiringTest();
   });
 
-  it('applies queued setShuffle immediately', async () => {
+  it('promotes queued setShuffle on cast when holding final slot', async () => {
       const items = [item('a', 1), item('b', 1)];
       const initial = displayCast(items, 0, LoopMode.none);
       canvasService.setCastInfo(initial, false);
@@ -185,7 +185,7 @@ describe('PlaylistClient — hold completed final timed slot', () => {
     expect(canvasService.hasQueuedPlaylistPending()).toBe(false);
   });
 
-  it('applies deferred refreshPlaylist immediately', async () => {
+  it('promotes deferred refreshPlaylist on cast when holding final slot', async () => {
       const items = [item('a', 1), item('b', 1)];
       const initial = displayCast(items, 0, LoopMode.none);
       canvasService.setCastInfo(initial, false);
