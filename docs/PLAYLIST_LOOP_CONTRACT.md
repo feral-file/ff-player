@@ -12,4 +12,4 @@ Each **Now Display** playlist (`DP1Action.NowDisplay`, including boot display) r
 
 If loop mode changes away from `none` while FF1 is holding the final artwork, playback restarts from that current artwork's slot instead of waiting for another external command.
 
-While holding on the final artwork (no slot timer), a **queued** `setShuffle` or `refreshPlaylist` still applies immediately so the new item order is not stuck waiting for a slot that will not fire again.
+While **repeat-off is intentionally holding** the final artwork slot, the route keeps an explicit hold flag (not “no timer” alone, which is also true during timer gaps and infinite-duration items). A **queued** `setShuffle` or `refreshPlaylist` applies immediately in that hold state so the new item order is not stuck waiting for a slot that will not fire again.

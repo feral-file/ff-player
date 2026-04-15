@@ -38,6 +38,7 @@ npm run build
 - Run `npm run verify` before handing work off for review.
 - Re-run `npm run verify` after addressing any valid review feedback.
 - If the change touches playback, cast recovery, display settings, or route behavior, pair verification with a manual smoke pass for the affected flow.
+- **Playlist route / repeat-off hold:** With loop `none`, advance to the last timed slot so playback holds on the final artwork; confirm a queued shuffle or refresh applies immediately only in that hold (not when the final item has no finite slot timer); leaving `none` via `setLoop` should resume the slot timer from the held frame.
 
 ## CI parity
 
@@ -50,6 +51,7 @@ That split is intentionally equivalent to `npm run verify`, while keeping lint r
 
 ## Local notes
 
+- Vitest runs `src/**/*.test.ts` in the **node** environment and `src/**/*.test.tsx` in **jsdom** so lightweight React wiring tests can mount client components without changing the default environment for pure `.test.ts` suites.
 - Local builds are expected to work without production secrets for normal repo verification.
 - If a change introduces new required environment variables or build-time contracts, document that in `README.md` and update the verification guidance in the same PR.
 - There is no dedicated ESLint rule here for enum size or class length. File-size limits and reviewer judgment cover those until a narrower rule is worth the added noise.

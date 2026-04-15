@@ -17,6 +17,8 @@ import {
   normalizePlaylistIndex,
   resolveQueuedPlaylistNextIndex,
   resolveSequentialPlaylistAdvance,
+  shouldApplyQueuedPlaylistOnShuffleOrRefresh,
+  shouldResumeSlotTimerAfterSetLoop,
 } from '@/utils/playlist';
 import { coerceLoopMode } from '@/utils/loopMode';
 import * as Sentry from '@sentry/nextjs';
@@ -66,6 +68,7 @@ export default function PlaylistClient() {
   const playlistRef = useRef<DP1Item[]>([]);
   const playlistLengthRef = useRef<number>(0);
   const loopModeRef = useRef<LoopMode>(LoopMode.playlist);
+  const holdAfterFinalSlotRef = useRef(false);
 
   currentIndexRef.current = currentIndex;
   playlistRef.current = playlist;
@@ -176,6 +179,8 @@ export default function PlaylistClient() {
         return { applied: false };
       }
 
+      holdAfterFinalSlotRef.current = false;
+
       const hasDeferredRefresh = canvasService.hasDeferredRefreshPlaylist();
       const currentCastInfo = canvasService.getCastInfo();
       const nextIndex = resolveQueuedPlaylistNextIndex({
@@ -225,6 +230,7 @@ export default function PlaylistClient() {
       }
 
       timerRef.current = setTimeout(() => {
+        holdAfterFinalSlotRef.current = false;
         // The timeout is firing now, so the previous handle is no longer active.
         // Clearing it lets later loop-mode changes detect a true "held on final
         // artwork" state after repeat-off stops progression.
@@ -256,6 +262,12 @@ export default function PlaylistClient() {
         if (nextIndex === null) {
           // Repeat-off holds the final artwork on screen until another command
           // changes playback. Do not wrap or reschedule from this slot.
+          if (
+            loopModeRef.current === LoopMode.none &&
+            normalizedIndex === snapshot.length - 1
+          ) {
+            holdAfterFinalSlotRef.current = true;
+          }
           return;
         }
 
@@ -277,6 +289,7 @@ export default function PlaylistClient() {
 
   useEffect(() => {
     if (currentIndex < 0 || playlist.length === 0) {
+      holdAfterFinalSlotRef.current = false;
       clearTimer();
       return;
     }
@@ -308,6 +321,7 @@ export default function PlaylistClient() {
   useEffect(() => {
     if (!castInfo) {
       clearTimer();
+      holdAfterFinalSlotRef.current = false;
       currentItemRef.current = undefined;
       loopModeRef.current = LoopMode.playlist;
       setPlaylist([]);
@@ -320,6 +334,7 @@ export default function PlaylistClient() {
 
     switch (castInfo.castCommand) {
       case CastCommand.displayPlaylist: {
+        holdAfterFinalSlotRef.current = false;
         loopModeRef.current = coerceLoopMode(castInfo.loopMode);
         if (castInfo.playlist?.items?.length) {
           setPlaylistDefaultsSettings(castInfo.playlist.defaults ?? null);
@@ -347,22 +362,21 @@ export default function PlaylistClient() {
       case CastCommand.refreshPlaylist:
       case CastCommand.setShuffle: {
         if (castInfo.playlist?.items?.length) {
-          // Queued shuffle/refresh normally applies when the current slot timer
-          // fires. If there is no active slot timer (e.g. repeat-off hold on the
-          // final artwork after the last slot ended), still apply immediately so
-          // a new shuffled order is not stuck behind a timer that will never run.
-          const noActiveSlotTimer = timerRef.current === undefined;
-          const shouldApplyQueuedPlaylist =
-            currentIndexRef.current < 0 ||
-            playlistLengthRef.current === 0 ||
-            (canvasService.hasQueuedPlaylistPending() && noActiveSlotTimer);
-
-          if (shouldApplyQueuedPlaylist) {
+          if (
+            shouldApplyQueuedPlaylistOnShuffleOrRefresh({
+              currentIndex: currentIndexRef.current,
+              playlistLength: playlistLengthRef.current,
+              hasQueuedPlaylistPending:
+                canvasService.hasQueuedPlaylistPending(),
+              holdAfterFinalSlot: holdAfterFinalSlotRef.current,
+            })
+          ) {
             applyQueuedPlaylistIfExists(castInfo.index);
           }
           break;
         }
 
+        holdAfterFinalSlotRef.current = false;
         clearTimer();
         currentItemRef.current = undefined;
         setPlaylist([]);
@@ -386,6 +400,7 @@ export default function PlaylistClient() {
           }
         }
 
+        holdAfterFinalSlotRef.current = false;
         if (castInfo.playlist?.items?.length) {
           setCurrentIndex(
             normalizePlaylistIndex(
@@ -402,21 +417,19 @@ export default function PlaylistClient() {
       case CastCommand.setLoop: {
         const nextLoopMode = coerceLoopMode(castInfo.loopMode);
         const activePlaylist = playlistRef.current;
-        const isHoldingFinalArtwork =
-          timerRef.current === undefined &&
-          activePlaylist.length > 0 &&
-          currentIndexRef.current >= 0 &&
-          normalizePlaylistIndex(
-            currentIndexRef.current,
-            activePlaylist.length
-          ) ===
-            activePlaylist.length - 1;
+        const shouldResume = shouldResumeSlotTimerAfterSetLoop({
+          nextLoopMode,
+          holdAfterFinalSlot: holdAfterFinalSlotRef.current,
+          currentIndex: currentIndexRef.current,
+          playlistLength: activePlaylist.length,
+        });
 
         loopModeRef.current = nextLoopMode;
 
-        if (nextLoopMode !== LoopMode.none && isHoldingFinalArtwork) {
+        if (shouldResume) {
           // Leaving repeat-off while holding the last artwork should restart that
           // artwork's slot timer so playback can continue from the held frame.
+          holdAfterFinalSlotRef.current = false;
           scheduleCurrentItemTimer(currentIndexRef.current, activePlaylist);
         }
         break;
