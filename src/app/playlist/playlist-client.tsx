@@ -155,7 +155,9 @@ export default function PlaylistClient() {
           { itemId: activeItemId, ref: activeRef }
         );
         const currentItem = currentItemRef.current;
-        if (!currentItem) return;
+        if (!currentItem) {
+          return;
+        }
         if (currentItem.id === activeItemId && currentItem.ref === activeRef) {
           setCurrentItemDisplayPreference(defaultDP1DisplayPreference);
         }
@@ -307,11 +309,12 @@ export default function PlaylistClient() {
   const showNotesBeforeItem = useCallback(
     (notes: DP1Note[], normalizedIndex: number, snapshot: DP1Item[]) => {
       const run = (queue: DP1Note[]) => {
-        const [note, ...remaining] = queue;
-        if (!note) {
+        if (queue.length === 0) {
           beginPlaybackAfterNotes(normalizedIndex, snapshot);
           return;
         }
+        const note = queue[0]!;
+        const remaining = queue.slice(1);
         clearTimer();
         clearNoteTimeout();
         setCastPreviewURL(null);
