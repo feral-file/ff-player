@@ -1,9 +1,13 @@
 import type { DP1Item } from '@/models/dp1.model';
+import { LoopMode } from '@/models/cast_info.model';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   normalizePlaylistIndex,
   resolveItemIndexInNewItems,
   resolveQueuedPlaylistNextIndex,
+  resolveSequentialPlaylistAdvance,
+  shouldApplyQueuedPlaylistOnShuffleOrRefresh,
+  shouldResumeSlotTimerAfterSetLoop,
 } from './playlist';
 
 const item = (id: string): DP1Item =>
@@ -78,5 +82,116 @@ describe('playlist index helpers', () => {
         keepCurrent: true,
       })
     ).toBe(0);
+  });
+});
+
+describe('sequential playlist advance', () => {
+  it('holds on the final artwork when loop mode is none', () => {
+    expect(
+      resolveSequentialPlaylistAdvance({
+        currentIndex: 2,
+        playlistLength: 3,
+        loopMode: LoopMode.none,
+      })
+    ).toBeNull();
+  });
+
+  it('wraps when loop mode is playlist', () => {
+    expect(
+      resolveSequentialPlaylistAdvance({
+        currentIndex: 2,
+        playlistLength: 3,
+        loopMode: LoopMode.playlist,
+      })
+    ).toBe(0);
+  });
+
+  it('stays on the current artwork when loop mode is one', () => {
+    expect(
+      resolveSequentialPlaylistAdvance({
+        currentIndex: 2,
+        playlistLength: 3,
+        loopMode: LoopMode.one,
+      })
+    ).toBe(2);
+  });
+});
+
+describe('queued playlist apply / setLoop resume guards', () => {
+  it('applies queued shuffle when there is no local playback yet', () => {
+    expect(
+      shouldApplyQueuedPlaylistOnShuffleOrRefresh({
+        currentIndex: -1,
+        playlistLength: 3,
+        hasQueuedPlaylistPending: true,
+        holdAfterFinalSlot: false,
+      })
+    ).toBe(true);
+  });
+
+  it('does not apply queued shuffle on timer absence alone (no hold flag)', () => {
+    expect(
+      shouldApplyQueuedPlaylistOnShuffleOrRefresh({
+        currentIndex: 2,
+        playlistLength: 3,
+        hasQueuedPlaylistPending: true,
+        holdAfterFinalSlot: false,
+      })
+    ).toBe(false);
+  });
+
+  it('applies queued shuffle only when hold flag is set at the final index', () => {
+    expect(
+      shouldApplyQueuedPlaylistOnShuffleOrRefresh({
+        currentIndex: 2,
+        playlistLength: 3,
+        hasQueuedPlaylistPending: true,
+        holdAfterFinalSlot: true,
+      })
+    ).toBe(true);
+  });
+
+  it('does not apply when hold flag is set but index is not last (stale ref)', () => {
+    expect(
+      shouldApplyQueuedPlaylistOnShuffleOrRefresh({
+        currentIndex: 0,
+        playlistLength: 3,
+        hasQueuedPlaylistPending: true,
+        holdAfterFinalSlot: true,
+      })
+    ).toBe(false);
+  });
+
+  it('does not resume slot timer while staying on repeat none', () => {
+    expect(
+      shouldResumeSlotTimerAfterSetLoop({
+        nextLoopMode: LoopMode.none,
+        holdAfterFinalSlot: true,
+        currentIndex: 2,
+        playlistLength: 3,
+      })
+    ).toBe(false);
+  });
+
+  it('resumes slot timer when leaving repeat-off hold at final index', () => {
+    expect(
+      shouldResumeSlotTimerAfterSetLoop({
+        nextLoopMode: LoopMode.playlist,
+        holdAfterFinalSlot: true,
+        currentIndex: 2,
+        playlistLength: 3,
+      })
+    ).toBe(true);
+  });
+
+  it('does not resume without explicit hold flag', () => {
+    expect(
+      shouldResumeSlotTimerAfterSetLoop({
+        nextLoopMode: LoopMode.playlist,
+        holdAfterFinalSlot: false,
+        currentIndex: 2,
+        playlistLength: 3,
+      })
+    ).toBe(false);
   });
 });

@@ -1,6 +1,7 @@
 import { DP1Call } from './dp1.model';
 
 export enum LoopMode {
+  none = 'none',
   playlist = 'playlist',
   one = 'one',
 }

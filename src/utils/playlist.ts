@@ -1,3 +1,4 @@
+import { LoopMode } from '@/models/cast_info.model';
 import type { DP1Item } from '@/models/dp1.model';
 
 /**
@@ -102,4 +103,99 @@ export function resolveQueuedPlaylistNextIndex({
   }
 
   return 0;
+}
+
+interface ResolveSequentialPlaylistAdvanceOptions {
+  currentIndex: number;
+  playlistLength: number;
+  loopMode: LoopMode;
+}
+
+/**
+ * Resolve the next index for timer-driven sequential playback.
+ *
+ * `none` holds on the final artwork instead of wrapping, `playlist` wraps
+ * through the full list, and `one` keeps the current artwork selected.
+ */
+export function resolveSequentialPlaylistAdvance({
+  currentIndex,
+  playlistLength,
+  loopMode,
+}: ResolveSequentialPlaylistAdvanceOptions): number | null {
+  if (playlistLength <= 0) {
+    return null;
+  }
+
+  const normalizedIndex = normalizePlaylistIndex(currentIndex, playlistLength);
+  if (normalizedIndex < 0) {
+    return null;
+  }
+
+  if (loopMode === LoopMode.one) {
+    return normalizedIndex;
+  }
+
+  if (loopMode === LoopMode.none && normalizedIndex === playlistLength - 1) {
+    return null;
+  }
+
+  return normalizePlaylistIndex(normalizedIndex + 1, playlistLength);
+}
+
+/**
+ * Whether a queued shuffle/refresh should promote the queued playlist on cast,
+ * rather than waiting for the next slot timer (which repeat-off hold may never schedule).
+ *
+ * Callers set `holdAfterFinalSlot` only after repeat-off intentionally stops at
+ * the final artwork slot; do not infer this from timer absence alone (timer gaps
+ * and infinite-duration items also have no active timer).
+ */
+export function shouldApplyQueuedPlaylistOnShuffleOrRefresh(params: {
+  currentIndex: number;
+  playlistLength: number;
+  hasQueuedPlaylistPending: boolean;
+  holdAfterFinalSlot: boolean;
+}): boolean {
+  const {
+    currentIndex,
+    playlistLength,
+    hasQueuedPlaylistPending,
+    holdAfterFinalSlot,
+  } = params;
+
+  if (playlistLength <= 0 || currentIndex < 0) {
+    return true;
+  }
+  if (!hasQueuedPlaylistPending || !holdAfterFinalSlot) {
+    return false;
+  }
+  return (
+    normalizePlaylistIndex(currentIndex, playlistLength) ===
+    playlistLength - 1
+  );
+}
+
+/**
+ * Whether `setLoop` should restart the current slot timer after leaving repeat-off
+ * hold on the final artwork. Requires the explicit hold flag plus last-slot index.
+ */
+export function shouldResumeSlotTimerAfterSetLoop(params: {
+  nextLoopMode: LoopMode;
+  holdAfterFinalSlot: boolean;
+  currentIndex: number;
+  playlistLength: number;
+}): boolean {
+  const { nextLoopMode, holdAfterFinalSlot, currentIndex, playlistLength } =
+    params;
+
+  if (nextLoopMode === LoopMode.none) {
+    return false;
+  }
+  if (!holdAfterFinalSlot || playlistLength <= 0 || currentIndex < 0) {
+    return false;
+  }
+  return (
+    normalizePlaylistIndex(currentIndex, playlistLength) ===
+    playlistLength - 1
+  );
 }
