@@ -25,7 +25,8 @@ export interface DP1Call {
 
 export interface DP1Note {
   text: string;
-  display_duration?: number;
+  /** Intermission length in seconds (DP-1 Playlist Extension `note.duration`; default 20 when omitted). */
+  duration?: number;
 }
 
 export enum DP1Action {

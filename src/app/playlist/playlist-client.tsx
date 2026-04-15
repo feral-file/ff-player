@@ -50,7 +50,7 @@ function reportPlaylistDisplayPreferenceError(
 }
 
 function getNoteDurationMs(note: DP1Note): number {
-  return (note.display_duration ?? 20) * 1000;
+  return (note.duration ?? 20) * 1000;
 }
 
 export default function PlaylistClient() {
@@ -295,11 +295,7 @@ export default function PlaylistClient() {
       setCastPreviewURL(item.source);
       scheduleCurrentItemTimer(n, snapshot);
     },
-    [
-      clearNoteTimeout,
-      handleItemDisplayPreference,
-      scheduleCurrentItemTimer,
-    ]
+    [clearNoteTimeout, handleItemDisplayPreference, scheduleCurrentItemTimer]
   );
 
   /**
@@ -313,7 +309,7 @@ export default function PlaylistClient() {
           beginPlaybackAfterNotes(normalizedIndex, snapshot);
           return;
         }
-        const note = queue[0]!;
+        const note = queue[0];
         const remaining = queue.slice(1);
         clearTimer();
         clearNoteTimeout();
@@ -345,7 +341,11 @@ export default function PlaylistClient() {
     currentItemRef.current = currentItem;
 
     const notesToShow: DP1Note[] = [];
-    if (normalizedIndex === 0 && !hasShownPlaylistNoteRef.current && playlistNote) {
+    if (
+      normalizedIndex === 0 &&
+      !hasShownPlaylistNoteRef.current &&
+      playlistNote
+    ) {
       notesToShow.push(playlistNote);
       hasShownPlaylistNoteRef.current = true;
     }
