@@ -52,10 +52,6 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: npm run build
 
-      - name: Write the current version hash
-        run: |
-          echo "{\"version\": \"$(git rev-parse HEAD)\"}" > out/version.json
-
       - name: Publish to Cloudflare Pages
         uses: cloudflare/pages-action@v1
         with:

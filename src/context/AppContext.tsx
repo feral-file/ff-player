@@ -29,6 +29,7 @@ import useCursorPositions, {
 import { normalizePlaylistIndex } from '@/utils/playlist';
 import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
 import { useRouter } from 'next/navigation';
+
 interface AppContextProps {
   children: ReactNode;
 }
@@ -58,6 +59,7 @@ export const useAppContext = () => {
   return context;
 };
 
+/* eslint-disable max-lines-per-function -- single provider owns boot + subscriptions */
 export const AppProvider = ({ children }: AppContextProps) => {
   const [appRemoteConfig, setAppConfig] = useState({} as AppRemoteConfig);
   const remoteConfigService = useRef(new RemoteConfigService());
@@ -110,33 +112,17 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const initCastInfo = async () => {
     console.log('[AppContext] initCastInfo');
 
-    // Check if this is a version update reload
-    const versionUpdateReloadValue = await DeviceManager.getItem(
-      LocalStorageItem.versionUpdateReload
-    );
-    const isVersionUpdateReload = versionUpdateReloadValue === 'true';
-
-    if (isVersionUpdateReload) {
-      console.log(
-        '[AppContext] Version update reload detected, skipping boot playlist'
-      );
-      await DeviceManager.removeItem(LocalStorageItem.versionUpdateReload);
-    }
-
     let castInfo: CastInfo | null = null;
-    // Only check for boot playlist if this is NOT a version update reload
-    if (!isVersionUpdateReload) {
-      const bootPlaylist = await DeviceManager.getBootPlaylist();
-      if (bootPlaylist?.items?.length) {
-        console.log('[AppContext] Boot playlist found, casting boot playlist');
-        castInfo = {
-          castCommand: CastCommand.displayPlaylist,
-          playlist: bootPlaylist,
-          index: 0,
-          isPaused: false,
-          playlistId: bootPlaylist.id,
-        };
-      }
+    const bootPlaylist = await DeviceManager.getBootPlaylist();
+    if (bootPlaylist?.items?.length) {
+      console.log('[AppContext] Boot playlist found, casting boot playlist');
+      castInfo = {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: bootPlaylist,
+        index: 0,
+        isPaused: false,
+        playlistId: bootPlaylist.id,
+      };
     }
 
     if (!castInfo) {
@@ -197,19 +183,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
   };
 
   useEffect(() => {
-    if (appRemoteConfig.defaultPlaylistURL && isFallbackPlaylist) {
-      fallbackPlaylist();
-    }
-  }, [appRemoteConfig.defaultPlaylistURL, isFallbackPlaylist]);
-
-  useEffect(() => {
-    const cdpRequestHandler = CDPRequestHandler.getInstance();
-    return () => {
-      cdpRequestHandler.cleanup();
-    };
-  }, []);
-
-  useEffect(() => {
     const fetchConfig = async () => {
       try {
         const appRemoteConfig =
@@ -218,7 +191,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
       } catch (error) {
         console.log('[API] Failed to load config:', error);
         setAppConfig({
-          duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,
           defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
         });
       }
@@ -228,6 +200,20 @@ export const AppProvider = ({ children }: AppContextProps) => {
       console.log('[API] Failed to load config:', error);
     });
   }, []);
+
+  useEffect(() => {
+    const cdpRequestHandler = CDPRequestHandler.getInstance();
+    return () => {
+      cdpRequestHandler.cleanup();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (appRemoteConfig.defaultPlaylistURL && isFallbackPlaylist) {
+      fallbackPlaylist();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: react when URL + fallback flag change only
+  }, [appRemoteConfig.defaultPlaylistURL, isFallbackPlaylist]);
 
   useEffect(() => {
     initContext().catch((error: unknown) => {

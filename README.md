@@ -62,10 +62,12 @@ Use `npm run post-implement-check` first to auto-fix and lint only the files cha
 
 ## Runtime Configuration
 
-- `https://raw.githubusercontent.com/bitmark-inc/feral-file-docs/main/configs/display.json` provides `duration` (version check interval) and `defaultPlaylistURL`.
-- `https://display.feralfile.com/version.json` provides the current app version for reload checks.
+- `display.json` (loaded from `${NEXT_PUBLIC_PUB_DOC_URL}/configs/display.json`, or same-origin `/configs/display.json` when the env is empty) provides `defaultPlaylistURL` for fallback playback defaults. Extra keys in the published document are ignored.
+- Player updates on FF1 are expected to ship with the device image or update channel; the in-browser version polling/reload flow has been removed.
 
-In production these files are typically served by the host/CDN; in local dev, stubs live in `public/`.
+In production these files are typically served by the host/CDN; in local dev, stubs may live in `public/`.
+
+For bundling and serving the static export on-device (FF1 local HTTP, root URL), see [`docs/DEVICE_LOCAL_PLAYER.md`](docs/DEVICE_LOCAL_PLAYER.md).
 
 ## Project Structure
 

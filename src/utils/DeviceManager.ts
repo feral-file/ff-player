@@ -11,7 +11,6 @@ const PRELOAD_KEYS: string[] = [
   LocalStorageItem.criticalTemp,
   LocalStorageItem.dp1ScheduledTask,
   LocalStorageItem.bootPlaylist,
-  LocalStorageItem.versionUpdateReload,
 ];
 
 class DeviceManager {
@@ -160,7 +159,7 @@ class DeviceManager {
   public async getCastInfo(): Promise<CastInfo | null> {
     await this.ensureInitialized();
     const castInfoString = await this.fetchAndCache(LocalStorageItem.castInfo);
-    if (castInfoString != null) {
+    if (castInfoString !== null) {
       try {
         return JSON.parse(castInfoString) as CastInfo;
       } catch (error) {

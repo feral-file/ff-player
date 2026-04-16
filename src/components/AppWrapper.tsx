@@ -1,7 +1,6 @@
 'use client';
 
 import { useAppContext } from '@/context/AppContext';
-import AppService from '@/services/app.service';
 import { CastCommand } from '@/models';
 import { useRouter, usePathname } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
@@ -9,10 +8,8 @@ import {
   CustomEventName,
   NavigateEventDetail,
 } from '@/models/custom_event';
-import { LocalStorageItem } from '@/constants';
 import DP1ScheduleService from '@/services/DP1ScheduleService';
 import ScheduleDisplay from './ScheduleDisplay';
-import DeviceManager from '@/utils/DeviceManager';
 
 const enum CastState {
   None, // Not casting
@@ -52,28 +49,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
     return () => {
       window.removeEventListener(CustomEventName.Navigate, navigate);
     };
-  }, []);
-
-  // Check version update
-  useEffect(() => {
-    if (!context.appRemoteConfig.duration) {
-      return;
-    }
-
-    checkVersion().catch((error: unknown) => {
-      console.error(error);
-    });
-
-    const intervalID = setInterval(() => {
-      checkVersion().catch((error: unknown) => {
-        console.error(error);
-      });
-    }, context.appRemoteConfig.duration);
-
-    return () => {
-      clearInterval(intervalID);
-    };
-  }, [context.appRemoteConfig.duration]);
+  }, [router]);
 
   // Check for scheduled DP1 tasks
   useEffect(() => {
@@ -81,30 +57,6 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       console.error('[AppWrapper] Error checking scheduled tasks:', error);
     });
   }, []);
-
-  const checkVersion = async () => {
-    const [currentVersion, newVersion] = await Promise.all([
-      AppService.getCurrentVersion(),
-      AppService.getVersion(),
-    ]);
-    console.log('[INFO] Current Version:', currentVersion);
-    console.log('[INFO] New Version:', newVersion);
-    if (newVersion !== currentVersion) {
-      // Set flag to indicate this is a version update reload
-      DeviceManager.setItem(LocalStorageItem.versionUpdateReload, 'true')
-        .then(() => {
-          window.location.reload();
-        })
-        .catch((error: unknown) => {
-          console.error(
-            '[AppWrapper] Error setting version update reload flag:',
-            error
-          );
-          // Still reload even if storage fails
-          window.location.reload();
-        });
-    }
-  };
 
   useEffect(() => {
     if (!castInfo) {
