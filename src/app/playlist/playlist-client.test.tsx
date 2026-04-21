@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PlaylistClient from './playlist-client';
 
 vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
-  default: (props: Record<string, unknown>) => {
+  default: function MockArtworkPlayer(props: Record<string, unknown>) {
     (globalThis as { __artworkPlayerProps?: Record<string, unknown> })
       .__artworkPlayerProps = props;
     return null;
@@ -28,6 +28,7 @@ vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
 vi.mock('@sentry/nextjs', () => ({
   captureException: vi.fn(),
   captureMessage: vi.fn(),
+  addBreadcrumb: vi.fn(),
 }));
 
 function canvasInternals(): {
@@ -110,9 +111,8 @@ function teardownPlaylistWiringTest(): void {
   s.queuedPlaylistPending = false;
   s.deferredRefreshPlaylist = null;
   s.originalPlaylistItems = null;
-  // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-  delete (globalThis as { __artworkPlayerProps?: Record<string, unknown> })
-    .__artworkPlayerProps;
+  (globalThis as { __artworkPlayerProps?: Record<string, unknown> })
+    .__artworkPlayerProps = undefined;
 }
 
 describe('PlaylistClient — no hold (final item has no finite slot timer)', () => {
@@ -264,28 +264,33 @@ describe('PlaylistClient — refresh artwork', () => {
     teardownPlaylistWiringTest();
   });
 
-  it('bumps the artwork refresh nonce when refreshArtwork is received', async () => {
+  it('refreshes ArtworkPlayer preview URL when refreshArtwork is received', async () => {
     const items = [item('a', 1)];
     const initial = displayCast(items, 0, LoopMode.playlist);
     canvasService.setCastInfo(initial, false);
-    const { rerender } = render(<PlaylistHarness castInfo={initial} />);
+    render(<PlaylistHarness castInfo={initial} />);
+    const initialPreviewURL = (
+      globalThis as { __artworkPlayerProps?: Record<string, unknown> }
+    ).__artworkPlayerProps?.previewURL as string | undefined;
+    expect(initialPreviewURL).toBe('https://example.com/a.jpg');
 
-    const refreshed: CastInfo = {
-      ...initial,
-      castCommand: CastCommand.refreshArtwork,
-    };
-    canvasService.setCastInfo(refreshed, false);
-    rerender(<PlaylistHarness castInfo={refreshed} />);
+    const reply = canvasService.processMessage({
+      command: CastCommand.refreshArtwork,
+      request: {},
+    });
+    expect(reply).toEqual({ ok: true });
 
     await act(async () => {
       await Promise.resolve();
     });
 
-    expect((globalThis as { __artworkPlayerProps?: Record<string, unknown> })
-      .__artworkPlayerProps?.refreshNonce).toBe(1);
+    const refreshedPreviewURL = (
+      globalThis as { __artworkPlayerProps?: Record<string, unknown> }
+    ).__artworkPlayerProps?.previewURL as string | undefined;
     expect(
-      (globalThis as { __artworkPlayerProps?: Record<string, unknown> })
-        .__artworkPlayerProps?.previewURL
-    ).toBe('https://example.com/a.jpg');
+      refreshedPreviewURL?.startsWith('https://example.com/a.jpg')
+    ).toBe(true);
+    expect(refreshedPreviewURL).toContain('_ff_refresh=');
+    expect(refreshedPreviewURL).not.toBe(initialPreviewURL);
   });
 });

@@ -24,6 +24,20 @@ import { coerceLoopMode } from '@/utils/loopMode';
 import * as Sentry from '@sentry/nextjs';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+function buildArtworkRefreshURL(source: string): string {
+  const refreshToken = Date.now().toString();
+  if (source.startsWith('data:')) {
+    return `${source}#_ff_refresh=${refreshToken}`;
+  }
+
+  const [baseWithQuery, hash = ''] = source.split('#', 2);
+  const [path, query = ''] = baseWithQuery.split('?', 2);
+  const searchParams = new URLSearchParams(query);
+  searchParams.set('_ff_refresh', refreshToken);
+  const nextURL = `${path}?${searchParams.toString()}`;
+  return hash ? `${nextURL}#${hash}` : nextURL;
+}
+
 function reportPlaylistDisplayPreferenceError(
   phase: string,
   error: unknown,
@@ -61,7 +75,6 @@ export default function PlaylistClient() {
     useState<DP1DisplayPreference | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
-  const [artworkRefreshNonce, setArtworkRefreshNonce] = useState(0);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   const currentItemRef = useRef<DP1Item>();
@@ -86,6 +99,25 @@ export default function PlaylistClient() {
       clearTimer();
     };
   }, [clearTimer]);
+
+  const triggerArtworkRefresh = useCallback(() => {
+    if (playlistRef.current.length === 0) {
+      return;
+    }
+
+    const currentSource = currentItemRef.current?.source;
+    if (!currentSource) {
+      return;
+    }
+    setCastPreviewURL(buildArtworkRefreshURL(currentSource));
+  }, []);
+
+  useEffect(() => {
+    canvasService.onRefreshArtwork = triggerArtworkRefresh;
+    return () => {
+      canvasService.onRefreshArtwork = null;
+    };
+  }, [triggerArtworkRefresh]);
 
   const handleItemDisplayPreference = useCallback(
     async (dp1Item: DP1Item) => {
@@ -389,9 +421,7 @@ export default function PlaylistClient() {
       }
 
       case CastCommand.refreshArtwork: {
-        if (castInfo.playlist?.items?.length) {
-          setArtworkRefreshNonce(prev => prev + 1);
-        }
+        triggerArtworkRefresh();
         break;
       }
 
@@ -448,6 +478,7 @@ export default function PlaylistClient() {
     castInfo,
     clearTimer,
     scheduleCurrentItemTimer,
+    triggerArtworkRefresh,
   ]);
 
   return (
@@ -457,7 +488,6 @@ export default function PlaylistClient() {
           <ArtworkPlayer
             previewURL={castPreviewURL ?? ''}
             displayPreferences={currentItemDisplayPreference}
-            refreshNonce={artworkRefreshNonce}
           />
         )}
       </div>

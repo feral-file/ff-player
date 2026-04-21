@@ -3,7 +3,7 @@ import { CastCommand } from '@/models';
 import type { CastInfo } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import { DP1Action, type DP1Call, type DP1Item } from '@/models/dp1.model';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
 
 const item = (id: string): DP1Item =>
@@ -35,11 +35,13 @@ const service = canvasService as unknown as {
   castInfo: CastInfo | null;
   queuedPlaylistPending: boolean;
   refreshArtwork(): { ok: boolean };
+  onRefreshArtwork: (() => void) | null;
 };
 
 describe('CanvasService Now Display defaults', () => {
   afterEach(() => {
     canvasService.setCastInfo(null, false);
+    service.onRefreshArtwork = null;
   });
 
   it('resets loop and shuffle when a fresh Now Display playlist is applied', () => {
@@ -69,7 +71,10 @@ describe('CanvasService Now Display defaults', () => {
     expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['B', 'C']);
   });
 
-  it('emits refreshArtwork without changing the current playlist payload', () => {
+  it('refreshes artwork without mutating cast command payload', () => {
+    const refreshSpy = vi.fn();
+    service.onRefreshArtwork = refreshSpy;
+
     canvasService.setCastInfo(
       {
         castCommand: CastCommand.displayPlaylist,
@@ -85,8 +90,9 @@ describe('CanvasService Now Display defaults', () => {
     });
 
     expect(reply).toEqual({ ok: true });
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
     const next = canvasService.getCastInfo();
-    expect(next?.castCommand).toBe(CastCommand.refreshArtwork);
+    expect(next?.castCommand).toBe(CastCommand.displayPlaylist);
     expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['A', 'B']);
     expect(next?.index).toBe(1);
   });

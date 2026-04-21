@@ -73,6 +73,7 @@ class CanvasService {
   // the new list. Kept private so getStatus never exposes staging state.
   private deferredRefreshPlaylist: DP1Call | null = null;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
+  public onRefreshArtwork: (() => void) | null = null;
 
   // Cursor positions
   private cursorPositionsListeners: CursorPositionListener[] = [];
@@ -299,8 +300,7 @@ class CanvasService {
     try {
       if (
         command === CastCommand.displayPlaylist ||
-        command === CastCommand.displayDefaultPlaylist ||
-        command === CastCommand.refreshArtwork
+        command === CastCommand.displayDefaultPlaylist
       ) {
         DeviceManager.removeItem(LocalStorageItem.criticalTemp).catch(
           (error: unknown) => {
@@ -462,10 +462,9 @@ class CanvasService {
       return { ok: false };
     }
 
-    this.setCastInfo({
-      ...activeCastInfo,
-      castCommand: CastCommand.refreshArtwork,
-    });
+    // Refresh is a one-shot playback action. Keep castCommand unchanged so
+    // status and persistence continue to represent the active playback command.
+    this.onRefreshArtwork?.();
     return { ok: true };
   }
 
