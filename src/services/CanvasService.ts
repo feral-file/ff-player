@@ -182,13 +182,15 @@ class CanvasService {
   }
 
   /**
-   * Called by the player when it is about to apply the queued playlist (i.e.
-   * The current item just ended and the new list should start). Atomically
-   * promotes the deferred refresh onto castInfo so getStatus reflects the new
-   * playlist from the first frame of the new item.
+   * True when a queued refresh targets a playlist that did not contain the
+   * current item, so the player had to defer promotion until it was about to
+   * leave the current artwork. The player calls this before applying a queued
+   * playlist so it can pick the correct index resolution strategy.
    *
-   * Returns the new playlist if there was a pending deferred refresh, or null
-   * if nothing was deferred (normal case — no special handling needed).
+   * Promotion timing: callers include the slot-end timer, the final-artwork
+   * hold release, moveToArtwork / updateIndex commands, AND the intermission
+   * dismiss flush. Any of these may be the trigger — the deferred flag only
+   * says "there is a differently-shaped list ready", not "which event fires".
    */
   public hasDeferredRefreshPlaylist(): boolean {
     return this.deferredRefreshPlaylist !== null;
@@ -208,6 +210,20 @@ class CanvasService {
     return this.castInfo?.playlist?.items ?? null;
   }
 
+  /**
+   * Atomically promotes a pending deferred-refresh playlist onto castInfo.
+   *
+   * Triggered by any of: slot-end timer, final-artwork hold release after
+   * loop/shuffle, moveToArtwork / updateIndex while a deferred refresh is
+   * pending, or the intermission dismiss flush. The side effect is identical
+   * across triggers: clear the deferred flag, swap in the new playlist, set
+   * the next index, and emit an `updateIndex` cast so `getStatus` reports the
+   * new playlist from the first frame.
+   *
+   * Returns the promoted `DP1Call`, or null if nothing was deferred (the
+   * common case — an immediate refresh updates castInfo synchronously and
+   * does not route through this path).
+   */
   public consumeDeferredRefreshPlaylist(nextIndex: number): DP1Call | null {
     const pending = this.deferredRefreshPlaylist;
     if (!pending) {
