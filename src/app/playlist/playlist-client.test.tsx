@@ -4,6 +4,9 @@
  * aligned the same way the live route would after a cast update. Deferred
  * refresh is staged via the same `CanvasService.refreshPlaylist` path the CDP
  * handler uses before the player applies it on hold.
+ *
+ * Real `ArtworkPlayer` reload / media setup is covered in
+ * `ArtworkPlayer.refresh.test.tsx` (this file mocks `ArtworkPlayer`).
  */
 import { AppContext } from '@/context/AppContext';
 import { NO_DURATION_VALUE } from '@/constants';

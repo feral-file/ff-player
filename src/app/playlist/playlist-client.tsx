@@ -94,6 +94,10 @@ export default function PlaylistClient() {
     []
   );
 
+  // False negatives are possible when ArtworkPlayer has not yet run
+  // useArtworkReloadRegistration's effect (performReload still null) or when
+  // currentItemRef lags a committed playlist update — CanvasService surfaces
+  // that as ok:false for the cast sender to retry.
   const triggerArtworkRefresh = useCallback((): boolean => {
     if (playlistRef.current.length === 0) {
       return false;
@@ -112,6 +116,7 @@ export default function PlaylistClient() {
     return true;
   }, []);
 
+  // Attaches after commit; refreshArtwork cast can arrive between first paint and here.
   useEffect(() => {
     canvasService.onRefreshArtwork = triggerArtworkRefresh;
     return () => {
