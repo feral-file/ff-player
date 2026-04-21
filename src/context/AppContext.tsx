@@ -125,9 +125,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
       };
     }
 
-    if (!castInfo) {
-      castInfo = await DeviceManager.getCastInfo();
-    }
+    castInfo ??= await DeviceManager.getCastInfo();
 
     if (castInfo) {
       const criticalTempValue = await DeviceManager.getItem(
@@ -219,6 +217,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
     initContext().catch((error: unknown) => {
       console.error('[AppContext] Error initializing context:', error);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot boot
   }, []);
 
   useEffect(() => {

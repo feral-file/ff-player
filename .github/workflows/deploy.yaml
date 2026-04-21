@@ -32,20 +32,9 @@ jobs:
 
       - name: Set environment variables
         run: |
-          echo "NEXT_PUBLIC_INDEXER_MAINNET_URL=${{ vars.INDEXER_MAINNET_URL }}" >> .env.local
-          echo "NEXT_PUBLIC_ACCOUNTS_URL=${{ vars.ACCOUNTS_URL }}" >> .env.local
-          echo "NEXT_PUBLIC_AUTONOMY_IPFS_PREFIX=${{ vars.AUTONOMY_IPFS_PREFIX }}" >> .env.local
-          echo "NEXT_PUBLIC_FERAL_FILE_ASSET_URL=${{ vars.FERAL_FILE_ASSET_URL }}" >> .env.local
-          echo "NEXT_PUBLIC_API_URL=${{ vars.API_URL }}" >> .env.local
-          echo "NEXT_PUBLIC_PUB_DOC_URL=${{ vars.PUB_DOC_URL }}" >> .env.local
-          echo "NEXT_PUBLIC_WEBSOCKET_URL=${{ vars.WEBSOCKET_URL }}" >> .env.local
-          echo "NEXT_PUBLIC_ACCOUNTS_API_KEY=${{ secrets.ACCOUNTS_API_KEY }}" >> .env.local
-          echo "NEXT_PUBLIC_API_KEY=${{ secrets.WEBSOCKET_API_KEY }}" >> .env.local
           echo "NEXT_PUBLIC_ENVIRONMENT=${{ vars.ENVIRONMENT }}" >> .env.local
+          echo "NEXT_PUBLIC_PUB_DOC_URL=${{ vars.PUB_DOC_URL }}" >> .env.local
           echo "NEXT_PUBLIC_SENTRY_DSN=${{ vars.SENTRY_DSN }}" >> .env.local
-          echo "NEXT_PUBLIC_SUPPORT_API_URL=${{ vars.SUPPORT_API_URL }}" >> .env.local
-          echo "NEXT_PUBLIC_INFURA_ENDPOINT=${{ secrets.INFURA_ENDPOINT }}" >> .env.local
-          echo "NEXT_PUBLIC_SUPPORT_API_KEY=${{ secrets.SUPPORT_API_KEY }}" >> .env.local
 
       - name: Build Next.js app
         env:
