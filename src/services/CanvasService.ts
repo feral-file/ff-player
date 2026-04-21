@@ -299,7 +299,8 @@ class CanvasService {
     try {
       if (
         command === CastCommand.displayPlaylist ||
-        command === CastCommand.displayDefaultPlaylist
+        command === CastCommand.displayDefaultPlaylist ||
+        command === CastCommand.refreshArtwork
       ) {
         DeviceManager.removeItem(LocalStorageItem.criticalTemp).catch(
           (error: unknown) => {
@@ -332,6 +333,8 @@ class CanvasService {
           );
         case CastCommand.moveToArtwork:
           return this.moveToArtwork(requestJson as MoveToItemRequest);
+        case CastCommand.refreshArtwork:
+          return this.refreshArtwork();
         case CastCommand.setSleepMode:
           return this.setSleepMode(requestJson as SetSleepModeRequest);
         case CastCommand.setShuffle:
@@ -448,6 +451,20 @@ class CanvasService {
       ...this.castInfo,
       castCommand: CastCommand.moveToArtwork,
       index: request.index,
+    });
+    return { ok: true };
+  }
+
+  private refreshArtwork(): Reply {
+    const activeCastInfo = this.castInfo;
+    if (!activeCastInfo?.playlist?.items?.length) {
+      console.error('[CanvasService] No active artwork to refresh');
+      return { ok: false };
+    }
+
+    this.setCastInfo({
+      ...activeCastInfo,
+      castCommand: CastCommand.refreshArtwork,
     });
     return { ok: true };
   }

@@ -76,12 +76,14 @@ const ArtworkPlayer = ({
   isCustomView,
   artworkPreviewMIMEType,
   displayPreferences,
+  refreshNonce = 0,
 }: {
   previewURL: string;
   isCustomView?: boolean;
   keyboardCode?: number;
   artworkPreviewMIMEType?: string;
   displayPreferences: DP1DisplayPreference;
+  refreshNonce?: number;
 }) => {
   const FADE_IN_OUT_DURATION_MS = 650;
   const { context } = useAppContext();
@@ -485,6 +487,23 @@ const ArtworkPlayer = ({
       handleWebGLLost();
     }
   };
+
+  const refreshCurrentArtwork = useCallback(() => {
+    const currentSlot = activeSlotRef.current;
+    const layer = slotsRef.current[currentSlot];
+    if (!layer?.displaySoftwareURL) {
+      return;
+    }
+
+    reloadIframe(currentSlot);
+  }, []);
+
+  useEffect(() => {
+    if (!refreshNonce) {
+      return;
+    }
+    refreshCurrentArtwork();
+  }, [refreshNonce, refreshCurrentArtwork]);
 
   useEffect(() => {
     let cancelled = false;

@@ -34,6 +34,7 @@ const service = canvasService as unknown as {
   originalPlaylistItems: DP1Item[] | null;
   castInfo: CastInfo | null;
   queuedPlaylistPending: boolean;
+  refreshArtwork(): { ok: boolean };
 };
 
 describe('CanvasService Now Display defaults', () => {
@@ -66,6 +67,28 @@ describe('CanvasService Now Display defaults', () => {
     expect(next?.shuffle).toBe(false);
     expect(next?.loopMode).toBe(LoopMode.playlist);
     expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['B', 'C']);
+  });
+
+  it('emits refreshArtwork without changing the current playlist payload', () => {
+    canvasService.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: playlist('active', ['A', 'B'].map(item)),
+        index: 1,
+      },
+      false
+    );
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.refreshArtwork,
+      request: {},
+    });
+
+    expect(reply).toEqual({ ok: true });
+    const next = canvasService.getCastInfo();
+    expect(next?.castCommand).toBe(CastCommand.refreshArtwork);
+    expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['A', 'B']);
+    expect(next?.index).toBe(1);
   });
 });
 

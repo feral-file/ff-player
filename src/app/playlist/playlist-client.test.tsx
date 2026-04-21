@@ -18,7 +18,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PlaylistClient from './playlist-client';
 
 vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
-  default: () => null,
+  default: (props: Record<string, unknown>) => {
+    (globalThis as { __artworkPlayerProps?: Record<string, unknown> })
+      .__artworkPlayerProps = props;
+    return null;
+  },
 }));
 
 vi.mock('@sentry/nextjs', () => ({
@@ -106,6 +110,9 @@ function teardownPlaylistWiringTest(): void {
   s.queuedPlaylistPending = false;
   s.deferredRefreshPlaylist = null;
   s.originalPlaylistItems = null;
+  // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+  delete (globalThis as { __artworkPlayerProps?: Record<string, unknown> })
+    .__artworkPlayerProps;
 }
 
 describe('PlaylistClient — no hold (final item has no finite slot timer)', () => {
@@ -245,5 +252,40 @@ describe('PlaylistClient — setLoop after hold', () => {
       await advanceMs(1000);
 
     expect(canvasService.getCastInfo()?.index).toBe(0);
+  });
+});
+
+describe('PlaylistClient — refresh artwork', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    teardownPlaylistWiringTest();
+  });
+
+  it('bumps the artwork refresh nonce when refreshArtwork is received', async () => {
+    const items = [item('a', 1)];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    const { rerender } = render(<PlaylistHarness castInfo={initial} />);
+
+    const refreshed: CastInfo = {
+      ...initial,
+      castCommand: CastCommand.refreshArtwork,
+    };
+    canvasService.setCastInfo(refreshed, false);
+    rerender(<PlaylistHarness castInfo={refreshed} />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect((globalThis as { __artworkPlayerProps?: Record<string, unknown> })
+      .__artworkPlayerProps?.refreshNonce).toBe(1);
+    expect(
+      (globalThis as { __artworkPlayerProps?: Record<string, unknown> })
+        .__artworkPlayerProps?.previewURL
+    ).toBe('https://example.com/a.jpg');
   });
 });

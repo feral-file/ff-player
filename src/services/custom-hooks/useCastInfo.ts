@@ -17,6 +17,7 @@ const useCastInfo = () => {
         CastCommand.moveToArtwork,
         CastCommand.updateIndex,
         CastCommand.refreshPlaylist,
+        CastCommand.refreshArtwork,
         CastCommand.setShuffle,
         CastCommand.setLoop,
       ].includes(castInfo.castCommand)

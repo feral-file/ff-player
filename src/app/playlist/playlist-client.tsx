@@ -61,6 +61,7 @@ export default function PlaylistClient() {
     useState<DP1DisplayPreference | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
+  const [artworkRefreshNonce, setArtworkRefreshNonce] = useState(0);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   const currentItemRef = useRef<DP1Item>();
@@ -387,6 +388,13 @@ export default function PlaylistClient() {
         break;
       }
 
+      case CastCommand.refreshArtwork: {
+        if (castInfo.playlist?.items?.length) {
+          setArtworkRefreshNonce(prev => prev + 1);
+        }
+        break;
+      }
+
       case CastCommand.moveToArtwork:
       case CastCommand.updateIndex: {
         if (castInfo.index === undefined) {
@@ -449,6 +457,7 @@ export default function PlaylistClient() {
           <ArtworkPlayer
             previewURL={castPreviewURL ?? ''}
             displayPreferences={currentItemDisplayPreference}
+            refreshNonce={artworkRefreshNonce}
           />
         )}
       </div>
