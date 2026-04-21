@@ -3,8 +3,24 @@ import axios from 'axios';
 import * as Sentry from '@sentry/nextjs';
 
 export interface AppRemoteConfig {
-  duration: number;
+  /** Poll interval for `version.json`; omit, `undefined`, or `0` disables polling. */
+  duration?: number;
   defaultPlaylistURL: string;
+}
+
+/**
+ * Maps `display.json` `duration` for version polling: valid finite values ≥0
+ * are kept; negatives clamp to `0`; absent or invalid values become `undefined`
+ * (no polling). `AppWrapper` treats falsy duration as disabled.
+ */
+function normalizePublishedDuration(raw: unknown): number | undefined {
+  if (typeof raw !== 'number' || Number.isNaN(raw) || !Number.isFinite(raw)) {
+    return undefined;
+  }
+  if (raw < 0) {
+    return 0;
+  }
+  return raw;
 }
 
 /**
@@ -32,10 +48,7 @@ class RemoteConfigService {
       );
 
       return {
-        duration:
-          typeof response.data.duration === 'number' && response.data.duration > 0
-            ? response.data.duration
-            : AppSettings.VERSION_CHECK_INTERVAL_DURATION,
+        duration: normalizePublishedDuration(response.data.duration),
         defaultPlaylistURL:
           typeof response.data.defaultPlaylistURL === 'string' &&
           response.data.defaultPlaylistURL.trim() !== ''

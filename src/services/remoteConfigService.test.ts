@@ -16,11 +16,14 @@ vi.mock('@sentry/nextjs', () => ({
   captureException: vi.fn(),
 }));
 
-describe('RemoteConfigService', () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.clearAllMocks();
-  });
+/** Clears env stubs and axios mock calls between RemoteConfigService tests. */
+function resetRemoteConfigTestEnv() {
+  vi.unstubAllEnvs();
+  vi.clearAllMocks();
+}
+
+describe('RemoteConfigService defaults', () => {
+  afterEach(resetRemoteConfigTestEnv);
 
   it('falls back to the local default playlist URL when the remote config omits it', async () => {
     vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
@@ -64,6 +67,69 @@ describe('RemoteConfigService', () => {
     await expect(service.getAppRemoteConfig()).resolves.toEqual({
       duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,
       defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
+    });
+  });
+});
+
+describe('RemoteConfigService duration normalization', () => {
+  afterEach(resetRemoteConfigTestEnv);
+
+  it('leaves duration undefined when display.json omits it', async () => {
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    axiosGet.mockResolvedValueOnce({
+      data: {
+        defaultPlaylistURL: 'https://example.com/playlist',
+      },
+    });
+
+    const service = new RemoteConfigService();
+
+    await expect(service.getAppRemoteConfig()).resolves.toEqual({
+      duration: undefined,
+      defaultPlaylistURL: 'https://example.com/playlist',
+    });
+  });
+
+  it('preserves zero duration and clamps negative duration to zero', async () => {
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    axiosGet.mockResolvedValueOnce({
+      data: {
+        duration: 0,
+        defaultPlaylistURL: 'https://example.com/a',
+      },
+    });
+    axiosGet.mockResolvedValueOnce({
+      data: {
+        duration: -1,
+        defaultPlaylistURL: 'https://example.com/b',
+      },
+    });
+
+    const zeroDuration = new RemoteConfigService();
+    await expect(zeroDuration.getAppRemoteConfig()).resolves.toMatchObject({
+      duration: 0,
+    });
+
+    const negativeDuration = new RemoteConfigService();
+    await expect(negativeDuration.getAppRemoteConfig()).resolves.toMatchObject({
+      duration: 0,
+    });
+  });
+
+  it('treats non-numeric duration as undefined', async () => {
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    axiosGet.mockResolvedValueOnce({
+      data: {
+        duration: 'not-a-number' as unknown as number,
+        defaultPlaylistURL: 'https://example.com/c',
+      },
+    });
+
+    const service = new RemoteConfigService();
+
+    await expect(service.getAppRemoteConfig()).resolves.toEqual({
+      duration: undefined,
+      defaultPlaylistURL: 'https://example.com/c',
     });
   });
 });

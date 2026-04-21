@@ -69,7 +69,7 @@ vi.mock('@/services/cdp-handler/CDPRequestHandler', () => ({
 
 vi.mock('@/services/CanvasService', () => ({
   canvasService: {
-    castPlaylistByURL: vi.fn(async () => undefined),
+    castPlaylistByURL: vi.fn(() => Promise.resolve(undefined)),
     setCastInfo: vi.fn(),
   },
 }));
@@ -94,8 +94,8 @@ describe('AppContext boot recovery', () => {
     deviceManager.setItem.mockResolvedValue(undefined);
     deviceManager.setDeviceDisplaySettings.mockResolvedValue(undefined);
     deviceManager.setDeviceInfo.mockResolvedValue(undefined);
-    vi.mocked(canvasService).castPlaylistByURL.mockImplementation(
-      async () => undefined
+    vi.mocked(canvasService).castPlaylistByURL.mockImplementation(() =>
+      Promise.resolve(undefined)
     );
   });
 
@@ -114,7 +114,7 @@ describe('AppContext boot recovery', () => {
       </AppProvider>
     );
 
-    await waitFor(() => expect(screen.getByTestId('app-ready')).toBeTruthy());
+    await waitFor(() => { expect(screen.getByTestId('app-ready')).toBeTruthy(); });
 
     await waitFor(() => {
       expect(deviceManager.getItem).toHaveBeenCalledWith(
