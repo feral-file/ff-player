@@ -11,9 +11,14 @@ const PRELOAD_KEYS: string[] = [
   LocalStorageItem.criticalTemp,
   LocalStorageItem.dp1ScheduledTask,
   LocalStorageItem.bootPlaylist,
-  LocalStorageItem.versionUpdateReload,
 ];
 
+/**
+ * Owns device-local persistence and migration for cast state, display
+ * settings, and boot playlists. The cache and legacy-storage bridge here are
+ * compatibility-sensitive because boot recovery depends on these keys staying
+ * stable across app updates.
+ */
 class DeviceManager {
   static instance = new DeviceManager();
 
@@ -160,7 +165,7 @@ class DeviceManager {
   public async getCastInfo(): Promise<CastInfo | null> {
     await this.ensureInitialized();
     const castInfoString = await this.fetchAndCache(LocalStorageItem.castInfo);
-    if (castInfoString != null) {
+    if (castInfoString !== null) {
       try {
         return JSON.parse(castInfoString) as CastInfo;
       } catch (error) {

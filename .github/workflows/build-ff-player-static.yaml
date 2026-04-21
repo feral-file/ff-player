@@ -1,0 +1,84 @@
+# Reusable workflow: build static export for bundling into FFOS ISO.
+# Called from feral-file/ffos.
+# Configure per Environment (Development / Production) on this repo:
+#   Variables: ENVIRONMENT, PUB_DOC_URL, SENTRY_DSN  (mapped to NEXT_PUBLIC_* at build time)
+#   Secrets: SENTRY_AUTH_TOKEN (source maps upload; optional if unset)
+name: Build ff-player Static
+
+on:
+  workflow_call:
+    inputs:
+      ff_player_ref:
+        description: 'Git ref (branch/tag/sha) to checkout and build'
+        required: true
+        type: string
+      environment:
+        description: 'GitHub Environment name (Development or Production)'
+        required: false
+        type: string
+        default: 'Development'
+    secrets:
+      REPO_ACCESS_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ff-player static export
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout ff-player
+        uses: actions/checkout@v4
+        with:
+          repository: feral-file/ff-player
+          ref: ${{ inputs.ff_player_ref }}
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate required environment variables
+        env:
+          NEXT_PUBLIC_ENVIRONMENT: ${{ vars.ENVIRONMENT }}
+          NEXT_PUBLIC_PUB_DOC_URL: ${{ vars.PUB_DOC_URL }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ vars.SENTRY_DSN }}
+        run: |
+          missing=()
+
+          for key in NEXT_PUBLIC_ENVIRONMENT NEXT_PUBLIC_PUB_DOC_URL NEXT_PUBLIC_SENTRY_DSN; do
+            value="${!key}"
+            if [ -z "$value" ]; then
+              missing+=("$key")
+            fi
+          done
+
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::Missing required environment variables: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Build static export
+        env:
+          NEXT_PUBLIC_ENVIRONMENT: ${{ vars.ENVIRONMENT }}
+          NEXT_PUBLIC_PUB_DOC_URL: ${{ vars.PUB_DOC_URL }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ vars.SENTRY_DSN }}
+          NEXT_PUBLIC_DISABLE_VERSION_CHECK: 'true'
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: npm run build
+
+      - name: Upload static artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ff-player-static
+          path: out/
+          retention-days: 1

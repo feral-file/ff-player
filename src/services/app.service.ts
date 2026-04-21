@@ -1,8 +1,9 @@
 import axios from 'axios';
 
 /**
- * Caches the current app version so repeated checks share one network read and
- * compare against a stable in-memory value for the lifetime of the session.
+ * Caches the current app version so the browser can compare the deployed
+ * `version.json` against a stable in-memory value without refetching on every
+ * render. The static device-local bundle disables this path at build time.
  */
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class AppService {
