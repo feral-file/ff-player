@@ -73,7 +73,12 @@ class CanvasService {
   // the new list. Kept private so getStatus never exposes staging state.
   private deferredRefreshPlaylist: DP1Call | null = null;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
-  public onRefreshArtwork: (() => void) | null = null;
+  /**
+   * Playlist route registers this to run a cache-bust reload on the active item.
+   * Return true when the preview URL was updated; false when nothing could be applied
+   * (e.g. No current source). Cast returns ok:false in that case so the sender can retry.
+   */
+  public onRefreshArtwork: (() => boolean) | null = null;
 
   // Cursor positions
   private cursorPositionsListeners: CursorPositionListener[] = [];
@@ -464,7 +469,21 @@ class CanvasService {
 
     // Refresh is a one-shot playback action. Keep castCommand unchanged so
     // status and persistence continue to represent the active playback command.
-    this.onRefreshArtwork?.();
+    // If the playlist UI is not mounted or cannot apply (no handler / no source),
+    // return ok:false so the sender can retry — no in-service queue.
+    if (!this.onRefreshArtwork) {
+      console.warn(
+        '[CanvasService] refreshArtwork: no playlist handler registered'
+      );
+      return { ok: false };
+    }
+    const applied = this.onRefreshArtwork();
+    if (!applied) {
+      console.warn(
+        '[CanvasService] refreshArtwork: handler could not update preview URL'
+      );
+      return { ok: false };
+    }
     return { ok: true };
   }
 

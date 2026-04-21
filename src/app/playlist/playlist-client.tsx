@@ -100,16 +100,17 @@ export default function PlaylistClient() {
     };
   }, [clearTimer]);
 
-  const triggerArtworkRefresh = useCallback(() => {
+  const triggerArtworkRefresh = useCallback((): boolean => {
     if (playlistRef.current.length === 0) {
-      return;
+      return false;
     }
 
     const currentSource = currentItemRef.current?.source;
     if (!currentSource) {
-      return;
+      return false;
     }
     setCastPreviewURL(buildArtworkRefreshURL(currentSource));
+    return true;
   }, []);
 
   useEffect(() => {
