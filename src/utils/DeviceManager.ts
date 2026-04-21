@@ -13,6 +13,12 @@ const PRELOAD_KEYS: string[] = [
   LocalStorageItem.bootPlaylist,
 ];
 
+/**
+ * Owns device-local persistence and migration for cast state, display
+ * settings, and boot playlists. The cache and legacy-storage bridge here are
+ * compatibility-sensitive because boot recovery depends on these keys staying
+ * stable across app updates.
+ */
 class DeviceManager {
   static instance = new DeviceManager();
 

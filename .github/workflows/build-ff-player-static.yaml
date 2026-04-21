@@ -47,11 +47,32 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate required environment variables
+        env:
+          NEXT_PUBLIC_ENVIRONMENT: ${{ vars.ENVIRONMENT }}
+          NEXT_PUBLIC_PUB_DOC_URL: ${{ vars.PUB_DOC_URL }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ vars.SENTRY_DSN }}
+        run: |
+          missing=()
+
+          for key in NEXT_PUBLIC_ENVIRONMENT NEXT_PUBLIC_PUB_DOC_URL NEXT_PUBLIC_SENTRY_DSN; do
+            value="${!key}"
+            if [ -z "$value" ]; then
+              missing+=("$key")
+            fi
+          done
+
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::Missing required environment variables: ${missing[*]}"
+            exit 1
+          fi
+
       - name: Build static export
         env:
           NEXT_PUBLIC_ENVIRONMENT: ${{ vars.ENVIRONMENT }}
           NEXT_PUBLIC_PUB_DOC_URL: ${{ vars.PUB_DOC_URL }}
           NEXT_PUBLIC_SENTRY_DSN: ${{ vars.SENTRY_DSN }}
+          NEXT_PUBLIC_DISABLE_VERSION_CHECK: 'true'
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: npm run build
 

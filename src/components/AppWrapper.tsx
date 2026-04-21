@@ -2,6 +2,9 @@
 
 import { useAppContext } from '@/context/AppContext';
 import { CastCommand } from '@/models';
+import { LocalStorageItem } from '@/constants';
+import AppService from '@/services/app.service';
+import DeviceManager from '@/utils/DeviceManager';
 import { useRouter, usePathname } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import {
@@ -15,6 +18,59 @@ const enum CastState {
   None, // Not casting
   Playlist, // Displaying playlist
 }
+
+const shouldCheckForUpdates =
+  process.env.NEXT_PUBLIC_DISABLE_VERSION_CHECK !== 'true';
+
+/**
+ * Polls `version.json` for the web deployment only. The static FF OS bundle
+ * disables the hook entirely so device-local installs do not try to self-reload
+ * against a file that is not shipped with that artifact.
+ */
+const useVersionUpdateReload = (duration: number | undefined) => {
+  useEffect(() => {
+    if (!shouldCheckForUpdates || !duration) {
+      return;
+    }
+
+    const checkVersion = async () => {
+      const [currentVersion, newVersion] = await Promise.all([
+        AppService.getCurrentVersion(),
+        AppService.getVersion(),
+      ]);
+
+      if (newVersion !== currentVersion) {
+        try {
+          await DeviceManager.setItem(
+            LocalStorageItem.versionUpdateReload,
+            'true'
+          );
+        } catch (error) {
+          console.error(
+            '[AppWrapper] Error setting version update reload flag:',
+            error
+          );
+        }
+
+        window.location.reload();
+      }
+    };
+
+    checkVersion().catch((error: unknown) => {
+      console.error('[AppWrapper] Error checking version:', error);
+    });
+
+    const intervalID = window.setInterval(() => {
+      checkVersion().catch((error: unknown) => {
+        console.error('[AppWrapper] Error checking version:', error);
+      });
+    }, duration);
+
+    return () => {
+      window.clearInterval(intervalID);
+    };
+  }, [duration]);
+};
 
 // Separate loading component
 const LoadingWrapper: React.FC = () => {
@@ -30,6 +86,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
   const pathname = usePathname();
   const castInfo = context.castInfo;
   const [castState, setCastState] = useState<CastState>(CastState.None);
+  useVersionUpdateReload(context.appRemoteConfig.duration);
 
   useEffect(() => {
     const navigate = (event: Event) => {

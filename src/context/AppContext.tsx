@@ -113,16 +113,32 @@ export const AppProvider = ({ children }: AppContextProps) => {
     console.log('[AppContext] initCastInfo');
 
     let castInfo: CastInfo | null = null;
-    const bootPlaylist = await DeviceManager.getBootPlaylist();
-    if (bootPlaylist?.items?.length) {
-      console.log('[AppContext] Boot playlist found, casting boot playlist');
-      castInfo = {
-        castCommand: CastCommand.displayPlaylist,
-        playlist: bootPlaylist,
-        index: 0,
-        isPaused: false,
-        playlistId: bootPlaylist.id,
-      };
+
+    // Check if this is a version update reload
+    const versionUpdateReloadValue = await DeviceManager.getItem(
+      LocalStorageItem.versionUpdateReload
+    );
+    const isVersionUpdateReload = versionUpdateReloadValue === 'true';
+
+    if (isVersionUpdateReload) {
+      console.log(
+        '[AppContext] Version update reload detected, skipping boot playlist'
+      );
+      await DeviceManager.removeItem(LocalStorageItem.versionUpdateReload);
+    }
+
+    if (!isVersionUpdateReload) {
+      const bootPlaylist = await DeviceManager.getBootPlaylist();
+      if (bootPlaylist?.items?.length) {
+        console.log('[AppContext] Boot playlist found, casting boot playlist');
+        castInfo = {
+          castCommand: CastCommand.displayPlaylist,
+          playlist: bootPlaylist,
+          index: 0,
+          isPaused: false,
+          playlistId: bootPlaylist.id,
+        };
+      }
     }
 
     castInfo ??= await DeviceManager.getCastInfo();
@@ -189,6 +205,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
       } catch (error) {
         console.log('[API] Failed to load config:', error);
         setAppConfig({
+          duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,
           defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
         });
       }

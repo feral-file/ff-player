@@ -20,11 +20,12 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 
 - At runtime, [RemoteConfigService](../src/services/remoteConfigService.ts) loads `${NEXT_PUBLIC_PUB_DOC_URL}/configs/display.json` when `NEXT_PUBLIC_PUB_DOC_URL` is set at build time.
 - When `NEXT_PUBLIC_PUB_DOC_URL` is empty, the request is same-origin: `/configs/display.json` (serve a matching file from `public/` in the bundle if needed).
-- Only `defaultPlaylistURL` is read; other keys in the published JSON are ignored.
+- `duration` controls the browser version-polling interval for web/Pages deployments, and `defaultPlaylistURL` controls fallback playback. Other keys in the published JSON are ignored.
 
 ## Player updates
 
-- In-browser version polling and reload-on-`version.json` have been removed. Treat the installed `out/` tree as the player version; coordinate updates with FF1 image or updater policy.
+- The Cloudflare Pages/web build still uses `version.json` polling and reload to pick up new deployments.
+- The FF OS static export sets `NEXT_PUBLIC_DISABLE_VERSION_CHECK=true`, so the device-local bundle does not self-refresh and should be updated with the FF1 image or updater policy.
 
 ## Compatibility note
 
