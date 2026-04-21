@@ -24,20 +24,6 @@ import { coerceLoopMode } from '@/utils/loopMode';
 import * as Sentry from '@sentry/nextjs';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-function buildArtworkRefreshURL(source: string): string {
-  const refreshToken = Date.now().toString();
-  if (source.startsWith('data:')) {
-    return `${source}#_ff_refresh=${refreshToken}`;
-  }
-
-  const [baseWithQuery, hash = ''] = source.split('#', 2);
-  const [path, query = ''] = baseWithQuery.split('?', 2);
-  const searchParams = new URLSearchParams(query);
-  searchParams.set('_ff_refresh', refreshToken);
-  const nextURL = `${path}?${searchParams.toString()}`;
-  return hash ? `${nextURL}#${hash}` : nextURL;
-}
-
 function reportPlaylistDisplayPreferenceError(
   phase: string,
   error: unknown,
@@ -75,6 +61,7 @@ export default function PlaylistClient() {
     useState<DP1DisplayPreference | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
+  const artworkPerformReloadRef = useRef<(() => void) | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   const currentItemRef = useRef<DP1Item>();
@@ -100,6 +87,13 @@ export default function PlaylistClient() {
     };
   }, [clearTimer]);
 
+  const registerArtworkReload = useCallback(
+    (reload: (() => void) | null) => {
+      artworkPerformReloadRef.current = reload;
+    },
+    []
+  );
+
   const triggerArtworkRefresh = useCallback((): boolean => {
     if (playlistRef.current.length === 0) {
       return false;
@@ -109,7 +103,12 @@ export default function PlaylistClient() {
     if (!currentSource) {
       return false;
     }
-    setCastPreviewURL(buildArtworkRefreshURL(currentSource));
+    const performReload = artworkPerformReloadRef.current;
+    if (!performReload) {
+      return false;
+    }
+    setCastPreviewURL(currentSource);
+    performReload();
     return true;
   }, []);
 
@@ -489,6 +488,7 @@ export default function PlaylistClient() {
           <ArtworkPlayer
             previewURL={castPreviewURL ?? ''}
             displayPreferences={currentItemDisplayPreference}
+            onRegisterArtworkReload={registerArtworkReload}
           />
         )}
       </div>

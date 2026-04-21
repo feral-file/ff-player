@@ -13,14 +13,34 @@ import { LoopMode } from '@/models/cast_info.model';
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
 import { act, render } from '@testing-library/react';
-import { useMemo, type ReactElement } from 'react';
+import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PlaylistClient from './playlist-client';
 
 vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
   default: function MockArtworkPlayer(props: Record<string, unknown>) {
-    (globalThis as { __artworkPlayerProps?: Record<string, unknown> })
-      .__artworkPlayerProps = props;
+    const g = globalThis as {
+      __artworkPlayerProps?: Record<string, unknown>;
+      __artworkReloadInvocations?: number;
+    };
+    g.__artworkPlayerProps = props;
+    React.useLayoutEffect(() => {
+      const reg = props.onRegisterArtworkReload as
+        | ((fn: (() => void) | null) => void)
+        | undefined;
+      if (!reg) {
+        return;
+      }
+      const reload = () => {
+        g.__artworkReloadInvocations = (g.__artworkReloadInvocations ?? 0) + 1;
+      };
+      reg(reload);
+      return () => {
+        reg(null);
+      };
+      // Test double: `g` is a module-level probe on globalThis, not a hook dep.
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
+    }, [props.onRegisterArtworkReload]);
     return null;
   },
 }));
@@ -76,8 +96,8 @@ function displayCast(
   };
 }
 
-function PlaylistHarness(props: { castInfo: CastInfo | null }): ReactElement {
-  const value = useMemo(
+function PlaylistHarness(props: { castInfo: CastInfo | null }): React.ReactElement {
+  const value = React.useMemo(
     () => ({
       context: {
         isInitialized: true,
@@ -111,8 +131,12 @@ function teardownPlaylistWiringTest(): void {
   s.queuedPlaylistPending = false;
   s.deferredRefreshPlaylist = null;
   s.originalPlaylistItems = null;
-  (globalThis as { __artworkPlayerProps?: Record<string, unknown> })
-    .__artworkPlayerProps = undefined;
+  const g = globalThis as {
+    __artworkPlayerProps?: Record<string, unknown>;
+    __artworkReloadInvocations?: number;
+  };
+  g.__artworkPlayerProps = undefined;
+  g.__artworkReloadInvocations = undefined;
 }
 
 describe('PlaylistClient — no hold (final item has no finite slot timer)', () => {
@@ -287,10 +311,10 @@ describe('PlaylistClient — refresh artwork', () => {
     const refreshedPreviewURL = (
       globalThis as { __artworkPlayerProps?: Record<string, unknown> }
     ).__artworkPlayerProps?.previewURL as string | undefined;
+    expect(refreshedPreviewURL).toBe('https://example.com/a.jpg');
     expect(
-      refreshedPreviewURL?.startsWith('https://example.com/a.jpg')
-    ).toBe(true);
-    expect(refreshedPreviewURL).toContain('_ff_refresh=');
-    expect(refreshedPreviewURL).not.toBe(initialPreviewURL);
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations
+    ).toBe(1);
   });
 });
