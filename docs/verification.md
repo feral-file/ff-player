@@ -52,6 +52,7 @@ That split is intentionally equivalent to `npm run verify`, while keeping lint r
 ## Local notes
 
 - Vitest runs `src/**/*.test.ts` in the **node** environment and `src/**/*.test.tsx` in **jsdom** so lightweight React wiring tests can mount client components without changing the default environment for pure `.test.ts` suites.
+- **Toolchain:** `package.json` overrides `vite` to ^6 (Vitest 3) and pins `jsdom` to 24.x so the jsdom project loads under Node without ESM/CJS breakage from newer whatwg stacks. Revisit when upgrading Vitest/Vite or Node to versions where jsdom 29+ is verified with Vitest’s loader; then remove the `jsdom` pin and run `npm test` before dropping the override.
 - Local builds are expected to work without production secrets for normal repo verification.
 - If a change introduces new required environment variables or build-time contracts, document that in `README.md` and update the verification guidance in the same PR.
 - There is no dedicated ESLint rule here for enum size or class length. File-size limits and reviewer judgment cover those until a narrower rule is worth the added noise.

@@ -1,16 +1,28 @@
 'use client';
 
+/* eslint-disable max-lines*/
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
+import { PlaylistIntermission } from '@/components/playlist/PlaylistIntermission';
 import { useAppContext } from '@/context/AppContext';
+import { useOverlayInterruptSuppression } from '@/hooks/useOverlayInterruptSuppression';
+import { usePlaylistIntroBypassOnMove } from '@/hooks/usePlaylistIntroBypassOnMove';
+import {
+  usePlaylistIntermissionPhase,
+  type PlaylistPhase,
+} from '@/hooks/usePlaylistIntermissionPhase';
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import {
   defaultDP1DisplayPreference,
   DP1DisplayPreference,
   DP1Defaults,
+  type DP1IntermissionNote,
   DP1Item,
 } from '@/models/dp1.model';
-import { NO_DURATION_VALUE } from '@/constants';
+import {
+  DP1_DEFAULT_INTERMISSION_SECONDS,
+  NO_DURATION_VALUE,
+} from '@/constants';
 import { canvasService } from '@/services/CanvasService';
 import { DP1Service } from '@/services/DP1Service';
 import {
@@ -22,7 +34,7 @@ import {
 } from '@/utils/playlist';
 import { coerceLoopMode } from '@/utils/loopMode';
 import * as Sentry from '@sentry/nextjs';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 function reportPlaylistDisplayPreferenceError(
   phase: string,
@@ -49,10 +61,37 @@ function reportPlaylistDisplayPreferenceError(
   }
 }
 
+export function getDP1IntermissionDurationSeconds(
+  note: DP1IntermissionNote
+): number {
+  const d = note.duration;
+  if (d === undefined || d <= 0 || !Number.isFinite(d)) {
+    return DP1_DEFAULT_INTERMISSION_SECONDS;
+  }
+  return d;
+}
+
+/**
+ * Session-scoped key for intermission dismissal (`usePlaylistIntermissionPhase`).
+ * Shares one monotonic epoch ref between `displayPlaylist` and queued promotion.
+ */
+export function nextPlaylistIntermissionKey(
+  playlistId: string | undefined,
+  epochRef: { current: number }
+): string {
+  const epoch = epochRef.current;
+  epochRef.current = epoch + 1;
+  if (playlistId) {
+    return `${playlistId}_${String(epoch)}`;
+  }
+  return `__session_${String(epoch)}`;
+}
+
+const INITIAL_PLAYLIST_KEY = '__initial__';
+
 // eslint-disable-next-line max-lines-per-function
 export default function PlaylistClient() {
-  const { context } = useAppContext();
-  const castInfo = context.castInfo;
+  const castInfo = useAppContext().context.castInfo;
 
   const [playlist, setPlaylist] = useState<DP1Item[]>([]);
   const [playlistDefaultsSettings, setPlaylistDefaultsSettings] =
@@ -61,6 +100,29 @@ export default function PlaylistClient() {
     useState<DP1DisplayPreference | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
+  // `playlistKey` is the single authority for intermission lifecycle resets.
+  // Sanctioned rotations (keep in sync with callers of `setPlaylistKey`):
+  //   1. `displayPlaylist` with items AND id change     → fresh key.
+  //   2. `displayPlaylist` with no items                → reset to INITIAL.
+  //   3. queued promotion, keepCurrent=false            → slot advance.
+  //   4. queued promotion, keepCurrent=true + id change → cross-list.
+  //   5. castInfo cleared                               → reset to INITIAL.
+  //   6. `moveToArtwork`                                → explicit jump.
+  // Anything else (loop/shuffle toggle, `updateIndex`, same-id republish,
+  // display-setting update) MUST NOT rotate: clearing dismissal on those
+  // paths would replay a dismissed intro and violate loop-one's contract.
+  const [playlistKey, setPlaylistKey] = useState<string>(INITIAL_PLAYLIST_KEY);
+  const playlistEpochRef = useRef(0);
+  // Playlist id that the **current** `playlistKey` was minted for. Lets
+  // queued-promotion paths detect when a queued refresh/shuffle actually swaps
+  // playlist identity (new `playlist.id`) so we can rotate `playlistKey` and
+  // let the new playlist's own intros show — even under `keepCurrent=true`,
+  // which would otherwise inherit the previous playlist's dismissal state.
+  // `canvasService.getCastInfo()` cannot be used for this comparison because
+  // callers often update `castInfo` before the dismiss flush runs; this ref is
+  // the component-local source of truth for "which playlist does our current
+  // dismissal/phase state belong to".
+  const currentPlaylistIdRef = useRef<string | undefined>(undefined);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   const currentItemRef = useRef<DP1Item>();
@@ -69,10 +131,52 @@ export default function PlaylistClient() {
   const playlistLengthRef = useRef<number>(0);
   const loopModeRef = useRef<LoopMode>(LoopMode.playlist);
   const holdAfterFinalSlotRef = useRef(false);
+  const intermissionOverlayRef = useRef(false);
 
   currentIndexRef.current = currentIndex;
   playlistRef.current = playlist;
   playlistLengthRef.current = playlist.length;
+
+  const safePlaylistIndex =
+    playlist.length > 0 && currentIndex >= 0
+      ? normalizePlaylistIndex(currentIndex, playlist.length)
+      : -1;
+  const currentPlaylistItem =
+    safePlaylistIndex >= 0 ? playlist[safePlaylistIndex] : undefined;
+
+  const intermission = usePlaylistIntermissionPhase({
+    playlistKey,
+    playlistLevelNote: castInfo?.playlist?.note,
+    currentItem: currentPlaylistItem,
+    currentIndex: safePlaylistIndex,
+  });
+
+  // Owned playback state only (slot index + length + item ordering). Omits
+  // `castCommand` so loop/shuffle toggles don't cancel an intermission, and
+  // `castInfo.playlist.id` because it lags component state across the
+  // Provider boundary (playlist identity already rotates `playlistKey`).
+  const playContextSignature = useMemo(() => {
+    const itemsSig = playlist.map(i => i.id).join('|');
+    return `${String(safePlaylistIndex)}|${String(playlist.length)}|${itemsSig}`;
+  }, [playlist, safePlaylistIndex]);
+
+  const suppressOverlay = useOverlayInterruptSuppression({
+    phase: intermission.phase,
+    playlistKey,
+    playContextSignature,
+    hasItems: playlist.length > 0,
+  });
+
+  const effectivePhase: PlaylistPhase = suppressOverlay
+    ? 'artwork'
+    : intermission.phase;
+
+  intermissionOverlayRef.current = effectivePhase !== 'artwork';
+
+  const markMoveToArtworkIntroBypass = usePlaylistIntroBypassOnMove({
+    playlistKey,
+    completePlaylistIntro: intermission.completePlaylistIntro,
+  });
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -167,7 +271,10 @@ export default function PlaylistClient() {
   }, []);
 
   const applyQueuedPlaylistIfExists = useCallback(
-    (targetIndex?: number, keepCurrent = false): { applied: boolean } => {
+    (
+      targetIndex?: number,
+      keepCurrent = false
+    ): { applied: boolean; rotatedPlaylistKey?: string } => {
       if (!canvasService.hasQueuedPlaylistPending()) {
         return { applied: false };
       }
@@ -205,9 +312,52 @@ export default function PlaylistClient() {
         publishCurrentIndex(nextIndex);
       }
 
+      // Rotate `playlistKey` when the promoted list advances the slot
+      // (keepCurrent=false), OR when playlist identity changed even under
+      // keepCurrent=true. The identity branch is what lets a queued refresh
+      // that promotes a *different* playlist show its own intro on dismiss —
+      // without it, the hook inherits the previous playlist's dismissal and
+      // silently skips the new intro. Comparison uses `currentPlaylistIdRef`,
+      // not `canvasService.getCastInfo()`, because callers typically update
+      // `castInfo` to the new playlist *before* this flush runs, which would
+      // hide the identity change from a canvasService-side comparison.
+      //
+      // The rotated key is surfaced so callers that own explicit-navigation
+      // semantics (notably `moveToArtwork`) can pair it with
+      // `markMoveToArtworkIntroBypass` on the same commit. Without that
+      // pairing, a queued-applied moveToArtwork re-arms the playlist welcome
+      // at the destination slot 0 and violates the explicit-jump contract.
+      const updatedCastInfo = canvasService.getCastInfo();
+      const newPlaylistId = updatedCastInfo?.playlist?.id;
+      const identityChanged = currentPlaylistIdRef.current !== newPlaylistId;
+      if (!keepCurrent || identityChanged) {
+        currentPlaylistIdRef.current = newPlaylistId;
+        const rotatedKey = nextPlaylistIntermissionKey(
+          newPlaylistId,
+          playlistEpochRef
+        );
+        setPlaylistKey(rotatedKey);
+        return { applied: true, rotatedPlaylistKey: rotatedKey };
+      }
+
       return { applied: true };
     },
     [publishCurrentIndex]
+  );
+
+  const handleIntermissionComplete = useCallback(
+    (originalCallback: () => void) => {
+      originalCallback();
+
+      // After intermission completes, flush any queued updates. Refresh/shuffle
+      // commands arriving during the overlay are otherwise stranded until an
+      // unrelated timer or hold-release event. keepCurrent=true stays on the
+      // item whose intro just dismissed (the intro represents that item).
+      if (canvasService.hasQueuedPlaylistPending()) {
+        applyQueuedPlaylistIfExists(undefined, true);
+      }
+    },
+    [applyQueuedPlaylistIfExists]
   );
 
   const scheduleCurrentItemTimer = useCallback(
@@ -299,7 +449,14 @@ export default function PlaylistClient() {
       playlist.length
     );
     const currentItem = playlist[normalizedIndex];
+    // Always keep currentItemRef in sync with the active item, even during
+    // note overlays, so queued refresh/shuffle anchors against the correct item.
     currentItemRef.current = currentItem;
+
+    if (effectivePhase !== 'artwork') {
+      clearTimer();
+      return;
+    }
 
     void handleItemDisplayPreference(currentItem);
     setCastPreviewURL(currentItem.source);
@@ -314,6 +471,7 @@ export default function PlaylistClient() {
     playlistDefaultsSettings,
     clearTimer,
     handleItemDisplayPreference,
+    effectivePhase,
     scheduleCurrentItemTimer,
   ]);
 
@@ -329,6 +487,9 @@ export default function PlaylistClient() {
       setPlaylistDefaultsSettings(null);
       setCurrentItemDisplayPreference(null);
       setCastPreviewURL(null);
+      setPlaylistKey(INITIAL_PLAYLIST_KEY);
+      currentPlaylistIdRef.current = undefined;
+      playlistEpochRef.current = 0;
       return;
     }
 
@@ -337,6 +498,16 @@ export default function PlaylistClient() {
         holdAfterFinalSlotRef.current = false;
         loopModeRef.current = coerceLoopMode(castInfo.loopMode);
         if (castInfo.playlist?.items?.length) {
+          // Rotate only on a true identity change. Same-id re-emissions
+          // (heartbeat, reconnect, republish) must preserve dismissal or
+          // loop-one will replay a dismissed intro on the next tick.
+          const incomingId = castInfo.playlist.id;
+          if (incomingId !== currentPlaylistIdRef.current) {
+            currentPlaylistIdRef.current = incomingId;
+            setPlaylistKey(
+              nextPlaylistIntermissionKey(incomingId, playlistEpochRef)
+            );
+          }
           setPlaylistDefaultsSettings(castInfo.playlist.defaults ?? null);
           setPlaylist(
             castInfo.playlist.items.map(item => ({
@@ -355,6 +526,8 @@ export default function PlaylistClient() {
           setPlaylistDefaultsSettings(null);
           setCurrentItemDisplayPreference(null);
           setCastPreviewURL(null);
+          setPlaylistKey(INITIAL_PLAYLIST_KEY);
+          currentPlaylistIdRef.current = undefined;
         }
         break;
       }
@@ -396,6 +569,20 @@ export default function PlaylistClient() {
         if (canvasService.hasQueuedPlaylistPending()) {
           const queuedResult = applyQueuedPlaylistIfExists(castInfo.index);
           if (queuedResult.applied) {
+            // `applyQueuedPlaylistIfExists` already rotated `playlistKey` and
+            // cleared dismissal, which is enough for item intros (spec cases
+            // 1 and 2). Case 3 — a playlist-level welcome showing while the
+            // explicit jump targets slot 0 — still needs the bypass, because
+            // rotation alone re-arms the welcome and the "leave slot 0"
+            // auto-clear never fires for a slot-0 destination. Mirror the
+            // non-queued branch below so both paths honor the same explicit-
+            // navigation contract.
+            if (
+              castInfo.castCommand === CastCommand.moveToArtwork &&
+              queuedResult.rotatedPlaylistKey !== undefined
+            ) {
+              markMoveToArtworkIntroBypass(queuedResult.rotatedPlaylistKey);
+            }
             break;
           }
         }
@@ -410,6 +597,23 @@ export default function PlaylistClient() {
           );
         } else {
           setCurrentIndex(castInfo.index);
+        }
+
+        // moveToArtwork is an EXPLICIT jump: rotate so suppression baseline
+        // and dismissal both reset, so destination's item intro renders (spec
+        // cases 1 and 2). The bypass hook covers case 3: when the target is
+        // slot 0 mid playlist-intro, rotation alone would re-arm the welcome,
+        // so we dismiss the welcome explicitly on the new key. `updateIndex`
+        // stays on the non-rotating branch (republished every tick / loop).
+        if (castInfo.castCommand === CastCommand.moveToArtwork) {
+          const targetId = castInfo.playlist?.id;
+          const rotatedKey = nextPlaylistIntermissionKey(
+            targetId,
+            playlistEpochRef
+          );
+          currentPlaylistIdRef.current = targetId;
+          markMoveToArtworkIntroBypass(rotatedKey);
+          setPlaylistKey(rotatedKey);
         }
         break;
       }
@@ -426,7 +630,7 @@ export default function PlaylistClient() {
 
         loopModeRef.current = nextLoopMode;
 
-        if (shouldResume) {
+        if (shouldResume && !intermissionOverlayRef.current) {
           // Leaving repeat-off while holding the last artwork should restart that
           // artwork's slot timer so playback can continue from the held frame.
           holdAfterFinalSlotRef.current = false;
@@ -439,19 +643,37 @@ export default function PlaylistClient() {
     applyQueuedPlaylistIfExists,
     castInfo,
     clearTimer,
+    markMoveToArtworkIntroBypass,
     scheduleCurrentItemTimer,
   ]);
 
+  // Render gated on `effectivePhase` (not `intermission.phase`): a suppressed
+  // overlay must not leak through while ArtworkPlayer waits on its first
+  // `currentItemDisplayPreference`, otherwise the JSX used to fall through to
+  // the overlay branch because `activeNote` is still truthy on the same tick.
+  const activeNote = intermission.activeNote;
+
   return (
-    <>
-      <div style={{ width: '100%', height: '100%' }}>
-        {currentItemDisplayPreference && (
-          <ArtworkPlayer
-            previewURL={castPreviewURL ?? ''}
-            displayPreferences={currentItemDisplayPreference}
-          />
-        )}
-      </div>
-    </>
+    <div style={{ width: '100%', height: '100%' }}>
+      {effectivePhase !== 'artwork' && activeNote ? (
+        <PlaylistIntermission
+          key={`${intermission.phase}-${playlistKey}-${currentPlaylistItem?.id ?? 'none'}`}
+          durationSeconds={getDP1IntermissionDurationSeconds(activeNote)}
+          text={activeNote.text}
+          onComplete={() => {
+            handleIntermissionComplete(
+              intermission.phase === 'playlistIntro'
+                ? intermission.completePlaylistIntro
+                : intermission.completeItemIntro
+            );
+          }}
+        />
+      ) : currentItemDisplayPreference ? (
+        <ArtworkPlayer
+          previewURL={castPreviewURL ?? ''}
+          displayPreferences={currentItemDisplayPreference}
+        />
+      ) : null}
+    </div>
   );
 }

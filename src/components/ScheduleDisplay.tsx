@@ -1,11 +1,50 @@
 'use client';
 
+import { UI_LAYERS } from '@/constants';
 import { useEffect, useState } from 'react';
 
 interface DP1ScheduleTimeoutSetEvent extends CustomEvent {
   detail: {
     scheduleTime: string;
   };
+}
+
+function formatCountdown(scheduleTime: string): string {
+  try {
+    const scheduledDateTime = new Date(scheduleTime);
+    const now = new Date();
+    const timeDifference = scheduledDateTime.getTime() - now.getTime();
+
+    if (timeDifference <= 0) {
+      return 'Now';
+    }
+
+    const days = Math.floor(timeDifference / (1000 * 60 * 60 * 24));
+    const hours = Math.floor(
+      (timeDifference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+    );
+    const minutes = Math.floor(
+      (timeDifference % (1000 * 60 * 60)) / (1000 * 60)
+    );
+    const seconds = Math.floor((timeDifference % (1000 * 60)) / 1000);
+
+    let countdownString = '';
+    if (days > 0) {
+      countdownString += `${String(days)}d `;
+    }
+    if (hours > 0 || days > 0) {
+      countdownString += `${String(hours)}h `;
+    }
+    if (minutes > 0 || hours > 0 || days > 0) {
+      countdownString += `${String(minutes)}m `;
+    }
+    countdownString += `${String(seconds)}s`;
+
+    return countdownString;
+  } catch (error) {
+    console.error('Error calculating countdown:', error);
+    return 'Invalid date';
+  }
 }
 
 const ScheduleDisplay = () => {
@@ -25,14 +64,12 @@ const ScheduleDisplay = () => {
       setCountdown('');
     };
 
-    // Add event listeners
     window.addEventListener(
       'dp1ScheduleTimeoutSet',
       handleTimeoutSet as EventListener
     );
     window.addEventListener('dp1ScheduleTimeoutCleared', handleTimeoutCleared);
 
-    // Cleanup
     return () => {
       window.removeEventListener(
         'dp1ScheduleTimeoutSet',
@@ -45,56 +82,14 @@ const ScheduleDisplay = () => {
     };
   }, []);
 
-  // Countdown timer effect
   useEffect(() => {
-    if (!scheduleTime) return;
+    if (!scheduleTime) {return;}
 
     const updateCountdown = () => {
-      try {
-        // Parse the scheduled date and time
-        const scheduledDateTime = new Date(scheduleTime);
-        const now = new Date();
-        const timeDifference = scheduledDateTime.getTime() - now.getTime();
-
-        if (timeDifference <= 0) {
-          setCountdown('Now');
-          return;
-        }
-
-        // Calculate days, hours, minutes, seconds
-        const days = Math.floor(timeDifference / (1000 * 60 * 60 * 24));
-        const hours = Math.floor(
-          (timeDifference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
-        );
-        const minutes = Math.floor(
-          (timeDifference % (1000 * 60 * 60)) / (1000 * 60)
-        );
-        const seconds = Math.floor((timeDifference % (1000 * 60)) / 1000);
-
-        // Format countdown string
-        let countdownString = '';
-        if (days > 0) {
-          countdownString += `${String(days)}d `;
-        }
-        if (hours > 0 || days > 0) {
-          countdownString += `${String(hours)}h `;
-        }
-        if (minutes > 0 || hours > 0 || days > 0) {
-          countdownString += `${String(minutes)}m `;
-        }
-        countdownString += `${String(seconds)}s`;
-
-        setCountdown(countdownString);
-      } catch (error) {
-        console.error('Error calculating countdown:', error);
-        setCountdown('Invalid date');
-      }
+      setCountdown(formatCountdown(scheduleTime));
     };
 
-    // Update immediately
     updateCountdown();
-
-    // Update every second
     const interval = setInterval(updateCountdown, 1000);
 
     return () => {
@@ -113,7 +108,7 @@ const ScheduleDisplay = () => {
         top: 0,
         left: 0,
         right: 0,
-        zIndex: 1000,
+        zIndex: UI_LAYERS.scheduleBanner,
         backgroundColor: 'black',
         padding: '10px',
         color: 'white',

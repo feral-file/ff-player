@@ -11,14 +11,26 @@ export interface DP1Intent {
   schedule_time?: string;
 }
 
+/**
+ * DP-1 Playlist Extension (experimental): intermission card before the playlist
+ * body or before an item’s `source` loads. See `dp-1/extensions/playlists/schema.json`.
+ */
+export interface DP1IntermissionNote {
+  text: string;
+  /** Seconds to show the intermission; schema default is 20 when omitted. */
+  duration?: number;
+}
+
 export interface DP1Call {
   dpVersion: string;
-  id?: string;
+  id: string;
   title: string;
   slug?: string;
   created?: string;
   defaults?: DP1Defaults;
   items?: DP1Item[];
+  /** Playlist Extension: optional intermission before the first item. */
+  note?: DP1IntermissionNote;
   signature?: string;
 }
 
@@ -52,6 +64,8 @@ export interface DP1Item {
     provenance?: DP1Provenance;
   };
   display?: DP1DisplayPreference;
+  /** Playlist Extension: optional intermission before this item’s media loads. */
+  note?: DP1IntermissionNote;
   repro?: DP1Repro;
   provenance?: DP1Provenance;
 }
