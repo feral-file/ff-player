@@ -1,22 +1,29 @@
 import { AppProvider } from '@/context/AppContext';
-import axios from 'axios';
+import { LocalStorageItem } from '@/constants';
+import { canvasService } from '@/services/CanvasService';
 import { render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const deviceManager = {
-  getDeviceDisplaySettings: vi.fn().mockResolvedValue(null),
-  getItem: vi.fn().mockResolvedValue('true'),
-  removeItem: vi.fn().mockResolvedValue(undefined),
-  getBootPlaylist: vi.fn(),
-  getCastInfo: vi.fn().mockResolvedValue(null),
-  setItem: vi.fn().mockResolvedValue(undefined),
-  setDeviceDisplaySettings: vi.fn().mockResolvedValue(undefined),
-  setDeviceInfo: vi.fn().mockResolvedValue(undefined),
-};
+const { axiosGet, deviceManager } = vi.hoisted(() => {
+  const deviceManager = {
+    getDeviceDisplaySettings: vi.fn().mockResolvedValue(null),
+    getItem: vi.fn().mockResolvedValue('true'),
+    removeItem: vi.fn().mockResolvedValue(undefined),
+    getBootPlaylist: vi.fn(),
+    getCastInfo: vi.fn().mockResolvedValue(null),
+    setItem: vi.fn().mockResolvedValue(undefined),
+    setDeviceDisplaySettings: vi.fn().mockResolvedValue(undefined),
+    setDeviceInfo: vi.fn().mockResolvedValue(undefined),
+  };
+  return {
+    axiosGet: vi.fn(),
+    deviceManager,
+  };
+});
 
 vi.mock('axios', () => ({
   default: {
-    get: vi.fn(),
+    get: axiosGet,
   },
 }));
 
@@ -62,7 +69,7 @@ vi.mock('@/services/cdp-handler/CDPRequestHandler', () => ({
 
 vi.mock('@/services/CanvasService', () => ({
   canvasService: {
-    castPlaylistByURL: vi.fn().mockResolvedValue(undefined),
+    castPlaylistByURL: vi.fn(async () => undefined),
     setCastInfo: vi.fn(),
   },
 }));
@@ -71,12 +78,25 @@ vi.mock('@/utils/DeviceManager', () => ({
   default: deviceManager,
 }));
 
-const axiosGet = vi.mocked(axios.get);
-
 describe('AppContext boot recovery', () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
+  });
+
+  // vitest.config enables restoreMocks, which strips mockResolvedValue / mockImplementation
+  // from hoisted spies before each test; re-apply defaults here.
+  beforeEach(() => {
+    deviceManager.getItem.mockResolvedValue('true');
+    deviceManager.getCastInfo.mockResolvedValue(null);
+    deviceManager.getDeviceDisplaySettings.mockResolvedValue(null);
+    deviceManager.removeItem.mockResolvedValue(undefined);
+    deviceManager.setItem.mockResolvedValue(undefined);
+    deviceManager.setDeviceDisplaySettings.mockResolvedValue(undefined);
+    deviceManager.setDeviceInfo.mockResolvedValue(undefined);
+    vi.mocked(canvasService).castPlaylistByURL.mockImplementation(
+      async () => undefined
+    );
   });
 
   it('skips boot playlist restoration after a version update reload', async () => {
@@ -96,8 +116,14 @@ describe('AppContext boot recovery', () => {
 
     await waitFor(() => expect(screen.getByTestId('app-ready')).toBeTruthy());
 
-    expect(deviceManager.getItem).toHaveBeenCalledWith('versionUpdateReload');
-    expect(deviceManager.removeItem).toHaveBeenCalledWith('versionUpdateReload');
-    expect(deviceManager.getBootPlaylist).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(deviceManager.getItem).toHaveBeenCalledWith(
+        LocalStorageItem.versionUpdateReload
+      );
+      expect(deviceManager.removeItem).toHaveBeenCalledWith(
+        LocalStorageItem.versionUpdateReload
+      );
+      expect(deviceManager.getBootPlaylist).not.toHaveBeenCalled();
+    });
   });
 });

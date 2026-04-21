@@ -1,19 +1,20 @@
 import { AppSettings } from '@/constants';
-import axios from 'axios';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RemoteConfigService from './remoteConfigService';
 
+const { axiosGet } = vi.hoisted(() => ({
+  axiosGet: vi.fn(),
+}));
+
 vi.mock('axios', () => ({
   default: {
-    get: vi.fn(),
+    get: axiosGet,
   },
 }));
 
 vi.mock('@sentry/nextjs', () => ({
   captureException: vi.fn(),
 }));
-
-const axiosGet = vi.mocked(axios.get);
 
 describe('RemoteConfigService', () => {
   afterEach(() => {
