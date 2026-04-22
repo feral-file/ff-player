@@ -22,7 +22,7 @@ import {
 } from '@/utils/playlist';
 import { coerceLoopMode } from '@/utils/loopMode';
 import * as Sentry from '@sentry/nextjs';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 function reportPlaylistDisplayPreferenceError(
   phase: string,
@@ -95,9 +95,8 @@ export default function PlaylistClient() {
   );
 
   // False negatives are possible when ArtworkPlayer has not yet run
-  // useArtworkReloadRegistration's effect (performReload still null) or when
-  // currentItemRef lags a committed playlist update — CanvasService surfaces
-  // that as ok:false for the cast sender to retry.
+  // useArtworkReloadRegistration (performReload still null) — CanvasService
+  // surfaces that as ok:false for the cast sender to retry.
   const triggerArtworkRefresh = useCallback((): boolean => {
     if (playlistRef.current.length === 0) {
       return false;
@@ -115,6 +114,19 @@ export default function PlaylistClient() {
     performReload();
     return true;
   }, []);
+
+  // Keep currentItemRef aligned with the latest committed slot before passive
+  // effects run so refreshArtwork does not reload a stale source right after
+  // updateIndex/displayPlaylist transitions.
+  useLayoutEffect(() => {
+    if (currentIndex < 0 || playlist.length === 0) {
+      currentItemRef.current = undefined;
+      return;
+    }
+
+    const normalizedIndex = normalizePlaylistIndex(currentIndex, playlist.length);
+    currentItemRef.current = playlist[normalizedIndex];
+  }, [currentIndex, playlist]);
 
   // Attaches after commit; refreshArtwork cast can arrive between first paint and here.
   useEffect(() => {
@@ -332,12 +344,8 @@ export default function PlaylistClient() {
       return;
     }
 
-    const normalizedIndex = normalizePlaylistIndex(
-      currentIndex,
-      playlist.length
-    );
+    const normalizedIndex = normalizePlaylistIndex(currentIndex, playlist.length);
     const currentItem = playlist[normalizedIndex];
-    currentItemRef.current = currentItem;
 
     void handleItemDisplayPreference(currentItem);
     setCastPreviewURL(currentItem.source);

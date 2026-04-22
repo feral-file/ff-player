@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useLayoutEffect, useState } from 'react';
 
 /**
  * Bumps a tick consumed by the previewURL effect so the same URL can re-run the
@@ -6,10 +6,9 @@ import { useCallback, useEffect, useState } from 'react';
  * When `onRegisterArtworkReload` is set, the parent receives `performReload` and
  * must clear it with `null` on teardown (handled here).
  *
- * Registration uses an effect, so the parent may briefly lack `performReload` right
- * after mount or across fast remounts; cast refresh in that window returns ok:false
- * (see CanvasService.refreshArtwork). Accepted trade-off until a pending-refresh or
- * earlier-registration design is adopted.
+ * Registration uses a layout effect so the parent receives `performReload`
+ * in the same commit frame. This shrinks race windows where a committed
+ * artwork could still report refresh as unavailable.
  */
 export function useArtworkReloadRegistration(
   onRegisterArtworkReload?: (reload: (() => void) | null) => void
@@ -19,7 +18,7 @@ export function useArtworkReloadRegistration(
     setArtworkReloadTick(n => n + 1);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!onRegisterArtworkReload) {
       return;
     }
