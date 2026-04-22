@@ -94,15 +94,6 @@ export default function PlaylistClient() {
     []
   );
 
-  // False negatives are possible when ArtworkPlayer has not yet run
-  // useArtworkReloadRegistration (performReload still null) — CanvasService
-  // surfaces that as ok:false for the cast sender to retry.
-  //
-  // Resolve the active source from CanvasService's in-memory cast snapshot, not
-  // currentItemRef: cast commands run synchronously in CanvasService while refs
-  // fed from React state only align after the next commit/layout, so a host
-  // updateIndex/displayPlaylist followed immediately by refreshArtwork would
-  // otherwise reload the previous slot or return ok:false.
   const triggerArtworkRefresh = useCallback((): boolean => {
     const cast = canvasService.getCastInfo();
     const items = cast?.playlist?.items;
@@ -125,9 +116,6 @@ export default function PlaylistClient() {
     return true;
   }, []);
 
-  // Keep currentItemRef aligned with the latest committed slot before passive
-  // effects run so refreshArtwork does not reload a stale source right after
-  // updateIndex/displayPlaylist transitions.
   useLayoutEffect(() => {
     if (currentIndex < 0 || playlist.length === 0) {
       currentItemRef.current = undefined;
@@ -138,7 +126,6 @@ export default function PlaylistClient() {
     currentItemRef.current = playlist[normalizedIndex];
   }, [currentIndex, playlist]);
 
-  // Attaches after commit; refreshArtwork cast can arrive between first paint and here.
   useEffect(() => {
     canvasService.onRefreshArtwork = triggerArtworkRefresh;
     return () => {

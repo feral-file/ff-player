@@ -43,7 +43,6 @@ import {
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
 import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
 import { useArtworkSettings } from '@/services/custom-hooks/useArtworkSettings';
-import { useArtworkReloadRegistration } from './useArtworkReloadRegistration';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
 const SLOT_INDICES = [0, 1] as const;
@@ -88,16 +87,23 @@ const ArtworkPlayer = ({
   keyboardCode?: number;
   artworkPreviewMIMEType?: string;
   displayPreferences: DP1DisplayPreference;
-  /**
-   * Optional: parent receives a function that re-runs the same-URL load path
-   * (e.g. after `refreshArtwork` when the host cleared HTTP cache). Cleanup
-   * passes `null` so the parent can drop its reference.
-   */
   onRegisterArtworkReload?: (reload: (() => void) | null) => void;
 }) => {
   const FADE_IN_OUT_DURATION_MS = 650;
   const { context } = useAppContext();
-  const artworkReloadTick = useArtworkReloadRegistration(onRegisterArtworkReload);
+  const [artworkReloadTick, setArtworkReloadTick] = useState(0);
+  const performArtworkReload = useCallback(() => {
+    setArtworkReloadTick(n => n + 1);
+  }, []);
+  useLayoutEffect(() => {
+    if (!onRegisterArtworkReload) {
+      return;
+    }
+    onRegisterArtworkReload(performArtworkReload);
+    return () => {
+      onRegisterArtworkReload(null);
+    };
+  }, [onRegisterArtworkReload, performArtworkReload]);
   const [slots, setSlots] = useState<[SlotLayer | null, SlotLayer | null]>([
     null,
     null,
@@ -674,7 +680,7 @@ const ArtworkPlayer = ({
             level: 'error',
             extra: { displayPreviewURL: layer.displayPreviewURL, mediaType },
           });
-        };
+      };
 
       const loadMedia = async () => {
         if (isCancelled) {return;}

@@ -74,14 +74,8 @@ class CanvasService {
   private deferredRefreshPlaylist: DP1Call | null = null;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
   /**
-   * Playlist route registers this to run a cache-bust reload on the active item.
-   * Return true when the preview URL was updated; false when nothing could be applied
-   * (e.g. No current source). Cast returns ok:false in that case so the sender can retry.
-   *
-   * Known gap (accepted for now): this callback is attached from React effects in the
-   * playlist route and ArtworkPlayer, so cast can arrive before the handler exists or while
-   * the reload ref is briefly null (boot, route handoff, fast artwork swaps). There is no
-   * in-service pending queue; senders should treat ok:false as retryable. See refreshArtwork().
+   * Playlist route registers a cache-bust reload for the active artwork.
+   * Return true when the reload was applied; false means the sender should retry.
    */
   public onRefreshArtwork: (() => boolean) | null = null;
 
@@ -472,16 +466,6 @@ class CanvasService {
       return { ok: false };
     }
 
-    // Refresh is a one-shot playback action. Keep castCommand unchanged so
-    // status and persistence continue to represent the active playback command.
-    // If the playlist UI is not mounted or cannot apply (no handler / no source),
-    // return ok:false so the sender can retry — no in-service queue.
-    //
-    // Timing: ok:false is also expected during short windows where the UI has committed
-    // but playlist/ArtworkPlayer effects have not yet registered onRefreshArtwork or the
-    // performReload ref (see playlist-client and useArtworkReloadRegistration). That is
-    // intentional; fixing it would mean earlier registration or a pending refresh — out
-    // of scope until product requires stronger delivery guarantees.
     if (!this.onRefreshArtwork) {
       console.warn(
         '[CanvasService] refreshArtwork: no playlist handler registered'
