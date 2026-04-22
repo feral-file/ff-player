@@ -366,7 +366,7 @@ describe('ArtworkPlayer — refresh reload tick (iframe)', () => {
         ...args: unknown[]
       ) {
         if (type === 'webgl2' || type === 'webgl') {
-          return new FakeWebGLContext() as WebGLRenderingContext;
+          return new FakeWebGLContext() as unknown as WebGLRenderingContext;
         }
         return Reflect.apply(origGetContext, this, [type, ...args] as never);
       });
