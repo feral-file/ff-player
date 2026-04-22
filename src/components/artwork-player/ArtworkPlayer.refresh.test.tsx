@@ -1,7 +1,7 @@
 /**
  * Integration coverage for `refreshArtwork`: the reload tick must re-enter the same-URL
- * load path so image / HLS setup runs again (playlist-client tests mock ArtworkPlayer and
- * only cover wiring).
+ * load path so image / progressive video / HLS setup runs again (playlist-client tests mock
+ * ArtworkPlayer and only cover wiring).
  */
 import { AppContext } from '@/context/AppContext';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
@@ -99,6 +99,8 @@ vi.mock('hls.js', () => {
 });
 
 const IMAGE_PREVIEW_URL = 'https://feralfile.com/test/artwork-refresh.jpg';
+/** Progressive video: trusted origin + explicit MIME avoids HEAD; non-HLS video path. */
+const VIDEO_PREVIEW_URL = 'https://feralfile.com/test/artwork-video-refresh.mp4';
 /** ipfs.io is in KNOWN_ORIGINS so streaming setup can attach without blob fetch. */
 const HLS_PREVIEW_URL = 'https://ipfs.io/ipfs/QmTest/stream.m3u8';
 
@@ -116,7 +118,7 @@ function renderWithContext(ui: React.ReactElement): void {
   render(<AppContext.Provider value={value as never}>{ui}</AppContext.Provider>);
 }
 
-describe('ArtworkPlayer — refresh reload tick', () => {
+describe('ArtworkPlayer — refresh reload tick (image)', () => {
   let playSpy: ReturnType<typeof vi.spyOn>;
   let pauseSpy: ReturnType<typeof vi.spyOn>;
 
@@ -174,6 +176,27 @@ describe('ArtworkPlayer — refresh reload tick', () => {
     expect(last?.mediaType).toBe('image');
     expect(last?.url).toBe(IMAGE_PREVIEW_URL);
   });
+});
+
+describe('ArtworkPlayer — refresh reload tick (HLS)', () => {
+  let playSpy: ReturnType<typeof vi.spyOn>;
+  let pauseSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    mediaLoadInstrumentation.calls.length = 0;
+    playSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'play')
+      .mockImplementation(() => Promise.resolve());
+    pauseSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'pause')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    playSpy.mockRestore();
+    pauseSpy.mockRestore();
+    cleanup();
+  });
 
   it('invokes Hls loadSource again when reload tick fires for an HLS item', async () => {
     hlsTest.loadSource.mockClear();
@@ -207,5 +230,72 @@ describe('ArtworkPlayer — refresh reload tick', () => {
     await waitFor(() => {
       expect(hlsTest.loadSource.mock.calls.length).toBeGreaterThan(countBefore);
     });
+  });
+});
+
+describe('ArtworkPlayer — refresh reload tick (progressive video)', () => {
+  let playSpy: ReturnType<typeof vi.spyOn>;
+  let pauseSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    mediaLoadInstrumentation.calls.length = 0;
+    playSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'play')
+      .mockImplementation(() => Promise.resolve());
+    pauseSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'pause')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    playSpy.mockRestore();
+    pauseSpy.mockRestore();
+    cleanup();
+  });
+
+  it('re-runs progressive video media load when reload tick fires at the same preview URL', async () => {
+    let performReload: (() => void) | null = null;
+
+    renderWithContext(
+      <ArtworkPlayer
+        previewURL={VIDEO_PREVIEW_URL}
+        artworkPreviewMIMEType="video/mp4"
+        displayPreferences={defaultDP1DisplayPreference}
+        onRegisterArtworkReload={fn => {
+          performReload = fn;
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(performReload).not.toBeNull();
+    });
+
+    await waitFor(() => {
+      const videoLoads = mediaLoadInstrumentation.calls.filter(
+        entry => entry.mediaType === 'video'
+      );
+      expect(videoLoads.length).toBeGreaterThanOrEqual(1);
+    });
+
+    const countBeforeReload = mediaLoadInstrumentation.calls.filter(
+      entry => entry.mediaType === 'video'
+    ).length;
+
+    act(() => {
+      performReload?.();
+    });
+
+    await waitFor(() => {
+      const videoLoads = mediaLoadInstrumentation.calls.filter(
+        entry => entry.mediaType === 'video'
+      );
+      expect(videoLoads.length).toBeGreaterThan(countBeforeReload);
+    });
+
+    const lastVideo = mediaLoadInstrumentation.calls.filter(
+      entry => entry.mediaType === 'video'
+    ).at(-1);
+    expect(lastVideo?.url).toBe(VIDEO_PREVIEW_URL);
   });
 });

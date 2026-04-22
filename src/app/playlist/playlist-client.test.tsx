@@ -356,3 +356,47 @@ describe('PlaylistClient — refresh artwork', () => {
     ).toBe(1);
   });
 });
+
+describe('PlaylistClient — refresh artwork (cast leads React)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    teardownPlaylistWiringTest();
+  });
+
+  it('uses castInfo index for refreshArtwork before React applies updateIndex (no rerender)', async () => {
+    const items = [item('a', 1), item('b', 1)];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    render(<PlaylistHarness castInfo={initial} />);
+
+    const moveToNext: CastInfo = {
+      castCommand: CastCommand.updateIndex,
+      playlist: dp1Call('pl', items),
+      index: 1,
+      loopMode: LoopMode.playlist,
+    };
+    canvasService.setCastInfo(moveToNext, false);
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.refreshArtwork,
+      request: {},
+    });
+    expect(reply).toEqual({ ok: true });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const refreshedPreviewURL = (
+      globalThis as { __artworkPlayerProps?: Record<string, unknown> }
+    ).__artworkPlayerProps?.previewURL as string | undefined;
+    expect(refreshedPreviewURL).toBe('https://example.com/b.jpg');
+    expect(
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations
+    ).toBe(1);
+  });
+});

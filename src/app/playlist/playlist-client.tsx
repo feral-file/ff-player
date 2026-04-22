@@ -97,12 +97,22 @@ export default function PlaylistClient() {
   // False negatives are possible when ArtworkPlayer has not yet run
   // useArtworkReloadRegistration (performReload still null) — CanvasService
   // surfaces that as ok:false for the cast sender to retry.
+  //
+  // Resolve the active source from CanvasService's in-memory cast snapshot, not
+  // currentItemRef: cast commands run synchronously in CanvasService while refs
+  // fed from React state only align after the next commit/layout, so a host
+  // updateIndex/displayPlaylist followed immediately by refreshArtwork would
+  // otherwise reload the previous slot or return ok:false.
   const triggerArtworkRefresh = useCallback((): boolean => {
-    if (playlistRef.current.length === 0) {
+    const cast = canvasService.getCastInfo();
+    const items = cast?.playlist?.items;
+    const rawIndex = cast?.index;
+    if (!items?.length || rawIndex === undefined) {
       return false;
     }
 
-    const currentSource = currentItemRef.current?.source;
+    const normalizedIndex = normalizePlaylistIndex(rawIndex, items.length);
+    const currentSource = items[normalizedIndex]?.source;
     if (!currentSource) {
       return false;
     }
