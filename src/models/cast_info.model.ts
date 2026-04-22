@@ -12,6 +12,7 @@ export enum CastCommand {
   checkStatus = 'checkStatus',
   moveToArtwork = 'moveToArtwork',
   updateIndex = 'updateIndex',
+  refreshArtwork = 'refreshArtwork',
   updateArtFraming = 'updateArtFraming',
   updateDisplaySettings = 'updateDisplaySettings',
   cursorUpdate = 'cursorUpdate',

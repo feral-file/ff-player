@@ -69,10 +69,25 @@ class CanvasService {
   private static instance: CanvasService | null;
   private originalPlaylistItems: DP1Item[] | null = null;
   private queuedPlaylistPending = false;
+  private pendingRefreshArtwork = false;
   // Refresh payload deferred because the currently playing item is absent from
   // the new list. Kept private so getStatus never exposes staging state.
   private deferredRefreshPlaylist: DP1Call | null = null;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
+  /**
+   * Playlist route registers a cache-bust reload for the active artwork.
+   * Return true when the reload was applied; false means the sender should retry.
+   */
+  private _onRefreshArtwork: (() => boolean) | null = null;
+
+  public get onRefreshArtwork(): (() => boolean) | null {
+    return this._onRefreshArtwork;
+  }
+
+  public set onRefreshArtwork(handler: (() => boolean) | null) {
+    this._onRefreshArtwork = handler;
+    this.flushPendingRefreshArtwork();
+  }
 
   // Cursor positions
   private cursorPositionsListeners: CursorPositionListener[] = [];
@@ -161,6 +176,7 @@ class CanvasService {
     if (castInfo === null) {
       this.queuedPlaylistPending = false;
       this.setDeferredRefreshPlaylist(null);
+      this.pendingRefreshArtwork = false;
     }
     this.castInfo =
       castInfo === null ? null : stripLegacyCastPlaybackTimeline(castInfo);
@@ -179,6 +195,22 @@ class CanvasService {
 
   private setDeferredRefreshPlaylist(next: DP1Call | null) {
     this.deferredRefreshPlaylist = next;
+  }
+
+  private flushPendingRefreshArtwork() {
+    if (!this.pendingRefreshArtwork || !this._onRefreshArtwork) {
+      return;
+    }
+
+    const applied = this._onRefreshArtwork();
+    if (applied) {
+      this.pendingRefreshArtwork = false;
+      return;
+    }
+
+    console.warn(
+      '[CanvasService] refreshArtwork: handler could not update preview URL'
+    );
   }
 
   /**
@@ -332,6 +364,8 @@ class CanvasService {
           );
         case CastCommand.moveToArtwork:
           return this.moveToArtwork(requestJson as MoveToItemRequest);
+        case CastCommand.refreshArtwork:
+          return this.refreshArtwork();
         case CastCommand.setSleepMode:
           return this.setSleepMode(requestJson as SetSleepModeRequest);
         case CastCommand.setShuffle:
@@ -449,6 +483,31 @@ class CanvasService {
       castCommand: CastCommand.moveToArtwork,
       index: request.index,
     });
+    return { ok: true };
+  }
+
+  private refreshArtwork(): Reply {
+    const activeCastInfo = this.castInfo;
+    if (!activeCastInfo?.playlist?.items?.length) {
+      console.error('[CanvasService] No active artwork to refresh');
+      return { ok: false };
+    }
+
+    if (!this._onRefreshArtwork) {
+      this.pendingRefreshArtwork = true;
+      console.warn(
+        '[CanvasService] refreshArtwork: no playlist handler registered'
+      );
+      return { ok: false };
+    }
+    const applied = this._onRefreshArtwork();
+    if (!applied) {
+      console.warn(
+        '[CanvasService] refreshArtwork: handler could not update preview URL'
+      );
+      return { ok: false };
+    }
+    this.pendingRefreshArtwork = false;
     return { ok: true };
   }
 

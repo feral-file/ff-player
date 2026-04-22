@@ -1,3 +1,7 @@
+/* eslint-disable max-lines, max-lines-per-function, react-hooks/exhaustive-deps --
+ * ArtworkPlayer remains the mixed-media playback surface; a full split is deferred.
+ * Prefer new logic in hooks/utils alongside this file rather than growing inline debt here.
+ */
 import { MessageModalType } from '@/models';
 import Hls from 'hls.js';
 import {
@@ -76,15 +80,30 @@ const ArtworkPlayer = ({
   isCustomView,
   artworkPreviewMIMEType,
   displayPreferences,
+  onRegisterArtworkReload,
 }: {
   previewURL: string;
   isCustomView?: boolean;
   keyboardCode?: number;
   artworkPreviewMIMEType?: string;
   displayPreferences: DP1DisplayPreference;
+  onRegisterArtworkReload?: (reload: (() => void) | null) => void;
 }) => {
   const FADE_IN_OUT_DURATION_MS = 650;
   const { context } = useAppContext();
+  const [artworkReloadTick, setArtworkReloadTick] = useState(0);
+  const performArtworkReload = useCallback(() => {
+    setArtworkReloadTick(n => n + 1);
+  }, []);
+  useLayoutEffect(() => {
+    if (!onRegisterArtworkReload) {
+      return;
+    }
+    onRegisterArtworkReload(performArtworkReload);
+    return () => {
+      onRegisterArtworkReload(null);
+    };
+  }, [onRegisterArtworkReload, performArtworkReload]);
   const [slots, setSlots] = useState<[SlotLayer | null, SlotLayer | null]>([
     null,
     null,
@@ -243,7 +262,7 @@ const ArtworkPlayer = ({
     (slotIndex: SlotIndex, patch: Partial<SlotLayer>) => {
       setSlots(prev => {
         const cur = prev[slotIndex];
-        if (!cur) return prev;
+        if (!cur) {return prev;}
         const next = [...prev] as [SlotLayer | null, SlotLayer | null];
         next[slotIndex] = { ...cur, ...patch };
         return next;
@@ -258,7 +277,7 @@ const ArtworkPlayer = ({
       pendingReadySlotRef.current = slotIndex;
       setSlots(prev => {
         const layer = prev[slotIndex];
-        if (layer?.previewURL !== currentURL || !layer.loading) return prev;
+        if (layer?.previewURL !== currentURL || !layer.loading) {return prev;}
         const next = [...prev] as [SlotLayer | null, SlotLayer | null];
         next[slotIndex] = { ...layer, loading: false };
         return next;
@@ -384,7 +403,7 @@ const ArtworkPlayer = ({
 
   useLayoutEffect(() => {
     const readySlot = pendingReadySlotRef.current;
-    if (readySlot === null) return;
+    if (readySlot === null) {return;}
 
     const currentURL = previewURLRef.current;
     const incomingLayer = slots[readySlot];
@@ -392,7 +411,7 @@ const ArtworkPlayer = ({
       pendingReadySlotRef.current = null;
       return;
     }
-    if (incomingLayer.loading) return;
+    if (incomingLayer.loading) {return;}
 
     pendingReadySlotRef.current = null;
     setGlobalLoading(false);
@@ -420,7 +439,7 @@ const ArtworkPlayer = ({
 
     const outgoing = activeSlotRef.current;
     const incoming = readySlot;
-    if (outgoing === incoming) return;
+    if (outgoing === incoming) {return;}
 
     const outLayer = slots[outgoing];
     const outgoingType = outLayer?.previewType ?? null;
@@ -431,7 +450,7 @@ const ArtworkPlayer = ({
     transitionTokenRef.current += 1;
     const token = transitionTokenRef.current;
     if (transitionTimeoutRef.current)
-      clearTimeout(transitionTimeoutRef.current);
+      {clearTimeout(transitionTimeoutRef.current);}
 
     pauseAndTeardownSlot(outgoing);
     setTopSlotIndex(incoming);
@@ -444,7 +463,7 @@ const ArtworkPlayer = ({
         return op;
       });
       transitionTimeoutRef.current = setTimeout(() => {
-        if (token !== transitionTokenRef.current) return;
+        if (token !== transitionTokenRef.current) {return;}
         setSlots(prev => {
           const next = [...prev] as [SlotLayer | null, SlotLayer | null];
           next[outgoing] = null;
@@ -465,7 +484,7 @@ const ArtworkPlayer = ({
       return op;
     });
     transitionTimeoutRef.current = setTimeout(() => {
-      if (token !== transitionTokenRef.current) return;
+      if (token !== transitionTokenRef.current) {return;}
       setSlots(prev => {
         const next = [...prev] as [SlotLayer | null, SlotLayer | null];
         next[outgoing] = null;
@@ -489,7 +508,7 @@ const ArtworkPlayer = ({
   useEffect(() => {
     let cancelled = false;
     const url = previewURL;
-    if (!url) return;
+    if (!url) {return;}
 
     // Cancel any in-flight transition and collapse to a single active layer.
     // This prevents stale overlays from previous tokens blocking the next artwork.
@@ -505,7 +524,7 @@ const ArtworkPlayer = ({
     pauseAndTeardownSlot(staleSlot);
     setSlotOpacity(currentActive === 0 ? [1, 0] : [0, 1]);
     setSlots(prev => {
-      if (!prev[staleSlot]) return prev;
+      if (!prev[staleSlot]) {return prev;}
       const next = [...prev] as [SlotLayer | null, SlotLayer | null];
       next[staleSlot] = null;
       return next;
@@ -513,7 +532,7 @@ const ArtworkPlayer = ({
 
     setGlobalLoading(true);
     setShowLoading(false);
-    if (loadingDelayRef.current) clearTimeout(loadingDelayRef.current);
+    if (loadingDelayRef.current) {clearTimeout(loadingDelayRef.current);}
     loadingDelayRef.current = setTimeout(() => {
       if (!cancelled && previewURLRef.current === url) {
         setShowLoading(true);
@@ -562,12 +581,12 @@ const ArtworkPlayer = ({
 
     detectPreviewType()
       .then(cfg => {
-        if (cancelled || previewURLRef.current !== url) return;
+        if (cancelled || previewURLRef.current !== url) {return;}
         setSlots(prev => {
           const incoming = incomingSlotRef.current;
-          if (incoming === null) return prev;
+          if (incoming === null) {return prev;}
           const layer = prev[incoming];
-          if (layer?.previewURL !== url) return prev;
+          if (layer?.previewURL !== url) {return prev;}
           const next = [...prev] as [SlotLayer | null, SlotLayer | null];
           next[incoming] = {
             ...layer,
@@ -580,13 +599,13 @@ const ArtworkPlayer = ({
         });
       })
       .catch((error: unknown) => {
-        if (cancelled || previewURLRef.current !== url) return;
+        if (cancelled || previewURLRef.current !== url) {return;}
         Sentry.captureException(error);
         setSlots(prev => {
           const incoming = incomingSlotRef.current;
-          if (incoming === null) return prev;
+          if (incoming === null) {return prev;}
           const layer = prev[incoming];
-          if (layer?.previewURL !== url) return prev;
+          if (layer?.previewURL !== url) {return prev;}
           const next = [...prev] as [SlotLayer | null, SlotLayer | null];
           next[incoming] = {
             ...layer,
@@ -601,9 +620,9 @@ const ArtworkPlayer = ({
 
     return () => {
       cancelled = true;
-      if (loadingDelayRef.current) clearTimeout(loadingDelayRef.current);
+      if (loadingDelayRef.current) {clearTimeout(loadingDelayRef.current);}
     };
-  }, [previewURL, artworkPreviewMIMEType]);
+  }, [previewURL, artworkPreviewMIMEType, artworkReloadTick]);
 
   useEffect(() => {
     const layer = slots[activeSlot];
@@ -648,7 +667,7 @@ const ArtworkPlayer = ({
    */
   const setupMediaForSlot = useCallback(
     (slotIndex: SlotIndex, layer: SlotLayer | null) => {
-      if (!layer?.displayPreviewURL) return undefined;
+      if (!layer?.displayPreviewURL) {return undefined;}
 
       let isCancelled = false;
       const abortController = new AbortController();
@@ -661,10 +680,10 @@ const ArtworkPlayer = ({
             level: 'error',
             extra: { displayPreviewURL: layer.displayPreviewURL, mediaType },
           });
-        };
+      };
 
       const loadMedia = async () => {
-        if (isCancelled) return;
+        if (isCancelled) {return;}
         if (
           layer.previewType === PreviewHTMLTag.image &&
           imageRefs[slotIndex].current
@@ -816,13 +835,13 @@ const ArtworkPlayer = ({
   }, [context.isOnline, slots, slotOpacity, topSlotIndex]);
 
   useEffect(() => {
-    if (!displaySettings || !context.deviceRotation?.viewMode) return;
+    if (!displaySettings || !context.deviceRotation?.viewMode) {return;}
     setSlots(prev => {
       const next = [...prev] as [SlotLayer | null, SlotLayer | null];
       let changedCount = 0;
       SLOT_INDICES.forEach(i => {
         const slot = next[i];
-        if (!slot?.displayPreviewURL) return;
+        if (!slot?.displayPreviewURL) {return;}
         let softwareURL = slot.displayPreviewURL;
         if (
           slot.previewType === PreviewHTMLTag.iframe &&
@@ -839,7 +858,7 @@ const ArtworkPlayer = ({
           changedCount += 1;
         }
       });
-      if (changedCount === 0) return prev;
+      if (changedCount === 0) {return prev;}
       return next;
     });
   }, [displaySettings, context.deviceRotation?.viewMode, slots]);
@@ -855,7 +874,7 @@ const ArtworkPlayer = ({
   const reloadIframe = (slotIndex: SlotIndex) => {
     setSlots(prev => {
       const slot = prev[slotIndex];
-      if (!slot) return prev;
+      if (!slot) {return prev;}
       const next = [...prev] as [SlotLayer | null, SlotLayer | null];
       next[slotIndex] = {
         ...slot,

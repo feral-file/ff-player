@@ -22,7 +22,7 @@ import {
 } from '@/utils/playlist';
 import { coerceLoopMode } from '@/utils/loopMode';
 import * as Sentry from '@sentry/nextjs';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 function reportPlaylistDisplayPreferenceError(
   phase: string,
@@ -61,6 +61,7 @@ export default function PlaylistClient() {
     useState<DP1DisplayPreference | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
+  const artworkPerformReloadRef = useRef<(() => void) | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   const currentItemRef = useRef<DP1Item>();
@@ -85,6 +86,52 @@ export default function PlaylistClient() {
       clearTimer();
     };
   }, [clearTimer]);
+
+  const registerArtworkReload = useCallback(
+    (reload: (() => void) | null) => {
+      artworkPerformReloadRef.current = reload;
+    },
+    []
+  );
+
+  const triggerArtworkRefresh = useCallback((): boolean => {
+    const cast = canvasService.getCastInfo();
+    const items = cast?.playlist?.items;
+    const rawIndex = cast?.index;
+    if (!items?.length || rawIndex === undefined) {
+      return false;
+    }
+
+    const normalizedIndex = normalizePlaylistIndex(rawIndex, items.length);
+    const currentSource = items[normalizedIndex]?.source;
+    if (!currentSource) {
+      return false;
+    }
+    const performReload = artworkPerformReloadRef.current;
+    if (!performReload) {
+      return false;
+    }
+    setCastPreviewURL(currentSource);
+    performReload();
+    return true;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (currentIndex < 0 || playlist.length === 0) {
+      currentItemRef.current = undefined;
+      return;
+    }
+
+    const normalizedIndex = normalizePlaylistIndex(currentIndex, playlist.length);
+    currentItemRef.current = playlist[normalizedIndex];
+  }, [currentIndex, playlist]);
+
+  useEffect(() => {
+    canvasService.onRefreshArtwork = triggerArtworkRefresh;
+    return () => {
+      canvasService.onRefreshArtwork = null;
+    };
+  }, [triggerArtworkRefresh]);
 
   const handleItemDisplayPreference = useCallback(
     async (dp1Item: DP1Item) => {
@@ -294,12 +341,8 @@ export default function PlaylistClient() {
       return;
     }
 
-    const normalizedIndex = normalizePlaylistIndex(
-      currentIndex,
-      playlist.length
-    );
+    const normalizedIndex = normalizePlaylistIndex(currentIndex, playlist.length);
     const currentItem = playlist[normalizedIndex];
-    currentItemRef.current = currentItem;
 
     void handleItemDisplayPreference(currentItem);
     setCastPreviewURL(currentItem.source);
@@ -387,6 +430,11 @@ export default function PlaylistClient() {
         break;
       }
 
+      case CastCommand.refreshArtwork: {
+        triggerArtworkRefresh();
+        break;
+      }
+
       case CastCommand.moveToArtwork:
       case CastCommand.updateIndex: {
         if (castInfo.index === undefined) {
@@ -440,6 +488,7 @@ export default function PlaylistClient() {
     castInfo,
     clearTimer,
     scheduleCurrentItemTimer,
+    triggerArtworkRefresh,
   ]);
 
   return (
@@ -449,6 +498,7 @@ export default function PlaylistClient() {
           <ArtworkPlayer
             previewURL={castPreviewURL ?? ''}
             displayPreferences={currentItemDisplayPreference}
+            onRegisterArtworkReload={registerArtworkReload}
           />
         )}
       </div>

@@ -3,7 +3,7 @@ import { CastCommand } from '@/models';
 import type { CastInfo } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import { DP1Action, type DP1Call, type DP1Item } from '@/models/dp1.model';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
 
 const item = (id: string): DP1Item =>
@@ -34,6 +34,7 @@ const service = canvasService as unknown as {
   originalPlaylistItems: DP1Item[] | null;
   castInfo: CastInfo | null;
   queuedPlaylistPending: boolean;
+  onRefreshArtwork: (() => boolean) | null;
 };
 
 describe('CanvasService Now Display defaults', () => {
@@ -66,6 +67,113 @@ describe('CanvasService Now Display defaults', () => {
     expect(next?.shuffle).toBe(false);
     expect(next?.loopMode).toBe(LoopMode.playlist);
     expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['B', 'C']);
+  });
+});
+
+describe('CanvasService refreshArtwork', () => {
+  afterEach(() => {
+    canvasService.setCastInfo(null, false);
+    service.onRefreshArtwork = null;
+  });
+
+  it('refreshes artwork without mutating cast command payload', () => {
+    const refreshSpy = vi.fn(() => true);
+    service.onRefreshArtwork = refreshSpy;
+
+    canvasService.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: playlist('active', ['A', 'B'].map(item)),
+        index: 1,
+      },
+      false
+    );
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.refreshArtwork,
+      request: {},
+    });
+
+    expect(reply).toEqual({ ok: true });
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    const next = canvasService.getCastInfo();
+    expect(next?.castCommand).toBe(CastCommand.displayPlaylist);
+    expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['A', 'B']);
+    expect(next?.index).toBe(1);
+  });
+
+  it('returns ok:false when no playlist handler is registered', () => {
+    canvasService.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: playlist('active', ['A', 'B'].map(item)),
+        index: 1,
+      },
+      false
+    );
+    service.onRefreshArtwork = null;
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.refreshArtwork,
+      request: {},
+    });
+    expect(reply).toEqual({ ok: false });
+  });
+
+  it('returns ok:false when the handler cannot apply a preview URL', () => {
+    const refreshSpy = vi.fn(() => false);
+    service.onRefreshArtwork = refreshSpy;
+
+    canvasService.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: playlist('active', ['A'].map(item)),
+        index: 0,
+      },
+      false
+    );
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.refreshArtwork,
+      request: {},
+    });
+    expect(reply).toEqual({ ok: false });
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CanvasService refreshArtwork replay', () => {
+  afterEach(() => {
+    canvasService.setCastInfo(null, false);
+    service.onRefreshArtwork = null;
+  });
+
+  it('replays a pending refresh when the handler registers later', () => {
+    canvasService.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: playlist('active', ['A', 'B'].map(item)),
+        index: 1,
+      },
+      false
+    );
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.refreshArtwork,
+      request: {},
+    });
+    expect(reply).toEqual({ ok: false });
+
+    const refreshSpy = vi.fn(() => true);
+    service.onRefreshArtwork = refreshSpy;
+
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    expect(
+      canvasService.processMessage({
+        command: CastCommand.refreshArtwork,
+        request: {},
+      })
+    ).toEqual({ ok: true });
   });
 });
 
