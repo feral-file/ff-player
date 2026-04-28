@@ -13,6 +13,7 @@ on:
       - 'next.config.mjs'
       - 'public/**'
       - 'eslint.config.mjs'
+      - 'scripts/verify.sh'
       - 'sentry*.ts'
       - '.env.local.sample'
       - '.github/workflows/build-website.yaml'
@@ -28,6 +29,7 @@ on:
       - 'next.config.mjs'
       - 'public/**'
       - 'eslint.config.mjs'
+      - 'scripts/verify.sh'
       - 'sentry*.ts'
       - '.env.local.sample'
       - '.github/workflows/build-website.yaml'
@@ -53,6 +55,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -63,6 +67,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Fetch verification base branch
+        run: git fetch origin ${{ github.base_ref || 'main' }}
 
       - name: Set environment variables for ${{ matrix.environment }}
         run: |
@@ -124,5 +131,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
 
-      - name: Build Next.js app
-        run: npm run build
+      - name: Run repo verification
+        env:
+          VERIFY_BASE_REF: origin/${{ github.base_ref || 'main' }}
+        run: npm run verify

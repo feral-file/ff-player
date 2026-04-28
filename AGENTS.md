@@ -43,7 +43,7 @@ Repo contract for coding agents and automation working in `ff-player`.
 8. Keep changed code small and easy to reason about. The changed-file lint gate enforces file length, function length, and parameter-count limits.
 9. Run a separate reviewer loop over the full diff after lint is clean. If agent reviewers are available, use a dedicated reviewer sub-agent rather than self-approving the implementation pass.
 The reviewer should step back, reason from first principles about why the task matters, judge whether the chosen solution is actually the best way to solve the underlying problem, and check how that solution changes or constrains the current playback and recovery flows.
-10. Run `npm run verify` before handoff.
+10. Run `npm run verify` before handoff. This is the non-mutating CI-aligned path for changed-file lint, typecheck, unit tests, and production build.
 11. If playback, cast recovery, or display settings changed, do a manual smoke pass for the affected route or flow and include that evidence in the handoff.
 
 ## Stop and ask the user when

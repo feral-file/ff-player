@@ -11,7 +11,7 @@
     "post-implement-check": "bash ./scripts/lint-changed.sh --fix",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run lint && npm run build"
+    "verify": "bash ./scripts/verify.sh"
   },
   "dependencies": {
     "@sentry/nextjs": "^8.22.0",

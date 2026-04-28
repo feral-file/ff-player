@@ -1,6 +1,6 @@
 # Verification
 
-`npm run post-implement-check` is the required changed-files lint pass after implementation, and `npm run verify` is the canonical changed-file-lint plus build verification command before handoff.
+`npm run post-implement-check` is the required changed-files lint pass after implementation, and `npm run verify` is the canonical non-mutating repo-wide verification command before handoff.
 
 ## Post-implement check
 
@@ -23,11 +23,17 @@ Use it immediately after implementation work so lint cleanup stays scoped to the
 
 ```bash
 npm run lint
+npm run typecheck
+npm run test
 npm run build
 ```
 
 - `npm run lint` is the changed-files ESLint gate against `origin/main` by default.
-- `npm run build` is the production Next.js build and includes type-checking.
+- `npm run typecheck` runs `tsc --noEmit`.
+- `npm run test` runs the Vitest unit test suite.
+- `npm run build` is the production Next.js build.
+
+By default, `npm run verify` lints changed files against `origin/main`. To verify against a different base, run either `VERIFY_BASE_REF=origin/develop npm run verify` or `npm run verify -- --base=origin/develop`.
 
 ## When to run it
 
@@ -42,12 +48,13 @@ npm run build
 
 ## CI parity
 
-CI uses the same verification surface in split form:
+CI uses the same verification surface where practical:
 
-- `.github/workflows/lint-js.yaml` runs the lint step.
-- `.github/workflows/build-website.yaml` runs the production build step for both configured environments.
+- `.github/workflows/build-website.yaml` runs `npm run verify` for both configured environments.
+- `.github/workflows/lint-js.yaml` separately runs the changed-file ESLint scope through reviewdog so lint findings can appear as advisory inline PR comments without failing that advisory job.
+- `.github/workflows/typecheck.yaml` and `.github/workflows/unit-test.yaml` keep compact split checks for fast signal on TypeScript and test failures.
 
-That split is intentionally equivalent to `npm run verify`, while keeping lint review comments and environment-specific build coverage in GitHub Actions.
+The required local handoff path is `npm run verify`; the Build workflow is the CI-aligned path that reuses it, while the split workflows preserve targeted GitHub Actions output and advisory lint comments.
 
 ## Local notes
 
