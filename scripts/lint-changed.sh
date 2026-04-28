@@ -38,11 +38,13 @@ done < <(
 )
 
 existing_files=()
-for file in "${changed_files[@]}"; do
-  if [[ -f "$file" ]]; then
-    existing_files+=("$file")
-  fi
-done
+if [[ "${#changed_files[@]}" -ne 0 ]]; then
+  for file in "${changed_files[@]}"; do
+    if [[ -f "$file" ]]; then
+      existing_files+=("$file")
+    fi
+  done
+fi
 
 if [[ "${#existing_files[@]}" -eq 0 ]]; then
   echo "No changed JavaScript or TypeScript files to lint against $base_ref."
