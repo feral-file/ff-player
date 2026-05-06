@@ -257,6 +257,78 @@ export default function PlaylistClient() {
     [publishCurrentIndex]
   );
 
+  // Advance away from the slot at `fromIndex`. Shared by the duration-based
+  // timer (scheduleCurrentItemTimer) and the source-end callback that fires
+  // when a time-based item finishes naturally (display.loop=false). Per DP-1
+  // §4.1, when both triggers exist, whichever fires first wins; the guard
+  // against the current index keeps a late second trigger from advancing
+  // again after the slot has already moved.
+  const advanceFromSlot = useCallback(
+    function advanceFromSlot(fromIndex: number, snapshot: DP1Item[]): void {
+      if (!snapshot.length) {
+        return;
+      }
+      if (currentIndexRef.current !== fromIndex) {
+        return;
+      }
+
+      clearTimer();
+      holdAfterFinalSlotRef.current = false;
+
+      if (loopModeRef.current === LoopMode.one) {
+        // Apply queued playlist if any, staying on the same artwork.
+        // keepCurrent=true: find the current item in the new list and loop it,
+        // falling back to index 0 if the item was removed by a deferred refresh.
+        // After apply, React effect reschedules the timer with the new playlist.
+        if (applyQueuedPlaylistIfExists(undefined, true).applied) {
+          return;
+        }
+        publishCurrentIndex(fromIndex);
+        scheduleCurrentItemTimer(fromIndex, snapshot);
+        return;
+      }
+
+      const queuedResult = applyQueuedPlaylistIfExists();
+      if (queuedResult.applied) {
+        return;
+      }
+
+      const nextIndex = resolveSequentialPlaylistAdvance({
+        currentIndex: fromIndex,
+        playlistLength: snapshot.length,
+        loopMode: loopModeRef.current,
+      });
+      if (nextIndex === null) {
+        // Repeat-off holds the final artwork on screen until another command
+        // changes playback. Do not wrap or reschedule from this slot.
+        if (
+          loopModeRef.current === LoopMode.none &&
+          fromIndex === snapshot.length - 1
+        ) {
+          holdAfterFinalSlotRef.current = true;
+        }
+        return;
+      }
+
+      // Single-item playlist: nextIndex wraps back to the same position.
+      // setCurrentIndex would be a no-op and React would not re-run the
+      // scheduling effect. Reschedule directly to keep the loop alive.
+      if (nextIndex === fromIndex) {
+        publishCurrentIndex(nextIndex);
+        scheduleCurrentItemTimer(nextIndex, snapshot);
+        return;
+      }
+
+      setCurrentIndex(nextIndex);
+      publishCurrentIndex(nextIndex);
+    },
+    // scheduleCurrentItemTimer is hoisted later via function declaration; the
+    // ref-based pattern (currentIndexRef, etc.) keeps the dep set minimal and
+    // avoids a circular useCallback dependency between advance and schedule.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [applyQueuedPlaylistIfExists, clearTimer, publishCurrentIndex]
+  );
+
   const scheduleCurrentItemTimer = useCallback(
     function scheduleCurrentItemTimer(
       index: number,
@@ -277,62 +349,30 @@ export default function PlaylistClient() {
       }
 
       timerRef.current = setTimeout(() => {
-        holdAfterFinalSlotRef.current = false;
         // The timeout is firing now, so the previous handle is no longer active.
         // Clearing it lets later loop-mode changes detect a true "held on final
         // artwork" state after repeat-off stops progression.
         timerRef.current = undefined;
-
-        if (loopModeRef.current === LoopMode.one) {
-          // Apply queued playlist if any, staying on the same artwork.
-          // keepCurrent=true: find the current item in the new list and loop it,
-          // falling back to index 0 if the item was removed by a deferred refresh.
-          // After apply, React effect reschedules the timer with the new playlist.
-          if (applyQueuedPlaylistIfExists(undefined, true).applied) {
-            return;
-          }
-          publishCurrentIndex(normalizedIndex);
-          scheduleCurrentItemTimer(normalizedIndex, snapshot);
-          return;
-        }
-
-        const queuedResult = applyQueuedPlaylistIfExists();
-        if (queuedResult.applied) {
-          return;
-        }
-
-        const nextIndex = resolveSequentialPlaylistAdvance({
-          currentIndex: normalizedIndex,
-          playlistLength: snapshot.length,
-          loopMode: loopModeRef.current,
-        });
-        if (nextIndex === null) {
-          // Repeat-off holds the final artwork on screen until another command
-          // changes playback. Do not wrap or reschedule from this slot.
-          if (
-            loopModeRef.current === LoopMode.none &&
-            normalizedIndex === snapshot.length - 1
-          ) {
-            holdAfterFinalSlotRef.current = true;
-          }
-          return;
-        }
-
-        // Single-item playlist: nextIndex wraps back to the same position.
-        // setCurrentIndex would be a no-op and React would not re-run the
-        // scheduling effect. Reschedule directly to keep the loop alive.
-        if (nextIndex === normalizedIndex) {
-          publishCurrentIndex(nextIndex);
-          scheduleCurrentItemTimer(nextIndex, snapshot);
-          return;
-        }
-
-        setCurrentIndex(nextIndex);
-        publishCurrentIndex(nextIndex);
+        advanceFromSlot(normalizedIndex, snapshot);
       }, duration * 1000);
     },
-    [applyQueuedPlaylistIfExists, clearTimer, publishCurrentIndex]
+    [advanceFromSlot, clearTimer]
   );
+
+  // Triggered by ArtworkPlayer when a time-based source (video or audio) ends
+  // naturally. Per DP-1 §4.1, end-of-stream advances the playlist when
+  // display.loop is false. The HTML5 media element does not emit `ended`
+  // while loop=true, so this only fires for items where advance-on-source-end
+  // is actually requested.
+  const handleSourceEnded = useCallback(() => {
+    const idx = currentIndexRef.current;
+    const snapshot = playlistRef.current;
+    if (idx < 0 || !snapshot.length) {
+      return;
+    }
+    const normalizedIndex = normalizePlaylistIndex(idx, snapshot.length);
+    advanceFromSlot(normalizedIndex, snapshot);
+  }, [advanceFromSlot]);
 
   useEffect(() => {
     if (currentIndex < 0 || playlist.length === 0) {
@@ -499,6 +539,7 @@ export default function PlaylistClient() {
             previewURL={castPreviewURL ?? ''}
             displayPreferences={currentItemDisplayPreference}
             onRegisterArtworkReload={registerArtworkReload}
+            onSourceEnded={handleSourceEnded}
           />
         )}
       </div>

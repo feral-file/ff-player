@@ -357,6 +357,76 @@ describe('PlaylistClient — refresh artwork', () => {
   });
 });
 
+// DP-1 §4.1: when display.loop is false, time-based items advance at
+// end-of-stream rather than waiting for a duration timer. The video element
+// only emits `ended` when loop is false, so the onSourceEnded callback is
+// gated by the spec field at the element level. PlaylistClient must wire
+// that signal to the same advance machinery the duration timer drives.
+describe('PlaylistClient — source-end advance (DP-1 §4.1)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    teardownPlaylistWiringTest();
+  });
+
+  function callSourceEnded(): void {
+    const onSourceEnded = (
+      globalThis as { __artworkPlayerProps?: Record<string, unknown> }
+    ).__artworkPlayerProps?.onSourceEnded as (() => void) | undefined;
+    if (!onSourceEnded) {
+      throw new Error('onSourceEnded was not wired through to ArtworkPlayer');
+    }
+    act(() => {
+      onSourceEnded();
+    });
+  }
+
+  it('advances to the next item when the source ends and no duration is set', async () => {
+    const items = [item('a', NO_DURATION_VALUE), item('b', 1)];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    render(<PlaylistHarness castInfo={initial} />);
+
+    // No duration on item 0: the timer must not advance on its own.
+    await advanceMs(60000);
+    expect(canvasService.getCastInfo()?.index).toBe(0);
+
+    callSourceEnded();
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
+  it('lets source-end advance race the duration timer and uses whichever fires first', async () => {
+    const items = [item('a', 5), item('b', NO_DURATION_VALUE)];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    render(<PlaylistHarness castInfo={initial} />);
+
+    // Source ends well before the 5s timer would fire.
+    await advanceMs(1000);
+    expect(canvasService.getCastInfo()?.index).toBe(0);
+
+    callSourceEnded();
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+
+    // The pre-existing 5s timer for slot 0 must not double-fire after the
+    // source-end advance has already moved the playlist forward.
+    await advanceMs(10000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
+  it('holds on the final slot when source-end fires under repeat-off', () => {
+    const items = [item('a', 1), item('b', NO_DURATION_VALUE)];
+    const initial = displayCast(items, 1, LoopMode.none);
+    canvasService.setCastInfo(initial, false);
+    render(<PlaylistHarness castInfo={initial} />);
+
+    callSourceEnded();
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+});
+
 describe('PlaylistClient — refresh artwork (cast leads React)', () => {
   beforeEach(() => {
     vi.useFakeTimers();

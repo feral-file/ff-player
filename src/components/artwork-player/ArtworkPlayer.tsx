@@ -81,6 +81,7 @@ const ArtworkPlayer = ({
   artworkPreviewMIMEType,
   displayPreferences,
   onRegisterArtworkReload,
+  onSourceEnded,
 }: {
   previewURL: string;
   isCustomView?: boolean;
@@ -88,6 +89,11 @@ const ArtworkPlayer = ({
   artworkPreviewMIMEType?: string;
   displayPreferences: DP1DisplayPreference;
   onRegisterArtworkReload?: (reload: (() => void) | null) => void;
+  // Fired when a time-based source (video/audio) reaches end-of-stream.
+  // The HTML5 media element only emits `ended` when its `loop` attribute is
+  // false, so this callback is naturally gated by display.loop. Per DP-1
+  // §4.1, the consumer (PlaylistClient) advances to the next item.
+  onSourceEnded?: () => void;
 }) => {
   const FADE_IN_OUT_DURATION_MS = 650;
   const { context } = useAppContext();
@@ -1081,6 +1087,14 @@ const ArtworkPlayer = ({
             loop={displaySettings?.loop ?? true}
             playsInline
             crossOrigin="anonymous"
+            // The inactive slot is preloaded during cross-fades and may emit
+            // `ended` for content that no longer represents the playing item.
+            // Gate on activeSlotRef so only the visible slot drives advance.
+            onEnded={() => {
+              if (slotIndex === activeSlotRef.current) {
+                onSourceEnded?.();
+              }
+            }}
           />
         )}
         {slot.previewType === PreviewHTMLTag.audio && (
@@ -1088,6 +1102,11 @@ const ArtworkPlayer = ({
             ref={audioRefs[slotIndex]}
             autoPlay={displaySettings?.autoPlay ?? true}
             loop={displaySettings?.loop ?? true}
+            onEnded={() => {
+              if (slotIndex === activeSlotRef.current) {
+                onSourceEnded?.();
+              }
+            }}
           />
         )}
         {slot.displaySoftwareURL &&
