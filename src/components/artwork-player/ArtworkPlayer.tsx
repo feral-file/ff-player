@@ -93,7 +93,9 @@ const ArtworkPlayer = ({
   // The HTML5 media element only emits `ended` when its `loop` attribute is
   // false, so this callback is naturally gated by display.loop. Per DP-1
   // §4.1, the consumer (PlaylistClient) advances to the next item.
-  onSourceEnded?: () => void;
+  // The argument is the firing slot's previewURL, so the consumer can drop
+  // events that arrive after the playlist has already moved past them.
+  onSourceEnded?: (previewURL: string) => void;
 }) => {
   const FADE_IN_OUT_DURATION_MS = 650;
   const { context } = useAppContext();
@@ -1087,12 +1089,21 @@ const ArtworkPlayer = ({
             loop={displaySettings?.loop ?? true}
             playsInline
             crossOrigin="anonymous"
-            // The inactive slot is preloaded during cross-fades and may emit
-            // `ended` for content that no longer represents the playing item.
-            // Gate on activeSlotRef so only the visible slot drives advance.
+            // Drive advance from the slot whose previewURL matches the current
+            // target. activeSlotRef alone is too strict: during the 650ms
+            // cross-fade the incoming slot is already playing but activeSlot
+            // hasn't committed yet, so a short clip can `ended` before the
+            // swap and the event would otherwise be dropped. The previewURL
+            // match is a stable identity check that holds throughout the
+            // transition and rejects events from the outgoing slot.
             onEnded={() => {
-              if (slotIndex === activeSlotRef.current) {
-                onSourceEnded?.();
+              const slotPreviewURL =
+                slotsRef.current[slotIndex]?.previewURL;
+              if (
+                slotPreviewURL &&
+                slotPreviewURL === previewURLRef.current
+              ) {
+                onSourceEnded?.(slotPreviewURL);
               }
             }}
           />
@@ -1103,8 +1114,13 @@ const ArtworkPlayer = ({
             autoPlay={displaySettings?.autoPlay ?? true}
             loop={displaySettings?.loop ?? true}
             onEnded={() => {
-              if (slotIndex === activeSlotRef.current) {
-                onSourceEnded?.();
+              const slotPreviewURL =
+                slotsRef.current[slotIndex]?.previewURL;
+              if (
+                slotPreviewURL &&
+                slotPreviewURL === previewURLRef.current
+              ) {
+                onSourceEnded?.(slotPreviewURL);
               }
             }}
           />

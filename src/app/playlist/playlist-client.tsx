@@ -364,13 +364,25 @@ export default function PlaylistClient() {
   // display.loop is false. The HTML5 media element does not emit `ended`
   // while loop=true, so this only fires for items where advance-on-source-end
   // is actually requested.
-  const handleSourceEnded = useCallback(() => {
+  //
+  // `endedSource` is the previewURL of the slot that fired the event. If it
+  // no longer matches the current item's source, the slot has already moved
+  // on — most likely a duration timer beat the source-end event to the
+  // advance. Dropping the stale event keeps a near-simultaneous
+  // timer-then-ended pair from advancing twice. ArtworkPlayer also gates the
+  // event at the slot level (`slot.previewURL === previewURLRef.current`);
+  // this is a second line of defense against the rare interleaving where
+  // both fire before React commits the index update.
+  const handleSourceEnded = useCallback((endedSource: string) => {
     const idx = currentIndexRef.current;
     const snapshot = playlistRef.current;
     if (idx < 0 || !snapshot.length) {
       return;
     }
     const normalizedIndex = normalizePlaylistIndex(idx, snapshot.length);
+    if (snapshot[normalizedIndex]?.source !== endedSource) {
+      return;
+    }
     advanceFromSlot(normalizedIndex, snapshot);
   }, [advanceFromSlot]);
 
@@ -518,7 +530,22 @@ export default function PlaylistClient() {
           // Leaving repeat-off while holding the last artwork should restart that
           // artwork's slot timer so playback can continue from the held frame.
           holdAfterFinalSlotRef.current = false;
-          scheduleCurrentItemTimer(currentIndexRef.current, activePlaylist);
+          const idx = currentIndexRef.current;
+          const heldItem =
+            activePlaylist[normalizePlaylistIndex(idx, activePlaylist.length)];
+          const heldDuration = heldItem.duration ?? 0;
+          const isHeldNoDuration =
+            heldDuration <= 0 || heldDuration >= NO_DURATION_VALUE;
+          if (isHeldNoDuration) {
+            // Time-based items (video/audio with display.loop=false) reach the
+            // hold state after end-of-stream, paused on the final frame.
+            // scheduleCurrentItemTimer is a no-op without a duration, so to
+            // resume playback we re-fire the artwork refresh path; the next
+            // end-of-stream will drive advance through onSourceEnded.
+            triggerArtworkRefresh();
+          } else {
+            scheduleCurrentItemTimer(idx, activePlaylist);
+          }
         }
         break;
       }

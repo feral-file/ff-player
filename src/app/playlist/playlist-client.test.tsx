@@ -371,15 +371,17 @@ describe('PlaylistClient — source-end advance (DP-1 §4.1)', () => {
     teardownPlaylistWiringTest();
   });
 
-  function callSourceEnded(): void {
+  function callSourceEnded(endedSource: string): void {
     const onSourceEnded = (
       globalThis as { __artworkPlayerProps?: Record<string, unknown> }
-    ).__artworkPlayerProps?.onSourceEnded as (() => void) | undefined;
+    ).__artworkPlayerProps?.onSourceEnded as
+      | ((previewURL: string) => void)
+      | undefined;
     if (!onSourceEnded) {
       throw new Error('onSourceEnded was not wired through to ArtworkPlayer');
     }
     act(() => {
-      onSourceEnded();
+      onSourceEnded(endedSource);
     });
   }
 
@@ -393,7 +395,7 @@ describe('PlaylistClient — source-end advance (DP-1 §4.1)', () => {
     await advanceMs(60000);
     expect(canvasService.getCastInfo()?.index).toBe(0);
 
-    callSourceEnded();
+    callSourceEnded(items[0].source);
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 
@@ -407,12 +409,29 @@ describe('PlaylistClient — source-end advance (DP-1 §4.1)', () => {
     await advanceMs(1000);
     expect(canvasService.getCastInfo()?.index).toBe(0);
 
-    callSourceEnded();
+    callSourceEnded(items[0].source);
     expect(canvasService.getCastInfo()?.index).toBe(1);
 
     // The pre-existing 5s timer for slot 0 must not double-fire after the
     // source-end advance has already moved the playlist forward.
     await advanceMs(10000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
+  it('drops a late source-end event after the duration timer already advanced', async () => {
+    // Reverse race: timer fires first, advances 0 → 1, then a delayed `ended`
+    // event arrives for item 0 (its previewURL no longer matches the current
+    // item, but we exercise the source-mismatch guard in PlaylistClient
+    // itself so a slot-level gate bypass cannot cause a double-advance).
+    const items = [item('a', 1), item('b', 1), item('c', 1)];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    render(<PlaylistHarness castInfo={initial} />);
+
+    await advanceMs(1000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+
+    callSourceEnded(items[0].source);
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 
@@ -422,8 +441,70 @@ describe('PlaylistClient — source-end advance (DP-1 §4.1)', () => {
     canvasService.setCastInfo(initial, false);
     render(<PlaylistHarness castInfo={initial} />);
 
-    callSourceEnded();
+    callSourceEnded(items[1].source);
     expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+});
+
+// setLoop on a held no-duration item is its own recovery path: scheduling
+// the next slot timer is a no-op without a duration, so we have to re-fire
+// the artwork-refresh signal to restart playback from the held frame.
+describe('PlaylistClient — setLoop after source-end hold', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    teardownPlaylistWiringTest();
+  });
+
+  function callSourceEnded(endedSource: string): void {
+    const onSourceEnded = (
+      globalThis as { __artworkPlayerProps?: Record<string, unknown> }
+    ).__artworkPlayerProps?.onSourceEnded as
+      | ((previewURL: string) => void)
+      | undefined;
+    if (!onSourceEnded) {
+      throw new Error('onSourceEnded was not wired through to ArtworkPlayer');
+    }
+    act(() => {
+      onSourceEnded(endedSource);
+    });
+  }
+
+  it('restarts a held no-duration video when loop toggles back on', async () => {
+    // After a no-duration video at the final slot of a repeat-off playlist
+    // ends, holdAfterFinalSlot is set. Toggling loop back on must restart
+    // playback through the artwork-refresh path (scheduleCurrentItemTimer is
+    // a no-op without a duration). The reload tick is the existing
+    // refresh-playback signal, so we assert it fired exactly once.
+    const items = [item('a', 1), item('b', NO_DURATION_VALUE)];
+    const initial = displayCast(items, 1, LoopMode.none);
+    canvasService.setCastInfo(initial, false);
+    const { rerender } = render(<PlaylistHarness castInfo={initial} />);
+
+    callSourceEnded(items[1].source);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+
+    const reloadsBefore =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+
+    const setLoop: CastInfo = {
+      castCommand: CastCommand.setLoop,
+      playlist: dp1Call('pl', items),
+      index: 1,
+      loopMode: LoopMode.playlist,
+    };
+    canvasService.setCastInfo(setLoop, false);
+    rerender(<PlaylistHarness castInfo={setLoop} />);
+
+    await advanceMs(0);
+
+    const reloadsAfter =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+    expect(reloadsAfter).toBe(reloadsBefore + 1);
   });
 });
 
