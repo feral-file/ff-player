@@ -22,7 +22,26 @@ import {
 } from '@/utils/playlist';
 import { coerceLoopMode } from '@/utils/loopMode';
 import * as Sentry from '@sentry/nextjs';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+
+// Stable identity for a playlist slot. DP-1 PlaylistItem.id is optional in
+// the spec, so we synthesise one from the playlist position and source when
+// missing. Adjacent items that share the same source must produce different
+// identities, which is why position is part of the synthetic key — that's
+// what lets ArtworkPlayer recreate its slot (and re-mount the <video>) on
+// transition between two items pointing at the same URL.
+function itemIdentityFor(items: DP1Item[], index: number): string {
+  const item = items[index] as DP1Item | undefined;
+  if (!item) {
+    return '';
+  }
+  const id = item.id;
+  if (typeof id === 'string' && id.length > 0) {
+    return id;
+  }
+  const source = typeof item.source === 'string' ? item.source : '';
+  return `__by_index_${String(index)}__${source}`;
+}
 
 function reportPlaylistDisplayPreferenceError(
   phase: string,
@@ -365,22 +384,21 @@ export default function PlaylistClient() {
   // while loop=true, so this only fires for items where advance-on-source-end
   // is actually requested.
   //
-  // `endedSource` is the previewURL of the slot that fired the event. If it
-  // no longer matches the current item's source, the slot has already moved
-  // on — most likely a duration timer beat the source-end event to the
-  // advance. Dropping the stale event keeps a near-simultaneous
-  // timer-then-ended pair from advancing twice. ArtworkPlayer also gates the
-  // event at the slot level (`slot.previewURL === previewURLRef.current`);
-  // this is a second line of defense against the rare interleaving where
-  // both fire before React commits the index update.
-  const handleSourceEnded = useCallback((endedSource: string) => {
+  // `endedIdentity` is the firing slot's itemIdentity. If it no longer
+  // matches the current item's identity, the slot has already moved on
+  // (e.g. a duration timer beat the source-end event to the advance, or the
+  // previous slot fired a late `ended` from an adjacent same-URL item).
+  // ArtworkPlayer gates events at the slot level too; this is a second line
+  // of defense against the rare interleaving where both fire before React
+  // commits the index update.
+  const handleSourceEnded = useCallback((endedIdentity: string) => {
     const idx = currentIndexRef.current;
     const snapshot = playlistRef.current;
     if (idx < 0 || !snapshot.length) {
       return;
     }
     const normalizedIndex = normalizePlaylistIndex(idx, snapshot.length);
-    if (snapshot[normalizedIndex]?.source !== endedSource) {
+    if (itemIdentityFor(snapshot, normalizedIndex) !== endedIdentity) {
       return;
     }
     advanceFromSlot(normalizedIndex, snapshot);
@@ -558,6 +576,20 @@ export default function PlaylistClient() {
     triggerArtworkRefresh,
   ]);
 
+  // Identity of the slot the player is currently rendering. Recomputed when
+  // the playlist or current index changes; passed to ArtworkPlayer so the
+  // end-of-stream gate can reject events from a previous adjacent item that
+  // happens to share the same source URL.
+  const currentItemIdentity = useMemo(() => {
+    if (currentIndex < 0 || playlist.length === 0) {
+      return '';
+    }
+    return itemIdentityFor(
+      playlist,
+      normalizePlaylistIndex(currentIndex, playlist.length)
+    );
+  }, [currentIndex, playlist]);
+
   return (
     <>
       <div style={{ width: '100%', height: '100%' }}>
@@ -565,6 +597,7 @@ export default function PlaylistClient() {
           <ArtworkPlayer
             previewURL={castPreviewURL ?? ''}
             displayPreferences={currentItemDisplayPreference}
+            itemIdentity={currentItemIdentity}
             onRegisterArtworkReload={registerArtworkReload}
             onSourceEnded={handleSourceEnded}
           />

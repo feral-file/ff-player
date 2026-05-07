@@ -57,9 +57,18 @@ interface SlotLayer {
   isStreaming: boolean;
   loading: boolean;
   iframeKey: number;
+  // Stable identity of the playlist item this slot is rendering. Adjacent
+  // playlist items can share the same URL (and the same SlotLayer reuses
+  // them); itemIdentity discriminates so the onEnded gate can reject events
+  // from the previous item even when previewURL alone cannot.
+  itemIdentity: string;
 }
 
-function createSlotLayer(previewURL: string, iframeKey: number): SlotLayer {
+function createSlotLayer(
+  previewURL: string,
+  iframeKey: number,
+  itemIdentity: string
+): SlotLayer {
   return {
     previewURL,
     displayPreviewURL: '',
@@ -68,6 +77,7 @@ function createSlotLayer(previewURL: string, iframeKey: number): SlotLayer {
     isStreaming: false,
     loading: true,
     iframeKey,
+    itemIdentity,
   };
 }
 
@@ -80,6 +90,7 @@ const ArtworkPlayer = ({
   isCustomView,
   artworkPreviewMIMEType,
   displayPreferences,
+  itemIdentity,
   onRegisterArtworkReload,
   onSourceEnded,
 }: {
@@ -88,14 +99,19 @@ const ArtworkPlayer = ({
   keyboardCode?: number;
   artworkPreviewMIMEType?: string;
   displayPreferences: DP1DisplayPreference;
+  // Stable identity of the current playlist item. When adjacent items share
+  // the same URL, this discriminates them so the player can (a) restart
+  // playback on transition and (b) reject `ended` events from the previous
+  // item once the next one has become current.
+  itemIdentity?: string;
   onRegisterArtworkReload?: (reload: (() => void) | null) => void;
   // Fired when a time-based source (video/audio) reaches end-of-stream.
   // The HTML5 media element only emits `ended` when its `loop` attribute is
   // false, so this callback is naturally gated by display.loop. Per DP-1
   // §4.1, the consumer (PlaylistClient) advances to the next item.
-  // The argument is the firing slot's previewURL, so the consumer can drop
-  // events that arrive after the playlist has already moved past them.
-  onSourceEnded?: (previewURL: string) => void;
+  // The argument is the firing slot's itemIdentity so the consumer can
+  // drop events that arrive after the playlist has already moved past them.
+  onSourceEnded?: (itemIdentity: string) => void;
 }) => {
   const FADE_IN_OUT_DURATION_MS = 650;
   const { context } = useAppContext();
@@ -162,6 +178,7 @@ const ArtworkPlayer = ({
   const pendingReadySlotRef = useRef<SlotIndex | null>(null);
   const incomingSlotRef = useRef<SlotIndex | null>(null);
   const previewURLRef = useRef(previewURL);
+  const itemIdentityRef = useRef(itemIdentity ?? '');
   const slotsRef = useRef(slots);
   const activeSlotRef = useRef(activeSlot);
   const slotOpacityRef = useRef<[number, number]>(slotOpacity);
@@ -217,6 +234,10 @@ const ArtworkPlayer = ({
   useEffect(() => {
     previewURLRef.current = previewURL;
   }, [previewURL]);
+
+  useEffect(() => {
+    itemIdentityRef.current = itemIdentity ?? '';
+  }, [itemIdentity]);
 
   useEffect(() => {
     slotsRef.current = slots;
@@ -547,20 +568,21 @@ const ArtworkPlayer = ({
       }
     }, 2000);
 
+    const identity = itemIdentityRef.current;
     setSlots(prev => {
       const hasAny = prev[currentActive] !== null;
       if (!hasAny) {
         const k = ++iframeKeyCounterRef.current;
         incomingSlotRef.current = currentActive;
         const next: [SlotLayer | null, SlotLayer | null] = [null, null];
-        next[currentActive] = createSlotLayer(url, k);
+        next[currentActive] = createSlotLayer(url, k, identity);
         return next;
       }
       const incoming = (currentActive === 0 ? 1 : 0) as SlotIndex;
       incomingSlotRef.current = incoming;
       const k = ++iframeKeyCounterRef.current;
       const next = [...prev] as [SlotLayer | null, SlotLayer | null];
-      next[incoming] = createSlotLayer(url, k);
+      next[incoming] = createSlotLayer(url, k, identity);
       return next;
     });
 
@@ -630,7 +652,11 @@ const ArtworkPlayer = ({
       cancelled = true;
       if (loadingDelayRef.current) {clearTimeout(loadingDelayRef.current);}
     };
-  }, [previewURL, artworkPreviewMIMEType, artworkReloadTick]);
+    // itemIdentity is in the deps so adjacent playlist items that share the
+    // same previewURL still trigger a fresh slot setup. Without this, the
+    // effect would short-circuit on equal previewURL and the second item
+    // would inherit the prior item's paused-at-end media frame.
+  }, [previewURL, artworkPreviewMIMEType, artworkReloadTick, itemIdentity]);
 
   useEffect(() => {
     const layer = slots[activeSlot];
@@ -1079,6 +1105,12 @@ const ArtworkPlayer = ({
         )}
         {slot.previewType === PreviewHTMLTag.video && (
           <video
+            // iframeKey is bumped on every slot setup; using it as React key
+            // unmounts the old <video> instance when the slot is recreated
+            // (e.g. on reload or itemIdentity change with same URL), which
+            // discards any pending `ended` event still queued for the prior
+            // playback.
+            key={`v-${String(slot.iframeKey)}`}
             ref={videoRefs[slotIndex]}
             style={{
               width: '100%',
@@ -1089,38 +1121,37 @@ const ArtworkPlayer = ({
             loop={displaySettings?.loop ?? true}
             playsInline
             crossOrigin="anonymous"
-            // Drive advance from the slot whose previewURL matches the current
-            // target. activeSlotRef alone is too strict: during the 650ms
-            // cross-fade the incoming slot is already playing but activeSlot
-            // hasn't committed yet, so a short clip can `ended` before the
-            // swap and the event would otherwise be dropped. The previewURL
-            // match is a stable identity check that holds throughout the
-            // transition and rejects events from the outgoing slot.
+            // Gate by itemIdentity rather than previewURL so adjacent items
+            // sharing the same URL are still discriminated. The active slot
+            // (the one rendering the current playlist item) carries the
+            // current itemIdentity; the outgoing slot during a cross-fade
+            // carries the previous identity and its `ended` is dropped.
             onEnded={() => {
-              const slotPreviewURL =
-                slotsRef.current[slotIndex]?.previewURL;
+              const slotIdentity =
+                slotsRef.current[slotIndex]?.itemIdentity;
               if (
-                slotPreviewURL &&
-                slotPreviewURL === previewURLRef.current
+                slotIdentity &&
+                slotIdentity === itemIdentityRef.current
               ) {
-                onSourceEnded?.(slotPreviewURL);
+                onSourceEnded?.(slotIdentity);
               }
             }}
           />
         )}
         {slot.previewType === PreviewHTMLTag.audio && (
           <audio
+            key={`a-${String(slot.iframeKey)}`}
             ref={audioRefs[slotIndex]}
             autoPlay={displaySettings?.autoPlay ?? true}
             loop={displaySettings?.loop ?? true}
             onEnded={() => {
-              const slotPreviewURL =
-                slotsRef.current[slotIndex]?.previewURL;
+              const slotIdentity =
+                slotsRef.current[slotIndex]?.itemIdentity;
               if (
-                slotPreviewURL &&
-                slotPreviewURL === previewURLRef.current
+                slotIdentity &&
+                slotIdentity === itemIdentityRef.current
               ) {
-                onSourceEnded?.(slotPreviewURL);
+                onSourceEnded?.(slotIdentity);
               }
             }}
           />
