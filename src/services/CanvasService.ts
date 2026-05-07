@@ -410,7 +410,7 @@ class CanvasService {
 
       return {
         ok: true,
-        castCommand: activeCastInfo?.castCommand,
+        castCommand: DeviceManager.getCachedCastInfo()?.castCommand,
 
         playlist: activeCastInfo?.playlist,
         playlistUrl: activeCastInfo?.playlistUrl,
@@ -455,9 +455,15 @@ class CanvasService {
 
   public setSleepMode(request: SetSleepModeRequest): SetSleepModeReply {
     console.log('[CanvasService] Set sleep mode', request.sleepMode);
-    const path = request.sleepMode ? '/sleep' : '/';
+    const path = request.sleepMode ? '/sleep' : '/playlist';
 
     if (typeof window !== 'undefined') {
+      if (!request.sleepMode) {
+        this.setCastInfo({
+          ...this.castInfo,
+          castCommand: CastCommand.displayPlaylist,
+        });
+      }
       window.dispatchEvent(
         new CustomEvent<NavigateEventDetail>(
           CustomEventName.Navigate as string,
