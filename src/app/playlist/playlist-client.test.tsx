@@ -472,6 +472,48 @@ describe('PlaylistClient — source-end advance (DP-1 §4.1)', () => {
   });
 });
 
+// Same-tick race regression: timer + onSourceEnded both fire before React
+// commits. The synchronous currentIndexRef claim inside advanceFromSlot
+// keeps the second invocation from publishing a duplicate updateIndex.
+describe('PlaylistClient — same-tick race', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    teardownPlaylistWiringTest();
+  });
+
+  it('only publishes one updateIndex when timer and source-end race', async () => {
+    const items = [item('a', 1), item('b', 1), item('c', 1)];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    render(<PlaylistHarness castInfo={initial} />);
+
+    const setCastSpy = vi.spyOn(canvasService, 'setCastInfo');
+    setCastSpy.mockClear();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+      const onSourceEnded = (
+        globalThis as { __artworkPlayerProps?: Record<string, unknown> }
+      ).__artworkPlayerProps?.onSourceEnded as
+        | ((identity: string) => void)
+        | undefined;
+      onSourceEnded?.(items[0].id);
+    });
+
+    const updateIndexCalls = setCastSpy.mock.calls.filter(
+      args =>
+        (args[0] as { castCommand?: string } | null)?.castCommand ===
+        CastCommand.updateIndex
+    );
+    expect(updateIndexCalls.length).toBe(1);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+    setCastSpy.mockRestore();
+  });
+});
+
 // setLoop on a held no-duration item is its own recovery path: scheduling
 // the next slot timer is a no-op without a duration, so we have to re-fire
 // the artwork-refresh signal to restart playback from the held frame.

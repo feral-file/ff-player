@@ -225,6 +225,41 @@ describe('ArtworkPlayer — onSourceEnded during cross-fade', () => {
     expect(onSourceEnded).not.toHaveBeenCalled();
   });
 
+  it('drops a late ended when the same id is reused with a new source URL', async () => {
+    // Refresh-style update: the player keeps the same itemIdentity but
+    // points at a different source (e.g. the curator swapped out the asset
+    // mid-playlist). The identity-only gate would accept a stale `ended`
+    // from the old source as the new source's end-of-stream. The combined
+    // identity + previewURL gate must drop it.
+    const onSourceEnded = vi.fn();
+    const { container, rerender } = renderArtworkPlayer({
+      previewURL: VIDEO_URL_A,
+      itemIdentity: ITEM_A,
+      onSourceEnded,
+    });
+
+    const oldElement = await findVideoForURL(container, VIDEO_URL_A);
+
+    // Same identity, different source. ArtworkPlayer recreates the slot
+    // (previewURL change drives the effect) and the new <video> mounts
+    // with a fresh iframeKey-derived React key.
+    rerenderArtworkPlayer(rerender, {
+      previewURL: VIDEO_URL_B,
+      itemIdentity: ITEM_A,
+      onSourceEnded,
+    });
+
+    await findVideoForURL(container, VIDEO_URL_B);
+
+    act(() => {
+      oldElement.dispatchEvent(new Event('ended'));
+    });
+
+    // The stale element belongs to ITEM_A's old source, but the current
+    // target source is VIDEO_URL_B. The combined gate drops the event.
+    expect(onSourceEnded).not.toHaveBeenCalled();
+  });
+
   it('drops a late ended from the outgoing slot when adjacent items share a URL', async () => {
     // The bot-flagged regression case: two adjacent playlist items pointing
     // at the same media URL. The previewURL gate alone would not

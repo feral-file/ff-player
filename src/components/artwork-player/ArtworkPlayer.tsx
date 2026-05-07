@@ -1121,19 +1121,21 @@ const ArtworkPlayer = ({
             loop={displaySettings?.loop ?? true}
             playsInline
             crossOrigin="anonymous"
-            // Gate by itemIdentity rather than previewURL so adjacent items
-            // sharing the same URL are still discriminated. The active slot
-            // (the one rendering the current playlist item) carries the
-            // current itemIdentity; the outgoing slot during a cross-fade
-            // carries the previous identity and its `ended` is dropped.
+            // Gate by itemIdentity AND previewURL together. Identity alone
+            // is unstable across refresh-style updates that keep the same
+            // item id but change the source; URL alone collapses adjacent
+            // playlist items that share the same source. Both must match
+            // the current target before we treat the `ended` as the
+            // current item's end-of-stream.
             onEnded={() => {
-              const slotIdentity =
-                slotsRef.current[slotIndex]?.itemIdentity;
+              const slot = slotsRef.current[slotIndex];
               if (
-                slotIdentity &&
-                slotIdentity === itemIdentityRef.current
+                slot &&
+                slot.itemIdentity.length > 0 &&
+                slot.itemIdentity === itemIdentityRef.current &&
+                slot.previewURL === previewURLRef.current
               ) {
-                onSourceEnded?.(slotIdentity);
+                onSourceEnded?.(slot.itemIdentity);
               }
             }}
           />
@@ -1145,13 +1147,14 @@ const ArtworkPlayer = ({
             autoPlay={displaySettings?.autoPlay ?? true}
             loop={displaySettings?.loop ?? true}
             onEnded={() => {
-              const slotIdentity =
-                slotsRef.current[slotIndex]?.itemIdentity;
+              const slot = slotsRef.current[slotIndex];
               if (
-                slotIdentity &&
-                slotIdentity === itemIdentityRef.current
+                slot &&
+                slot.itemIdentity.length > 0 &&
+                slot.itemIdentity === itemIdentityRef.current &&
+                slot.previewURL === previewURLRef.current
               ) {
-                onSourceEnded?.(slotIdentity);
+                onSourceEnded?.(slot.itemIdentity);
               }
             }}
           />

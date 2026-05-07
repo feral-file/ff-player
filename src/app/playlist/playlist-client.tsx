@@ -338,6 +338,14 @@ export default function PlaylistClient() {
         return;
       }
 
+      // Synchronously claim the advance before the React commit so a
+      // concurrent same-tick caller (e.g. duration timer fires and
+      // onSourceEnded fires within the same microtask) sees the ref
+      // already past `fromIndex` and bails on the guard above. Without
+      // this, both callbacks pass the guard, both call setCurrentIndex
+      // (collapses correctly) but both also call publishCurrentIndex,
+      // emitting a duplicate updateIndex on the cast bus.
+      currentIndexRef.current = nextIndex;
       setCurrentIndex(nextIndex);
       publishCurrentIndex(nextIndex);
     },
