@@ -231,16 +231,27 @@ const ArtworkPlayer = ({
     return { previewType: PreviewHTMLTag.iframe, isStreaming: false };
   }
 
-  // These refs feed the end-of-stream gate, which can fire synchronously
-  // from a media element during the post-render layout window — before a
-  // passive useEffect would commit the new prop. Assign during render so
-  // the gate cannot accept a stale slot's `ended` immediately after a
-  // previewURL or itemIdentity change.
-  previewURLRef.current = previewURL;
-  itemIdentityRef.current = itemIdentity ?? '';
-  slotsRef.current = slots;
-  activeSlotRef.current = activeSlot;
-  slotOpacityRef.current = slotOpacity;
+  // These refs feed the end-of-stream gate. useLayoutEffect runs
+  // synchronously after a committed render and before the browser paints,
+  // which is the right phase for "ref should reflect the committed prop":
+  // it closes the post-passive-effect timing hole that drops valid `ended`
+  // events without making the refs visible during interrupted/replayed
+  // renders the way render-time assignment would under concurrent React.
+  useLayoutEffect(() => {
+    previewURLRef.current = previewURL;
+  }, [previewURL]);
+  useLayoutEffect(() => {
+    itemIdentityRef.current = itemIdentity ?? '';
+  }, [itemIdentity]);
+  useLayoutEffect(() => {
+    slotsRef.current = slots;
+  }, [slots]);
+  useLayoutEffect(() => {
+    activeSlotRef.current = activeSlot;
+  }, [activeSlot]);
+  useLayoutEffect(() => {
+    slotOpacityRef.current = slotOpacity;
+  }, [slotOpacity]);
 
   const pauseAndTeardownSlot = useCallback((slotIndex: SlotIndex) => {
     hlsInstancesRef.current[slotIndex]?.destroy();

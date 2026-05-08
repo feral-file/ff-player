@@ -130,6 +130,34 @@ describe('PlaylistClient — source-end advance (DP-1 §4.1)', () => {
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 
+  it('still advances on source-end after a reorder for an item that kept its id', () => {
+    // Regression for the reorder case: when items have stable DP-1 ids
+    // (the common case), itemIdentity is item.id and survives a refresh
+    // that moves the still-playing item to a new index. The late `ended`
+    // from the visible item must still advance.
+    const items = [
+      item('a', NO_DURATION_VALUE),
+      item('b', NO_DURATION_VALUE),
+      item('c', NO_DURATION_VALUE),
+    ];
+    canvasService.setCastInfo(displayCast(items, 0, LoopMode.playlist), false);
+    const { rerender } = render(
+      <PlaylistHarness castInfo={displayCast(items, 0, LoopMode.playlist)} />
+    );
+
+    // Same items, item 'a' moved to index 2. Re-cast as displayPlaylist
+    // (the route reinitialises from this command without going through
+    // the queued refresh state machine).
+    const reordered = [items[1], items[2], items[0]];
+    const reorderedCast = displayCast(reordered, 2, LoopMode.playlist);
+    canvasService.setCastInfo(reorderedCast, false);
+    rerender(<PlaylistHarness castInfo={reorderedCast} />);
+
+    callSourceEnded('a');
+    // Sequential advance from the last slot wraps back to the start.
+    expect(canvasService.getCastInfo()?.index).toBe(0);
+  });
+
   it('drops a late source-end from a previous adjacent same-URL item', () => {
     const items = [
       item('a', NO_DURATION_VALUE),
