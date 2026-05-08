@@ -219,9 +219,25 @@ export default function PlaylistClient() {
     [playlistDefaultsSettings]
   );
 
+  // Publishes a single updateIndex per (command, index) transition. When the
+  // duration timer and onSourceEnded both fire for the same slot in a tick
+  // (multi-item advance, LoopMode.one, single-item wrap, queued-playlist
+  // apply), both branches end here. Without dedupe each call emits an
+  // updateIndex; subscribers see duplicate noise and, in racy branches that
+  // do not change currentIndex, the cast bus repeats unchanged state.
+  // Dropping when castInfo already shows updateIndex at the same index
+  // collapses both same-tick races and across-tick periodic re-publishing
+  // for LoopMode.one (which adds no information once subscribers have
+  // already seen the index).
   const publishCurrentIndex = useCallback((index: number) => {
     const currentCastInfo = canvasService.getCastInfo();
     if (!currentCastInfo) {
+      return;
+    }
+    if (
+      currentCastInfo.castCommand === CastCommand.updateIndex &&
+      currentCastInfo.index === index
+    ) {
       return;
     }
 
