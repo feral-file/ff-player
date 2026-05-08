@@ -20,6 +20,7 @@ import {
   advanceMs,
   callOnSourceEndedRaw,
   callSourceEnded,
+  canvasInternals,
   displayCast,
   dp1Call,
   item,
@@ -145,6 +146,43 @@ describe('PlaylistClient — source-end advance (DP-1 §4.1)', () => {
     // in PlaylistClient must drop it even when items 0 and 1 share a URL.
     callSourceEnded(items[0].id);
     expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+});
+
+// Queued-playlist apply branches in advanceFromSlot return early; if the
+// queued refresh keeps the same item id and source, ArtworkPlayer never
+// sees a previewURL or identity change and the slot is not recreated.
+// No-duration items still need an explicit restart on these paths.
+describe('PlaylistClient — replay after queued apply', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    teardownPlaylistWiringTest();
+  });
+
+  it('restarts a no-duration video after queued same-item refresh in LoopMode.one', () => {
+    const items = [item('a', NO_DURATION_VALUE)];
+    canvasService.setCastInfo(displayCast(items, 0, LoopMode.one), false);
+    render(<PlaylistHarness castInfo={displayCast(items, 0, LoopMode.one)} />);
+
+    canvasInternals().queuedPlaylistPending = true;
+    canvasService.processMessage({
+      command: CastCommand.refreshPlaylist,
+      request: { items },
+    });
+
+    const reloadsBefore =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+
+    callSourceEnded(items[0].id);
+
+    const reloadsAfter =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+    expect(reloadsAfter).toBeGreaterThan(reloadsBefore);
   });
 });
 

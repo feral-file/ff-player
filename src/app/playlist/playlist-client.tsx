@@ -310,6 +310,13 @@ export default function PlaylistClient() {
         // keepCurrent=true keeps loop on this artwork after a queued
         // refresh; falls back to index 0 if the item was removed.
         if (applyQueuedPlaylistIfExists(undefined, true).applied) {
+          // Same-id same-source queued refresh leaves previewURL/identity
+          // unchanged, so ArtworkPlayer does not recreate the slot.
+          // Restart no-duration playback explicitly.
+          replayCurrentSlotIfNoDuration(
+            currentIndexRef.current,
+            playlistRef.current
+          );
           return;
         }
         publishCurrentIndex(fromIndex);
@@ -320,6 +327,10 @@ export default function PlaylistClient() {
 
       const queuedResult = applyQueuedPlaylistIfExists();
       if (queuedResult.applied) {
+        replayCurrentSlotIfNoDuration(
+          currentIndexRef.current,
+          playlistRef.current
+        );
         return;
       }
 
