@@ -329,6 +329,53 @@ describe('PlaylistClient — setLoop after source-end hold', () => {
     expect(reloadsAfter).toBe(reloadsBefore + 1);
   });
 
+});
+
+describe('PlaylistClient — setLoop after timed hold', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    teardownPlaylistWiringTest();
+  });
+
+  it('restarts a held finite-duration video when loop toggles back on', async () => {
+    // Regression for the bot-flagged finite-duration setLoop case: a
+    // video held at end-of-stream under repeat-off should restart
+    // playback when looping is re-enabled, not stay frozen until the
+    // duration timer happens to fire.
+    const items = [item('a', 1), item('b', 1)];
+    canvasService.setCastInfo(displayCast(items, 0, LoopMode.none), false);
+    const { rerender } = render(
+      <PlaylistHarness castInfo={displayCast(items, 0, LoopMode.none)} />
+    );
+
+    // Run the playlist into the held state on the final slot.
+    await advanceMs(1000);
+    await advanceMs(1000);
+
+    const reloadsBefore =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+
+    const setLoop: CastInfo = {
+      castCommand: CastCommand.setLoop,
+      playlist: dp1Call('pl', items),
+      index: 1,
+      loopMode: LoopMode.playlist,
+    };
+    canvasService.setCastInfo(setLoop, false);
+    rerender(<PlaylistHarness castInfo={setLoop} />);
+
+    await advanceMs(0);
+
+    const reloadsAfter =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+    expect(reloadsAfter).toBe(reloadsBefore + 1);
+  });
+
   it('restarts a held no-duration video when loop toggles back on', async () => {
     const items = [item('a', 1), item('b', NO_DURATION_VALUE)];
     canvasService.setCastInfo(displayCast(items, 1, LoopMode.none), false);

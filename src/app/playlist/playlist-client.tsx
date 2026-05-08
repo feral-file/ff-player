@@ -571,14 +571,15 @@ export default function PlaylistClient() {
         loopModeRef.current = nextLoopMode;
 
         if (shouldResume) {
-          // Leaving repeat-off restarts the held artwork. Time-based items
-          // (display.loop=false) reach the hold paused on the final frame;
-          // replayCurrentSlotIfNoDuration restores playback there. Duration
-          // items have their slot timer re-armed.
+          // Leaving repeat-off restarts the held artwork. Restart media
+          // unconditionally: a finite-duration video paused at end-frame
+          // (loop=false) resumes via the reload; a no-duration video
+          // restarts and the next end-of-stream drives advance; images
+          // and HTML reload but render the same frame. Then re-arm the
+          // duration timer for time-based loops.
           holdAfterFinalSlotRef.current = false;
-          const idx = currentIndexRef.current;
-          scheduleCurrentItemTimer(idx, activePlaylist);
-          replayCurrentSlotIfNoDuration(idx, activePlaylist);
+          artworkPerformReloadRef.current?.();
+          scheduleCurrentItemTimer(currentIndexRef.current, activePlaylist);
         }
         break;
       }
