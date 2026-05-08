@@ -212,6 +212,57 @@ describe('PlaylistClient — setLoop after source-end hold', () => {
     teardownPlaylistWiringTest();
   });
 
+  it('replays a no-duration video on source-end in LoopMode.one', () => {
+    // LoopMode.one re-publishes the same index instead of advancing. For a
+    // no-duration time-based item (display.loop=false at the spec level)
+    // the duration timer is a no-op, so the slot would otherwise park on
+    // its final frame. PlaylistClient explicitly re-fires the artwork
+    // reload to restart playback; the next end-of-stream drives the next
+    // replay through onSourceEnded.
+    const items = [
+      item('a', NO_DURATION_VALUE),
+      item('b', NO_DURATION_VALUE),
+    ];
+    canvasService.setCastInfo(displayCast(items, 0, LoopMode.one), false);
+    render(<PlaylistHarness castInfo={displayCast(items, 0, LoopMode.one)} />);
+
+    const reloadsBefore =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+
+    callSourceEnded(items[0].id);
+
+    const reloadsAfter =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+    expect(reloadsAfter).toBe(reloadsBefore + 1);
+    expect(canvasService.getCastInfo()?.index).toBe(0);
+  });
+
+  it('replays a no-duration video on source-end in a single-item playlist', () => {
+    // Single-item playlist wraps to itself; the same-slot replay branch
+    // must restart playback instead of relying on a duration timer.
+    const items = [item('a', NO_DURATION_VALUE)];
+    canvasService.setCastInfo(
+      displayCast(items, 0, LoopMode.playlist),
+      false
+    );
+    render(
+      <PlaylistHarness castInfo={displayCast(items, 0, LoopMode.playlist)} />
+    );
+
+    const reloadsBefore =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+
+    callSourceEnded(items[0].id);
+
+    const reloadsAfter =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+    expect(reloadsAfter).toBe(reloadsBefore + 1);
+  });
+
   it('restarts a held no-duration video when loop toggles back on', async () => {
     const items = [item('a', 1), item('b', NO_DURATION_VALUE)];
     canvasService.setCastInfo(displayCast(items, 1, LoopMode.none), false);

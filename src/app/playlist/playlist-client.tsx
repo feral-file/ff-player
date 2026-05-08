@@ -14,6 +14,8 @@ import { NO_DURATION_VALUE } from '@/constants';
 import { canvasService } from '@/services/CanvasService';
 import { DP1Service } from '@/services/DP1Service';
 import {
+  isNoDurationItem,
+  itemIdentityFor,
   normalizePlaylistIndex,
   resolveQueuedPlaylistNextIndex,
   resolveSequentialPlaylistAdvance,
@@ -23,25 +25,6 @@ import {
 import { coerceLoopMode } from '@/utils/loopMode';
 import * as Sentry from '@sentry/nextjs';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-
-// Stable identity for a playlist slot. DP-1 PlaylistItem.id is optional in
-// the spec, so we synthesise one from the playlist position and source when
-// missing. Adjacent items that share the same source must produce different
-// identities, which is why position is part of the synthetic key — that's
-// what lets ArtworkPlayer recreate its slot (and re-mount the <video>) on
-// transition between two items pointing at the same URL.
-function itemIdentityFor(items: DP1Item[], index: number): string {
-  const item = items[index] as DP1Item | undefined;
-  if (!item) {
-    return '';
-  }
-  const id = item.id;
-  if (typeof id === 'string' && id.length > 0) {
-    return id;
-  }
-  const source = typeof item.source === 'string' ? item.source : '';
-  return `__by_index_${String(index)}__${source}`;
-}
 
 function reportPlaylistDisplayPreferenceError(
   phase: string,
@@ -109,6 +92,22 @@ export default function PlaylistClient() {
   const registerArtworkReload = useCallback(
     (reload: (() => void) | null) => {
       artworkPerformReloadRef.current = reload;
+    },
+    []
+  );
+
+  // Same-slot loops (LoopMode.one, single-item wrap) park on the final
+  // frame for no-duration items because scheduleCurrentItemTimer is a
+  // no-op without a duration. Restart playback explicitly here.
+  const replayCurrentSlotIfNoDuration = useCallback(
+    (index: number, snapshot: DP1Item[]): void => {
+      if (!snapshot.length) {
+        return;
+      }
+      const item = snapshot[normalizePlaylistIndex(index, snapshot.length)];
+      if (isNoDurationItem(item)) {
+        artworkPerformReloadRef.current?.();
+      }
     },
     []
   );
@@ -219,16 +218,8 @@ export default function PlaylistClient() {
     [playlistDefaultsSettings]
   );
 
-  // Publishes a single updateIndex per (command, index) transition. When the
-  // duration timer and onSourceEnded both fire for the same slot in a tick
-  // (multi-item advance, LoopMode.one, single-item wrap, queued-playlist
-  // apply), both branches end here. Without dedupe each call emits an
-  // updateIndex; subscribers see duplicate noise and, in racy branches that
-  // do not change currentIndex, the cast bus repeats unchanged state.
-  // Dropping when castInfo already shows updateIndex at the same index
-  // collapses both same-tick races and across-tick periodic re-publishing
-  // for LoopMode.one (which adds no information once subscribers have
-  // already seen the index).
+  // Drops a no-op updateIndex transition (cast already at this index).
+  // Collapses same-tick races where timer + onSourceEnded both publish.
   const publishCurrentIndex = useCallback((index: number) => {
     const currentCastInfo = canvasService.getCastInfo();
     if (!currentCastInfo) {
@@ -276,6 +267,11 @@ export default function PlaylistClient() {
 
       setPlaylist(queuedPlaylist);
       setCurrentIndex(nextIndex);
+      // Sync refs immediately so a same-tick concurrent caller sees the
+      // new state instead of re-entering against the old snapshot.
+      playlistRef.current = queuedPlaylist;
+      playlistLengthRef.current = queuedPlaylist.length;
+      currentIndexRef.current = nextIndex;
 
       // consumeDeferredRefreshPlaylist atomically promotes the deferred refresh
       // onto castInfo so getStatus reflects the new list from the first frame.
@@ -311,15 +307,14 @@ export default function PlaylistClient() {
       holdAfterFinalSlotRef.current = false;
 
       if (loopModeRef.current === LoopMode.one) {
-        // Apply queued playlist if any, staying on the same artwork.
-        // keepCurrent=true: find the current item in the new list and loop it,
-        // falling back to index 0 if the item was removed by a deferred refresh.
-        // After apply, React effect reschedules the timer with the new playlist.
+        // keepCurrent=true keeps loop on this artwork after a queued
+        // refresh; falls back to index 0 if the item was removed.
         if (applyQueuedPlaylistIfExists(undefined, true).applied) {
           return;
         }
         publishCurrentIndex(fromIndex);
         scheduleCurrentItemTimer(fromIndex, snapshot);
+        replayCurrentSlotIfNoDuration(fromIndex, snapshot);
         return;
       }
 
@@ -351,16 +346,12 @@ export default function PlaylistClient() {
       if (nextIndex === fromIndex) {
         publishCurrentIndex(nextIndex);
         scheduleCurrentItemTimer(nextIndex, snapshot);
+        replayCurrentSlotIfNoDuration(nextIndex, snapshot);
         return;
       }
 
-      // Synchronously claim the advance before the React commit so a
-      // concurrent same-tick caller (e.g. duration timer fires and
-      // onSourceEnded fires within the same microtask) sees the ref
-      // already past `fromIndex` and bails on the guard above. Without
-      // this, both callbacks pass the guard, both call setCurrentIndex
-      // (collapses correctly) but both also call publishCurrentIndex,
-      // emitting a duplicate updateIndex on the cast bus.
+      // Sync the ref before React commits so a same-tick concurrent caller
+      // sees the new index and bails on the guard above.
       currentIndexRef.current = nextIndex;
       setCurrentIndex(nextIndex);
       publishCurrentIndex(nextIndex);
@@ -569,25 +560,14 @@ export default function PlaylistClient() {
         loopModeRef.current = nextLoopMode;
 
         if (shouldResume) {
-          // Leaving repeat-off while holding the last artwork should restart that
-          // artwork's slot timer so playback can continue from the held frame.
+          // Leaving repeat-off restarts the held artwork. Time-based items
+          // (display.loop=false) reach the hold paused on the final frame;
+          // replayCurrentSlotIfNoDuration restores playback there. Duration
+          // items have their slot timer re-armed.
           holdAfterFinalSlotRef.current = false;
           const idx = currentIndexRef.current;
-          const heldItem =
-            activePlaylist[normalizePlaylistIndex(idx, activePlaylist.length)];
-          const heldDuration = heldItem.duration ?? 0;
-          const isHeldNoDuration =
-            heldDuration <= 0 || heldDuration >= NO_DURATION_VALUE;
-          if (isHeldNoDuration) {
-            // Time-based items (video/audio with display.loop=false) reach the
-            // hold state after end-of-stream, paused on the final frame.
-            // scheduleCurrentItemTimer is a no-op without a duration, so to
-            // resume playback we re-fire the artwork refresh path; the next
-            // end-of-stream will drive advance through onSourceEnded.
-            triggerArtworkRefresh();
-          } else {
-            scheduleCurrentItemTimer(idx, activePlaylist);
-          }
+          scheduleCurrentItemTimer(idx, activePlaylist);
+          replayCurrentSlotIfNoDuration(idx, activePlaylist);
         }
         break;
       }
@@ -596,6 +576,7 @@ export default function PlaylistClient() {
     applyQueuedPlaylistIfExists,
     castInfo,
     clearTimer,
+    replayCurrentSlotIfNoDuration,
     scheduleCurrentItemTimer,
     triggerArtworkRefresh,
   ]);

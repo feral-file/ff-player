@@ -231,24 +231,16 @@ const ArtworkPlayer = ({
     return { previewType: PreviewHTMLTag.iframe, isStreaming: false };
   }
 
-  useEffect(() => {
-    previewURLRef.current = previewURL;
-  }, [previewURL]);
-
-  useEffect(() => {
-    itemIdentityRef.current = itemIdentity ?? '';
-  }, [itemIdentity]);
-
-  useEffect(() => {
-    slotsRef.current = slots;
-  }, [slots]);
-
-  useEffect(() => {
-    activeSlotRef.current = activeSlot;
-  }, [activeSlot]);
-  useEffect(() => {
-    slotOpacityRef.current = slotOpacity;
-  }, [slotOpacity]);
+  // These refs feed the end-of-stream gate, which can fire synchronously
+  // from a media element during the post-render layout window — before a
+  // passive useEffect would commit the new prop. Assign during render so
+  // the gate cannot accept a stale slot's `ended` immediately after a
+  // previewURL or itemIdentity change.
+  previewURLRef.current = previewURL;
+  itemIdentityRef.current = itemIdentity ?? '';
+  slotsRef.current = slots;
+  activeSlotRef.current = activeSlot;
+  slotOpacityRef.current = slotOpacity;
 
   const pauseAndTeardownSlot = useCallback((slotIndex: SlotIndex) => {
     hlsInstancesRef.current[slotIndex]?.destroy();
