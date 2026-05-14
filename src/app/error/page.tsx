@@ -49,7 +49,7 @@ const ErrorPage = () => {
       case ErrorType.ServiceFailed.toString(): {
         setTitle('Service Failed');
         setMessage(
-          'FF1 encountered an unexpected issue and has stopped working. Please reboot the device. If the problem persists, contact support@feralfile.com for assistance.'
+          'The Art Computer encountered an unexpected issue and has stopped working. Please reboot the device. If the problem persists, contact support@feralfile.com for assistance.'
         );
         break;
       }
