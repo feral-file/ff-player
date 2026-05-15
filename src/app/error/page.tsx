@@ -30,7 +30,9 @@ const ErrorPage = () => {
   useEffect(() => {
     const errorType = searchParams.get('error');
 
-    if (!errorType) return;
+    if (!errorType) {
+      return;
+    }
 
     switch (errorType) {
       case ErrorType.Overheating.toString(): {
