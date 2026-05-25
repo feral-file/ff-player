@@ -51,6 +51,11 @@ function reportPlaylistDisplayPreferenceError(
   }
 }
 
+// 'sourceEnd' means the media just ended (display.loop=false) and needs a
+// reload to restart playback; 'timer' lets the natively-looping element
+// keep playing on the same-slot replay paths.
+type AdvanceCause = 'timer' | 'sourceEnd';
+
 // eslint-disable-next-line max-lines-per-function
 export default function PlaylistClient() {
   const { context } = useAppContext();
@@ -96,16 +101,17 @@ export default function PlaylistClient() {
     []
   );
 
-  // Same-slot loops (LoopMode.one, single-item wrap) park on the final
-  // frame for no-duration items because scheduleCurrentItemTimer is a
-  // no-op without a duration. Restart playback explicitly here.
-  const replayCurrentSlotIfNoDuration = useCallback(
-    (index: number, snapshot: DP1Item[]): void => {
+  // Same-slot loops park on the end frame either when there's no duration
+  // (timer is a no-op) or when display.loop=false has already fired `ended`.
+  // Under display.loop=true the element loops natively, so cause='timer'
+  // skips the reload.
+  const replayCurrentSlot = useCallback(
+    (index: number, snapshot: DP1Item[], cause: AdvanceCause): void => {
       if (!snapshot.length) {
         return;
       }
       const item = snapshot[normalizePlaylistIndex(index, snapshot.length)];
-      if (isNoDurationItem(item)) {
+      if (cause === 'sourceEnd' || isNoDurationItem(item)) {
         artworkPerformReloadRef.current?.();
       }
     },
@@ -295,7 +301,9 @@ export default function PlaylistClient() {
   // against the current index keeps a late second trigger from advancing
   // again after the slot has already moved.
   const advanceFromSlot = useCallback(
-    function advanceFromSlot(fromIndex: number, snapshot: DP1Item[]): void {
+    function advanceFromSlot(
+      fromIndex: number, snapshot: DP1Item[], cause: AdvanceCause = 'timer'
+    ): void {
       if (!snapshot.length) {
         return;
       }
@@ -312,24 +320,22 @@ export default function PlaylistClient() {
         if (applyQueuedPlaylistIfExists(undefined, true).applied) {
           // Same-id same-source queued refresh leaves previewURL/identity
           // unchanged, so ArtworkPlayer does not recreate the slot.
-          // Restart no-duration playback explicitly.
-          replayCurrentSlotIfNoDuration(
-            currentIndexRef.current,
-            playlistRef.current
+          // Restart playback if the source ended or has no duration.
+          replayCurrentSlot(
+            currentIndexRef.current, playlistRef.current, cause
           );
           return;
         }
         publishCurrentIndex(fromIndex);
         scheduleCurrentItemTimer(fromIndex, snapshot);
-        replayCurrentSlotIfNoDuration(fromIndex, snapshot);
+        replayCurrentSlot(fromIndex, snapshot, cause);
         return;
       }
 
       const queuedResult = applyQueuedPlaylistIfExists();
       if (queuedResult.applied) {
-        replayCurrentSlotIfNoDuration(
-          currentIndexRef.current,
-          playlistRef.current
+        replayCurrentSlot(
+          currentIndexRef.current, playlistRef.current, cause
         );
         return;
       }
@@ -357,7 +363,7 @@ export default function PlaylistClient() {
       if (nextIndex === fromIndex) {
         publishCurrentIndex(nextIndex);
         scheduleCurrentItemTimer(nextIndex, snapshot);
-        replayCurrentSlotIfNoDuration(nextIndex, snapshot);
+        replayCurrentSlot(nextIndex, snapshot, cause);
         return;
       }
 
@@ -427,7 +433,7 @@ export default function PlaylistClient() {
     if (itemIdentityFor(snapshot, normalizedIndex) !== endedIdentity) {
       return;
     }
-    advanceFromSlot(normalizedIndex, snapshot);
+    advanceFromSlot(normalizedIndex, snapshot, 'sourceEnd');
   }, [advanceFromSlot]);
 
   useEffect(() => {
@@ -588,7 +594,7 @@ export default function PlaylistClient() {
     applyQueuedPlaylistIfExists,
     castInfo,
     clearTimer,
-    replayCurrentSlotIfNoDuration,
+    replayCurrentSlot,
     scheduleCurrentItemTimer,
     triggerArtworkRefresh,
   ]);

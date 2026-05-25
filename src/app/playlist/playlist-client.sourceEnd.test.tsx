@@ -331,6 +331,80 @@ describe('PlaylistClient — setLoop after source-end hold', () => {
 
 });
 
+// Finite-duration display.loop=false items still park on their end frame
+// because the duration timer can't rewind a video that has already ended.
+// Source-end must reload the same-slot replay paths regardless of duration.
+describe('PlaylistClient — finite-duration source-end replay', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    teardownPlaylistWiringTest();
+  });
+
+  it('replays a finite-duration video on source-end in LoopMode.one', () => {
+    const items = [item('a', 5), item('b', 5)];
+    canvasService.setCastInfo(displayCast(items, 0, LoopMode.one), false);
+    render(<PlaylistHarness castInfo={displayCast(items, 0, LoopMode.one)} />);
+
+    const reloadsBefore =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+
+    callSourceEnded(items[0].id);
+
+    const reloadsAfter =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+    expect(reloadsAfter).toBe(reloadsBefore + 1);
+    expect(canvasService.getCastInfo()?.index).toBe(0);
+  });
+
+  it('replays a finite-duration video on source-end in a single-item playlist', () => {
+    const items = [item('a', 5)];
+    canvasService.setCastInfo(
+      displayCast(items, 0, LoopMode.playlist),
+      false
+    );
+    render(
+      <PlaylistHarness castInfo={displayCast(items, 0, LoopMode.playlist)} />
+    );
+
+    const reloadsBefore =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+
+    callSourceEnded(items[0].id);
+
+    const reloadsAfter =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+    expect(reloadsAfter).toBe(reloadsBefore + 1);
+  });
+
+  // Regression: the default display.loop=true case must not reload on
+  // the duration timer. The HTML5 element loops natively; a reload
+  // would cause a visible mid-stream blip every duration cycle.
+  it('does not reload on duration timer in LoopMode.one (default loop)', async () => {
+    const items = [item('a', 5), item('b', 5)];
+    canvasService.setCastInfo(displayCast(items, 0, LoopMode.one), false);
+    render(<PlaylistHarness castInfo={displayCast(items, 0, LoopMode.one)} />);
+
+    const reloadsBefore =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+
+    await advanceMs(5000);
+
+    const reloadsAfter =
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations ?? 0;
+    expect(reloadsAfter).toBe(reloadsBefore);
+    expect(canvasService.getCastInfo()?.index).toBe(0);
+  });
+});
+
 describe('PlaylistClient — setLoop after timed hold', () => {
   beforeEach(() => {
     vi.useFakeTimers();
