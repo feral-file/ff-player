@@ -1,5 +1,38 @@
+import { NO_DURATION_VALUE } from '@/constants';
 import { LoopMode } from '@/models/cast_info.model';
 import type { DP1Item } from '@/models/dp1.model';
+
+/**
+ * True when a playlist item has no usable duration set — the duration timer
+ * is a no-op for these items, so same-slot replay paths must restart media
+ * playback explicitly through the artwork-refresh hook.
+ */
+export function isNoDurationItem(item: DP1Item | undefined): boolean {
+  if (!item) {
+    return false;
+  }
+  const duration = item.duration ?? 0;
+  return duration <= 0 || duration >= NO_DURATION_VALUE;
+}
+
+/**
+ * Stable identity for a playlist slot. DP-1 PlaylistItem.id is optional, so
+ * we synthesise one from the position and source when missing. Adjacent
+ * items sharing a source must produce different identities so the player
+ * can recreate the slot (and remount the <video>) between them.
+ */
+export function itemIdentityFor(items: DP1Item[], index: number): string {
+  const item = items[index] as DP1Item | undefined;
+  if (!item) {
+    return '';
+  }
+  const id = item.id;
+  if (typeof id === 'string' && id.length > 0) {
+    return id;
+  }
+  const source = typeof item.source === 'string' ? item.source : '';
+  return `__by_index_${String(index)}__${source}`;
+}
 
 /**
  * Normalize a playlist index to the range of 0 to playlistLength - 1.

@@ -357,6 +357,7 @@ describe('PlaylistClient — refresh artwork', () => {
   });
 });
 
+
 describe('PlaylistClient — refresh artwork (cast leads React)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
