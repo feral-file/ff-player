@@ -23,33 +23,8 @@ import {
   shouldResumeSlotTimerAfterSetLoop,
 } from '@/utils/playlist';
 import { coerceLoopMode } from '@/utils/loopMode';
-import * as Sentry from '@sentry/nextjs';
+import { reportPlaylistDisplayPreferenceError } from '@/utils/playlistDisplayPreference';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-
-function reportPlaylistDisplayPreferenceError(
-  phase: string,
-  error: unknown,
-  extra?: Record<string, unknown>
-): void {
-  const message = `[PlaylistClient] Error handling item display preference (${phase})`;
-  console.error(
-    message,
-    error instanceof Error ? error.message : String(error)
-  );
-  if (error instanceof Error) {
-    Sentry.captureException(error, {
-      extra: { phase, ...extra },
-    });
-  } else {
-    Sentry.captureMessage(message, {
-      extra: {
-        error: String(error),
-        phase,
-        ...extra,
-      },
-    });
-  }
-}
 
 // 'sourceEnd' means the media just ended (display.loop=false) and needs a
 // reload to restart playback; 'timer' lets the natively-looping element
@@ -613,6 +588,13 @@ export default function PlaylistClient() {
     );
   }, [currentIndex, playlist]);
 
+  // Tombstone of the item currently rendering — the brief museum-style label
+  // shown when the work first loads.
+  const currentTombstone =
+    currentIndex >= 0 && playlist.length > 0
+      ? playlist[normalizePlaylistIndex(currentIndex, playlist.length)].tombstone
+      : undefined;
+
   return (
     <>
       <div style={{ width: '100%', height: '100%' }}>
@@ -621,6 +603,7 @@ export default function PlaylistClient() {
             previewURL={castPreviewURL ?? ''}
             displayPreferences={currentItemDisplayPreference}
             itemIdentity={currentItemIdentity}
+            tombstone={currentTombstone}
             onRegisterArtworkReload={registerArtworkReload}
             onSourceEnded={handleSourceEnded}
           />

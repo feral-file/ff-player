@@ -41,7 +41,8 @@ import {
   getDP1Margin,
 } from '@/utils/helper';
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
-import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
+import Tombstone from './Tombstone';
+import { DP1DisplayPreference, DP1Tombstone, Scaling } from '@/models/dp1.model';
 import { useArtworkSettings } from '@/services/custom-hooks/useArtworkSettings';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
@@ -91,6 +92,7 @@ const ArtworkPlayer = ({
   artworkPreviewMIMEType,
   displayPreferences,
   itemIdentity,
+  tombstone,
   onRegisterArtworkReload,
   onSourceEnded,
 }: {
@@ -99,6 +101,8 @@ const ArtworkPlayer = ({
   keyboardCode?: number;
   artworkPreviewMIMEType?: string;
   displayPreferences: DP1DisplayPreference;
+  // Museum-style label shown briefly when the work first loads, then faded out.
+  tombstone?: DP1Tombstone;
   // Stable identity of the current playlist item. When adjacent items share
   // the same URL, this discriminates them so the player can (a) restart
   // playback on transition and (b) reject `ended` events from the previous
@@ -1216,6 +1220,7 @@ const ArtworkPlayer = ({
         <CursorLayer ref={cursorRef} />
         {showSlowLoadingSpinner() && <Loading />}
         {SLOT_INDICES.map(i => renderSlot(i))}
+        <Tombstone data={tombstone} itemIdentity={itemIdentity} />
       </div>
       {showMessageModal && (
         <MessageModal

@@ -54,6 +54,42 @@ export interface DP1Item {
   display?: DP1DisplayPreference;
   repro?: DP1Repro;
   provenance?: DP1Provenance;
+  /**
+   * Museum-style tombstone shown briefly over the work when it first loads,
+   * then faded out so the art shows clean. See {@link DP1Tombstone}.
+   */
+  tombstone?: DP1Tombstone;
+}
+
+/**
+ * The "tombstone" is the wall label a museum places beside a work. Here it is
+ * an overlay the player shows for a few seconds when a work first loads, then
+ * fades away so the art is unobstructed.
+ *
+ * It renders multi-author credit in *distinct roles* — e.g. the visual maker
+ * and the curatorial author are shown separately and never collapsed into a
+ * single "artist" — alongside the work's source and its on-chain provenance
+ * and current owner.
+ */
+export interface DP1Tombstone {
+  /** Work title. Falls back to {@link DP1Item.title} when omitted. */
+  title?: string;
+  /**
+   * Makers in distinct roles, in display order, e.g.
+   * `[{ role: 'Visual', name: 'Justin Wetch' }, { role: 'Curation', name: 'Roger Dickerman' }]`.
+   */
+  makers?: { role: string; name: string }[];
+  /** Artists the work is "based on" (e.g. the day's highlighted artists). */
+  basedOn?: string[];
+  /** Where the work comes from, e.g. "24 Hours of Art". */
+  source?: string;
+  /**
+   * Current on-chain holder — ENS preferred, else a 0x address. Read from
+   * chain; omit when the work is not (yet) minted.
+   */
+  owner?: string;
+  /** Seconds to hold the tombstone before it fades out. Defaults to 5. */
+  durationSeconds?: number;
 }
 
 export enum Scaling {
