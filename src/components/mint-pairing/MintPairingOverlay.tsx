@@ -15,7 +15,10 @@ const hiddenDisplay: MintPairingDisplayDetail = {
 
 function browserLabel(browserName: string | undefined): string {
   const trimmed = browserName?.trim();
-  return trimmed ?? 'the browser';
+  if (trimmed) {
+    return trimmed;
+  }
+  return 'the browser';
 }
 
 /**

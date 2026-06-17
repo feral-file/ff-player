@@ -48,7 +48,7 @@ describe('MintPairingOverlay', () => {
 
     displayMintPairing({
       state: MintPairingDisplayState.RequestReceived,
-      browserName: 'Chrome',
+      browserName: '  Chrome  ',
     });
 
     expect(
@@ -62,7 +62,7 @@ describe('MintPairingOverlay', () => {
 
     displayMintPairing({
       state: MintPairingDisplayState.CreatingToken,
-      browserName: 'Chrome',
+      browserName: '  Chrome  ',
     });
 
     expect(
@@ -76,5 +76,31 @@ describe('MintPairingOverlay', () => {
         screen.queryByText('Creating a new token and sending it to Chrome.')
       ).toBeNull();
     });
+  });
+
+  it('uses the generic browser label when the browser name is blank', async () => {
+    render(<MintPairingOverlay />);
+
+    displayMintPairing({
+      state: MintPairingDisplayState.RequestReceived,
+      browserName: '   ',
+    });
+
+    expect(
+      await screen.findByText(
+        'Received a minting request from the browser.'
+      )
+    ).toBeTruthy();
+
+    displayMintPairing({
+      state: MintPairingDisplayState.CreatingToken,
+      browserName: '   ',
+    });
+
+    expect(
+      await screen.findByText(
+        'Creating a new token and sending it to the browser.'
+      )
+    ).toBeTruthy();
   });
 });

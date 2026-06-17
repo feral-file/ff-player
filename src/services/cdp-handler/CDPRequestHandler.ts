@@ -223,5 +223,12 @@ function isMintPairingDisplayDetail(
     return false;
   }
 
+  if (
+    detail.browserName !== undefined &&
+    typeof detail.browserName !== 'string'
+  ) {
+    return false;
+  }
+
   return true;
 }

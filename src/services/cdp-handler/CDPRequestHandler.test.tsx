@@ -60,4 +60,27 @@ describe('CDPRequestHandler mint pairing display command', () => {
       },
     });
   });
+
+  it.each([
+    MintPairingDisplayState.RequestReceived,
+    MintPairingDisplayState.CreatingToken,
+  ])('rejects %s requests with a non-string browser name', (state) => {
+    const listener = vi.fn();
+    window.addEventListener(CustomEventName.MintPairingDisplay, listener);
+
+    const response = (window as unknown as CDPTestWindow).handleCDPRequest({
+      command: 'mintPairingDisplay',
+      request: { state, browserName: 123 },
+    });
+
+    expect(JSON.parse(response)).toEqual({
+      message: {
+        ok: false,
+        error: 'Invalid mint pairing display request',
+      },
+    });
+    expect(listener).not.toHaveBeenCalled();
+
+    window.removeEventListener(CustomEventName.MintPairingDisplay, listener);
+  });
 });
