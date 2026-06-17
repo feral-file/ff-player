@@ -13,6 +13,7 @@ import {
 } from '@/models/custom_event';
 import DP1ScheduleService from '@/services/DP1ScheduleService';
 import ScheduleDisplay from './ScheduleDisplay';
+import MintPairingOverlay from './mint-pairing/MintPairingOverlay';
 
 const enum CastState {
   None, // Not casting
@@ -161,6 +162,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       }}>
       {children}
       <ScheduleDisplay />
+      <MintPairingOverlay />
     </div>
   );
 };

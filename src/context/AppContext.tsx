@@ -218,6 +218,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
   useEffect(() => {
     const cdpRequestHandler = CDPRequestHandler.getInstance();
+    cdpRequestHandler.initialize();
     return () => {
       cdpRequestHandler.cleanup();
     };

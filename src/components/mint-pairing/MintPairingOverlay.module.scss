@@ -1,0 +1,51 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  width: 100vw;
+  height: 100vh;
+  padding: 6vh 6vw;
+  pointer-events: none;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.82);
+}
+
+.qrPanel,
+.messagePanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  max-width: min(86vw, 1040px);
+  text-align: center;
+}
+
+.qrCanvas {
+  width: min(52vh, 52vw, 560px);
+  height: min(52vh, 52vw, 560px);
+  border: 16px solid #ffffff;
+  background: #ffffff;
+}
+
+.code {
+  margin-top: 5vh;
+  font-size: clamp(56px, 9vh, 118px);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.title {
+  font-size: clamp(42px, 7vh, 92px);
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.subtitle {
+  max-width: 960px;
+  margin-top: 4vh;
+  font-size: clamp(30px, 4.5vh, 62px);
+  line-height: 1.14;
+  letter-spacing: 0;
+}

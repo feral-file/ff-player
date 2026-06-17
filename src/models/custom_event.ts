@@ -5,6 +5,7 @@ export enum WatchdogEvent {
 
 export enum CustomEventName {
   ConnectivityChange = 'connectivityChange',
+  MintPairingDisplay = 'mintPairingDisplay',
   Navigate = 'navigate',
   WatchdogEvent = 'watchdogEvent',
 }
@@ -19,4 +20,17 @@ export interface WatchdogEventDetail {
 
 export interface NavigateEventDetail {
   path: string;
+}
+
+export enum MintPairingDisplayState {
+  Hidden = 'hidden',
+  PairingCode = 'pairing_code',
+  RequestReceived = 'request_received',
+  CreatingToken = 'creating_token',
+}
+
+export interface MintPairingDisplayDetail {
+  state: MintPairingDisplayState;
+  pairingCode?: string;
+  browserName?: string;
 }

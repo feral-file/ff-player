@@ -63,7 +63,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/services/cdp-handler/CDPRequestHandler', () => ({
   CDPRequestHandler: {
-    getInstance: vi.fn(() => ({ cleanup: vi.fn() })),
+    getInstance: vi.fn(() => ({ cleanup: vi.fn(), initialize: vi.fn() })),
   },
 }));
 

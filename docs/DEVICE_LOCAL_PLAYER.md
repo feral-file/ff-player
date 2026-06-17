@@ -27,6 +27,13 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 - The Cloudflare Pages/web build still uses `version.json` polling and reload to pick up new deployments.
 - The FF OS static export sets `NEXT_PUBLIC_DISABLE_VERSION_CHECK=true`, so the device-local bundle does not self-refresh and should be updated with the FF1 image or updater policy.
 
+## Mint pairing overlay
+
+- `feral-controld` drives browser-session mint pairing display through the CDP command `mintPairingDisplay`.
+- The command payload is `{ command: "mintPairingDisplay", request: { state, pairingCode?, browserName? } }`.
+- Supported states are `pairing_code`, `request_received`, `creating_token`, and `hidden`.
+- The overlay renders above the active artwork player and does not unmount or navigate away from playback.
+
 ## Compatibility note
 
 - Persisted storage keys for cast, display settings, and boot recovery are unchanged by this document. Do not rename persisted keys without a migration plan.

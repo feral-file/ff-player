@@ -3,6 +3,8 @@ import { WebSocketMessage } from '@/models';
 import {
   ConnectivityEventDetail,
   CustomEventName,
+  MintPairingDisplayDetail,
+  MintPairingDisplayState,
   WatchdogEvent,
 } from '@/models/custom_event';
 import {
@@ -11,7 +13,9 @@ import {
 } from '@/utils/ErrorNavigation';
 
 const pingCommand = 'ping';
+const mintPairingDisplayCommand = 'mintPairingDisplay';
 
+/** Bridges native CDP callbacks into player services and browser events. */
 export class CDPRequestHandler {
   private static instance: CDPRequestHandler | null = null;
   private isInitialized = false;
@@ -28,7 +32,10 @@ export class CDPRequestHandler {
   }
 
   public initialize() {
-    if (this.isInitialized) return;
+    if (this.isInitialized) {
+      return;
+    }
+
     this.isInitialized = true;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleCDPRequest = this.handleCDPRequest.bind(this);
@@ -111,6 +118,14 @@ export class CDPRequestHandler {
         break;
       }
 
+      case mintPairingDisplayCommand: {
+        reply = {
+          messageID,
+          message: this.handleMintPairingDisplay(wsMessage.request),
+        };
+        break;
+      }
+
       default: {
         const responseMessage = canvasService.processMessage(wsMessage);
         reply = {
@@ -122,6 +137,20 @@ export class CDPRequestHandler {
     }
 
     return JSON.stringify(reply);
+  }
+
+  private handleMintPairingDisplay(request: unknown) {
+    if (!isMintPairingDisplayDetail(request)) {
+      return { ok: false, error: 'Invalid mint pairing display request' };
+    }
+
+    window.dispatchEvent(
+      new CustomEvent<MintPairingDisplayDetail>(
+        CustomEventName.MintPairingDisplay,
+        { detail: request }
+      )
+    );
+    return { ok: true };
   }
 
   private handleConnectivityChange(isOnline: boolean) {
@@ -167,4 +196,32 @@ export class CDPRequestHandler {
 
     return false;
   }
+}
+
+/** Validate CDP-owned mint pairing overlay state before dispatching it. */
+function isMintPairingDisplayDetail(
+  request: unknown
+): request is MintPairingDisplayDetail {
+  if (!request || typeof request !== 'object') {
+    return false;
+  }
+
+  const detail = request as Partial<MintPairingDisplayDetail>;
+  if (
+    typeof detail.state !== 'string' ||
+    !Object.values(MintPairingDisplayState).includes(
+      detail.state
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    detail.state === MintPairingDisplayState.PairingCode &&
+    typeof detail.pairingCode !== 'string'
+  ) {
+    return false;
+  }
+
+  return true;
 }
