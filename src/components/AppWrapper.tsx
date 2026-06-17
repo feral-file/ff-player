@@ -162,7 +162,6 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
       }}>
       {children}
       <ScheduleDisplay />
-      <MintPairingOverlay />
     </div>
   );
 };
@@ -170,12 +169,19 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
 // Wrapper component that conditionally renders based on initialization state
 const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { context } = useAppContext();
+  const appContent = context.isInitialized ? (
+    <InitializedAppWrapper>{children}</InitializedAppWrapper>
+  ) : (
+    <LoadingWrapper />
+  );
 
-  if (!context.isInitialized) {
-    return <LoadingWrapper />;
-  }
-
-  return <InitializedAppWrapper>{children}</InitializedAppWrapper>;
+  return (
+    <>
+      {appContent}
+      {/* Keep the CDP-driven mint pairing listener mounted during boot. */}
+      <MintPairingOverlay />
+    </>
+  );
 };
 
 export default AppWrapper;

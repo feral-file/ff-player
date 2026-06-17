@@ -5,9 +5,13 @@
  * `AppContext` is re-imported together with `AppWrapper` (same context identity).
  */
 import { LocalStorageItem } from '@/constants';
-import { act, render } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import React, { useMemo } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  CustomEventName,
+  MintPairingDisplayState,
+} from '@/models/custom_event';
 
 const { getCurrentVersion, getVersion, setItemSpy, checkScheduledTask } =
   vi.hoisted(() => ({
@@ -48,10 +52,15 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/',
 }));
 
-function buildContextValue(durationMs?: number) {
+function buildContextValue(props?: {
+  durationMs?: number;
+  isInitialized?: boolean;
+}) {
+  const { durationMs, isInitialized = true } = props ?? {};
+
   return {
     context: {
-      isInitialized: true,
+      isInitialized,
       isOnline: true,
       appRemoteConfig:
         durationMs !== undefined
@@ -71,9 +80,13 @@ function TestTree(props: {
   AppContextModule: typeof import('@/context/AppContext').AppContext;
   AppWrapper: React.ComponentType<{ children: React.ReactNode }>;
   durationMs?: number;
+  isInitialized?: boolean;
 }) {
-  const { AppContextModule, AppWrapper, durationMs } = props;
-  const value = useMemo(() => buildContextValue(durationMs), [durationMs]);
+  const { AppContextModule, AppWrapper, durationMs, isInitialized } = props;
+  const value = useMemo(
+    () => buildContextValue({ durationMs, isInitialized }),
+    [durationMs, isInitialized]
+  );
 
   return (
     <AppContextModule.Provider value={value as never}>
@@ -81,6 +94,17 @@ function TestTree(props: {
         <span data-testid="child">child</span>
       </AppWrapper>
     </AppContextModule.Provider>
+  );
+}
+
+function dispatchMintPairingRequest() {
+  window.dispatchEvent(
+    new CustomEvent(CustomEventName.MintPairingDisplay, {
+      detail: {
+        state: MintPairingDisplayState.RequestReceived,
+        browserName: 'Chrome',
+      },
+    })
   );
 }
 
@@ -101,6 +125,7 @@ function resetHoistedSpies() {
 }
 
 function cleanupModuleAndEnv() {
+  cleanup();
   vi.unstubAllEnvs();
   vi.useRealTimers();
   vi.resetModules();
@@ -257,4 +282,61 @@ describe('AppWrapper version polling (static FF OS)', () => {
 
   it('does not schedule version polling even when duration is present', () =>
     assertFfStaticSkipsVersionPolling());
+});
+
+describe('AppWrapper mint pairing overlay', () => {
+  beforeEach(() => {
+    resetHoistedSpies();
+    prepareFfStaticEnv();
+  });
+
+  afterEach(cleanupModuleAndEnv);
+
+  it('keeps a boot-time mint pairing request visible after initialization', async () => {
+    const { AppContextModule, AppWrapper } = await loadAppShell();
+    const { rerender } = render(
+      <TestTree
+        AppContextModule={AppContextModule}
+        AppWrapper={AppWrapper}
+        isInitialized={false}
+      />
+    );
+
+    expect(screen.queryByTestId('child')).toBeNull();
+
+    act(() => {
+      dispatchMintPairingRequest();
+    });
+
+    const requestMessage = 'Received a minting request from Chrome.';
+    expect(await screen.findByText(requestMessage)).toBeTruthy();
+
+    rerender(
+      <TestTree
+        AppContextModule={AppContextModule}
+        AppWrapper={AppWrapper}
+        isInitialized
+      />
+    );
+
+    expect(await screen.findByTestId('child')).toBeTruthy();
+    expect(screen.getByText(requestMessage)).toBeTruthy();
+  });
+
+  it('still displays mint pairing requests after the app is initialized', async () => {
+    const { AppContextModule, AppWrapper } = await loadAppShell();
+
+    render(
+      <TestTree AppContextModule={AppContextModule} AppWrapper={AppWrapper} />
+    );
+
+    act(() => {
+      dispatchMintPairingRequest();
+    });
+
+    expect(
+      await screen.findByText('Received a minting request from Chrome.')
+    ).toBeTruthy();
+    expect(screen.getByTestId('child')).toBeTruthy();
+  });
 });

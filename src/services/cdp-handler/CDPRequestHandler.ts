@@ -217,8 +217,15 @@ function isMintPairingDisplayDetail(
   }
 
   if (
-    detail.state === MintPairingDisplayState.PairingCode &&
+    detail.pairingCode !== undefined &&
     typeof detail.pairingCode !== 'string'
+  ) {
+    return false;
+  }
+
+  if (
+    detail.state === MintPairingDisplayState.PairingCode &&
+    !detail.pairingCode?.trim()
   ) {
     return false;
   }

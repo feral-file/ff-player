@@ -12,6 +12,36 @@ type CDPTestWindow = Window & {
   handleCDPRequest: (payload: Record<string, unknown>) => string;
 };
 
+/**
+ * Send a mint pairing CDP request through the browser-exposed bridge.
+ */
+function handleMintPairingDisplay(request: Record<string, unknown>) {
+  return (window as unknown as CDPTestWindow).handleCDPRequest({
+    command: 'mintPairingDisplay',
+    request,
+  });
+}
+
+/**
+ * Assert malformed mint pairing payloads fail before an overlay event fires.
+ */
+function expectInvalidMintPairingRequest(request: Record<string, unknown>) {
+  const listener = vi.fn();
+  window.addEventListener(CustomEventName.MintPairingDisplay, listener);
+
+  const response = handleMintPairingDisplay(request);
+
+  expect(JSON.parse(response)).toEqual({
+    message: {
+      ok: false,
+      error: 'Invalid mint pairing display request',
+    },
+  });
+  expect(listener).not.toHaveBeenCalled();
+
+  window.removeEventListener(CustomEventName.MintPairingDisplay, listener);
+}
+
 describe('CDPRequestHandler mint pairing display command', () => {
   beforeEach(() => {
     CDPRequestHandler.getInstance().initialize();
@@ -26,12 +56,9 @@ describe('CDPRequestHandler mint pairing display command', () => {
     const listener = vi.fn();
     window.addEventListener(CustomEventName.MintPairingDisplay, listener);
 
-    const response = (window as unknown as CDPTestWindow).handleCDPRequest({
-      command: 'mintPairingDisplay',
-      request: {
-        state: MintPairingDisplayState.PairingCode,
-        pairingCode: 'PAIR-123',
-      },
+    const response = handleMintPairingDisplay({
+      state: MintPairingDisplayState.PairingCode,
+      pairingCode: 'PAIR-123',
     });
 
     expect(JSON.parse(response)).toEqual({ message: { ok: true } });
@@ -48,16 +75,23 @@ describe('CDPRequestHandler mint pairing display command', () => {
   });
 
   it('rejects malformed mint pairing display requests', () => {
-    const response = (window as unknown as CDPTestWindow).handleCDPRequest({
-      command: 'mintPairingDisplay',
-      request: { state: 'pairing_code' },
-    });
+    expectInvalidMintPairingRequest({ state: 'pairing_code' });
+  });
 
-    expect(JSON.parse(response)).toEqual({
-      message: {
-        ok: false,
-        error: 'Invalid mint pairing display request',
-      },
+  it.each(['', '   '])(
+    'rejects pairing code requests with a blank pairing code',
+    (pairingCode) => {
+      expectInvalidMintPairingRequest({
+        state: MintPairingDisplayState.PairingCode,
+        pairingCode,
+      });
+    }
+  );
+
+  it('rejects optional non-string pairing codes on status requests', () => {
+    expectInvalidMintPairingRequest({
+      state: MintPairingDisplayState.RequestReceived,
+      pairingCode: 123,
     });
   });
 
@@ -65,22 +99,9 @@ describe('CDPRequestHandler mint pairing display command', () => {
     MintPairingDisplayState.RequestReceived,
     MintPairingDisplayState.CreatingToken,
   ])('rejects %s requests with a non-string browser name', (state) => {
-    const listener = vi.fn();
-    window.addEventListener(CustomEventName.MintPairingDisplay, listener);
-
-    const response = (window as unknown as CDPTestWindow).handleCDPRequest({
-      command: 'mintPairingDisplay',
-      request: { state, browserName: 123 },
+    expectInvalidMintPairingRequest({
+      state,
+      browserName: 123,
     });
-
-    expect(JSON.parse(response)).toEqual({
-      message: {
-        ok: false,
-        error: 'Invalid mint pairing display request',
-      },
-    });
-    expect(listener).not.toHaveBeenCalled();
-
-    window.removeEventListener(CustomEventName.MintPairingDisplay, listener);
   });
 });
