@@ -33,6 +33,7 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 - The command payload is `{ command: "mintPairingDisplay", request: { state, pairingCode?, browserName? } }`.
 - Supported states are `pairing_code`, `request_received`, `creating_token`, and `hidden`.
 - The overlay renders above the active artwork player and does not unmount or navigate away from playback.
+- The device-local static export ships `ffos-player-contract.json` at the bundle root. `feral-controld` and `feral-player.service` use that manifest to verify the deployed player supports this CDP contract before enabling mint pairing.
 
 ## Compatibility note
 

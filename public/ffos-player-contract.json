@@ -1,0 +1,17 @@
+{
+  "contracts": {
+    "mintPairingDisplay": {
+      "version": 1,
+      "requestKey": "request",
+      "states": [
+        "pairing_code",
+        "request_received",
+        "creating_token",
+        "hidden"
+      ],
+      "acceptedResponse": {
+        "ok": true
+      }
+    }
+  }
+}
