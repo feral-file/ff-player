@@ -1,17 +1,10 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
-import QRCode from 'qrcode';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   CustomEventName,
   MintPairingDisplayState,
 } from '@/models/custom_event';
 import MintPairingOverlay from './MintPairingOverlay';
-
-vi.mock('qrcode', () => ({
-  default: {
-    toCanvas: vi.fn(() => Promise.resolve()),
-  },
-}));
 
 function displayMintPairing(detail: Record<string, unknown>) {
   window.dispatchEvent(
@@ -22,25 +15,24 @@ function displayMintPairing(detail: Record<string, unknown>) {
 describe('MintPairingOverlay', () => {
   afterEach(() => {
     cleanup();
-    vi.clearAllMocks();
   });
 
-  it('renders the pairing QR code and visible pairing code', async () => {
-    render(<MintPairingOverlay />);
+  it('renders code-only external device pairing instructions', async () => {
+    const { container } = render(<MintPairingOverlay />);
 
     displayMintPairing({
       state: MintPairingDisplayState.PairingCode,
       pairingCode: 'PAIR-123',
     });
 
+    expect(await screen.findByText('External Device Pairing Mode')).toBeTruthy();
     expect(await screen.findByText('PAIR-123')).toBeTruthy();
-    await waitFor(() => {
-      expect(QRCode.toCanvas).toHaveBeenCalledWith(
-        expect.any(HTMLCanvasElement),
-        'PAIR-123',
-        expect.objectContaining({ errorCorrectionLevel: 'M' })
-      );
-    });
+    expect(
+      screen.getByText(
+        'Input the code on the website that is asking for a session.'
+      )
+    ).toBeTruthy();
+    expect(container.querySelector('canvas')).toBeNull();
   });
 
   it('switches from code display to browser request status and hides', async () => {
@@ -55,9 +47,7 @@ describe('MintPairingOverlay', () => {
       await screen.findByText('Received a minting request from Chrome.')
     ).toBeTruthy();
     expect(
-      screen.getByText(
-        'Open the Feral File mobile app to Approve or Reject the request.'
-      )
+      screen.getByText(/go to Settings > Art Computer, and approve the session/)
     ).toBeTruthy();
 
     displayMintPairing({

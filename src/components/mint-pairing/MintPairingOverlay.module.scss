@@ -12,7 +12,7 @@
   background: rgba(0, 0, 0, 0.82);
 }
 
-.qrPanel,
+.codePanel,
 .messagePanel {
   display: flex;
   flex-direction: column;
@@ -22,16 +22,9 @@
   text-align: center;
 }
 
-.qrCanvas {
-  width: min(52vh, 52vw, 560px);
-  height: min(52vh, 52vw, 560px);
-  border: 16px solid #ffffff;
-  background: #ffffff;
-}
-
 .code {
-  margin-top: 5vh;
-  font-size: clamp(56px, 9vh, 118px);
+  margin-top: 6vh;
+  font-size: clamp(72px, 13vh, 168px);
   line-height: 1;
   letter-spacing: 0;
 }

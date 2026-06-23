@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import QRCode from 'qrcode';
+import { useEffect, useState } from 'react';
 import {
   CustomEventName,
   MintPairingDisplayDetail,
@@ -29,7 +28,6 @@ function browserLabel(browserName: string | undefined): string {
 export default function MintPairingOverlay() {
   const [display, setDisplay] =
     useState<MintPairingDisplayDetail>(hiddenDisplay);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const handleDisplay = (event: Event) => {
@@ -45,28 +43,6 @@ export default function MintPairingOverlay() {
     };
   }, []);
 
-  useEffect(() => {
-    if (
-      display.state !== MintPairingDisplayState.PairingCode ||
-      !display.pairingCode ||
-      !canvasRef.current
-    ) {
-      return;
-    }
-
-    QRCode.toCanvas(canvasRef.current, display.pairingCode, {
-      errorCorrectionLevel: 'M',
-      margin: 2,
-      scale: 10,
-      color: {
-        dark: '#000000',
-        light: '#ffffff',
-      },
-    }).catch((error: unknown) => {
-      console.error('[MintPairingOverlay] Failed to render QR code:', error);
-    });
-  }, [display.pairingCode, display.state]);
-
   if (display.state === MintPairingDisplayState.Hidden) {
     return null;
   }
@@ -74,13 +50,12 @@ export default function MintPairingOverlay() {
   if (display.state === MintPairingDisplayState.PairingCode) {
     return (
       <section className={styles.overlay} aria-live="polite">
-        <div className={styles.qrPanel}>
-          <canvas
-            ref={canvasRef}
-            className={styles.qrCanvas}
-            aria-label="Mint pairing QR code"
-          />
+        <div className={styles.codePanel}>
+          <p className={styles.title}>External Device Pairing Mode</p>
           <p className={styles.code}>{display.pairingCode}</p>
+          <p className={styles.subtitle}>
+            Input the code on the website that is asking for a session.
+          </p>
         </div>
       </section>
     );
@@ -106,7 +81,8 @@ export default function MintPairingOverlay() {
           Received a minting request from {browserLabel(display.browserName)}.
         </p>
         <p className={styles.subtitle}>
-          Open the Feral File mobile app to Approve or Reject the request.
+          Open the Feral File mobile app, go to Settings &gt; Art Computer, and
+          approve the session.
         </p>
       </div>
     </section>
