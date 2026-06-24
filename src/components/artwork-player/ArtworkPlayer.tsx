@@ -266,7 +266,8 @@ const ArtworkPlayer = ({
     const el = videoRefs[slotIndex].current;
     if (el) {
       el.muted = true;
-      el.play().catch((error: unknown) => {
+      const playPromise = el.play() as Promise<void> | undefined;
+      void playPromise?.catch((error: unknown) => {
         console.log('[ArtworkPlayer] Error play video', JSON.stringify(error));
         Sentry.captureMessage('[ArtworkPlayer] Error play video');
       });
@@ -356,8 +357,13 @@ const ArtworkPlayer = ({
       }
 
       playedVideoURLRef.current[slotIndex] = layer.previewURL;
-      videoElement
-        .play()
+      const playPromise = videoElement.play() as Promise<void> | undefined;
+      if (!playPromise) {
+        loadedSource(slotIndex);
+        return;
+      }
+
+      void playPromise
         .catch((error: unknown) => {
           console.log('Error play video', error);
           reTryToPlayVideo(slotIndex);
@@ -853,7 +859,8 @@ const ArtworkPlayer = ({
           slotIndex === targetSlot;
         if (shouldPlay) {
           if (video.paused) {
-            video.play().catch((error: unknown) => {
+            const playPromise = video.play() as Promise<void> | undefined;
+            void playPromise?.catch((error: unknown) => {
               console.log(
                 '[ArtworkPlayer] Error play video',
                 JSON.stringify(error)

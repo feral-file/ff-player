@@ -27,6 +27,15 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 - The Cloudflare Pages/web build still uses `version.json` polling and reload to pick up new deployments.
 - The FF OS static export sets `NEXT_PUBLIC_DISABLE_VERSION_CHECK=true`, so the device-local bundle does not self-refresh and should be updated with the FF1 image or updater policy.
 
+## Mint pairing overlay
+
+- `feral-controld` drives browser-session mint pairing display through the CDP command `mintPairingDisplay`.
+- The command payload is `{ command: "mintPairingDisplay", request: { state, pairingCode?, browserName? } }`.
+- Supported states are `pairing_code`, `request_received`, `creating_token`, and `hidden`.
+- The overlay renders above the active artwork player and does not unmount or navigate away from playback. In `pairing_code`, the player shows a code-only External Device Pairing Mode screen and asks the user to enter that code on the requesting website.
+- In `request_received`, the player instructs the user to open the Feral File mobile app, go to Settings > Art Computer, and approve the browser session.
+- The device-local static export ships `ffos-player-contract.json` at the bundle root. `feral-controld` and `feral-player.service` use that manifest to verify the deployed player supports this CDP contract before enabling mint pairing.
+
 ## Compatibility note
 
 - Persisted storage keys for cast, display settings, and boot recovery are unchanged by this document. Do not rename persisted keys without a migration plan.

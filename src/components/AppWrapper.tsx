@@ -13,6 +13,7 @@ import {
 } from '@/models/custom_event';
 import DP1ScheduleService from '@/services/DP1ScheduleService';
 import ScheduleDisplay from './ScheduleDisplay';
+import MintPairingOverlay from './mint-pairing/MintPairingOverlay';
 
 const enum CastState {
   None, // Not casting
@@ -168,12 +169,19 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
 // Wrapper component that conditionally renders based on initialization state
 const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { context } = useAppContext();
+  const appContent = context.isInitialized ? (
+    <InitializedAppWrapper>{children}</InitializedAppWrapper>
+  ) : (
+    <LoadingWrapper />
+  );
 
-  if (!context.isInitialized) {
-    return <LoadingWrapper />;
-  }
-
-  return <InitializedAppWrapper>{children}</InitializedAppWrapper>;
+  return (
+    <>
+      {appContent}
+      {/* Keep the CDP-driven mint pairing listener mounted during boot. */}
+      <MintPairingOverlay />
+    </>
+  );
 };
 
 export default AppWrapper;
