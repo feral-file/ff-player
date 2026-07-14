@@ -14,6 +14,7 @@ import {
 import * as Sentry from '@sentry/nextjs';
 import Loading from '../loading/loading';
 import { useAppContext } from '@/context/AppContext';
+import { canvasService } from '@/services/CanvasService';
 import styles from './styles.module.scss';
 import MessageModal from '../MessageModal';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
@@ -41,10 +42,14 @@ import {
   getDP1Margin,
 } from '@/utils/helper';
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
-import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
+import {
+  RenderStatus,
+} from '@/models';
 import { useArtworkSettings } from '@/services/custom-hooks/useArtworkSettings';
+import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
+const RENDER_LOADING_DELAY_MS = 2000;
 const SLOT_INDICES = [0, 1] as const;
 
 type SlotIndex = 0 | 1;
@@ -152,6 +157,7 @@ const ArtworkPlayer = ({
   const loadingDelayRef = useRef<NodeJS.Timeout>();
   const transitionTimeoutRef = useRef<NodeJS.Timeout>();
   const transitionTokenRef = useRef(0);
+  const renderStatusRef = useRef<RenderStatus | undefined>(undefined);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isWebGLContextLost = useRef<boolean>(false);
   const iframeKeyCounterRef = useRef(0);
@@ -170,6 +176,8 @@ const ArtworkPlayer = ({
   ];
 
   const { displaySettings } = useArtworkSettings(displayPreferences);
+  const showRenderLoadingOverlay =
+    context.appRemoteConfig.showRenderLoadingOverlay ?? true;
 
   const mediaLoaders = useRef([createMediaLoader(), createMediaLoader()]);
   const hlsInstancesRef = useRef<[Hls | null, Hls | null]>([null, null]);
@@ -184,6 +192,63 @@ const ArtworkPlayer = ({
   const slotOpacityRef = useRef<[number, number]>(slotOpacity);
 
   const cursorRef = useRef<CursorLayerHandle>(null);
+
+  const clearLoadingDelay = useCallback(() => {
+    if (!loadingDelayRef.current) {
+      return;
+    }
+    clearTimeout(loadingDelayRef.current);
+    loadingDelayRef.current = undefined;
+  }, []);
+
+  const markArtworkPending = useCallback(() => {
+    if (renderStatusRef.current === RenderStatus.pending) {
+      return;
+    }
+    renderStatusRef.current = RenderStatus.pending;
+    canvasService.setRenderStatus(RenderStatus.pending);
+    setGlobalLoading(true);
+    setShowLoading(false);
+  }, []);
+
+  const markArtworkLoading = useCallback(() => {
+    if (renderStatusRef.current === RenderStatus.loading) {
+      return;
+    }
+    renderStatusRef.current = RenderStatus.loading;
+    canvasService.setRenderStatus(RenderStatus.loading);
+    setGlobalLoading(true);
+    setShowLoading(true);
+  }, []);
+
+  const markArtworkReady = useCallback(() => {
+    if (renderStatusRef.current === RenderStatus.ready) {
+      return;
+    }
+    renderStatusRef.current = RenderStatus.ready;
+    canvasService.setRenderStatus(RenderStatus.ready);
+    setGlobalLoading(false);
+    setShowLoading(false);
+    clearLoadingDelay();
+  }, [clearLoadingDelay]);
+
+  const markArtworkFailed = useCallback(() => {
+    if (renderStatusRef.current === RenderStatus.failed) {
+      return;
+    }
+    renderStatusRef.current = RenderStatus.failed;
+    canvasService.setRenderStatus(RenderStatus.failed);
+    setGlobalLoading(false);
+    setShowLoading(false);
+    clearLoadingDelay();
+  }, [clearLoadingDelay]);
+
+  useEffect(() => {
+    return () => {
+      canvasService.setRenderStatus(undefined);
+      renderStatusRef.current = undefined;
+    };
+  }, []);
 
   function getPreviewTypeConfig(type: string): {
     previewType: PreviewHTMLTag;
@@ -326,20 +391,28 @@ const ArtworkPlayer = ({
       if (slot?.previewURL !== currentURL) {
         return;
       }
-
-      // If incomingSlotRef gets out-of-sync (e.g. playlist boundary / rapid source churn),
-      // allow rebind only when the currently pointed slot no longer matches current URL.
-      const currentIncoming = incomingSlotRef.current;
-      if (currentIncoming !== null && currentIncoming !== slotIndex) {
-        const incomingLayer = slotsRef.current[currentIncoming];
-        if (incomingLayer?.previewURL === currentURL) {
-          return;
-        }
-      }
       incomingSlotRef.current = slotIndex;
       markSlotReady(slotIndex);
     },
     [markSlotReady]
+  );
+
+  const handleArtworkRenderFailure = useCallback(
+    (slotIndex?: SlotIndex) => {
+      if (renderStatusRef.current === RenderStatus.failed) {
+        return;
+      }
+      if (slotIndex !== undefined) {
+        updateSlot(slotIndex, { loading: false });
+      }
+      markArtworkFailed();
+      setMessageModalText(null);
+      setMessageModalTitle(
+        'The artwork cannot be displayed correctly on this device.'
+      );
+      setShowMessageModal(true);
+    },
+    [markArtworkFailed, updateSlot]
   );
 
   const playVideoForSlot = useCallback(
@@ -408,6 +481,12 @@ const ArtworkPlayer = ({
           playVideoForSlot(slotIndex, layer, videoElement);
         });
         hlsInstance.on(Hls.Events.ERROR, function (_event, data) {
+          if (data.fatal) {
+            handleArtworkRenderFailure(slotIndex);
+            hlsInstance?.destroy();
+            hlsInstancesRef.current[slotIndex] = null;
+            return;
+          }
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               break;
@@ -417,6 +496,7 @@ const ArtworkPlayer = ({
               }
               break;
             default:
+              handleArtworkRenderFailure(slotIndex);
               hlsInstance?.destroy();
               hlsInstancesRef.current[slotIndex] = null;
               break;
@@ -436,7 +516,7 @@ const ArtworkPlayer = ({
         }
       };
     },
-    [playVideoForSlot]
+    [handleArtworkRenderFailure, playVideoForSlot]
   );
 
   useLayoutEffect(() => {
@@ -452,13 +532,6 @@ const ArtworkPlayer = ({
     if (incomingLayer.loading) {return;}
 
     pendingReadySlotRef.current = null;
-    setGlobalLoading(false);
-    setShowLoading(false);
-    if (loadingDelayRef.current) {
-      clearTimeout(loadingDelayRef.current);
-      loadingDelayRef.current = undefined;
-    }
-
     iframeRefs[readySlot].current?.focus();
 
     const other = (readySlot === 0 ? 1 : 0) as SlotIndex;
@@ -468,6 +541,7 @@ const ArtworkPlayer = ({
       setActiveSlot(readySlot);
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
+      markArtworkReady();
       return;
     }
 
@@ -511,6 +585,7 @@ const ArtworkPlayer = ({
         setActiveSlot(incoming);
         incomingSlotRef.current = null;
         setTopSlotIndex(null);
+        markArtworkReady();
       }, FADE_IN_OUT_DURATION_MS);
       return;
     }
@@ -531,8 +606,9 @@ const ArtworkPlayer = ({
       setActiveSlot(incoming);
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
+      markArtworkReady();
     }, FADE_IN_OUT_DURATION_MS);
-  }, [slots, pauseAndTeardownSlot]);
+  }, [markArtworkReady, pauseAndTeardownSlot, slots]);
 
   const handleIframeLoad = (slotIndex: SlotIndex) => {
     if (isWebGLAvailable()) {
@@ -568,14 +644,17 @@ const ArtworkPlayer = ({
       return next;
     });
 
-    setGlobalLoading(true);
-    setShowLoading(false);
-    if (loadingDelayRef.current) {clearTimeout(loadingDelayRef.current);}
+    markArtworkPending();
+    clearLoadingDelay();
     loadingDelayRef.current = setTimeout(() => {
-      if (!cancelled && previewURLRef.current === url) {
-        setShowLoading(true);
+      if (
+        !cancelled &&
+        previewURLRef.current === url &&
+        renderStatusRef.current === RenderStatus.pending
+      ) {
+        markArtworkLoading();
       }
-    }, 2000);
+    }, RENDER_LOADING_DELAY_MS);
 
     const identity = itemIdentityRef.current;
     setSlots(prev => {
@@ -719,11 +798,12 @@ const ArtworkPlayer = ({
       const handleMediaError =
         (mediaType: BlobLoadedMediaType) => (error: Error) => {
           console.error(`[ArtworkPlayer] ${mediaType} load failed:`, error);
+          handleArtworkRenderFailure(slotIndex);
           Sentry.captureMessage(`[ArtworkPlayer] ${mediaType} load failed`, {
             level: 'error',
             extra: { displayPreviewURL: layer.displayPreviewURL, mediaType },
           });
-      };
+        };
 
       const loadMedia = async () => {
         if (isCancelled) {return;}
@@ -752,6 +832,9 @@ const ArtworkPlayer = ({
             onError: handleMediaError('image'),
             signal: abortController.signal,
           });
+          if (el.complete && el.naturalWidth > 0) {
+            loadedSource(slotIndex);
+          }
         } else if (
           layer.previewType === PreviewHTMLTag.video &&
           !layer.isStreaming &&
@@ -819,7 +902,14 @@ const ArtworkPlayer = ({
         mediaLoaders.current[slotIndex].cleanup();
       };
     },
-    [loadedSource, playVideoForSlot]
+    [
+      handleArtworkRenderFailure,
+      clearLoadingDelay,
+      loadedSource,
+      playVideoForSlot,
+      markArtworkLoading,
+      markArtworkPending,
+    ]
   );
 
   useEffect(() => {
@@ -908,11 +998,7 @@ const ArtworkPlayer = ({
   }, [displaySettings, context.deviceRotation?.viewMode, slots]);
 
   const handleLoadIframeError = (slotIndex: SlotIndex) => {
-    updateSlot(slotIndex, { loading: false });
-    setMessageModalTitle(
-      'The artwork cannot be displayed correctly on this device.'
-    );
-    setShowMessageModal(true);
+    handleArtworkRenderFailure(slotIndex);
   };
 
   const reloadIframe = (slotIndex: SlotIndex) => {
@@ -940,6 +1026,7 @@ const ArtworkPlayer = ({
     }
 
     isWebGLContextLost.current = true;
+    markArtworkFailed();
     console.log('[ArtworkPlayer] WebGL context lost!');
     setMessageModalText(
       'This artwork appears to be especially demanding and may have caused a GPU crash. ' +
@@ -1053,14 +1140,7 @@ const ArtworkPlayer = ({
   }, [previewURL]);
 
   const showSlowLoadingSpinner = () => {
-    const incoming = incomingSlotRef.current;
-    const layer = incoming === null ? null : slots[incoming];
-    const t = layer?.previewType ?? null;
-    return (
-      showLoading &&
-      globalLoading &&
-      (t === null || t === PreviewHTMLTag.video || t === PreviewHTMLTag.audio)
-    );
+    return showLoading && globalLoading && showRenderLoadingOverlay;
   };
 
   const renderSlot = (slotIndex: SlotIndex) => {
@@ -1109,6 +1189,9 @@ const ArtworkPlayer = ({
             data={slot.displayPreviewURL}
             onLoad={() => {
               loadedSource(slotIndex);
+            }}
+            onError={() => {
+              handleArtworkRenderFailure(slotIndex);
             }}>
             Not supported
           </object>

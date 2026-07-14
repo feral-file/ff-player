@@ -31,6 +31,7 @@ import {
   SetShuffleRequest,
   SetLoopRequest,
   DisplayDefaultPlaylistReply,
+  RenderStatus,
 } from '@/models';
 import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
 import { LoopMode } from '@/models/cast_info.model';
@@ -59,6 +60,29 @@ import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
 import RemoteConfigService from './remoteConfigService';
 
+const PLAYLIST_SOURCE_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
+
+/**
+ * Reject obviously unsupported artwork sources before we commit cast state.
+ * This keeps invalid media from returning `ok: true` and leaving the old frame
+ * on screen with no explicit failure signal.
+ */
+function isSupportedArtworkSource(source: string): boolean {
+  try {
+    const url = new URL(source, 'https://ff-player.invalid/');
+    return PLAYLIST_SOURCE_PROTOCOLS.has(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
+/** Finds the first playlist item whose source is not supported by the player. */
+function findInvalidArtworkSource(
+  items: DP1Item[] | undefined
+): DP1Item | undefined {
+  return items?.find(item => !isSupportedArtworkSource(item.source));
+}
+
 /**
  * Owns the in-browser FF1 playback session state that cast commands and route
  * components share, including playlist order, loop/shuffle modes, and deferred
@@ -66,6 +90,7 @@ import RemoteConfigService from './remoteConfigService';
  */
 class CanvasService {
   private castInfo: CastInfo | null = null;
+  private renderStatus: RenderStatus | undefined;
   private static instance: CanvasService | null;
   private originalPlaylistItems: DP1Item[] | null = null;
   private queuedPlaylistPending = false;
@@ -177,12 +202,35 @@ class CanvasService {
       this.queuedPlaylistPending = false;
       this.setDeferredRefreshPlaylist(null);
       this.pendingRefreshArtwork = false;
+      this.renderStatus = undefined;
     }
     this.castInfo =
-      castInfo === null ? null : stripLegacyCastPlaybackTimeline(castInfo);
+      castInfo === null
+        ? null
+        : {
+            ...stripLegacyCastPlaybackTimeline(castInfo),
+            renderStatus:
+              castInfo.renderStatus ?? this.renderStatus ?? undefined,
+          };
+    if (this.castInfo?.renderStatus !== undefined) {
+      this.renderStatus = this.castInfo.renderStatus;
+    }
     if (notify) {
       this.onCastInfoChange?.(this.castInfo);
     }
+  }
+
+  public setRenderStatus(renderStatus: RenderStatus | undefined) {
+    this.renderStatus = renderStatus;
+    if (!this.castInfo) {
+      return;
+    }
+
+    this.castInfo = {
+      ...this.castInfo,
+      renderStatus,
+    };
+    this.onCastInfoChange?.(this.castInfo);
   }
 
   public hasQueuedPlaylistPending(): boolean {
@@ -402,6 +450,8 @@ class CanvasService {
       }
 
       const activeCastInfo = this.castInfo ?? storedCastInfo ?? null;
+      const activeRenderStatus =
+        this.renderStatus ?? activeCastInfo?.renderStatus ?? undefined;
 
       console.log(
         '[CanvasService getStatus] Reply ok. Current index:',
@@ -417,6 +467,7 @@ class CanvasService {
 
         items: activeCastInfo?.playlist?.items,
         index: activeCastInfo?.index,
+        renderStatus: activeRenderStatus,
 
         deviceSettings: {
           scaling:
@@ -602,9 +653,11 @@ class CanvasService {
           playlistUrl,
         });
 
-        DeviceManager.setBootPlaylist(dp1CallData).catch((error: unknown) => {
-          console.error('[CanvasService] Error setting boot playlist:', error);
-        });
+        if (reply.ok) {
+          DeviceManager.setBootPlaylist(dp1CallData).catch((error: unknown) => {
+            console.error('[CanvasService] Error setting boot playlist:', error);
+          });
+        }
         break;
       }
 
@@ -624,11 +677,21 @@ class CanvasService {
       return { ok: false };
     }
 
+    const invalidSourceItem = findInvalidArtworkSource(request.dp1CallData.items);
+    if (invalidSourceItem) {
+      console.error('[CanvasService] Invalid artwork source:', {
+        itemId: invalidSourceItem.id,
+        source: invalidSourceItem.source,
+      });
+      return { ok: false };
+    }
+
     // Clear any stored original playlist from a previous shuffle session and any
     // deferred refresh waiting to be applied — a fresh display supersedes both.
     this.originalPlaylistItems = null;
     this.queuedPlaylistPending = false;
     this.setDeferredRefreshPlaylist(null);
+    this.setRenderStatus(RenderStatus.pending);
 
     console.log('[CanvasService] Display playlist');
     // Each Now Display starts a new cast session surface: do not inherit prior
@@ -751,6 +814,14 @@ class CanvasService {
   private refreshPlaylist(newItems: DP1Item[] | undefined): Reply {
     const currentPlaylist = this.castInfo?.playlist;
     const prior = this.castInfo;
+    const invalidSourceItem = findInvalidArtworkSource(newItems);
+    if (invalidSourceItem) {
+      console.error('[CanvasService] Invalid artwork source:', {
+        itemId: invalidSourceItem.id,
+        source: invalidSourceItem.source,
+      });
+      return { ok: false };
+    }
     if (!currentPlaylist?.items?.length) {
       console.error(
         '[CanvasService] Cannot refresh playlist before an active playlist exists'

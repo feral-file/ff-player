@@ -39,6 +39,7 @@ describe('RemoteConfigService defaults', () => {
     await expect(service.getAppRemoteConfig()).resolves.toEqual({
       duration: 1234,
       defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
+      showRenderLoadingOverlay: true,
     });
   });
 
@@ -55,6 +56,7 @@ describe('RemoteConfigService defaults', () => {
     await expect(service.getAppRemoteConfig()).resolves.toEqual({
       duration: 4321,
       defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
+      showRenderLoadingOverlay: true,
     });
   });
 
@@ -67,6 +69,7 @@ describe('RemoteConfigService defaults', () => {
     await expect(service.getAppRemoteConfig()).resolves.toEqual({
       duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,
       defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
+      showRenderLoadingOverlay: true,
     });
   });
 });
@@ -87,6 +90,25 @@ describe('RemoteConfigService duration normalization', () => {
     await expect(service.getAppRemoteConfig()).resolves.toEqual({
       duration: undefined,
       defaultPlaylistURL: 'https://example.com/playlist',
+      showRenderLoadingOverlay: true,
+    });
+  });
+
+  it('respects the published render loading overlay switch when present', async () => {
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    axiosGet.mockResolvedValueOnce({
+      data: {
+        defaultPlaylistURL: 'https://example.com/playlist',
+        showRenderLoadingOverlay: false,
+      },
+    });
+
+    const service = new RemoteConfigService();
+
+    await expect(service.getAppRemoteConfig()).resolves.toEqual({
+      duration: undefined,
+      defaultPlaylistURL: 'https://example.com/playlist',
+      showRenderLoadingOverlay: false,
     });
   });
 
@@ -130,6 +152,7 @@ describe('RemoteConfigService duration normalization', () => {
     await expect(service.getAppRemoteConfig()).resolves.toEqual({
       duration: undefined,
       defaultPlaylistURL: 'https://example.com/c',
+      showRenderLoadingOverlay: true,
     });
   });
 });

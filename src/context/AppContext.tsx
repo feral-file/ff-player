@@ -207,6 +207,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
         setAppConfig({
           duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,
           defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
+          showRenderLoadingOverlay: true,
         });
       }
     };
