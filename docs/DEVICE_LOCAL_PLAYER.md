@@ -20,7 +20,7 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 
 - At runtime, [RemoteConfigService](../src/services/remoteConfigService.ts) loads `${NEXT_PUBLIC_PUB_DOC_URL}/configs/display.json` when `NEXT_PUBLIC_PUB_DOC_URL` is set at build time.
 - When `NEXT_PUBLIC_PUB_DOC_URL` is empty, the request is same-origin: `/configs/display.json` (serve a matching file from `public/` in the bundle if needed).
-- `duration` controls the browser version-polling interval for web/Pages deployments, and `defaultPlaylistURL` controls fallback playback. Other keys in the published JSON are ignored.
+- `duration` controls the browser version-polling interval for web/Pages deployments, `defaultPlaylistURL` controls fallback playback, and `showRenderLoadingOverlay` controls whether the loading overlay is shown while the current artwork is still rendering. Other keys in the published JSON are ignored.
 
 ## Player updates
 
