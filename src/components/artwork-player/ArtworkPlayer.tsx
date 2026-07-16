@@ -209,6 +209,9 @@ const ArtworkPlayer = ({
     canvasService.setRenderStatus(RenderStatus.pending);
     setGlobalLoading(true);
     setShowLoading(false);
+    setShowMessageModal(false);
+    setMessageModalText(null);
+    setMessageModalTitle(null);
   }, []);
 
   const markArtworkLoading = useCallback(() => {
@@ -230,6 +233,9 @@ const ArtworkPlayer = ({
     setGlobalLoading(false);
     setShowLoading(false);
     clearLoadingDelay();
+    setShowMessageModal(false);
+    setMessageModalText(null);
+    setMessageModalTitle(null);
   }, [clearLoadingDelay]);
 
   const markArtworkFailed = useCallback(() => {
@@ -388,8 +394,21 @@ const ArtworkPlayer = ({
     (slotIndex: SlotIndex) => {
       const currentURL = previewURLRef.current;
       const slot = slotsRef.current[slotIndex];
-      if (slot?.previewURL !== currentURL) {
+      if (
+        slot?.previewURL !== currentURL ||
+        slot?.itemIdentity !== itemIdentityRef.current
+      ) {
         return;
+      }
+      const currentIncoming = incomingSlotRef.current;
+      if (currentIncoming !== null && currentIncoming !== slotIndex) {
+        const incomingLayer = slotsRef.current[currentIncoming];
+        if (
+          incomingLayer?.previewURL === currentURL &&
+          incomingLayer.itemIdentity === itemIdentityRef.current
+        ) {
+          return;
+        }
       }
       incomingSlotRef.current = slotIndex;
       markSlotReady(slotIndex);
@@ -918,6 +937,7 @@ const ArtworkPlayer = ({
     slots[0]?.displayPreviewURL,
     slots[0]?.previewType,
     slots[0]?.isStreaming,
+    slots[0]?.itemIdentity,
     setupMediaForSlot,
   ]);
 
@@ -927,6 +947,7 @@ const ArtworkPlayer = ({
     slots[1]?.displayPreviewURL,
     slots[1]?.previewType,
     slots[1]?.isStreaming,
+    slots[1]?.itemIdentity,
     setupMediaForSlot,
   ]);
 

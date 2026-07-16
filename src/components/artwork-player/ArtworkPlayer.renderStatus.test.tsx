@@ -9,6 +9,7 @@ import ArtworkPlayer from './ArtworkPlayer';
 
 const loaderState = vi.hoisted(() => ({
   mode: 'fast' as 'fast' | 'slow' | 'fail' | 'cached',
+  delays: [] as number[],
 }));
 
 vi.mock('@/utils/mediaLoader', async importOriginal => {
@@ -39,7 +40,7 @@ vi.mock('@/utils/mediaLoader', async importOriginal => {
           return undefined;
         }
 
-        const delay = 2500;
+        const delay = loaderState.delays.shift() ?? 2500;
         setTimeout(() => {
           options.onLoad?.();
         }, delay);
@@ -93,13 +94,15 @@ function buildArtworkProvider(
 
 function artworkTree(
   previewURL: string,
-  appRemoteConfig?: Record<string, unknown>
+  appRemoteConfig?: Record<string, unknown>,
+  itemIdentity?: string
 ): React.ReactElement {
   return buildArtworkProvider(
     <ArtworkPlayer
       previewURL={previewURL}
       artworkPreviewMIMEType="image/jpeg"
       displayPreferences={defaultDP1DisplayPreference}
+      itemIdentity={itemIdentity}
     />,
     appRemoteConfig
   );
@@ -107,9 +110,10 @@ function artworkTree(
 
 function renderArtworkPlayer(
   previewURL: string,
-  appRemoteConfig?: Record<string, unknown>
+  appRemoteConfig?: Record<string, unknown>,
+  itemIdentity?: string
 ) {
-  return render(artworkTree(previewURL, appRemoteConfig));
+  return render(artworkTree(previewURL, appRemoteConfig, itemIdentity));
 }
 
 async function advanceTimersBy(ms: number) {
@@ -134,6 +138,7 @@ async function flushTimers() {
 
 beforeEach(() => {
   loaderState.mode = 'fast';
+  loaderState.delays = [];
 });
 
 afterEach(() => {
@@ -197,6 +202,43 @@ describe('ArtworkPlayer render status - ready and failure transitions', () => {
       expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
     });
     expect(screen.queryByText('Loading...')).toBeNull();
+  });
+
+  it('keeps a stale load from promoting a newer artwork that reuses the same URL', async () => {
+    vi.useFakeTimers();
+    loaderState.mode = 'slow';
+    loaderState.delays = [2500, 5000];
+
+    const previewURL = 'https://feralfile.com/test/shared-image.jpg';
+
+    const { rerender } = renderArtworkPlayer(previewURL, undefined, 'item-a');
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+
+    rerender(artworkTree(previewURL, undefined, 'item-b'));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.loading);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600);
+    });
+
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.loading);
+    expect(screen.getByText('Loading...')).toBeTruthy();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2400);
+    });
+
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.loading);
   });
 });
 
@@ -297,5 +339,39 @@ describe('ArtworkPlayer render status - loading overlay switch', () => {
 
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
     expect(screen.queryByText('Loading...')).toBeNull();
+  });
+
+  it('clears a failure modal when a later artwork becomes ready', async () => {
+    loaderState.mode = 'fail';
+
+    const { rerender } = renderArtworkPlayer(
+      'https://feralfile.com/test/fail-first.jpg',
+      undefined,
+      'item-fail'
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('The artwork cannot be displayed correctly on this device.')
+      ).toBeTruthy();
+    });
+
+    loaderState.mode = 'fast';
+
+    rerender(
+      artworkTree(
+        'https://feralfile.com/test/recovery.jpg',
+        undefined,
+        'item-recovery'
+      )
+    );
+
+    await waitFor(() => {
+      expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    });
+
+    expect(
+      screen.queryByText('The artwork cannot be displayed correctly on this device.')
+    ).toBeNull();
   });
 });
