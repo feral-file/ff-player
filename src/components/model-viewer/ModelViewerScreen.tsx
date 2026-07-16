@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 
 const shellStyle: CSSProperties = {
   alignItems: 'center',
@@ -62,15 +62,66 @@ export default function ModelViewerScreen({
   onError,
 }: ModelViewerScreenProps) {
   const viewerRef = useRef<HTMLElement | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
-  const [querySrc, setQuerySrc] = useState<string | null>(null);
+  const resolvedSrc = useResolvedModelSource(src);
+  const hasSource = resolvedSrc.trim().length > 0;
+  const { isLoaded, hasError } = useModelViewerPlaybackState({
+    hasSource,
+    onError,
+    onLoad,
+    resolvedSrc,
+    viewerRef,
+  });
 
   useEffect(() => {
     void import('@google/model-viewer').catch((error: unknown) => {
       console.error('[ModelViewer] Failed to load model-viewer element:', error);
     });
   }, []);
+
+  useModelViewerCursorLock(viewerRef, hasSource);
+
+  return (
+    <main style={shellStyle}>
+      <style>{`
+        @keyframes ff-model-spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+      {hasSource && (
+        <model-viewer
+          ref={viewerRef}
+          alt="3D artwork preview"
+          autoplay
+          camera-controls
+          crossorigin="anonymous"
+          exposure="1"
+          loading="eager"
+          reveal="auto"
+          style={{ ...viewerStyle, cursor: 'none' }}
+          shadow-intensity="1"
+          src={resolvedSrc}
+        />
+      )}
+      {hasSource && !isLoaded && !hasError && (
+        <div style={overlayStyle}>
+          <div style={spinnerStyle} />
+          <div>
+            <div>Loading 3D model</div>
+          </div>
+        </div>
+      )}
+      {hasError && (
+        <div style={overlayStyle}>
+          <div>Unable to load 3D model</div>
+        </div>
+      )}
+    </main>
+  );
+}
+
+function useResolvedModelSource(src?: string | null) {
+  const [querySrc, setQuerySrc] = useState<string | null>(null);
 
   useEffect(() => {
     if (src !== undefined && src !== null) {
@@ -82,8 +133,24 @@ export default function ModelViewerScreen({
     setQuerySrc(params.get('src'));
   }, [src]);
 
-  const resolvedSrc = src ?? querySrc ?? '';
-  const hasSource = resolvedSrc.trim().length > 0;
+  return src ?? querySrc ?? '';
+}
+
+function useModelViewerPlaybackState({
+  hasSource,
+  onError,
+  onLoad,
+  resolvedSrc,
+  viewerRef,
+}: {
+  hasSource: boolean;
+  onError?: () => void;
+  onLoad?: () => void;
+  resolvedSrc: string;
+  viewerRef: RefObject<HTMLElement | null>;
+}) {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
     if (!hasSource) {
@@ -136,44 +203,40 @@ export default function ModelViewerScreen({
       viewer.removeEventListener('load', markLoaded);
       viewer.removeEventListener('error', handleError);
     };
-  }, [hasSource, resolvedSrc, onError, onLoad]);
+  }, [hasSource, onError, onLoad, resolvedSrc, viewerRef]);
 
-  return (
-    <main style={shellStyle}>
-      <style>{`
-        @keyframes ff-model-spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-      {hasSource && (
-        <model-viewer
-          ref={viewerRef}
-          alt="3D artwork preview"
-          autoplay
-          camera-controls
-          crossorigin="anonymous"
-          exposure="1"
-          loading="eager"
-          reveal="auto"
-          shadow-intensity="1"
-          src={resolvedSrc}
-          style={viewerStyle}
-        />
-      )}
-      {hasSource && !isLoaded && !hasError && (
-        <div style={overlayStyle}>
-          <div style={spinnerStyle} />
-          <div>
-            <div>Loading 3D model</div>
-          </div>
-        </div>
-      )}
-      {hasError && (
-        <div style={overlayStyle}>
-          <div>Unable to load 3D model</div>
-        </div>
-      )}
-    </main>
-  );
+  return { isLoaded, hasError };
+}
+
+function useModelViewerCursorLock(
+  viewerRef: RefObject<HTMLElement | null>,
+  hasSource: boolean
+) {
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || !hasSource) {
+      return undefined;
+    }
+
+    const lockCursorToNone = () => {
+      viewer.style.cursor = 'none';
+    };
+
+    lockCursorToNone();
+
+    const observer = new MutationObserver(() => {
+      if (viewer.style.cursor !== 'none') {
+        viewer.style.cursor = 'none';
+      }
+    });
+
+    observer.observe(viewer, {
+      attributes: true,
+      attributeFilter: ['style'],
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasSource, viewerRef]);
 }

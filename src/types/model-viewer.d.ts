@@ -12,6 +12,8 @@ declare global {
         'camera-controls'?: boolean;
         crossorigin?: string;
         exposure?: string | number;
+        loading?: string;
+        reveal?: string;
         'shadow-intensity'?: string | number;
         src?: string;
       };

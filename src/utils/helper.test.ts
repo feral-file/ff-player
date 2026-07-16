@@ -11,7 +11,7 @@ describe('getContentTypeFromURL', () => {
     networkError.cause = new Error('tls alert');
 
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(networkError);
-    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(vi.fn());
 
     await expect(
       getContentTypeFromURL('https://example.com/ipfs/bafy-test-cid')
