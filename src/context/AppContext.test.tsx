@@ -59,6 +59,7 @@ vi.mock('next/navigation', () => ({
     push: vi.fn(),
     replace: vi.fn(),
   }),
+  usePathname: () => '/',
 }));
 
 vi.mock('@/services/cdp-handler/CDPRequestHandler', () => ({

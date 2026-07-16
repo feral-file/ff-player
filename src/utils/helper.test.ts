@@ -1,0 +1,29 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getContentTypeFromURL } from './helper';
+
+describe('getContentTypeFromURL', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('logs structured error details when the HEAD request fails', async () => {
+    const networkError = new Error('network down');
+    networkError.cause = new Error('tls alert');
+
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(networkError);
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await expect(
+      getContentTypeFromURL('https://example.com/ipfs/bafy-test-cid')
+    ).rejects.toThrow('Failed to determine content type');
+
+    expect(consoleLog).toHaveBeenCalledWith(
+      '[ContentType] Failed to get content-type from HEAD request',
+      expect.stringContaining('"message":"network down"')
+    );
+    expect(consoleLog).toHaveBeenCalledWith(
+      '[ContentType] Failed to get content-type from HEAD request',
+      expect.stringContaining('"cause":{"name":"Error","message":"tls alert"')
+    );
+  });
+});

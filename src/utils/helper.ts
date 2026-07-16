@@ -7,6 +7,13 @@ import {
 } from '@/models';
 import { Scaling } from '@/models/dp1.model';
 
+/**
+ * Resolve a media URL's `Content-Type` with a cache-busting `HEAD` request so
+ * playback can choose the correct renderer for extensionless assets. When the
+ * browser network stack fails before a response arrives, serialize the error
+ * into stable text because Chromium's remote console turns raw `Error` objects
+ * into `{}` in the device log.
+ */
 export async function getContentTypeFromURL(
   previewURL: string
 ): Promise<string> {
@@ -40,7 +47,7 @@ export async function getContentTypeFromURL(
   } catch (error) {
     console.log(
       '[ContentType] Failed to get content-type from HEAD request',
-      JSON.stringify(error)
+      serializeErrorForLog(error)
     );
 
     const extension = url.pathname.split('.').pop()?.toLowerCase();
@@ -68,6 +75,87 @@ export async function getContentTypeFromURL(
   }
 }
 
+/**
+ * Flatten unknown failures into stable log text for browser console capture.
+ */
+function serializeErrorForLog(error: unknown): string {
+  if (error instanceof Error) {
+    return JSON.stringify({
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      cause: serializeErrorCause(error.cause),
+    });
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  return JSON.stringify({
+    value: describeUnknownValue(error),
+    raw: error,
+  });
+}
+
+/**
+ * Serialize nested causes without relying on default object stringification.
+ */
+function serializeErrorCause(cause: unknown): string | Record<string, unknown> | null {
+  if (cause === undefined) {
+    return null;
+  }
+
+  if (cause instanceof Error) {
+    return {
+      name: cause.name,
+      message: cause.message,
+      stack: cause.stack,
+    };
+  }
+
+  return typeof cause === 'string'
+    ? cause
+    : {
+        value: describeUnknownValue(cause),
+      };
+}
+
+/**
+ * Produce a readable label for non-Error values that appear in caught failures.
+ */
+function describeUnknownValue(value: unknown): string {
+  if (value === null) {
+    return 'null';
+  }
+
+  if (value === undefined) {
+    return 'undefined';
+  }
+
+  if (typeof value === 'object') {
+    return Object.prototype.toString.call(value);
+  }
+
+  switch (typeof value) {
+    case 'string':
+      return value;
+    case 'number':
+    case 'boolean':
+    case 'bigint':
+      return value.toString();
+    case 'symbol':
+      return value.description ? `Symbol(${value.description})` : 'Symbol()';
+    case 'function':
+      return `[function ${value.name || 'anonymous'}]`;
+    default:
+      return 'unknown';
+  }
+}
+
+/**
+ * Map the player scaling preference onto CSS `object-fit`.
+ */
 export function convertScalingToObjectFit(
   scalingMode?: Scaling
 ): 'contain' | 'cover' | 'fill' {
@@ -83,6 +171,9 @@ export function convertScalingToObjectFit(
   }
 }
 
+/**
+ * Convert DP1 margin values into the CSS shape expected by the player shell.
+ */
 export function getDP1Margin(margin: number | string): string {
   if (typeof margin === 'number') {
     return `${String(margin)}px`;
@@ -96,30 +187,42 @@ export function getDP1Margin(margin: number | string): string {
   return margin;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function deepEqual(a: any, b: any): boolean {
-  if (a === b) return true;
-  if (typeof a !== typeof b) return false;
+/**
+ * Compare nested arrays and objects deeply for the small plain-data payloads
+ * used in playback configuration.
+ */
+export function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (typeof a !== typeof b) {
+    return false;
+  }
 
   // Array compare (thứ tự quan trọng)
   if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false;
+    if (a.length !== b.length) {
+      return false;
+    }
     for (let i = 0; i < a.length; i++) {
-      if (!deepEqual(a[i], b[i])) return false;
+      if (!deepEqual(a[i], b[i])) {
+        return false;
+      }
     }
     return true;
   }
 
   // Object compare
-  if (a && b && typeof a === 'object') {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+  if (isRecord(a) && isRecord(b)) {
     const keysA = Object.keys(a);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     const keysB = Object.keys(b);
-    if (keysA.length !== keysB.length) return false;
+    if (keysA.length !== keysB.length) {
+      return false;
+    }
     for (const key of keysA) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      if (!deepEqual(a[key], b[key])) return false;
+      if (!deepEqual(a[key], b[key])) {
+        return false;
+      }
     }
     return true;
   }
@@ -128,6 +231,9 @@ export function deepEqual(a: any, b: any): boolean {
 }
 
 // ---- TODO: Implement ref hash verification on DP1Service.getItemRef ----
+/**
+ * Hash an in-memory byte buffer into lowercase SHA-256 hex.
+ */
 export async function sha256hex(
   bytes: Uint8Array<ArrayBuffer>
 ): Promise<string> {
@@ -138,6 +244,9 @@ export async function sha256hex(
     .join('');
 }
 
+/**
+ * Convert bytes into lowercase hexadecimal text.
+ */
 function bufToHex(a: Uint8Array) {
   return Array.from(a)
     .map(b => b.toString(16).padStart(2, '0'))
@@ -145,17 +254,24 @@ function bufToHex(a: Uint8Array) {
 }
 
 // Accept hex or base64/base64url; normalize to lowercase hex
+/**
+ * Normalize either hex or base64/base64url SHA-256 values into lowercase hex.
+ */
 export function normalizeHashToHex(s: string): string {
   const str = s.trim();
   // Allow prefixes like "sha256:..." or "sha256:hex:..."
   const clean = str.replace(/^sha256:(hex:)?/i, '');
-  if (/^[0-9a-fA-F]+$/.test(clean) && clean.length >= 64)
+  if (/^[0-9a-fA-F]+$/.test(clean) && clean.length >= 64) {
     return clean.toLowerCase();
+  }
   // Base64/base64url → hex
   const b = base64AnyToBytes(clean);
   return bufToHex(b);
 }
 
+/**
+ * Decode base64 or base64url text into bytes across browser and Node runtimes.
+ */
 function base64AnyToBytes(inp: string): Uint8Array {
   // Normalize base64url to base64
   const b64 = inp
@@ -165,17 +281,33 @@ function base64AnyToBytes(inp: string): Uint8Array {
   if (typeof atob === 'function') {
     const bin = atob(b64);
     const out = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    for (let i = 0; i < bin.length; i++) {
+      out[i] = bin.charCodeAt(i);
+    }
     return out;
   }
 
   return new Uint8Array(Buffer.from(b64, 'base64'));
 }
 
+/**
+ * Narrow unknown values to plain key/value objects for recursive comparison.
+ */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object';
+}
+
+/**
+ * Recognize content-addressed IPFS-style URIs and gateway paths.
+ */
 export function isContentAddressed(u: string): boolean {
   // Check if it is an IPFS URI scheme (e.g., ipfs://...)
-  if (typeof u !== 'string') return false;
-  if (u.startsWith('ipfs://')) return true;
+  if (typeof u !== 'string') {
+    return false;
+  }
+  if (u.startsWith('ipfs://')) {
+    return true;
+  }
 
   try {
     const url = new URL(u);
