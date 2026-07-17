@@ -62,6 +62,7 @@ export default function ModelViewerScreen({
   onError,
 }: ModelViewerScreenProps) {
   const viewerRef = useRef<HTMLElement | null>(null);
+  const onErrorRef = useRef(onError);
   const resolvedSrc = useResolvedModelSource(src);
   const hasSource = resolvedSrc.trim().length > 0;
   const [hasBootstrapError, setHasBootstrapError] = useState(false);
@@ -74,6 +75,10 @@ export default function ModelViewerScreen({
   });
 
   useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
     let cancelled = false;
 
     void import('@google/model-viewer').catch((error: unknown) => {
@@ -83,13 +88,13 @@ export default function ModelViewerScreen({
 
       console.error('[ModelViewer] Failed to load model-viewer element:', error);
       setHasBootstrapError(true);
-      onError?.();
+      onErrorRef.current?.();
     });
 
     return () => {
       cancelled = true;
     };
-  }, [onError]);
+  }, []);
 
   useModelViewerCursorLock(viewerRef, hasSource);
 
