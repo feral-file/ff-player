@@ -40,19 +40,9 @@ export async function getContentTypeFromURL(
     }
 
     const contentType = response.headers.get('Content-Type');
-    if (contentType && !shouldSniffContentType(contentType)) {
-      return contentType;
-    }
-    const sniffedContentType = await sniffContentTypeFromBody(extendPreviewURL);
-    if (sniffedContentType) {
-      console.log('[ContentType] Sniffed Content-Type:', sniffedContentType);
-      return sniffedContentType;
-    }
-
     if (contentType) {
       return contentType;
     }
-
     throw new Error('No content type found in headers');
   } catch (error) {
     console.log(
@@ -81,109 +71,8 @@ export async function getContentTypeFromURL(
       }
     }
 
-    const sniffedContentType = await sniffContentTypeFromBody(extendPreviewURL);
-    if (sniffedContentType) {
-      console.log('[ContentType] Sniffed Content-Type:', sniffedContentType);
-      return sniffedContentType;
-    }
-
     throw new Error(`Failed to determine content type: ${String(error)}`);
   }
-}
-
-/**
- * Recognize response content types that still need byte-level sniffing.
- */
-function shouldSniffContentType(contentType: string): boolean {
-  const normalizedContentType = contentType.toLowerCase();
-  return (
-    normalizedContentType === 'application/octet-stream' ||
-    normalizedContentType === 'binary/octet-stream' ||
-    normalizedContentType.startsWith('application/json') ||
-    normalizedContentType.startsWith('text/plain')
-  );
-}
-
-/**
- * Inspect the first bytes of a response so extensionless model assets can be
- * classified even when HEAD metadata is missing or generic.
- */
-async function sniffContentTypeFromBody(
-  previewURL: string
-): Promise<string | null> {
-  try {
-    const response = await fetch(previewURL, {
-      cache: 'no-store',
-      headers: {
-        Range: 'bytes=0-65535',
-      },
-      method: 'GET',
-      referrerPolicy: 'no-referrer',
-    });
-
-    if (!response.ok && response.status !== 206) {
-      return null;
-    }
-
-    const responseType = response.headers.get('Content-Type');
-    if (responseType && !shouldSniffContentType(responseType)) {
-      const normalizedResponseType = responseType.toLowerCase();
-      if (normalizedResponseType.startsWith('model/')) {
-        return normalizedResponseType;
-      }
-    }
-
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (isGltfBinaryBuffer(bytes)) {
-      return 'model/gltf-binary';
-    }
-
-    const gltfJson = inferGltfJsonFromBuffer(bytes);
-    if (gltfJson) {
-      return gltfJson;
-    }
-
-    return null;
-  } catch (error) {
-    console.log(
-      '[ContentType] Failed to sniff content-type from body',
-      serializeErrorForLog(error)
-    );
-    return null;
-  }
-}
-
-/**
- * Detect the GLB magic header (`glTF`) in the first four bytes.
- */
-function isGltfBinaryBuffer(bytes: Uint8Array): boolean {
-  return (
-    bytes.length >= 4 &&
-    bytes[0] === 0x67 &&
-    bytes[1] === 0x6c &&
-    bytes[2] === 0x54 &&
-    bytes[3] === 0x46
-  );
-}
-
-/**
- * Detect JSON glTF documents from a partial or complete UTF-8 payload.
- */
-function inferGltfJsonFromBuffer(bytes: Uint8Array): string | null {
-  const text = new TextDecoder().decode(bytes).trimStart();
-  if (!text.startsWith('{')) {
-    return null;
-  }
-
-  if (!/"asset"\s*:\s*\{/.test(text)) {
-    return null;
-  }
-
-  if (!/"version"\s*:\s*"2\.0"/.test(text)) {
-    return null;
-  }
-
-  return 'model/gltf+json';
 }
 
 /**
