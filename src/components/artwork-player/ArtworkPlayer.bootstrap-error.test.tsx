@@ -9,11 +9,29 @@ const helperMocks = vi.hoisted(() => ({
   getContentTypeFromURL: vi.fn(),
 }));
 
+const mediaLoaderMocks = vi.hoisted(() => ({
+  loadMedia: vi.fn(({ onLoad }: { onLoad?: () => void }) => {
+    onLoad?.();
+    return { success: true, usedBlob: false };
+  }),
+}));
+
 vi.mock('@/utils/helper', async importOriginal => {
   const mod = await importOriginal<typeof import('@/utils/helper')>();
   return {
     ...mod,
     getContentTypeFromURL: helperMocks.getContentTypeFromURL,
+  };
+});
+
+vi.mock('@/utils/mediaLoader', async importOriginal => {
+  const mod = await importOriginal<typeof import('@/utils/mediaLoader')>();
+  return {
+    ...mod,
+    createMediaLoader: () => ({
+      loadMedia: mediaLoaderMocks.loadMedia,
+      cleanup: vi.fn(),
+    }),
   };
 });
 
@@ -29,25 +47,28 @@ vi.mock('@sentry/nextjs', () => ({
 
 const MODEL_URL =
   'https://ipfs.filebase.io/ipfs/bafybeiht7hyohzvnje3aozwfkoqowuvmb7fooqh4pbyigzv6qm2dolwgxu';
+const IMAGE_URL = 'https://example.com/image.png';
+
+const appContextValue = {
+  context: {
+    isInitialized: true,
+    isOnline: true,
+    appRemoteConfig: {},
+    displaySettings: null,
+    cursorPositions: null,
+    castInfo: null,
+  },
+};
 
 function renderWithContext(ui: React.ReactElement): ReturnType<typeof render> {
-  const value = {
-    context: {
-      isInitialized: true,
-      isOnline: true,
-      appRemoteConfig: {},
-      displaySettings: null,
-      cursorPositions: null,
-      castInfo: null,
-    },
-  };
   return render(
-    <AppContext.Provider value={value as never}>{ui}</AppContext.Provider>
+    <AppContext.Provider value={appContextValue as never}>{ui}</AppContext.Provider>
   );
 }
 
 afterEach(() => {
   helperMocks.getContentTypeFromURL.mockReset();
+  mediaLoaderMocks.loadMedia.mockClear();
   cleanup();
 });
 
@@ -66,6 +87,41 @@ describe('ArtworkPlayer — model bootstrap error handling', () => {
       expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
     });
 
-    expect(screen.queryByText('Loading...')).toBeNull();
+    expect(screen.queryByText('Loading 3D model')).toBeNull();
+  });
+
+  it('replaces the previous artwork when a model transition bootstrap fails', async () => {
+    const { container, rerender } = renderWithContext(
+      <ArtworkPlayer
+        previewURL={IMAGE_URL}
+        artworkPreviewMIMEType="image/png"
+        displayPreferences={defaultDP1DisplayPreference}
+      />
+    );
+
+    await waitFor(() => {
+      expect(mediaLoaderMocks.loadMedia).toHaveBeenCalled();
+    });
+    expect(container.querySelector('img')).toBeTruthy();
+
+    rerender(
+      <AppContext.Provider value={appContextValue as never}>
+        <ArtworkPlayer
+          previewURL={MODEL_URL}
+          artworkPreviewMIMEType="model/gltf-binary"
+          displayPreferences={defaultDP1DisplayPreference}
+        />
+      </AppContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('img')).toBeNull();
+    });
+
+    expect(screen.queryByText('Loading 3D model')).toBeNull();
   });
 });

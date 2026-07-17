@@ -576,6 +576,20 @@ const ArtworkPlayer = ({
     }
   }, []);
 
+  /**
+   * Keep model-viewer failures inside the transition pipeline so the failed
+   * incoming slot becomes the committed artwork state instead of leaving the
+   * previous slot visible underneath the error modal.
+   */
+  const handleModelLoadError = (slotIndex: SlotIndex) => {
+    clearLoadingIndicators();
+    loadedSource(slotIndex);
+    setMessageModalTitle(
+      'The artwork cannot be displayed correctly on this device.'
+    );
+    setShowMessageModal(true);
+  };
+
   useEffect(() => {
     let cancelled = false;
     const url = previewURL;
@@ -1168,7 +1182,7 @@ const ArtworkPlayer = ({
                 handleModelLoad(slotIndex);
               }}
               onError={() => {
-                handleLoadIframeError(slotIndex);
+                handleModelLoadError(slotIndex);
               }}
             />
           </div>

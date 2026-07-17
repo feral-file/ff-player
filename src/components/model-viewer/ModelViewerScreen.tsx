@@ -43,6 +43,18 @@ const spinnerStyle: CSSProperties = {
   width: '42px',
 };
 
+const CURSOR_LOCK_STYLE_ID = 'ff-model-viewer-cursor-lock';
+const CURSOR_LOCK_STYLE_TEXT = `
+  :host,
+  .container,
+  .userInput,
+  .userInput *,
+  canvas,
+  canvas * {
+    cursor: none !important;
+  }
+`;
+
 interface ModelViewerScreenProps {
   src?: string | null;
   onLoad?: () => void;
@@ -121,7 +133,7 @@ export default function ModelViewerScreen({
           src={resolvedSrc}
         />
       )}
-      {hasSource && !isLoaded && !hasError && (
+      {hasSource && !isLoaded && !hasError && !hasBootstrapError && (
         <div style={overlayStyle}>
           <div style={spinnerStyle} />
           <div>
@@ -226,6 +238,34 @@ function useModelViewerPlaybackState({
   return { isLoaded, hasError };
 }
 
+/**
+ * Force the model-viewer host and its shadow DOM interaction surfaces to keep
+ * the browser cursor hidden while the yellow dot cursor layer is active.
+ *
+ * The model-viewer controls code rewrites the host cursor during drag states,
+ * so we patch the host plus the shadow-root interaction nodes to keep the
+ * browser pointer from reappearing over the 3D surface.
+ */
+export function applyModelViewerCursorLock(viewer: HTMLElement) {
+  viewer.style.cursor = 'none';
+  const shadowRoot = viewer.shadowRoot;
+  if (!shadowRoot) {
+    return;
+  }
+
+  const existingStyle = shadowRoot.querySelector(
+    `style#${CURSOR_LOCK_STYLE_ID}`
+  );
+  if (existingStyle) {
+    return;
+  }
+
+  const style = document.createElement('style');
+  style.id = CURSOR_LOCK_STYLE_ID;
+  style.textContent = CURSOR_LOCK_STYLE_TEXT;
+  shadowRoot.appendChild(style);
+}
+
 function useModelViewerCursorLock(
   viewerRef: RefObject<HTMLElement | null>,
   hasSource: boolean
@@ -236,15 +276,11 @@ function useModelViewerCursorLock(
       return undefined;
     }
 
-    const lockCursorToNone = () => {
-      viewer.style.cursor = 'none';
-    };
-
-    lockCursorToNone();
+    applyModelViewerCursorLock(viewer);
 
     const observer = new MutationObserver(() => {
       if (viewer.style.cursor !== 'none') {
-        viewer.style.cursor = 'none';
+        applyModelViewerCursorLock(viewer);
       }
     });
 

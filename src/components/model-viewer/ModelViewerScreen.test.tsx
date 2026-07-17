@@ -26,5 +26,6 @@ describe('ModelViewerScreen', () => {
     });
 
     expect(onError).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Loading 3D model')).toBeNull();
   });
 });

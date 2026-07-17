@@ -14,6 +14,7 @@ Artwork transitions in ArtworkPlayer to use a 2-slot overlay model with safer me
   - incomingSlotRef, pendingReadySlotRef, transitionTokenRef, timeout cancellation
 - Kept heavy embedded content (iframe, object) on sequential handoff to reduce performance/GPU pressure.
 - Model MIME types now render through `ModelViewerScreen` directly inside `ArtworkPlayer` so glTF / GLB assets stay inside the playlist transition pipeline instead of falling back to the raw binary/object path.
+- Model-viewer bootstrap/load failures still clear the loading indicators and commit the failed model slot so the error modal replaces the outgoing artwork instead of leaving the prior slot visible underneath it.
 - Added per-slot media/HLS bookkeeping:
   - hlsInstancesRef, hlsLoadedURLRef, playedVideoURLRef
 - Split streaming video setup by slot (avoid cross-slot teardown/re-attach side effects).
