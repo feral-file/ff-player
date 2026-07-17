@@ -13,7 +13,7 @@ Artwork transitions in ArtworkPlayer to use a 2-slot overlay model with safer me
 - Added stale-transition guards:
   - incomingSlotRef, pendingReadySlotRef, transitionTokenRef, timeout cancellation
 - Kept heavy embedded content (iframe, object) on sequential handoff to reduce performance/GPU pressure.
-- Model MIME types now use a dedicated model viewer iframe route (`/model-viewer`) so glTF / GLB assets render in an isolated 3D document instead of falling back to the raw binary/object path.
+- Model MIME types now render through `ModelViewerScreen` directly inside `ArtworkPlayer` so glTF / GLB assets stay inside the playlist transition pipeline instead of falling back to the raw binary/object path.
 - Added per-slot media/HLS bookkeeping:
   - hlsInstancesRef, hlsLoadedURLRef, playedVideoURLRef
 - Split streaming video setup by slot (avoid cross-slot teardown/re-attach side effects).

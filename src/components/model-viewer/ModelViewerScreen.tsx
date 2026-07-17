@@ -64,6 +64,7 @@ export default function ModelViewerScreen({
   const viewerRef = useRef<HTMLElement | null>(null);
   const resolvedSrc = useResolvedModelSource(src);
   const hasSource = resolvedSrc.trim().length > 0;
+  const [hasBootstrapError, setHasBootstrapError] = useState(false);
   const { isLoaded, hasError } = useModelViewerPlaybackState({
     hasSource,
     onError,
@@ -73,10 +74,22 @@ export default function ModelViewerScreen({
   });
 
   useEffect(() => {
+    let cancelled = false;
+
     void import('@google/model-viewer').catch((error: unknown) => {
+      if (cancelled) {
+        return;
+      }
+
       console.error('[ModelViewer] Failed to load model-viewer element:', error);
+      setHasBootstrapError(true);
+      onError?.();
     });
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [onError]);
 
   useModelViewerCursorLock(viewerRef, hasSource);
 
@@ -111,7 +124,7 @@ export default function ModelViewerScreen({
           </div>
         </div>
       )}
-      {hasError && (
+      {(hasError || hasBootstrapError) && (
         <div style={overlayStyle}>
           <div>Unable to load 3D model</div>
         </div>

@@ -567,6 +567,15 @@ const ArtworkPlayer = ({
     loadedSource(slotIndex);
   };
 
+  const clearLoadingIndicators = useCallback(() => {
+    setGlobalLoading(false);
+    setShowLoading(false);
+    if (loadingDelayRef.current) {
+      clearTimeout(loadingDelayRef.current);
+      loadingDelayRef.current = undefined;
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const url = previewURL;
@@ -938,6 +947,7 @@ const ArtworkPlayer = ({
   }, [displaySettings, context.deviceRotation?.viewMode, slots]);
 
   const handleLoadIframeError = (slotIndex: SlotIndex) => {
+    clearLoadingIndicators();
     updateSlot(slotIndex, { loading: false });
     setMessageModalTitle(
       'The artwork cannot be displayed correctly on this device.'
