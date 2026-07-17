@@ -1,6 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject,
+} from 'react';
 
 const shellStyle: CSSProperties = {
   alignItems: 'center',
@@ -85,7 +91,6 @@ export default function ModelViewerScreen({
     resolvedSrc,
     viewerRef,
   });
-
   useEffect(() => {
     onErrorRef.current = onError;
   }, [onError]);
@@ -181,6 +186,16 @@ function useModelViewerPlaybackState({
 }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const onLoadRef = useRef(onLoad);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onLoadRef.current = onLoad;
+  }, [onLoad]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   useEffect(() => {
     if (!hasSource) {
@@ -199,11 +214,11 @@ function useModelViewerPlaybackState({
 
     const markLoaded = () => {
       setIsLoaded(true);
-      onLoad?.();
+      onLoadRef.current?.();
     };
     const handleError = () => {
       setHasError(true);
-      onError?.();
+      onErrorRef.current?.();
     };
 
     const checkLoaded = () => {
@@ -233,7 +248,7 @@ function useModelViewerPlaybackState({
       viewer.removeEventListener('load', markLoaded);
       viewer.removeEventListener('error', handleError);
     };
-  }, [hasSource, onError, onLoad, resolvedSrc, viewerRef]);
+  }, [hasSource, resolvedSrc, viewerRef]);
 
   return { isLoaded, hasError };
 }
@@ -266,6 +281,15 @@ export function applyModelViewerCursorLock(viewer: HTMLElement) {
   shadowRoot.appendChild(style);
 }
 
+function hasModelViewerCursorLock(viewer: HTMLElement) {
+  const shadowRoot = viewer.shadowRoot;
+  return (
+    viewer.style.cursor === 'none' &&
+    shadowRoot !== null &&
+    shadowRoot.querySelector(`style#${CURSOR_LOCK_STYLE_ID}`) !== null
+  );
+}
+
 function useModelViewerCursorLock(
   viewerRef: RefObject<HTMLElement | null>,
   hasSource: boolean
@@ -276,11 +300,27 @@ function useModelViewerCursorLock(
       return undefined;
     }
 
-    applyModelViewerCursorLock(viewer);
+    let retryId: number | null = null;
+    const retryLockCursor = () => {
+      if (retryId !== null) {
+        window.clearTimeout(retryId);
+        retryId = null;
+      }
+
+      applyModelViewerCursorLock(viewer);
+      if (!hasModelViewerCursorLock(viewer)) {
+        retryId = window.setTimeout(() => {
+          retryId = null;
+          retryLockCursor();
+        }, 50);
+      }
+    };
+
+    retryLockCursor();
 
     const observer = new MutationObserver(() => {
-      if (viewer.style.cursor !== 'none') {
-        applyModelViewerCursorLock(viewer);
+      if (!hasModelViewerCursorLock(viewer)) {
+        retryLockCursor();
       }
     });
 
@@ -290,6 +330,9 @@ function useModelViewerCursorLock(
     });
 
     return () => {
+      if (retryId !== null) {
+        window.clearTimeout(retryId);
+      }
       observer.disconnect();
     };
   }, [hasSource, viewerRef]);
