@@ -137,6 +137,42 @@ describe('PlaylistClient — merge-cache lifetime and pre-merge window', () => {
     vi.clearAllMocks();
   });
 
+});
+
+describe('PlaylistClient — bounded manifest wait', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(async () => {
+    teardownPlaylistWiringTest();
+    await setDeviceDefault(null);
+    vi.clearAllMocks();
+  });
+
+  it('applies the owner default after the bounded manifest wait', async () => {
+    await setDeviceDefault(5);
+    // Manifest never resolves and carries no veto anywhere: after the
+    // bounded gate window (REF_MANIFEST_GATE_TIMEOUT_MS) the merge proceeds
+    // with the synchronous layers and the owner's default governs.
+    getItemRefMock.mockReturnValue(new Promise(() => undefined) as never);
+    const items = [refItem('a', 300), item('b', 300)];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    render(<PlaylistHarness castInfo={initial} />);
+
+    await advanceMs(0);
+    // Within the bounded window: conservative, no override armed.
+    await advanceMs(5000);
+    expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
+
+    // Past the window (10s) the sync merge lands permissive and the 5s
+    // override arms; well before the item's own 300s the slot advances.
+    await advanceMs(5000);
+    await advanceMs(5000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
   it('drops the cached merge when a new playlist replaces the item', async () => {
     await setDeviceDefault(5);
     // First display: manifest allows overrides; the merge lands and the

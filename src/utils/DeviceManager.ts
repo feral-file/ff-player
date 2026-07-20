@@ -264,6 +264,10 @@ class DeviceManager {
     }
     this.cache.set(LocalStorageItem.defaultItemDuration, String(seconds));
     await this.ensureInitialized();
+    // Re-assert after initialization settles: a preload read that was in
+    // flight during the synchronous set above resolves with the stale stored
+    // value and would otherwise overwrite this session's new value.
+    this.cache.set(LocalStorageItem.defaultItemDuration, String(seconds));
     await indexedDBStorage.setItem(
       LocalStorageItem.defaultItemDuration,
       String(seconds)
