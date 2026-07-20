@@ -74,9 +74,10 @@ const PLAYLIST_SOURCE_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
 const ARTWORK_SOURCE_RESOLVE_BASE = 'https://ff-player.local/';
 
 /**
- * Reject non-renderable artwork sources before we commit cast state.
- * Empty, whitespace-only, and non-web schemes return false so now_display /
- * refreshPlaylist can answer `ok: false` instead of accepting dead media.
+ * Reject non-renderable artwork sources before we commit cast or schedule state.
+ * Empty, whitespace-only, and non-web schemes return false so now_display,
+ * schedule_play, and refreshPlaylist can answer `ok: false` instead of accepting
+ * dead media (or acknowledging a schedule the player already knows it cannot run).
  * Relative and protocol-relative sources remain allowed; load failure is reported
  * later via renderStatus rather than cast acceptance.
  */
@@ -807,6 +808,18 @@ class CanvasService {
 
     if (!request.scheduleTime) {
       console.error('[CanvasService] No schedule time found');
+      return { ok: false };
+    }
+
+    // Match now_display / refreshPlaylist: reject unsupported sources on receipt
+    // so schedule_play does not acknowledge work that executeScheduledDP1Task would
+    // later fail inside nowDisplayPlaylist with no controller reply.
+    const invalidSourceItem = findInvalidArtworkSource(request.dp1CallData.items);
+    if (invalidSourceItem) {
+      console.error('[CanvasService] Invalid artwork source:', {
+        itemId: invalidSourceItem.id,
+        source: invalidSourceItem.source,
+      });
       return { ok: false };
     }
 
