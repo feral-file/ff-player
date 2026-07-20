@@ -1212,6 +1212,10 @@ const ArtworkPlayer = ({
 
         isWebGLContextLost.current = false;
         setTimeout(() => {
+          // handleWebGLLost publishes failed; markArtworkReady intentionally
+          // ignores failed→ready (model-viewer commit). Clear failed before
+          // the recovery reload so a successful iframe ready can publish ready.
+          markArtworkPending();
           reloadIframe(activeSlotRef.current);
         }, 2000);
       }
@@ -1280,8 +1284,21 @@ const ArtworkPlayer = ({
   }, [previewURL]);
 
   const showSlowLoadingSpinner = () => {
-    // When the remote-config flag is on, show for every media type — including
-    // model-viewer — once markArtworkLoading has flipped showLoading.
+    // ModelViewerScreen owns its own "Loading 3D model" overlay; stacking the
+    // global ArtworkPlayer spinner on top creates a dual-overlay flash. Check
+    // incoming as well so image→model transitions do not briefly stack both.
+    const activePreviewType = slots[activeSlot]?.previewType;
+    const incoming = incomingSlotRef.current;
+    const incomingPreviewType =
+      incoming !== null ? slots[incoming]?.previewType : undefined;
+    if (
+      activePreviewType === PreviewHTMLTag.model ||
+      incomingPreviewType === PreviewHTMLTag.model
+    ) {
+      return false;
+    }
+    // When the remote-config flag is on, show for other media types once
+    // markArtworkLoading has flipped showLoading.
     return showLoading && globalLoading && showRenderLoadingOverlay;
   };
 

@@ -36,6 +36,14 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 - In `request_received`, the player instructs the user to open the Feral File mobile app, go to Settings > Art Computer, and approve the browser session.
 - The device-local static export ships `ffos-player-contract.json` at the bundle root. `feral-controld` and `feral-player.service` use that manifest to verify the deployed player supports this CDP contract before enabling mint pairing.
 
+## Artwork render status (`renderStatus`)
+
+- Status polls expose an optional numeric `renderStatus` on the device-status reply: `0` pending, `1` loading, `2` ready, `3` failed (`RenderStatus` in `src/models/render_status.model.ts`).
+- The value describes the **current page mount** only. Persistence and boot recovery strip it so IndexedDB cannot resurrect a prior ready/failed before `ArtworkPlayer` publishes a new lifecycle.
+- After boot/hydrate, `renderStatus` may be omitted/`undefined` until the player mounts; treat that as “not yet reported”, not as a terminal failure.
+- `CanvasService` forces `pending` when the selected artwork identity changes (`id` + `source`), including same-id source refresh.
+- `showRenderLoadingOverlay` only gates the visible loading overlay; it does not change the codes reported on status polls.
+
 ## Compatibility note
 
 - Persisted storage keys for cast, display settings, and boot recovery are unchanged by this document. Do not rename persisted keys without a migration plan.

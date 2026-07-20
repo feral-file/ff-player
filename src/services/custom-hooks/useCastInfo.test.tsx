@@ -18,6 +18,22 @@ vi.mock('@/utils/DeviceManager', () => ({
   },
 }));
 
+/** Minimal playlist fixture for persistence assertions. */
+function makePlaylist(): DP1Call {
+  return {
+    dpVersion: '1',
+    id: 'active',
+    title: 'active',
+    items: [
+      {
+        id: 'A',
+        source: 'https://example.com/a.jpg',
+        license: {},
+      } as DP1Item,
+    ],
+  } as DP1Call;
+}
+
 beforeEach(() => {
   setDeviceInfo.mockImplementation(() => Promise.resolve(undefined));
 });
@@ -29,22 +45,10 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('useCastInfo persistence', () => {
+describe('useCastInfo persistence strip', () => {
   it('strips renderStatus before persisting cast info', async () => {
     renderHook(() => useCastInfo());
-
-    const playlist = {
-      dpVersion: '1',
-      id: 'active',
-      title: 'active',
-      items: [
-        {
-          id: 'A',
-          source: 'https://example.com/a.jpg',
-          license: {},
-        } as DP1Item,
-      ],
-    } as DP1Call;
+    const playlist = makePlaylist();
 
     act(() => {
       canvasService.onCastInfoChange?.({
@@ -68,5 +72,83 @@ describe('useCastInfo persistence', () => {
       index: 0,
     });
     expect(stored).not.toHaveProperty('renderStatus');
+  });
+
+  it('rewrites playlist-control commands and strips renderStatus', async () => {
+    renderHook(() => useCastInfo());
+    const playlist = makePlaylist();
+
+    act(() => {
+      canvasService.onCastInfoChange?.({
+        castCommand: CastCommand.updateIndex,
+        playlist,
+        index: 0,
+        renderStatus: RenderStatus.loading,
+      });
+    });
+
+    await waitFor(() => {
+      expect(setDeviceInfo).toHaveBeenCalled();
+    });
+
+    expect(setDeviceInfo.mock.calls.at(-1)?.[0]).toEqual({
+      castCommand: CastCommand.displayPlaylist,
+      playlist,
+      index: 0,
+    });
+  });
+});
+
+describe('useCastInfo persistence thrash', () => {
+  it('does not persist again when only renderStatus changes', async () => {
+    renderHook(() => useCastInfo());
+    const playlist = makePlaylist();
+
+    act(() => {
+      canvasService.onCastInfoChange?.({
+        castCommand: CastCommand.displayPlaylist,
+        playlist,
+        index: 0,
+        renderStatus: RenderStatus.pending,
+      });
+    });
+
+    await waitFor(() => {
+      expect(setDeviceInfo).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      canvasService.onCastInfoChange?.({
+        castCommand: CastCommand.displayPlaylist,
+        playlist,
+        index: 0,
+        renderStatus: RenderStatus.loading,
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(setDeviceInfo).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      canvasService.onCastInfoChange?.({
+        castCommand: CastCommand.displayPlaylist,
+        playlist,
+        index: 1,
+        renderStatus: RenderStatus.ready,
+      });
+    });
+
+    await waitFor(() => {
+      expect(setDeviceInfo).toHaveBeenCalledTimes(2);
+    });
+
+    expect(setDeviceInfo.mock.calls.at(-1)?.[0]).toEqual({
+      castCommand: CastCommand.displayPlaylist,
+      playlist,
+      index: 1,
+    });
   });
 });

@@ -33,7 +33,10 @@ import {
   DisplayDefaultPlaylistReply,
   RenderStatus,
 } from '@/models';
-import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
+import {
+  stripEphemeralCastInfoFields,
+  stripLegacyCastPlaybackTimeline,
+} from '@/utils/castInfo';
 import { LoopMode } from '@/models/cast_info.model';
 import { DP1Item } from '@/models/dp1.model';
 import { CustomEventName, NavigateEventDetail } from '@/models/custom_event';
@@ -524,10 +527,9 @@ class CanvasService {
       if (!this.castInfo && storedCastInfo) {
         // Hydrate playlist/index only. renderStatus is live-only and must wait
         // for ArtworkPlayer (or an explicit setRenderStatus) after recovery.
-        const { renderStatus: _storedRenderStatus, ...recoverableCastInfo } =
-          storedCastInfo;
-        void _storedRenderStatus;
-        this.setCastInfo(recoverableCastInfo, false);
+        // Use the shared strip helper so future ephemeral fields stay aligned
+        // with AppContext boot and useCastInfo persistence.
+        this.setCastInfo(stripEphemeralCastInfoFields(storedCastInfo), false);
       }
 
       const activeCastInfo = this.castInfo ?? storedCastInfo ?? null;
