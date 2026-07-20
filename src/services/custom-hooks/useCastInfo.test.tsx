@@ -2,21 +2,24 @@
 import { CastCommand, RenderStatus, type CastInfo } from '@/models';
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
-import DeviceManager from '@/utils/DeviceManager';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useCastInfo from './useCastInfo';
 
+const { setDeviceInfo } = vi.hoisted(() => ({
+  setDeviceInfo: vi.fn<(castInfo: CastInfo | null) => Promise<void>>(() =>
+    Promise.resolve(undefined)
+  ),
+}));
+
 vi.mock('@/utils/DeviceManager', () => ({
   default: {
-    setDeviceInfo: vi.fn(() => Promise.resolve(undefined)),
+    setDeviceInfo,
   },
 }));
 
 beforeEach(() => {
-  vi.mocked(DeviceManager.setDeviceInfo).mockImplementation(() =>
-    Promise.resolve(undefined)
-  );
+  setDeviceInfo.mockImplementation(() => Promise.resolve(undefined));
 });
 
 afterEach(() => {
@@ -53,11 +56,12 @@ describe('useCastInfo persistence', () => {
     });
 
     await waitFor(() => {
-      expect(DeviceManager.setDeviceInfo).toHaveBeenCalled();
+      expect(setDeviceInfo).toHaveBeenCalled();
     });
 
-    const stored = vi.mocked(DeviceManager.setDeviceInfo).mock
-      .calls.at(-1)?.[0] as CastInfo | null | undefined;
+    const stored: CastInfo | null | undefined = setDeviceInfo.mock.calls.at(
+      -1
+    )?.[0];
     expect(stored).toEqual({
       castCommand: CastCommand.displayPlaylist,
       playlist,
