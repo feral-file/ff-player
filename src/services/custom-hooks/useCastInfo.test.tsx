@@ -1,10 +1,10 @@
 /** @vitest-environment jsdom */
 /**
  * Persistence contracts for useCastInfo:
- * - strip ephemeral renderStatus before IndexedDB write
- * - skip persist thrash when only renderStatus changes
- * - rewrite playlist-control commands (including updateDefaultDuration) to
- *   displayPlaylist so AppContext boot replay can populate the playlist route
+ * strip ephemeral renderStatus before IndexedDB write;
+ * skip persist thrash when only renderStatus changes;
+ * rewrite playlist-control commands (including updateDefaultDuration) to
+ * displayPlaylist so AppContext boot replay can populate the playlist route.
  */
 import { CastCommand, RenderStatus, type CastInfo } from '@/models';
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
