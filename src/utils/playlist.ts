@@ -25,6 +25,14 @@ interface ResolveSlotDurationSecondsOptions {
   playlistDefaults: DP1Defaults | null;
   /** Device-level override in seconds; null means "auto" (no override). */
   deviceDefaultDurationSeconds: number | null;
+  /**
+   * The slot's fully merged display preference once the async cascade —
+   * including the `item.ref` manifest layer — has resolved; null/absent
+   * before that. When present it is authoritative for the override gates so
+   * the timer agrees with what rendering applies; the synchronous merge
+   * below is only the pre-manifest fallback.
+   */
+  mergedDisplay?: DP1DisplayPreference | null;
 }
 
 /**
@@ -45,16 +53,18 @@ interface ResolveSlotDurationSecondsOptions {
  * non-time-based sources per the spec, and defaults to true, so only items
  * that explicitly opt out of looping take this path.
  *
- * The merge here is the synchronous subset of the display-preference cascade
- * (defaults.display → item.override.display → item.display). The async
- * ref-manifest layer is intentionally skipped: the timer must arm on slot
- * entry, and gating fields (loop/userOverrides) coming only from a remote
- * manifest are rare enough that waiting on the fetch is the worse trade.
+ * Gate fields come from `mergedDisplay` — the same merged preference
+ * rendering applies, including the async `item.ref` manifest layer — when the
+ * caller has it. Before that merge lands, the synchronous subset of the
+ * cascade (defaults.display → item.override.display → item.display) stands
+ * in, and the caller re-arms the timer once the full merge resolves so a
+ * manifest-only `userOverrides: false` or `loop: false` still wins.
  */
 export function resolveSlotDurationSeconds({
   item,
   playlistDefaults,
   deviceDefaultDurationSeconds,
+  mergedDisplay = null,
 }: ResolveSlotDurationSecondsOptions): number {
   const baseline = item.duration ?? NO_DURATION_VALUE;
 
@@ -62,7 +72,7 @@ export function resolveSlotDurationSeconds({
     return baseline;
   }
 
-  const display: DP1DisplayPreference = {
+  const display: DP1DisplayPreference = mergedDisplay ?? {
     ...defaultDP1DisplayPreference,
     ...(playlistDefaults?.display ?? {}),
     ...(item.override?.display ?? {}),

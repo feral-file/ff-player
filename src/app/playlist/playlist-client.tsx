@@ -12,7 +12,6 @@ import {
 } from '@/models/dp1.model';
 import { NO_DURATION_VALUE } from '@/constants';
 import { canvasService } from '@/services/CanvasService';
-import { DP1Service } from '@/services/DP1Service';
 import {
   isNoDurationItem,
   itemIdentityFor,
@@ -25,7 +24,11 @@ import {
 } from '@/utils/playlist';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
-import { reportPlaylistDisplayPreferenceError } from '@/utils/playlistDisplayPreference';
+import {
+  loadRefManifestDisplay,
+  mergeItemDisplayPreference,
+  reportPlaylistDisplayPreferenceError,
+} from '@/utils/playlistDisplayPreference';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 // 'sourceEnd' means the media just ended (display.loop=false) and needs a
@@ -49,6 +52,14 @@ export default function PlaylistClient() {
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   const currentItemRef = useRef<DP1Item>();
+  // Fully merged display preference (incl. async ref-manifest layer), tagged
+  // with its item so the slot timer's default-duration gate reads the same
+  // preference rendering applies and never a stale merge from a prior slot.
+  const mergedDisplayForItemRef = useRef<{
+    itemId: string | undefined;
+    ref: string | undefined;
+    display: DP1DisplayPreference;
+  } | null>(null);
   const currentIndexRef = useRef<number>(-1);
   const playlistRef = useRef<DP1Item[]>([]);
   const playlistLengthRef = useRef<number>(0);
@@ -139,63 +150,45 @@ export default function PlaylistClient() {
       const activeItemId = dp1Item.id;
       const activeRef = dp1Item.ref;
 
-      try {
-        // 4) Playlist defaults.display (lowest priority)
-        const base: DP1DisplayPreference = {
-          ...defaultDP1DisplayPreference,
-          ...(playlistDefaultsSettings?.display ?? {}),
-        };
-
-        // 3) Content loaded from item.ref
-        let refDisplay: DP1DisplayPreference | undefined;
-        try {
-          if (dp1Item.ref) {
-            // TODO: Implement ref hash verification
-            const manifest = await DP1Service.getItemRef(dp1Item.ref);
-            refDisplay = manifest?.controls?.display;
-          }
-        } catch (error: unknown) {
-          reportPlaylistDisplayPreferenceError('getItemRef', error, {
-            ref: dp1Item.ref,
-            itemId: dp1Item.id,
-          });
-          // Ref load failed; continue merge without manifest display.
-        }
-
-        // 2) Item override.display (medium priority)
-        let overriddenDisplay: DP1DisplayPreference | undefined;
-        if (dp1Item.override?.display) {
-          overriddenDisplay = dp1Item.override.display;
-        }
-
-        // 1) Item display (highest priority)
-        const merged: DP1DisplayPreference = {
-          ...base,
-          ...(refDisplay ?? {}),
-          ...(overriddenDisplay ?? {}),
-          ...(dp1Item.display ?? {}),
-        };
-
+      // Apply only if this merge still describes the item on screen; a slot
+      // change while the ref manifest loaded makes the result stale.
+      const apply = (merged: DP1DisplayPreference) => {
         const currentItem = currentItemRef.current;
         if (!currentItem) {
           return;
         }
         if (currentItem.id === activeItemId && currentItem.ref === activeRef) {
+          mergedDisplayForItemRef.current = {
+            itemId: activeItemId,
+            ref: activeRef,
+            display: merged,
+          };
           setCurrentItemDisplayPreference(merged);
         }
+      };
+
+      try {
+        // No-ref items resolve synchronously so first render is not deferred
+        // by a microtask; only the ref-manifest layer is asynchronous.
+        if (!activeRef) {
+          apply(mergeItemDisplayPreference(dp1Item, playlistDefaultsSettings));
+          return;
+        }
+        const refDisplay = await loadRefManifestDisplay(dp1Item);
+        apply(
+          mergeItemDisplayPreference(
+            dp1Item,
+            playlistDefaultsSettings,
+            refDisplay
+          )
+        );
       } catch (error: unknown) {
         reportPlaylistDisplayPreferenceError(
           'mergeOrApplyDisplayPreference',
           error,
           { itemId: activeItemId, ref: activeRef }
         );
-        const currentItem = currentItemRef.current;
-        if (!currentItem) {
-          return;
-        }
-        if (currentItem.id === activeItemId && currentItem.ref === activeRef) {
-          setCurrentItemDisplayPreference(defaultDP1DisplayPreference);
-        }
+        apply(defaultDP1DisplayPreference);
       }
     },
     [playlistDefaultsSettings]
@@ -371,16 +364,29 @@ export default function PlaylistClient() {
       const normalizedIndex = normalizePlaylistIndex(index, snapshot.length);
       const currentItem = snapshot[normalizedIndex];
 
-      // Device-level default duration (viewer override) participates in the
-      // resolution; resolveSlotDurationSeconds skips it for artist-vetoed
-      // (userOverrides=false) and natural-length (loop=false) items. The
-      // cached read is safe here: updateDefaultDuration republishes castInfo,
-      // which re-runs this scheduling path after the cache is already set.
+      // Device-level default duration (viewer override): applied only once
+      // this slot's fully merged display preference — including the async
+      // ref-manifest layer — is known, so a manifest-carried
+      // userOverrides=false (artist veto) or loop=false (natural length) can
+      // never be beaten to the timer by a slow fetch. Until the merge lands
+      // the item's own duration stands; the re-arm effect below reschedules
+      // with the override the moment the merge resolves. The cached read is
+      // safe here: updateDefaultDuration republishes castInfo, which re-runs
+      // this scheduling path after the cache is already set.
+      const storedMerge = mergedDisplayForItemRef.current;
+      const mergedDisplay =
+        storedMerge &&
+        storedMerge.itemId === currentItem.id &&
+        storedMerge.ref === currentItem.ref
+          ? storedMerge.display
+          : null;
       const duration = resolveSlotDurationSeconds({
         item: currentItem,
         playlistDefaults: playlistDefaultsSettings,
-        deviceDefaultDurationSeconds:
-          DeviceManager.getCachedDefaultItemDurationSeconds(),
+        deviceDefaultDurationSeconds: mergedDisplay
+          ? DeviceManager.getCachedDefaultItemDurationSeconds()
+          : null,
+        mergedDisplay,
       });
       if (duration <= 0 || duration >= NO_DURATION_VALUE) {
         return;
@@ -449,12 +455,28 @@ export default function PlaylistClient() {
     scheduleCurrentItemTimer,
   ]);
 
+  // Once the async display-preference merge (incl. the ref-manifest layer)
+  // lands for the current slot, re-arm its timer: the initial arm ran without
+  // the device override (merge unknown), and only the merged preference may
+  // grant it. Restart-from-zero on re-arm is deliberate — manifest loads
+  // settle well before any human-scale duration elapses.
+  useEffect(() => {
+    if (!currentItemDisplayPreference) {
+      return;
+    }
+    if (currentIndexRef.current < 0 || playlistRef.current.length === 0) {
+      return;
+    }
+    scheduleCurrentItemTimer(currentIndexRef.current, playlistRef.current);
+  }, [currentItemDisplayPreference, scheduleCurrentItemTimer]);
+
   // eslint-disable-next-line max-lines-per-function
   useEffect(() => {
     if (!castInfo) {
       clearTimer();
       holdAfterFinalSlotRef.current = false;
       currentItemRef.current = undefined;
+      mergedDisplayForItemRef.current = null;
       loopModeRef.current = LoopMode.playlist;
       setPlaylist([]);
       setCurrentIndex(-1);

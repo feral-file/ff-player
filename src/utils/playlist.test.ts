@@ -306,3 +306,42 @@ describe('device default duration gates', () => {
     ).toBe(600);
   });
 });
+
+describe('device default duration merged-display authority', () => {
+  it('gates on the merged display when provided (manifest veto wins)', () => {
+    expect(
+      resolveSlotDurationSeconds({
+        item: timedItem('A', 300),
+        playlistDefaults: noDefaults,
+        deviceDefaultDurationSeconds: 600,
+        mergedDisplay: { userOverrides: false },
+      })
+    ).toBe(300);
+  });
+
+  it('merged display is authoritative over the synchronous item fields', () => {
+    const syncVetoed = {
+      ...timedItem('A', 300),
+      display: { userOverrides: false },
+    } as DP1Item;
+    expect(
+      resolveSlotDurationSeconds({
+        item: syncVetoed,
+        playlistDefaults: noDefaults,
+        deviceDefaultDurationSeconds: 600,
+        mergedDisplay: { userOverrides: true, loop: true },
+      })
+    ).toBe(600);
+  });
+
+  it('merged loop=false keeps natural-length playback', () => {
+    expect(
+      resolveSlotDurationSeconds({
+        item: timedItem('A', NO_DURATION_VALUE),
+        playlistDefaults: noDefaults,
+        deviceDefaultDurationSeconds: 600,
+        mergedDisplay: { loop: false },
+      })
+    ).toBe(NO_DURATION_VALUE);
+  });
+});
