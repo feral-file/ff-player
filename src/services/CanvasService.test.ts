@@ -108,7 +108,7 @@ describe('CanvasService refreshArtwork', () => {
     expect(refreshSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('returns ok:false when refresh receives a relative source path', () => {
+  it('accepts a relative source path on refreshPlaylist', () => {
     canvasService.setCastInfo(
       {
         castCommand: CastCommand.displayPlaylist,
@@ -125,9 +125,44 @@ describe('CanvasService refreshArtwork', () => {
         refresh: true,
         dp1_call: playlist('refreshed', [
           {
-            id: 'bad-refresh',
+            id: 'rel-refresh',
             title: 'Relative Source',
             source: 'artwork.png',
+            license: {},
+          } as DP1Item,
+        ]),
+      },
+    });
+
+    // Relative sources are cast-acceptable. Current item is absent from the new
+    // list, so refresh defers apply and keeps the active playlist until promote.
+    expect(reply).toEqual({ ok: true });
+    expect(
+      canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)
+    ).toEqual(['A', 'B']);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
+  it('returns ok:false when refresh receives a non-web source scheme', () => {
+    canvasService.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: playlist('active', ['A', 'B'].map(item)),
+        index: 1,
+        renderStatus: undefined,
+      },
+      false
+    );
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.displayPlaylist,
+      request: {
+        refresh: true,
+        dp1_call: playlist('refreshed', [
+          {
+            id: 'tezos-refresh',
+            title: 'Tezos Source',
+            source: 'tezos:KT1example:1',
             license: {},
           } as DP1Item,
         ]),
