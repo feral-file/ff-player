@@ -8,6 +8,7 @@ import { NO_DURATION_VALUE } from '@/constants';
 import type { DP1Item } from '@/models/dp1.model';
 import { LoopMode } from '@/models/cast_info.model';
 import { canvasService } from '@/services/CanvasService';
+import { clearRefManifestDisplayCache } from '@/utils/playlistDisplayPreference';
 import DeviceManager from '@/utils/DeviceManager';
 import { render } from '@testing-library/react';
 import * as React from 'react';
@@ -78,6 +79,7 @@ describe('PlaylistClient — device default duration vs ref-manifest gates', () 
 
   afterEach(async () => {
     teardownPlaylistWiringTest();
+    clearRefManifestDisplayCache();
     await setDeviceDefault(null);
     vi.clearAllMocks();
   });
@@ -145,6 +147,7 @@ describe('PlaylistClient — bounded manifest wait', () => {
 
   afterEach(async () => {
     teardownPlaylistWiringTest();
+    clearRefManifestDisplayCache();
     await setDeviceDefault(null);
     vi.clearAllMocks();
   });
@@ -181,6 +184,7 @@ describe('PlaylistClient — in-session updateDefaultDuration', () => {
 
   afterEach(async () => {
     teardownPlaylistWiringTest();
+    clearRefManifestDisplayCache();
     await setDeviceDefault(null);
     vi.clearAllMocks();
   });
@@ -225,6 +229,57 @@ describe('PlaylistClient — in-session updateDefaultDuration', () => {
   });
 });
 
+describe('PlaylistClient — late manifest vetoes', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(async () => {
+    teardownPlaylistWiringTest();
+    clearRefManifestDisplayCache();
+    await setDeviceDefault(null);
+    vi.clearAllMocks();
+  });
+
+  it('a late veto never rewinds an advanced slot and binds its next visit', async () => {
+    await setDeviceDefault(5);
+    let resolveLate: ((value: unknown) => void) | undefined;
+    getItemRefMock.mockReturnValue(
+      new Promise(resolve => {
+        resolveLate = resolve;
+      }) as never
+    );
+    const items = [refItem('a', 30), item('b', 300), item('c', 300)];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    render(<PlaylistHarness castInfo={initial} />);
+
+    // Bounded merge at ~10s (sync-permissive), override 5s, advance at ~15s.
+    await advanceMs(0);
+    await advanceSteps(15000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+
+    // The manifest veto arrives only now — after the slot advanced. It must
+    // not rewind playback; it lands in the session cache instead.
+    resolveLate?.(manifestWithDisplay({ userOverrides: false }));
+    await advanceMs(0);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+
+    // b and c advance under the override; playback wraps to slot a.
+    await advanceSteps(5000);
+    expect(canvasService.getCastInfo()?.index).toBe(2);
+    await advanceSteps(5000);
+    expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
+
+    // Revisit: the cached veto is known at slot entry — the device default
+    // never arms and the item's own 30s duration governs.
+    await advanceSteps(5000);
+    expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
+    await advanceSteps(25000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+});
+
 describe('PlaylistClient — merge-cache lifetime', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -232,6 +287,7 @@ describe('PlaylistClient — merge-cache lifetime', () => {
 
   afterEach(async () => {
     teardownPlaylistWiringTest();
+    clearRefManifestDisplayCache();
     await setDeviceDefault(null);
     vi.clearAllMocks();
   });
@@ -262,13 +318,15 @@ describe('PlaylistClient — merge-cache lifetime', () => {
     canvasService.setCastInfo(next, false);
     rerender(<PlaylistHarness castInfo={next} />);
 
-    // Hold pre-merge; the bounded merge (~10s) lands carrying the sync veto,
-    // so the 30s baseline restarts then and the device default never arms.
+    // The ref display is session-cached from the first cast, so the new
+    // cast's merge lands immediately — recomputed against the new item's
+    // sync veto rather than reusing the stale slot merge. The device default
+    // must never arm; the item's own 30s duration governs from entry.
     await advanceMs(0);
     await advanceSteps(5000);
     expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
 
-    await advanceSteps(35000);
+    await advanceSteps(25000);
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 
@@ -296,10 +354,11 @@ describe('PlaylistClient — merge-cache lifetime', () => {
     await advanceSteps(5000);
     expect(canvasService.getCastInfo()?.index).toBe(1);
 
-    // Slot 1: same id/ref, merge pending. A stale slot-0 merge must not arm
-    // the 5s override: the slot holds until its own bounded merge lands with
-    // the sync veto (~10s in), then its 30s baseline governs from there.
-    await advanceSteps(35000);
+    // Slot 1: same id/ref. Its merge is recomputed for the slot (ref display
+    // session-cached, so it lands at entry) and the per-slot sync veto wins —
+    // a stale slot-0 merge must not arm the 5s override. The 30s baseline
+    // governs from slot entry (t=5), advancing at t=35.
+    await advanceSteps(25000);
     expect(canvasService.getCastInfo()?.index).toBe(1);
     await advanceSteps(5000);
     expect(canvasService.getCastInfo()?.index).toBe(2);

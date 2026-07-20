@@ -87,6 +87,19 @@ describe('CanvasService updateDefaultDuration', () => {
     ).toBeUndefined();
   });
 
+  it('treats a missing request envelope as clearing the override', () => {
+    canvasService.processMessage({
+      command: CastCommand.updateDefaultDuration,
+      request: { durationSeconds: 600 },
+    });
+    const reply = canvasService.processMessage({
+      command: CastCommand.updateDefaultDuration,
+    });
+
+    expect(reply).toEqual({ ok: true });
+    expect(DeviceManager.getCachedDefaultItemDurationSeconds()).toBeNull();
+  });
+
   it('rejects non-positive and non-finite durations without persisting', () => {
     const invalidDurations = [0, -5, Number.NaN, Number.POSITIVE_INFINITY];
     for (const durationSeconds of invalidDurations) {

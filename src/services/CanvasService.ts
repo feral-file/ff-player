@@ -771,8 +771,11 @@ class CanvasService {
    * republished so the playlist route re-arms the active slot timer against
    * the new value without restarting playback.
    */
-  private updateDefaultDuration(request: UpdateDefaultDurationRequest): Reply {
-    const raw = request.durationSeconds ?? null;
+  private updateDefaultDuration(
+    request: UpdateDefaultDurationRequest | undefined
+  ): Reply {
+    // A missing request envelope means "clear" — same as an explicit null.
+    const raw = request?.durationSeconds ?? null;
     if (raw !== null && (!Number.isFinite(raw) || raw <= 0)) {
       console.error('[CanvasService] Invalid default duration:', raw);
       return { ok: false };

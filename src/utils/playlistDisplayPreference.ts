@@ -77,16 +77,36 @@ export const REF_MANIFEST_GATE_TIMEOUT_MS = 10_000;
  * Fetch failures are reported and swallowed — a missing manifest must not
  * blank the artwork or strand the slot timer.
  */
+// Session cache of resolved manifest display preferences by ref URL. A slow
+// manifest can only lose the pre-advance veto race once per session: after it
+// resolves — however late — every later visit to any slot with that ref gets
+// its gates synchronously, before any timer arms. Failures are not cached so
+// transient fetch errors retry on the next visit.
+const refDisplayCache = new Map<string, DP1DisplayPreference | undefined>();
+
+/** Test hook: reset the session ref-display cache. */
+export function clearRefManifestDisplayCache(): void {
+  refDisplayCache.clear();
+}
+
+/**
+ *
+ */
 export async function loadRefManifestDisplay(
   dp1Item: DP1Item
 ): Promise<DP1DisplayPreference | undefined> {
   if (!dp1Item.ref) {
     return undefined;
   }
+  if (refDisplayCache.has(dp1Item.ref)) {
+    return refDisplayCache.get(dp1Item.ref);
+  }
   try {
     // TODO: Implement ref hash verification
     const manifest = await DP1Service.getItemRef(dp1Item.ref);
-    return manifest?.controls?.display;
+    const display = manifest?.controls?.display;
+    refDisplayCache.set(dp1Item.ref, display);
+    return display;
   } catch (error: unknown) {
     reportPlaylistDisplayPreferenceError('getItemRef', error, {
       ref: dp1Item.ref,
