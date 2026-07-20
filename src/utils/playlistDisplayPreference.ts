@@ -104,7 +104,7 @@ export function clearRefManifestDisplayCache(): void {
  * them; hashed entries are content-addressed and stay valid for the session.
  */
 export function clearUnversionedRefManifestDisplayCache(): void {
-  for (const key of [...refDisplayCache.keys()]) {
+  for (const key of Array.from(refDisplayCache.keys())) {
     if (key.endsWith('#')) {
       refDisplayCache.delete(key);
     }

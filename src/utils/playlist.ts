@@ -67,6 +67,28 @@ export function hasDecisiveSyncVeto(item: DP1Item): boolean {
   );
 }
 
+/**
+ * True when slot-timer scheduling should wait for the pending display merge:
+ * a device default is set, the item has a ref manifest still resolving, and
+ * no layer that outranks the manifest has already vetoed re-timing. Arming
+ * anything earlier would either let a short baseline beat a longer owner
+ * default or fire the override against unknown gates; the merge is bounded,
+ * so the re-arm always follows.
+ */
+export function shouldHoldForPendingMerge(params: {
+  item: DP1Item;
+  mergedDisplay: DP1DisplayPreference | null;
+  deviceDefaultDurationSeconds: number | null;
+}): boolean {
+  const { item, mergedDisplay, deviceDefaultDurationSeconds } = params;
+  return (
+    !mergedDisplay &&
+    deviceDefaultDurationSeconds !== null &&
+    !!item.ref &&
+    !hasDecisiveSyncVeto(item)
+  );
+}
+
 interface ResolveSlotDurationSecondsOptions {
   item: DP1Item;
   playlistDefaults: DP1Defaults | null;

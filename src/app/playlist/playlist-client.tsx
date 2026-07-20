@@ -12,7 +12,6 @@ import {
 import { NO_DURATION_VALUE } from '@/constants';
 import { canvasService } from '@/services/CanvasService';
 import {
-  hasDecisiveSyncVeto,
   isNoDurationItem,
   itemIdentityFor,
   mergedDisplayForSlot,
@@ -21,6 +20,7 @@ import {
   resolveSequentialPlaylistAdvance,
   resolveSlotDurationSeconds,
   shouldApplyQueuedPlaylistOnShuffleOrRefresh,
+  shouldHoldForPendingMerge,
   shouldResumeSlotTimerAfterSetLoop,
   type SlotMergedDisplay,
 } from '@/utils/playlist';
@@ -364,18 +364,12 @@ export default function PlaylistClient() {
         normalizedIndex
       );
       const deviceDefault = DeviceManager.getCachedDefaultItemDurationSeconds();
-      // With a device default set, a ref item whose merge has not landed yet
-      // arms no timer at all: neither its own duration (which could advance
-      // before a longer owner default gets its chance) nor the override
-      // (whose gates are unknown). The merge is bounded
-      // (REF_MANIFEST_GATE_TIMEOUT_MS), so the re-arm effect always follows.
-      // Exception: a veto in the item's own display layers outranks the
-      // manifest, so the gate is already decided — baseline arms now.
       if (
-        !mergedDisplay &&
-        deviceDefault !== null &&
-        currentItem.ref &&
-        !hasDecisiveSyncVeto(currentItem)
+        shouldHoldForPendingMerge({
+          item: currentItem,
+          mergedDisplay,
+          deviceDefaultDurationSeconds: deviceDefault,
+        })
       ) {
         return;
       }
