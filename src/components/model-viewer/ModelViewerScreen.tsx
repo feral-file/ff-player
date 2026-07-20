@@ -243,45 +243,74 @@ function useModelViewerPlaybackState({
       return undefined;
     }
 
-    const markLoaded = () => {
-      setIsLoaded(true);
-      onLoadRef.current?.();
-    };
-    const handleError = () => {
-      setHasError(true);
-      onErrorRef.current?.();
-    };
-
-    const checkLoaded = () => {
-      const modelViewer = viewer as HTMLElement & { loaded?: boolean };
-      if (modelViewer.loaded) {
-        markLoaded();
-        return true;
+    return trackModelViewerPlayback(
+      viewer,
+      () => {
+        setIsLoaded(true);
+        onLoadRef.current?.();
+      },
+      () => {
+        setHasError(true);
+        onErrorRef.current?.();
       }
-      return false;
-    };
-
-    if (checkLoaded()) {
-      return undefined;
-    }
-
-    const pollId = window.setInterval(() => {
-      if (checkLoaded()) {
-        window.clearInterval(pollId);
-      }
-    }, 100);
-
-    viewer.addEventListener('load', markLoaded);
-    viewer.addEventListener('error', handleError);
-
-    return () => {
-      window.clearInterval(pollId);
-      viewer.removeEventListener('load', markLoaded);
-      viewer.removeEventListener('error', handleError);
-    };
+    );
   }, [hasSource, isResolvingSource, resolvedSrc, viewerRef]);
 
   return { isLoaded, hasError };
+}
+
+function trackModelViewerPlayback(
+  viewer: HTMLElement,
+  onLoad: () => void,
+  onError: () => void
+) {
+  let pollId: number | null = null;
+  let didMarkLoaded = false;
+  const markLoaded = () => {
+    if (didMarkLoaded) {
+      return;
+    }
+    didMarkLoaded = true;
+    if (pollId !== null) {
+      window.clearInterval(pollId);
+      pollId = null;
+    }
+    onLoad();
+  };
+  const handleError = () => {
+    onError();
+  };
+
+  const checkLoaded = () => {
+    const modelViewer = viewer as HTMLElement & { loaded?: boolean };
+    if (modelViewer.loaded) {
+      markLoaded();
+      return true;
+    }
+    return false;
+  };
+
+  if (checkLoaded()) {
+    return undefined;
+  }
+
+  pollId = window.setInterval(() => {
+    if (checkLoaded() && pollId !== null) {
+      window.clearInterval(pollId);
+      pollId = null;
+    }
+  }, 100);
+
+  viewer.addEventListener('load', markLoaded);
+  viewer.addEventListener('error', handleError);
+
+  return () => {
+    if (pollId !== null) {
+      window.clearInterval(pollId);
+    }
+    viewer.removeEventListener('load', markLoaded);
+    viewer.removeEventListener('error', handleError);
+  };
 }
 
 /**

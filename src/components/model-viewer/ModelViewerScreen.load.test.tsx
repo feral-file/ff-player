@@ -44,12 +44,21 @@ describe('ModelViewerScreen', () => {
 
     const viewer = container.querySelector('model-viewer');
     expect(viewer).toBeTruthy();
+    Object.defineProperty(viewer, 'loaded', {
+      configurable: true,
+      value: true,
+    });
 
     viewer?.dispatchEvent(new Event('load'));
 
     await waitFor(() => {
       expect(onLoad).toHaveBeenCalledTimes(1);
     });
+    await new Promise(resolve => {
+      setTimeout(resolve, 150);
+    });
+
+    expect(onLoad).toHaveBeenCalledTimes(1);
 
     expect(screen.queryByText('Unable to load 3D model')).toBeNull();
   });

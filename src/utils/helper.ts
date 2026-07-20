@@ -63,6 +63,10 @@ export async function getContentTypeFromURL(
         inferredType = 'application/pdf';
       } else if (FileUseStreamVideo.includes(extension)) {
         inferredType = 'application/x-mpegurl';
+      } else if (extension === 'glb') {
+        inferredType = 'model/gltf-binary';
+      } else if (extension === 'gltf') {
+        inferredType = 'model/gltf+json';
       }
 
       if (inferredType) {

@@ -26,4 +26,16 @@ describe('getContentTypeFromURL', () => {
       expect.stringContaining('"cause":{"name":"Error","message":"tls alert"')
     );
   });
+
+  it('infers GLB and glTF MIME types from extensions when HEAD fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('blocked'));
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    await expect(
+      getContentTypeFromURL('https://example.com/artwork/model.glb')
+    ).resolves.toBe('model/gltf-binary');
+    await expect(
+      getContentTypeFromURL('https://example.com/artwork/model.gltf')
+    ).resolves.toBe('model/gltf+json');
+  });
 });
