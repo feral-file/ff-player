@@ -15,6 +15,7 @@ import {
   isNoDurationItem,
   itemIdentityFor,
   mergedDisplayForSlot,
+  mergeStillDescribesActiveSlot,
   normalizePlaylistIndex,
   resolveQueuedPlaylistNextIndex,
   resolveSequentialPlaylistAdvance,
@@ -39,8 +40,7 @@ type AdvanceCause = 'timer' | 'sourceEnd';
 
 // eslint-disable-next-line max-lines-per-function
 export default function PlaylistClient() {
-  const { context } = useAppContext();
-  const castInfo = context.castInfo;
+  const castInfo = useAppContext().context.castInfo;
 
   const [playlist, setPlaylist] = useState<DP1Item[]>([]);
   const [playlistDefaultsSettings, setPlaylistDefaultsSettings] =
@@ -156,19 +156,18 @@ export default function PlaylistClient() {
       // index is part of the guard because same-id/ref slots may carry
       // different per-slot display fields.
       const apply = (merged: DP1DisplayPreference) => {
-        const currentItem = currentItemRef.current;
-        if (!currentItem) {
-          return;
-        }
         const activeIndex = normalizePlaylistIndex(
           currentIndexRef.current,
           playlistRef.current.length
         );
-        if (
-          activeIndex === slotIndex &&
-          currentItem.id === activeItemId &&
-          currentItem.ref === activeRef
-        ) {
+        const stillActive = mergeStillDescribesActiveSlot({
+          activeIndex,
+          activeItem: currentItemRef.current,
+          slotIndex,
+          itemId: activeItemId,
+          ref: activeRef,
+        });
+        if (stillActive) {
           mergedDisplayForItemRef.current = {
             index: slotIndex,
             itemId: activeItemId,
@@ -388,13 +387,14 @@ export default function PlaylistClient() {
       // fresh interval: the artwork has been on screen since slot entry, so
       // only the remaining time is scheduled. Override re-arms deliberately
       // restart from zero (owner just changed the pacing).
-      const isBaseline =
+      const keepElapsed =
+        preserveElapsed &&
         duration === (currentItem.duration ?? NO_DURATION_VALUE);
-      const elapsedMs =
-        preserveElapsed && isBaseline
-          ? Date.now() - slotStartedAtRef.current
-          : 0;
-      const delayMs = Math.max(duration * 1000 - elapsedMs, 0);
+      const delayMs = Math.max(
+        duration * 1000 -
+          (keepElapsed ? Date.now() - slotStartedAtRef.current : 0),
+        0
+      );
 
       timerRef.current = setTimeout(() => {
         // The timeout is firing now, so the previous handle is no longer active.

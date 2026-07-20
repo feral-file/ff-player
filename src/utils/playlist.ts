@@ -68,6 +68,28 @@ export function hasDecisiveSyncVeto(item: DP1Item): boolean {
 }
 
 /**
+ * True when a resolved display merge still describes the slot on screen: the
+ * active slot index matches the slot the merge was started for and the item
+ * occupying it still has the same id/ref. Guards against a slot change while
+ * a ref manifest was loading.
+ */
+export function mergeStillDescribesActiveSlot(params: {
+  activeIndex: number;
+  activeItem: DP1Item | undefined;
+  slotIndex: number;
+  itemId: string | undefined;
+  ref: string | undefined;
+}): boolean {
+  const { activeIndex, activeItem, slotIndex, itemId, ref } = params;
+  return (
+    activeIndex === slotIndex &&
+    activeItem !== undefined &&
+    activeItem.id === itemId &&
+    activeItem.ref === ref
+  );
+}
+
+/**
  * True when slot-timer scheduling should wait for the pending display merge:
  * a device default is set, the item has a ref manifest still resolving, and
  * no layer that outranks the manifest has already vetoed re-timing. Arming
