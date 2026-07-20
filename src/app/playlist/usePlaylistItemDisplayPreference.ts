@@ -42,6 +42,10 @@ export function usePlaylistItemDisplayPreference(options: {
   const [preference, setPreference] = useState<DP1DisplayPreference | null>(
     null
   );
+  // Bumped whenever the playlist is replaced. An async merge started under
+  // an older generation must not apply even when the replacement keeps the
+  // same slot index/id/ref — the new cast may carry different display gates.
+  const generationRef = useRef(0);
   // Fully merged display preference (incl. async ref-manifest layer), tagged
   // with its slot so the timer's default-duration gate reads the same
   // preference rendering applies and never a stale merge from another slot.
@@ -51,12 +55,16 @@ export function usePlaylistItemDisplayPreference(options: {
     async (dp1Item: DP1Item, slotIndex: number) => {
       const activeItemId = dp1Item.id;
       const activeRef = dp1Item.ref;
+      const generation = generationRef.current;
 
       // Apply only if this merge still describes the slot on screen; a slot
       // change while the ref manifest loaded makes the result stale. The
       // index is part of the guard because same-id/ref slots may carry
       // different per-slot display fields.
       const apply = (merged: DP1DisplayPreference) => {
+        if (generation !== generationRef.current) {
+          return;
+        }
         const activeIndex = normalizePlaylistIndex(
           currentIndexRef.current,
           playlistRef.current.length
@@ -95,15 +103,18 @@ export function usePlaylistItemDisplayPreference(options: {
   // without a version identity to detect it by. The rendered preference is
   // kept until the new slot's merge lands so the artwork does not unmount.
   const clearMergedDisplayForNewCast = useCallback(() => {
+    generationRef.current++;
     mergedDisplayRef.current = null;
     clearUnversionedRefManifestDisplayCache();
   }, []);
 
   const clearMergedDisplay = useCallback(() => {
+    generationRef.current++;
     mergedDisplayRef.current = null;
   }, []);
 
   const reset = useCallback(() => {
+    generationRef.current++;
     mergedDisplayRef.current = null;
     setPreference(null);
   }, []);

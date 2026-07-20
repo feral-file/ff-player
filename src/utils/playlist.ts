@@ -61,10 +61,11 @@ export function mergedDisplayForSlot(
  * eventually says — callers need not hold the slot timer for the manifest.
  */
 export function hasDecisiveSyncVeto(item: DP1Item): boolean {
-  const layers = [item.display, item.override?.display];
-  return layers.some(
-    display => display?.userOverrides === false || display?.loop === false
-  );
+  // Merge respecting layer precedence: item.display outranks
+  // item.override.display, so a field the higher layer re-opts into
+  // neutralizes the lower layer's veto (mirrors mergeItemDisplayPreference).
+  const merged = { ...item.override?.display, ...item.display };
+  return merged.userOverrides === false || merged.loop === false;
 }
 
 /**

@@ -372,6 +372,76 @@ describe('PlaylistClient — merge-cache lifetime', () => {
     vi.clearAllMocks();
   });
 
+  it('a stale in-flight merge cannot apply across an identical recast', async () => {
+    await setDeviceDefault(5);
+    // First cast: item 'a' (permissive), manifest slow. Before it resolves,
+    // recast the SAME slot identity (index/id/ref) but locally vetoed. The
+    // old cast's merge then resolves permissive — it must not apply to the
+    // new cast, whose veto keeps the 30s baseline.
+    let resolveOld: ((value: unknown) => void) | undefined;
+    getItemRefMock.mockReturnValueOnce(
+      new Promise(resolve => {
+        resolveOld = resolve;
+      }) as never
+    );
+    getItemRefMock.mockReturnValue(new Promise(() => undefined) as never);
+    const permissive = [refItem('a', 30), item('b', 300), item('c', 300)];
+    const initial = displayCast(permissive, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    const { rerender } = render(<PlaylistHarness castInfo={initial} />);
+    await advanceMs(0);
+
+    const vetoed = [
+      { ...refItem('a', 30), display: { userOverrides: false } } as DP1Item,
+      item('b', 300),
+      item('c', 300),
+    ];
+    const next = displayCast(vetoed, 0, LoopMode.playlist);
+    canvasService.setCastInfo(next, false);
+    rerender(<PlaylistHarness castInfo={next} />);
+    await advanceMs(0);
+
+    // The OLD cast's manifest resolves permissive now; stale generation.
+    resolveOld?.(manifestWithDisplay({ userOverrides: true }) as never);
+    await advanceMs(0);
+
+    // If the stale merge applied, the 5s override would advance the slot.
+    await advanceSteps(10000);
+    expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
+    await advanceSteps(20000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
+  it('an override-layer veto is not decisive when item.display opts back in', async () => {
+    await setDeviceDefault(60);
+    // override.display vetoes but the higher-priority item.display re-opts
+    // in: the sync layers do NOT decide the gate, so the slot must hold for
+    // the manifest instead of letting the short 5s baseline fire.
+    getItemRefMock.mockReturnValue(new Promise(() => undefined) as never);
+    const items = [
+      {
+        ...refItem('a', 5),
+        override: { display: { userOverrides: false } },
+        display: { userOverrides: true },
+      } as DP1Item,
+      item('b', 300),
+      item('c', 300),
+    ];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    render(<PlaylistHarness castInfo={initial} />);
+
+    await advanceMs(0);
+    // Held through the item's own 5s (no baseline armed pre-merge)...
+    await advanceSteps(5000);
+    expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
+    // ...then the bounded merge lands permissive and the 60s default arms.
+    await advanceSteps(10000);
+    expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
+    await advanceSteps(60000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
   it('drops the cached merge when a new playlist replaces the item', async () => {
     await setDeviceDefault(5);
     // First display: manifest allows overrides; the merge lands and the
