@@ -271,6 +271,33 @@ describe('PlaylistClient — late manifest vetoes', () => {
     vi.clearAllMocks();
   });
 
+  it('a mid-slot veto preserves the item duration elapsed time', async () => {
+    await setDeviceDefault(60);
+    // Item's own duration (5s) is shorter than the device default (60s).
+    // The manifest resolves with a veto 2s in — before the baseline would
+    // have expired. The item must advance at ~5s from slot entry, neither
+    // early (pre-merge hold has no timer) nor restarted (7s).
+    let resolveLate: ((value: unknown) => void) | undefined;
+    getItemRefMock.mockReturnValue(
+      new Promise(resolve => {
+        resolveLate = resolve;
+      }) as never
+    );
+    const items = [refItem('a', 5), item('b', 300), item('c', 300)];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    render(<PlaylistHarness castInfo={initial} />);
+    await advanceMs(0);
+
+    await advanceMs(2000);
+    resolveLate?.(manifestWithDisplay({ userOverrides: false }));
+    await advanceMs(0);
+    // 2s elapsed under the veto's baseline: only ~3s remain.
+    expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
+    await advanceMs(3000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
   it('a late veto never rewinds an advanced slot and binds its next visit', async () => {
     await setDeviceDefault(5);
     let resolveLate: ((value: unknown) => void) | undefined;

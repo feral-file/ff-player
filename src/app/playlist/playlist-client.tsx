@@ -48,6 +48,10 @@ export default function PlaylistClient() {
   const artworkPerformReloadRef = useRef<(() => void) | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
+  // Wall-clock moment the active slot last (re)started, so a merge-landed
+  // re-arm can preserve elapsed time for baseline durations instead of
+  // granting a vetoed item a fresh full interval.
+  const slotStartedAtRef = useRef<number>(0);
   const currentItemRef = useRef<DP1Item>();
   // Fully merged display preference (incl. async ref-manifest layer), tagged
   // with its item so the slot timer's default-duration gate reads the same
@@ -326,12 +330,16 @@ export default function PlaylistClient() {
   const scheduleCurrentItemTimer = useCallback(
     function scheduleCurrentItemTimer(
       index: number,
-      snapshot: DP1Item[]
+      snapshot: DP1Item[],
+      preserveElapsed = false
     ): void {
       clearTimer();
 
       if (!snapshot.length) {
         return;
+      }
+      if (!preserveElapsed) {
+        slotStartedAtRef.current = Date.now();
       }
 
       const normalizedIndex = normalizePlaylistIndex(index, snapshot.length);
@@ -370,13 +378,26 @@ export default function PlaylistClient() {
         return;
       }
 
+      // A merge-landed re-arm that resolves to the item's own duration (the
+      // override was withheld — artist veto or no default) must not grant a
+      // fresh interval: the artwork has been on screen since slot entry, so
+      // only the remaining time is scheduled. Override re-arms deliberately
+      // restart from zero (owner just changed the pacing).
+      const isBaseline =
+        duration === (currentItem.duration ?? NO_DURATION_VALUE);
+      const elapsedMs =
+        preserveElapsed && isBaseline
+          ? Date.now() - slotStartedAtRef.current
+          : 0;
+      const delayMs = Math.max(duration * 1000 - elapsedMs, 0);
+
       timerRef.current = setTimeout(() => {
         // The timeout is firing now, so the previous handle is no longer active.
         // Clearing it lets later loop-mode changes detect a true "held on final
         // artwork" state after repeat-off stops progression.
         timerRef.current = undefined;
         advanceFromSlot(normalizedIndex, snapshot);
-      }, duration * 1000);
+      }, delayMs);
     },
     [advanceFromSlot, clearTimer, playlistDefaultsSettings]
   );
@@ -452,7 +473,7 @@ export default function PlaylistClient() {
     if (DeviceManager.getCachedDefaultItemDurationSeconds() === null) {
       return;
     }
-    scheduleCurrentItemTimer(currentIndexRef.current, playlistRef.current);
+    scheduleCurrentItemTimer(currentIndexRef.current, playlistRef.current, true);
   }, [currentItemDisplayPreference, scheduleCurrentItemTimer]);
 
   // eslint-disable-next-line max-lines-per-function
