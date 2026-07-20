@@ -25,6 +25,7 @@ const playlist = (id: string): DP1Call => ({
   items: [item('a'), item('b')],
 });
 
+/** A two-item cast at index 1 carrying [castCommand]. */
 function castWith(castCommand: CastCommand): CastInfo {
   return {
     castCommand,
