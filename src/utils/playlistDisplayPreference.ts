@@ -90,7 +90,10 @@ export function clearRefManifestDisplayCache(): void {
 }
 
 /**
- *
+ * Load the display preference carried by an item's `ref` manifest, or
+ * undefined when the item has no ref or the manifest cannot be fetched.
+ * Resolved results are session-cached by ref URL; fetch failures are
+ * reported, swallowed, and left uncached so they retry on the next visit.
  */
 export async function loadRefManifestDisplay(
   dp1Item: DP1Item

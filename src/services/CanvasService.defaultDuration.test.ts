@@ -87,6 +87,19 @@ describe('CanvasService updateDefaultDuration', () => {
     ).toBeUndefined();
   });
 
+});
+
+describe('CanvasService updateDefaultDuration edge inputs', () => {
+  beforeEach(() => {
+    vi.stubGlobal('window', { location: { pathname: '/playlist' } });
+  });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    canvasService.setCastInfo(null, false);
+    await DeviceManager.setDefaultItemDurationSeconds(null);
+  });
+
   it('treats a missing request envelope as clearing the override', () => {
     canvasService.processMessage({
       command: CastCommand.updateDefaultDuration,
