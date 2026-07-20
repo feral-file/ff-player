@@ -257,6 +257,31 @@ class CanvasService {
     return pending;
   }
 
+  /**
+   * Publishes a slot-index transition from the playlist route. Drops the
+   * update when castInfo is absent or already reports this index under
+   * updateIndex — collapsing same-tick races where the duration timer and a
+   * source-end event both try to publish the same advance.
+   */
+  public publishIndexUpdate(index: number): void {
+    const currentCastInfo = this.castInfo;
+    if (!currentCastInfo) {
+      return;
+    }
+    if (
+      currentCastInfo.castCommand === CastCommand.updateIndex &&
+      currentCastInfo.index === index
+    ) {
+      return;
+    }
+
+    this.setCastInfo({
+      ...currentCastInfo,
+      castCommand: CastCommand.updateIndex,
+      index,
+    });
+  }
+
   public executeScheduledDP1Task(dp1CallData: DP1Call): void {
     console.log('[CanvasService] Executing scheduled DP1 task with data');
     this.nowDisplayPlaylist({ dp1CallData });

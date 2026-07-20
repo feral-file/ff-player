@@ -203,25 +203,9 @@ export default function PlaylistClient() {
     [playlistDefaultsSettings]
   );
 
-  // Drops a no-op updateIndex transition (cast already at this index).
-  // Collapses same-tick races where timer + onSourceEnded both publish.
+  // Same-tick dedupe of index transitions lives with the cast state owner.
   const publishCurrentIndex = useCallback((index: number) => {
-    const currentCastInfo = canvasService.getCastInfo();
-    if (!currentCastInfo) {
-      return;
-    }
-    if (
-      currentCastInfo.castCommand === CastCommand.updateIndex &&
-      currentCastInfo.index === index
-    ) {
-      return;
-    }
-
-    canvasService.setCastInfo({
-      ...currentCastInfo,
-      castCommand: CastCommand.updateIndex,
-      index,
-    });
+    canvasService.publishIndexUpdate(index);
   }, []);
 
   const applyQueuedPlaylistIfExists = useCallback(
