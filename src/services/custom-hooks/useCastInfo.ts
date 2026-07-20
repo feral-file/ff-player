@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { canvasService } from '../CanvasService';
 import { CastCommand, CastInfo } from '@/models';
-import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
+import { stripEphemeralCastInfoFields } from '@/utils/castInfo';
 import DeviceManager from '@/utils/DeviceManager';
 
 const useCastInfo = () => {
@@ -47,9 +47,11 @@ const useCastInfo = () => {
       // TODO: Send cast info to app
     }
 
+    // Persist playlist/index recovery only — strip live renderStatus so a later
+    // boot cannot report ready/failed before ArtworkPlayer mounts.
     const castInfoToStore = castInfo
       ? {
-          ...stripLegacyCastPlaybackTimeline(castInfo),
+          ...stripEphemeralCastInfoFields(castInfo),
           castCommand: isPlaylistControlCommand(castInfo)
             ? CastCommand.displayPlaylist
             : castInfo.castCommand,

@@ -92,6 +92,45 @@ function findInvalidArtworkSource(
 }
 
 /**
+ * Resolve the render status to publish with a cast-info update.
+ *
+ * Index-only transitions often spread the previous castInfo, which would keep
+ * the prior artwork's ready/failed across the gap before ArtworkPlayer marks
+ * pending. When the selected item identity changes, force pending immediately
+ * so status polls never attribute the old lifecycle to the new artwork.
+ * Shuffle remaps that keep the same item id intentionally preserve status.
+ */
+function resolveRenderStatusForCastInfo(
+  previous: CastInfo | null,
+  next: CastInfo,
+  currentRenderStatus: RenderStatus | undefined
+): RenderStatus | undefined {
+  const previousIndex = previous?.index;
+  const nextIndex = next.index;
+  const previousItems = previous?.playlist?.items;
+  const nextItems = next.playlist?.items;
+
+  if (
+    previousItems?.length &&
+    nextItems?.length &&
+    previousIndex !== undefined &&
+    nextIndex !== undefined
+  ) {
+    const previousItemId = previousItems.at(previousIndex)?.id;
+    const nextItemId = nextItems.at(nextIndex)?.id;
+    if (
+      previousItemId !== undefined &&
+      nextItemId !== undefined &&
+      previousItemId !== nextItemId
+    ) {
+      return RenderStatus.pending;
+    }
+  }
+
+  return next.renderStatus ?? currentRenderStatus ?? undefined;
+}
+
+/**
  * Owns the in-browser FF1 playback session state that cast commands and route
  * components share, including playlist order, loop/shuffle modes, and deferred
  * refresh transitions.
@@ -211,23 +250,31 @@ class CanvasService {
       this.setDeferredRefreshPlaylist(null);
       this.pendingRefreshArtwork = false;
       this.renderStatus = undefined;
-    }
-    this.castInfo =
-      castInfo === null
-        ? null
-        : {
-            ...stripLegacyCastPlaybackTimeline(castInfo),
-            renderStatus:
-              castInfo.renderStatus ?? this.renderStatus ?? undefined,
-          };
-    if (this.castInfo?.renderStatus !== undefined) {
-      this.renderStatus = this.castInfo.renderStatus;
+      this.castInfo = null;
+    } else {
+      const nextRenderStatus = resolveRenderStatusForCastInfo(
+        this.castInfo,
+        castInfo,
+        this.renderStatus
+      );
+      this.castInfo = {
+        ...stripLegacyCastPlaybackTimeline(castInfo),
+        renderStatus: nextRenderStatus,
+      };
+      // Keep the private mirror in lockstep so getStatus never reads a stale
+      // castInfo.renderStatus left over from persistence or a prior item.
+      this.renderStatus = nextRenderStatus;
     }
     if (notify) {
       this.onCastInfoChange?.(this.castInfo);
     }
   }
 
+  /**
+   * Publish the live artwork render lifecycle for status replies.
+   * This updates in-memory castInfo only; persistence strips renderStatus so
+   * boot recovery cannot resurrect a ready/failed from a previous page.
+   */
   public setRenderStatus(renderStatus: RenderStatus | undefined) {
     this.renderStatus = renderStatus;
     if (!this.castInfo) {
@@ -453,13 +500,15 @@ class CanvasService {
 
       const storedCastInfo = DeviceManager.getCachedCastInfo();
       if (!this.castInfo && storedCastInfo) {
-        // Ensure in-memory state is available for future status calls
-        this.setCastInfo(storedCastInfo, false);
+        // Hydrate playlist/index only. renderStatus is live-only and must wait
+        // for ArtworkPlayer (or an explicit setRenderStatus) after recovery.
+        const { renderStatus: _storedRenderStatus, ...recoverableCastInfo } =
+          storedCastInfo;
+        void _storedRenderStatus;
+        this.setCastInfo(recoverableCastInfo, false);
       }
 
       const activeCastInfo = this.castInfo ?? storedCastInfo ?? null;
-      const activeRenderStatus =
-        this.renderStatus ?? activeCastInfo?.renderStatus ?? undefined;
 
       console.log(
         '[CanvasService getStatus] Reply ok. Current index:',
@@ -475,7 +524,9 @@ class CanvasService {
 
         items: activeCastInfo?.playlist?.items,
         index: activeCastInfo?.index,
-        renderStatus: activeRenderStatus,
+        // Never fall back to a persisted castInfo.renderStatus — that value
+        // describes a previous page render, not the current mount lifecycle.
+        renderStatus: this.renderStatus,
 
         deviceSettings: {
           scaling:

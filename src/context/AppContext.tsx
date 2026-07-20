@@ -27,7 +27,7 @@ import useCursorPositions, {
   CursorPosition,
 } from '@/services/custom-hooks/useCursorPositions';
 import { normalizePlaylistIndex } from '@/utils/playlist';
-import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
+import { stripEphemeralCastInfoFields } from '@/utils/castInfo';
 import { useRouter } from 'next/navigation';
 
 interface AppContextProps {
@@ -173,7 +173,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
         }
       }
 
-      const cleanCastInfo = stripLegacyCastPlaybackTimeline(castInfo);
+      const cleanCastInfo = stripEphemeralCastInfoFields(castInfo);
       setCastInfo(cleanCastInfo);
       canvasService.setCastInfo(cleanCastInfo, false);
       navigateToHomePage();

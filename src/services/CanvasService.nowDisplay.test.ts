@@ -178,3 +178,126 @@ it('returns ok:false when a playlist item source is protocol-relative', () => {
   ).toEqual(['A']);
   expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
 });
+
+it('resets render status to pending on moveToArtwork', () => {
+  const active = playlist('active', ['A', 'B'].map(item));
+  canvasService.setCastInfo(
+    {
+      castCommand: CastCommand.displayPlaylist,
+      playlist: active,
+      index: 0,
+      renderStatus: RenderStatus.ready,
+    },
+    false
+  );
+
+  const reply = canvasService.processMessage({
+    command: CastCommand.moveToArtwork,
+    request: { index: 1 },
+  });
+
+  expect(reply).toEqual({ ok: true });
+  expect(canvasService.getCastInfo()?.index).toBe(1);
+  expect(canvasService.getCastInfo()?.renderStatus).toBe(RenderStatus.pending);
+  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+});
+
+it('resets render status to pending on updateIndex when the selected item changes', () => {
+  const active = playlist('active', ['A', 'B'].map(item));
+  canvasService.setCastInfo(
+    {
+      castCommand: CastCommand.displayPlaylist,
+      playlist: active,
+      index: 0,
+      renderStatus: RenderStatus.ready,
+    },
+    false
+  );
+
+  // playlist-client publishCurrentIndex spreads the prior castInfo, which still
+  // carries ready — setCastInfo must not keep that across the new item.
+  canvasService.setCastInfo(
+    {
+      castCommand: CastCommand.updateIndex,
+      playlist: active,
+      index: 1,
+      renderStatus: RenderStatus.ready,
+    },
+    false
+  );
+
+  expect(canvasService.getCastInfo()?.renderStatus).toBe(RenderStatus.pending);
+  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+});
+
+it('resets render status when a deferred playlist promotion selects a new item', () => {
+  const previous = playlist('old', ['A'].map(item));
+  const deferred = playlist('new', ['B', 'C'].map(item));
+  const service = canvasService as unknown as {
+    deferredRefreshPlaylist: DP1Call | null;
+    queuedPlaylistPending: boolean;
+  };
+
+  canvasService.setCastInfo(
+    {
+      castCommand: CastCommand.displayPlaylist,
+      playlist: previous,
+      index: 0,
+      renderStatus: RenderStatus.failed,
+    },
+    false
+  );
+  service.deferredRefreshPlaylist = deferred;
+  service.queuedPlaylistPending = true;
+
+  expect(canvasService.consumeDeferredRefreshPlaylist(0)?.id).toBe('new');
+  expect(canvasService.getCastInfo()?.playlist?.id).toBe('new');
+  expect(canvasService.getCastInfo()?.renderStatus).toBe(RenderStatus.pending);
+  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+});
+
+it('preserves render status when cast info updates without changing artwork', () => {
+  const active = playlist('active', ['A', 'B'].map(item));
+  canvasService.setCastInfo(
+    {
+      castCommand: CastCommand.displayPlaylist,
+      playlist: active,
+      index: 0,
+      renderStatus: RenderStatus.ready,
+    },
+    false
+  );
+
+  canvasService.setCastInfo(
+    {
+      castCommand: CastCommand.setLoop,
+      playlist: active,
+      index: 0,
+      loopMode: LoopMode.one,
+      renderStatus: RenderStatus.ready,
+    },
+    false
+  );
+
+  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+});
+
+it('does not report persisted ready after cast info recovery hydrate', async () => {
+  const DeviceManager = (await import('@/utils/DeviceManager')).default;
+  const getCachedCastInfo = vi
+    .spyOn(DeviceManager, 'getCachedCastInfo')
+    .mockReturnValue({
+      castCommand: CastCommand.displayPlaylist,
+      playlist: playlist('recovered', ['A'].map(item)),
+      index: 0,
+      renderStatus: RenderStatus.ready,
+    });
+
+  canvasService.setCastInfo(null, false);
+
+  expect(canvasService.getStatus().renderStatus).toBeUndefined();
+  expect(canvasService.getCastInfo()?.renderStatus).toBeUndefined();
+  expect(canvasService.getCastInfo()?.playlist?.id).toBe('recovered');
+
+  getCachedCastInfo.mockRestore();
+});
