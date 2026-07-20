@@ -149,6 +149,61 @@ describe('ArtworkPlayer — GLB / model mime routing', () => {
   });
 });
 
+describe('ArtworkPlayer — model successful transition', () => {
+  it('commits a loaded model slot over the previous artwork', async () => {
+    const { container, rerender } = renderWithContext(
+      <ArtworkPlayer
+        previewURL={IMAGE_URL}
+        artworkPreviewMIMEType="image/png"
+        displayPreferences={defaultDP1DisplayPreference}
+      />
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector('img')).toBeTruthy();
+    });
+
+    rerender(
+      <AppContext.Provider
+        value={
+          {
+            context: {
+              isInitialized: true,
+              isOnline: true,
+              appRemoteConfig: {},
+              displaySettings: null,
+              cursorPositions: null,
+              castInfo: null,
+            },
+          } as never
+        }>
+        <ArtworkPlayer
+          previewURL={MODEL_URL}
+          artworkPreviewMIMEType="model/gltf-binary"
+          displayPreferences={defaultDP1DisplayPreference}
+        />
+      </AppContext.Provider>
+    );
+
+    const modelViewerEl = await waitFor(() => {
+      const node = container.querySelector('model-viewer');
+      if (!node) {
+        throw new Error('model-viewer element was not rendered');
+      }
+      return node;
+    });
+
+    modelViewerEl.dispatchEvent(new Event('load'));
+
+    await waitFor(() => {
+      expect(container.querySelector('img')).toBeNull();
+    });
+
+    expect(screen.queryByText('Unable to load 3D model')).toBeNull();
+    expect(screen.queryByText('Loading 3D model')).toBeNull();
+  });
+});
+
 describe('ArtworkPlayer — model runtime error handling', () => {
   it('commits a failed model slot over the previous artwork on runtime error', async () => {
     const { container, rerender } = renderWithContext(

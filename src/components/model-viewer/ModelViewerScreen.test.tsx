@@ -8,6 +8,7 @@ vi.mock('@google/model-viewer', () => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
 
 describe('ModelViewerScreen', () => {
@@ -63,5 +64,34 @@ describe('ModelViewerScreen', () => {
     expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
     expect(screen.queryByText('Loading 3D model')).toBeNull();
     expect(nextOnError).not.toHaveBeenCalled();
+  });
+
+  it('stops load polling after the custom element chunk fails to load', async () => {
+    const onError = vi.fn();
+    const onLoad = vi.fn();
+    const setIntervalSpy = vi.spyOn(window, 'setInterval');
+    const clearIntervalSpy = vi.spyOn(window, 'clearInterval');
+
+    const { container } = render(
+      <ModelViewerScreen
+        src="https://example.com/model.glb"
+        onError={onError}
+        onLoad={onLoad}
+      />
+    );
+
+    const viewer = container.querySelector('model-viewer');
+    expect(viewer).toBeTruthy();
+    await waitFor(() => {
+      expect(setIntervalSpy).toHaveBeenCalled();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+    });
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(clearIntervalSpy).toHaveBeenCalled();
+    expect(onLoad).not.toHaveBeenCalled();
   });
 });

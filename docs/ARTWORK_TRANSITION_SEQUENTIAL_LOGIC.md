@@ -125,7 +125,7 @@ Code references:
 The transition mode is decided when incoming slot is ready:
 
 - **Sequential** if either side is heavy embedded:
-  - heavy embedded means `iframe`, `iframePDF`, `object`, `model`
+  - heavy embedded means `iframe`, `object`, `model`
 - **Overlap crossfade** for other combinations
 
 ### Sequential flow

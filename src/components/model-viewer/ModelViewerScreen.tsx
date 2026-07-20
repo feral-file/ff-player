@@ -83,6 +83,7 @@ export default function ModelViewerScreen({
   const hasSource = resolvedSrc.trim().length > 0;
   const hasBootstrapError = useModelViewerBootstrap(onError);
   const { isLoaded, hasError } = useModelViewerPlaybackState({
+    hasBootstrapError,
     hasSource,
     onError,
     onLoad,
@@ -167,12 +168,14 @@ function useModelViewerBootstrap(onError?: () => void) {
 }
 
 function useModelViewerPlaybackState({
+  hasBootstrapError,
   hasSource,
   onError,
   onLoad,
   resolvedSrc,
   viewerRef,
 }: {
+  hasBootstrapError: boolean;
   hasSource: boolean;
   onError?: () => void;
   onLoad?: () => void;
@@ -193,6 +196,12 @@ function useModelViewerPlaybackState({
   }, [onError]);
 
   useEffect(() => {
+    if (hasBootstrapError) {
+      setIsLoaded(false);
+      setHasError(true);
+      return undefined;
+    }
+
     if (!hasSource) {
       setIsLoaded(false);
       setHasError(true);
@@ -218,7 +227,7 @@ function useModelViewerPlaybackState({
         onErrorRef.current?.();
       }
     );
-  }, [hasSource, resolvedSrc, viewerRef]);
+  }, [hasBootstrapError, hasSource, resolvedSrc, viewerRef]);
 
   return { isLoaded, hasError };
 }
