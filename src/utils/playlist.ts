@@ -20,6 +20,31 @@ export function isNoDurationItem(item: DP1Item | undefined): boolean {
   return duration <= 0 || duration >= NO_DURATION_VALUE;
 }
 
+/**
+ * A fully merged display preference tagged with the item it was resolved
+ * for. The tag lets slot-timer scheduling reject a stale merge left over
+ * from a previous slot (see mergedDisplayForSlot).
+ */
+export interface SlotMergedDisplay {
+  itemId: string | undefined;
+  ref: string | undefined;
+  display: DP1DisplayPreference;
+}
+
+/**
+ * Returns the stored merged display preference only when it was resolved
+ * for [item]; null otherwise (including before any merge has landed).
+ */
+export function mergedDisplayForSlot(
+  stored: SlotMergedDisplay | null,
+  item: DP1Item
+): DP1DisplayPreference | null {
+  if (!stored || stored.itemId !== item.id || stored.ref !== item.ref) {
+    return null;
+  }
+  return stored.display;
+}
+
 interface ResolveSlotDurationSecondsOptions {
   item: DP1Item;
   playlistDefaults: DP1Defaults | null;

@@ -8,7 +8,6 @@ import { NO_DURATION_VALUE } from '@/constants';
 import type { DP1Item } from '@/models/dp1.model';
 import { LoopMode } from '@/models/cast_info.model';
 import { canvasService } from '@/services/CanvasService';
-import { DP1Service } from '@/services/DP1Service';
 import DeviceManager from '@/utils/DeviceManager';
 import { render } from '@testing-library/react';
 import * as React from 'react';
@@ -36,14 +35,14 @@ vi.mock('@sentry/nextjs', () => ({
   addBreadcrumb: vi.fn(),
 }));
 
+const { getItemRefMock } = vi.hoisted(() => ({ getItemRefMock: vi.fn() }));
+
 vi.mock('@/services/DP1Service', () => ({
   DP1Service: {
-    getItemRef: vi.fn(),
+    getItemRef: getItemRefMock,
     getPlaylist: vi.fn(),
   },
 }));
-
-const getItemRefMock = vi.mocked(DP1Service.getItemRef);
 
 function refItem(id: string, durationSeconds: number): DP1Item {
   return {

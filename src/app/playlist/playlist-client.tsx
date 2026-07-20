@@ -15,12 +15,14 @@ import { canvasService } from '@/services/CanvasService';
 import {
   isNoDurationItem,
   itemIdentityFor,
+  mergedDisplayForSlot,
   normalizePlaylistIndex,
   resolveQueuedPlaylistNextIndex,
   resolveSequentialPlaylistAdvance,
   resolveSlotDurationSeconds,
   shouldApplyQueuedPlaylistOnShuffleOrRefresh,
   shouldResumeSlotTimerAfterSetLoop,
+  type SlotMergedDisplay,
 } from '@/utils/playlist';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
@@ -55,11 +57,7 @@ export default function PlaylistClient() {
   // Fully merged display preference (incl. async ref-manifest layer), tagged
   // with its item so the slot timer's default-duration gate reads the same
   // preference rendering applies and never a stale merge from a prior slot.
-  const mergedDisplayForItemRef = useRef<{
-    itemId: string | undefined;
-    ref: string | undefined;
-    display: DP1DisplayPreference;
-  } | null>(null);
+  const mergedDisplayForItemRef = useRef<SlotMergedDisplay | null>(null);
   const currentIndexRef = useRef<number>(-1);
   const playlistRef = useRef<DP1Item[]>([]);
   const playlistLengthRef = useRef<number>(0);
@@ -373,13 +371,10 @@ export default function PlaylistClient() {
       // with the override the moment the merge resolves. The cached read is
       // safe here: updateDefaultDuration republishes castInfo, which re-runs
       // this scheduling path after the cache is already set.
-      const storedMerge = mergedDisplayForItemRef.current;
-      const mergedDisplay =
-        storedMerge &&
-        storedMerge.itemId === currentItem.id &&
-        storedMerge.ref === currentItem.ref
-          ? storedMerge.display
-          : null;
+      const mergedDisplay = mergedDisplayForSlot(
+        mergedDisplayForItemRef.current,
+        currentItem
+      );
       const duration = resolveSlotDurationSeconds({
         item: currentItem,
         playlistDefaults: playlistDefaultsSettings,
