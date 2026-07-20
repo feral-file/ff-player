@@ -41,7 +41,7 @@ export async function getContentTypeFromURL(
 
     const contentType = response.headers.get('Content-Type');
     if (contentType) {
-      return contentType;
+      return inferContentTypeFromURL(url, contentType) ?? contentType;
     }
     throw new Error('No content type found in headers');
   } catch (error) {
@@ -50,33 +50,71 @@ export async function getContentTypeFromURL(
       serializeErrorForLog(error)
     );
 
-    const extension = url.pathname.split('.').pop()?.toLowerCase();
-    if (extension) {
-      let inferredType = '';
-      if (FileUseImage.includes(extension)) {
-        inferredType = `image/${extension === 'jpg' ? 'jpeg' : extension}`;
-      } else if (FileUseVideo.includes(extension)) {
-        inferredType = `video/${extension}`;
-      } else if (FileUseAudio.includes(extension)) {
-        inferredType = `audio/${extension}`;
-      } else if (FileUseIframePDF.includes(extension)) {
-        inferredType = 'application/pdf';
-      } else if (FileUseStreamVideo.includes(extension)) {
-        inferredType = 'application/x-mpegurl';
-      } else if (extension === 'glb') {
-        inferredType = 'model/gltf-binary';
-      } else if (extension === 'gltf') {
-        inferredType = 'model/gltf+json';
-      }
-
-      if (inferredType) {
-        console.log('[ContentType] Inferred Content-Type:', inferredType);
-        return inferredType;
-      }
+    const inferredType = inferContentTypeFromURL(url);
+    if (inferredType) {
+      console.log('[ContentType] Inferred Content-Type:', inferredType);
+      return inferredType;
     }
 
     throw new Error(`Failed to determine content type: ${String(error)}`);
   }
+}
+
+/**
+ * Infer known media types from file extensions when server metadata is absent
+ * or too generic to select a renderer safely.
+ */
+function inferContentTypeFromURL(
+  url: URL,
+  reportedContentType?: string
+): string | null {
+  if (
+    reportedContentType &&
+    !isGenericBinaryContentType(reportedContentType)
+  ) {
+    return null;
+  }
+
+  const extension = url.pathname.split('.').pop()?.toLowerCase();
+  if (!extension) {
+    return null;
+  }
+
+  if (FileUseImage.includes(extension)) {
+    return `image/${extension === 'jpg' ? 'jpeg' : extension}`;
+  }
+  if (FileUseVideo.includes(extension)) {
+    return `video/${extension}`;
+  }
+  if (FileUseAudio.includes(extension)) {
+    return `audio/${extension}`;
+  }
+  if (FileUseIframePDF.includes(extension)) {
+    return 'application/pdf';
+  }
+  if (FileUseStreamVideo.includes(extension)) {
+    return 'application/x-mpegurl';
+  }
+  if (extension === 'glb') {
+    return 'model/gltf-binary';
+  }
+  if (extension === 'gltf') {
+    return 'model/gltf+json';
+  }
+
+  return null;
+}
+
+/**
+ * Identify binary fallback types that should not override clearer file
+ * extension evidence such as `.glb` or `.gltf`.
+ */
+function isGenericBinaryContentType(contentType: string): boolean {
+  const mediaType = contentType.split(';')[0].trim().toLowerCase();
+  return (
+    mediaType === 'application/octet-stream' ||
+    mediaType === 'binary/octet-stream'
+  );
 }
 
 /**

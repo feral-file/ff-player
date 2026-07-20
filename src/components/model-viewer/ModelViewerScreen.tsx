@@ -229,12 +229,12 @@ function trackModelViewerPlayback(
   onError: () => void
 ) {
   let pollId: number | null = null;
-  let didMarkLoaded = false;
+  let didSettle = false;
   const markLoaded = () => {
-    if (didMarkLoaded) {
+    if (didSettle) {
       return;
     }
-    didMarkLoaded = true;
+    didSettle = true;
     if (pollId !== null) {
       window.clearInterval(pollId);
       pollId = null;
@@ -242,6 +242,15 @@ function trackModelViewerPlayback(
     onLoad();
   };
   const handleError = () => {
+    if (didSettle) {
+      return;
+    }
+
+    didSettle = true;
+    if (pollId !== null) {
+      window.clearInterval(pollId);
+      pollId = null;
+    }
     onError();
   };
 

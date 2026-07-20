@@ -38,4 +38,19 @@ describe('getContentTypeFromURL', () => {
       getContentTypeFromURL('https://example.com/artwork/model.gltf')
     ).resolves.toBe('model/gltf+json');
   });
+
+  it('prefers GLB extension inference when HEAD returns a generic binary type', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, {
+        headers: {
+          'Content-Type': 'application/octet-stream',
+        },
+        status: 200,
+      })
+    );
+
+    await expect(
+      getContentTypeFromURL('https://example.com/artwork/model.glb')
+    ).resolves.toBe('model/gltf-binary');
+  });
 });

@@ -32,6 +32,8 @@ vi.mock('@sentry/nextjs', () => ({
 
 const MODEL_URL =
   'https://ipfs.filebase.io/ipfs/bafybeiht7hyohzvnje3aozwfkoqowuvmb7fooqh4pbyigzv6qm2dolwgxu';
+const MODEL_URL_B =
+  'https://ipfs.filebase.io/ipfs/bafybeidifferentmodelcidforstaleerrorcase';
 const IMAGE_URL = 'https://example.com/image.png';
 
 function renderWithContext(ui: React.ReactElement): ReturnType<typeof render> {
@@ -129,6 +131,22 @@ describe('ArtworkPlayer — GLB / model mime routing', () => {
     expect(container.querySelector('object')).toBeNull();
     expect(modelViewerEl.getAttribute('src')).toBe(MODEL_URL);
   });
+
+  it('falls back to iframe for unsupported non-glTF model MIME types', async () => {
+    const { container } = renderWithContext(
+      <ArtworkPlayer
+        previewURL={MODEL_URL}
+        artworkPreviewMIMEType="model/stl"
+        displayPreferences={defaultDP1DisplayPreference}
+      />
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector('iframe')).toBeTruthy();
+    });
+
+    expect(container.querySelector('model-viewer')).toBeNull();
+  });
 });
 
 describe('ArtworkPlayer — model runtime error handling', () => {
@@ -186,5 +204,57 @@ describe('ArtworkPlayer — model runtime error handling', () => {
     });
 
     expect(screen.queryByText('Loading 3D model')).toBeNull();
+  });
+});
+
+describe('ArtworkPlayer — stale model error handling', () => {
+  it('ignores stale model errors after the preview URL changes', async () => {
+    const { container, rerender } = renderWithContext(
+      <ArtworkPlayer
+        previewURL={MODEL_URL}
+        artworkPreviewMIMEType="model/gltf-binary"
+        displayPreferences={defaultDP1DisplayPreference}
+      />
+    );
+
+    const staleModelViewerEl = await waitFor(() => {
+      const node = container.querySelector('model-viewer');
+      if (!node) {
+        throw new Error('model-viewer element was not rendered');
+      }
+      return node;
+    });
+
+    rerender(
+      <AppContext.Provider
+        value={
+          {
+            context: {
+              isInitialized: true,
+              isOnline: true,
+              appRemoteConfig: {},
+              displaySettings: null,
+              cursorPositions: null,
+              castInfo: null,
+            },
+          } as never
+        }>
+        <ArtworkPlayer
+          previewURL={MODEL_URL_B}
+          artworkPreviewMIMEType="model/gltf-binary"
+          displayPreferences={defaultDP1DisplayPreference}
+        />
+      </AppContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('model-viewer')).toHaveLength(2);
+    });
+
+    staleModelViewerEl.dispatchEvent(new Event('error'));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Unable to load 3D model')).toBeNull();
+    });
   });
 });

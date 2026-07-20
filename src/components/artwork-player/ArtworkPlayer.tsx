@@ -93,7 +93,8 @@ function isEmbeddedHeavy(t: PreviewHTMLTag | null): boolean {
 }
 
 function isModelMimeType(type: string): boolean {
-  return type.toLowerCase().startsWith('model/');
+  const mediaType = type.split(';')[0].trim().toLowerCase();
+  return mediaType === 'model/gltf-binary' || mediaType === 'model/gltf+json';
 }
 
 const ArtworkPlayer = ({
@@ -343,7 +344,7 @@ const ArtworkPlayer = ({
       const currentURL = previewURLRef.current;
       const slot = slotsRef.current[slotIndex];
       if (slot?.previewURL !== currentURL) {
-        return;
+        return false;
       }
 
       // If incomingSlotRef gets out-of-sync (e.g. playlist boundary / rapid source churn),
@@ -352,11 +353,12 @@ const ArtworkPlayer = ({
       if (currentIncoming !== null && currentIncoming !== slotIndex) {
         const incomingLayer = slotsRef.current[currentIncoming];
         if (incomingLayer?.previewURL === currentURL) {
-          return;
+          return false;
         }
       }
       incomingSlotRef.current = slotIndex;
       markSlotReady(slotIndex);
+      return true;
     },
     [markSlotReady]
   );
@@ -563,8 +565,9 @@ const ArtworkPlayer = ({
   };
 
   const handleModelLoad = (slotIndex: SlotIndex) => {
-    setShowMessageModal(false);
-    loadedSource(slotIndex);
+    if (loadedSource(slotIndex)) {
+      setShowMessageModal(false);
+    }
   };
 
   const clearLoadingIndicators = useCallback(() => {
@@ -582,8 +585,11 @@ const ArtworkPlayer = ({
    * previous slot visible underneath the error modal.
    */
   const handleModelLoadError = (slotIndex: SlotIndex) => {
+    if (!loadedSource(slotIndex)) {
+      return;
+    }
+
     clearLoadingIndicators();
-    loadedSource(slotIndex);
     setMessageModalTitle(
       'The artwork cannot be displayed correctly on this device.'
     );
@@ -1110,7 +1116,7 @@ const ArtworkPlayer = ({
     const incoming = incomingSlotRef.current;
     const layer = incoming === null ? null : slots[incoming];
     const t = layer?.previewType ?? null;
-    const isModelAsset = layer?.mimeType?.startsWith('model/') ?? false;
+    const isModelAsset = isModelMimeType(layer?.mimeType ?? '');
     return (
       showLoading &&
       globalLoading &&
