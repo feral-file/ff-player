@@ -1,6 +1,11 @@
 import { NO_DURATION_VALUE } from '@/constants';
 import { LoopMode } from '@/models/cast_info.model';
-import type { DP1Item } from '@/models/dp1.model';
+import {
+  defaultDP1DisplayPreference,
+  type DP1Defaults,
+  type DP1DisplayPreference,
+  type DP1Item,
+} from '@/models/dp1.model';
 
 /**
  * True when a playlist item has no usable duration set — the duration timer
@@ -13,6 +18,62 @@ export function isNoDurationItem(item: DP1Item | undefined): boolean {
   }
   const duration = item.duration ?? 0;
   return duration <= 0 || duration >= NO_DURATION_VALUE;
+}
+
+interface ResolveSlotDurationSecondsOptions {
+  item: DP1Item;
+  playlistDefaults: DP1Defaults | null;
+  /** Device-level override in seconds; null means "auto" (no override). */
+  deviceDefaultDurationSeconds: number | null;
+}
+
+/**
+ * Effective duration (seconds) for the slot's advance timer.
+ *
+ * Baseline is the item's own duration (already normalized by CanvasService:
+ * missing durations arrive as NO_DURATION_VALUE, meaning the timer never
+ * fires). On top of that, a device-level default duration — the viewer's
+ * "each work displays this long" setting — replaces the baseline per DP-1
+ * §4.1's device-level override rule, with two deliberate exceptions:
+ *
+ * - `userOverrides: false` in the merged display preference is the artist's
+ * veto on viewer re-timing; the baseline stands. (DP-1 models userOverrides
+ * per-field; this codebase carries it as a single boolean, default true.)
+ * - `loop: false` declares a time-based source that plays its natural length
+ * and advances at end-of-stream. The override is skipped so a non-looping
+ * film is never cut short by the device setting. Loop has no effect on
+ * non-time-based sources per the spec, and defaults to true, so only items
+ * that explicitly opt out of looping take this path.
+ *
+ * The merge here is the synchronous subset of the display-preference cascade
+ * (defaults.display → item.override.display → item.display). The async
+ * ref-manifest layer is intentionally skipped: the timer must arm on slot
+ * entry, and gating fields (loop/userOverrides) coming only from a remote
+ * manifest are rare enough that waiting on the fetch is the worse trade.
+ */
+export function resolveSlotDurationSeconds({
+  item,
+  playlistDefaults,
+  deviceDefaultDurationSeconds,
+}: ResolveSlotDurationSecondsOptions): number {
+  const baseline = item.duration ?? NO_DURATION_VALUE;
+
+  if (deviceDefaultDurationSeconds === null) {
+    return baseline;
+  }
+
+  const display: DP1DisplayPreference = {
+    ...defaultDP1DisplayPreference,
+    ...(playlistDefaults?.display ?? {}),
+    ...(item.override?.display ?? {}),
+    ...(item.display ?? {}),
+  };
+
+  if (display.userOverrides === false || display.loop === false) {
+    return baseline;
+  }
+
+  return deviceDefaultDurationSeconds;
 }
 
 /**

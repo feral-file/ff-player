@@ -11,7 +11,24 @@ const PRELOAD_KEYS: string[] = [
   LocalStorageItem.criticalTemp,
   LocalStorageItem.dp1ScheduledTask,
   LocalStorageItem.bootPlaylist,
+  LocalStorageItem.defaultItemDuration,
 ];
+
+/**
+ * Parse a persisted default-item-duration value. Only finite positive numbers
+ * are valid; anything else (missing, corrupted, non-positive) reads as `null`
+ * so playback falls back to the playlist's own duration cascade.
+ */
+function parseDurationSeconds(raw: string | null): number | null {
+  if (raw === null || raw === '') {
+    return null;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+}
 
 /**
  * Owns device-local persistence and migration for cast state, display
@@ -214,6 +231,49 @@ class DeviceManager {
     this.cache.set(key, null);
     await indexedDBStorage.removeItem(key);
     this.removeFromLegacyStorage(key);
+  }
+
+  /**
+   * Device-level default item duration in seconds (viewer override per DP-1
+   * §4.1 device-level overrides). `null` means "auto": no override is applied
+   * and each playlist's own duration cascade stands. Set by the
+   * `updateDefaultDuration` cast command; read synchronously at slot-timer
+   * scheduling time via the cached accessor.
+   */
+  public async getDefaultItemDurationSeconds(): Promise<number | null> {
+    await this.ensureInitialized();
+    const raw = await this.fetchAndCache(LocalStorageItem.defaultItemDuration);
+    return parseDurationSeconds(raw);
+  }
+
+  /**
+   * Persist (or clear, with `null`) the device-level default item duration.
+   * The in-memory cache is updated before the async IndexedDB write settles so
+   * cached reads issued in the same tick (e.g. An immediate timer re-arm after
+   * the cast command) already see the new value.
+   */
+  public async setDefaultItemDurationSeconds(
+    seconds: number | null
+  ): Promise<void> {
+    if (seconds === null) {
+      // Clear the cache before the async removal settles for the same
+      // same-tick visibility guarantee as the set path below.
+      this.cache.set(LocalStorageItem.defaultItemDuration, null);
+      await this.removeItem(LocalStorageItem.defaultItemDuration);
+      return;
+    }
+    this.cache.set(LocalStorageItem.defaultItemDuration, String(seconds));
+    await this.ensureInitialized();
+    await indexedDBStorage.setItem(
+      LocalStorageItem.defaultItemDuration,
+      String(seconds)
+    );
+  }
+
+  public getCachedDefaultItemDurationSeconds(): number | null {
+    return parseDurationSeconds(
+      this.getCachedValue(LocalStorageItem.defaultItemDuration)
+    );
   }
 
   public getCachedDeviceDisplaySettings(): DisplaySettings | null {

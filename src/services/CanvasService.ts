@@ -7,6 +7,7 @@ import {
   NowDisplayReply,
   SchedulePlaylistRequest,
   SchedulePlaylistReply,
+  UpdateDefaultDurationRequest,
 } from '@/models/cast_request_reply.model';
 import * as Sentry from '@sentry/nextjs';
 import {
@@ -374,6 +375,10 @@ class CanvasService {
           return this.setLoop(requestJson as SetLoopRequest);
         case CastCommand.displayDefaultPlaylist:
           return this.displayDefaultPlaylist();
+        case CastCommand.updateDefaultDuration:
+          return this.updateDefaultDuration(
+            requestJson as UpdateDefaultDurationRequest
+          );
         default:
           console.error(`[CAST] Unknown command: ${command}`);
           return { ok: false };
@@ -423,6 +428,8 @@ class CanvasService {
             DeviceManager.getCachedDeviceDisplaySettings()?.scaling ??
             DisplaySettings.defaultScaling,
           orientation: DeviceManager.getCachedViewMode() ?? ViewMode.landscape,
+          defaultDuration:
+            DeviceManager.getCachedDefaultItemDurationSeconds() ?? undefined,
         },
 
         isPaused: window.location.pathname === '/sleep',
@@ -725,6 +732,41 @@ class CanvasService {
         shuffle: false,
         index: newIndex,
         playlist: { ...this.castInfo.playlist, items: restored },
+      });
+    }
+
+    return { ok: true };
+  }
+
+  /**
+   * Sets (or clears, with null/absent durationSeconds) the persisted
+   * device-level default item duration — the viewer's "each work displays
+   * this long" override (DP-1 §4.1 device-level overrides). The value is
+   * cached synchronously before the IndexedDB write settles, then castInfo is
+   * republished so the playlist route re-arms the active slot timer against
+   * the new value without restarting playback.
+   */
+  private updateDefaultDuration(request: UpdateDefaultDurationRequest): Reply {
+    const raw = request.durationSeconds ?? null;
+    if (raw !== null && (!Number.isFinite(raw) || raw <= 0)) {
+      console.error('[CanvasService] Invalid default duration:', raw);
+      return { ok: false };
+    }
+
+    console.log('[CanvasService] updateDefaultDuration', raw);
+    DeviceManager.setDefaultItemDurationSeconds(raw).catch(
+      (error: unknown) => {
+        console.error(
+          '[CanvasService] Error persisting default duration:',
+          error
+        );
+      }
+    );
+
+    if (this.castInfo) {
+      this.setCastInfo({
+        ...this.castInfo,
+        castCommand: CastCommand.updateDefaultDuration,
       });
     }
 

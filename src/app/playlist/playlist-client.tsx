@@ -19,37 +19,14 @@ import {
   normalizePlaylistIndex,
   resolveQueuedPlaylistNextIndex,
   resolveSequentialPlaylistAdvance,
+  resolveSlotDurationSeconds,
   shouldApplyQueuedPlaylistOnShuffleOrRefresh,
   shouldResumeSlotTimerAfterSetLoop,
 } from '@/utils/playlist';
+import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
-import * as Sentry from '@sentry/nextjs';
+import { reportPlaylistDisplayPreferenceError } from '@/utils/playlistDisplayPreference';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-
-function reportPlaylistDisplayPreferenceError(
-  phase: string,
-  error: unknown,
-  extra?: Record<string, unknown>
-): void {
-  const message = `[PlaylistClient] Error handling item display preference (${phase})`;
-  console.error(
-    message,
-    error instanceof Error ? error.message : String(error)
-  );
-  if (error instanceof Error) {
-    Sentry.captureException(error, {
-      extra: { phase, ...extra },
-    });
-  } else {
-    Sentry.captureMessage(message, {
-      extra: {
-        error: String(error),
-        phase,
-        ...extra,
-      },
-    });
-  }
-}
 
 // 'sourceEnd' means the media just ended (display.loop=false) and needs a
 // reload to restart playback; 'timer' lets the natively-looping element
@@ -394,7 +371,17 @@ export default function PlaylistClient() {
       const normalizedIndex = normalizePlaylistIndex(index, snapshot.length);
       const currentItem = snapshot[normalizedIndex];
 
-      const duration = currentItem.duration ?? 0;
+      // Device-level default duration (viewer override) participates in the
+      // resolution; resolveSlotDurationSeconds skips it for artist-vetoed
+      // (userOverrides=false) and natural-length (loop=false) items. The
+      // cached read is safe here: updateDefaultDuration republishes castInfo,
+      // which re-runs this scheduling path after the cache is already set.
+      const duration = resolveSlotDurationSeconds({
+        item: currentItem,
+        playlistDefaults: playlistDefaultsSettings,
+        deviceDefaultDurationSeconds:
+          DeviceManager.getCachedDefaultItemDurationSeconds(),
+      });
       if (duration <= 0 || duration >= NO_DURATION_VALUE) {
         return;
       }
@@ -407,7 +394,7 @@ export default function PlaylistClient() {
         advanceFromSlot(normalizedIndex, snapshot);
       }, duration * 1000);
     },
-    [advanceFromSlot, clearTimer]
+    [advanceFromSlot, clearTimer, playlistDefaultsSettings]
   );
 
   // Triggered by ArtworkPlayer when a time-based source (video or audio) ends
@@ -561,6 +548,21 @@ export default function PlaylistClient() {
         } else {
           setCurrentIndex(castInfo.index);
         }
+        break;
+      }
+
+      case CastCommand.updateDefaultDuration: {
+        // The device default duration changed. Re-arm the active slot's
+        // timer so the new value applies to the artwork currently on screen
+        // without restarting playback. The full interval restarts from now —
+        // deliberately simple; elapsed-time credit is not worth the state.
+        // Repeat-off hold is preserved: re-arming on the held final slot just
+        // schedules an advance that resolveSequentialPlaylistAdvance turns
+        // into another hold.
+        scheduleCurrentItemTimer(
+          currentIndexRef.current,
+          playlistRef.current
+        );
         break;
       }
 
