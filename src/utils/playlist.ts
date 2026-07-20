@@ -54,6 +54,19 @@ export function mergedDisplayForSlot(
   return stored.display;
 }
 
+/**
+ * True when the item's own display layers already veto device re-timing.
+ * Item.display and item.override.display outrank the ref-manifest layer in
+ * the merge cascade, so a veto here is decisive no matter what the manifest
+ * eventually says — callers need not hold the slot timer for the manifest.
+ */
+export function hasDecisiveSyncVeto(item: DP1Item): boolean {
+  const layers = [item.display, item.override?.display];
+  return layers.some(
+    display => display?.userOverrides === false || display?.loop === false
+  );
+}
+
 interface ResolveSlotDurationSecondsOptions {
   item: DP1Item;
   playlistDefaults: DP1Defaults | null;

@@ -271,6 +271,29 @@ describe('PlaylistClient — late manifest vetoes', () => {
     vi.clearAllMocks();
   });
 
+  it('a decisive local veto arms the baseline without waiting for the manifest', async () => {
+    await setDeviceDefault(60);
+    // The item's own display veto outranks whatever the (hung) manifest
+    // might say, so the 5s baseline must arm at slot entry — not after the
+    // bounded manifest wait.
+    getItemRefMock.mockReturnValue(new Promise(() => undefined) as never);
+    const items = [
+      {
+        ...refItem('a', 5),
+        display: { userOverrides: false },
+      } as DP1Item,
+      item('b', 300),
+      item('c', 300),
+    ];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    render(<PlaylistHarness castInfo={initial} />);
+
+    await advanceMs(0);
+    await advanceMs(5000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
   it('a mid-slot veto preserves the item duration elapsed time', async () => {
     await setDeviceDefault(60);
     // Item's own duration (5s) is shorter than the device default (60s).

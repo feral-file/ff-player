@@ -12,6 +12,7 @@ import {
 import { NO_DURATION_VALUE } from '@/constants';
 import { canvasService } from '@/services/CanvasService';
 import {
+  hasDecisiveSyncVeto,
   isNoDurationItem,
   itemIdentityFor,
   mergedDisplayForSlot,
@@ -365,7 +366,14 @@ export default function PlaylistClient() {
       // before a longer owner default gets its chance) nor the override
       // (whose gates are unknown). The merge is bounded
       // (REF_MANIFEST_GATE_TIMEOUT_MS), so the re-arm effect always follows.
-      if (!mergedDisplay && deviceDefault !== null && currentItem.ref) {
+      // Exception: a veto in the item's own display layers outranks the
+      // manifest, so the gate is already decided — baseline arms now.
+      if (
+        !mergedDisplay &&
+        deviceDefault !== null &&
+        currentItem.ref &&
+        !hasDecisiveSyncVeto(currentItem)
+      ) {
         return;
       }
       const duration = resolveSlotDurationSeconds({
