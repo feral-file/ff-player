@@ -14,6 +14,7 @@ import {
 import DP1ScheduleService from '@/services/DP1ScheduleService';
 import ScheduleDisplay from './ScheduleDisplay';
 import MintPairingOverlay from './mint-pairing/MintPairingOverlay';
+import SetupOverlay from './setup/SetupOverlay';
 
 const enum CastState {
   None, // Not casting
@@ -180,6 +181,8 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       {appContent}
       {/* Keep the CDP-driven mint pairing listener mounted during boot. */}
       <MintPairingOverlay />
+      {/* Keep the CDP-driven setup listener mounted during boot. */}
+      <SetupOverlay />
     </>
   );
 };

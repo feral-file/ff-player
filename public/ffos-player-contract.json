@@ -12,6 +12,23 @@
       "acceptedResponse": {
         "ok": true
       }
+    },
+    "setupDisplay": {
+      "version": 1,
+      "requestKey": "request",
+      "states": [
+        "softap_qr",
+        "joining",
+        "join_failed",
+        "updating",
+        "claim_qr",
+        "factory_reset",
+        "ready",
+        "hidden"
+      ],
+      "acceptedResponse": {
+        "ok": true
+      }
     }
   }
 }
