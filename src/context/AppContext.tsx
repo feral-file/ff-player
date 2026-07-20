@@ -28,7 +28,7 @@ import useCursorPositions, {
 } from '@/services/custom-hooks/useCursorPositions';
 import { normalizePlaylistIndex } from '@/utils/playlist';
 import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 interface AppContextProps {
   children: ReactNode;
@@ -70,20 +70,13 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const { displaySettings, setDisplaySettings } = useDeviceSettings();
   const { cursorPositions } = useCursorPositions();
   const router = useRouter();
-  const pathname = usePathname();
   const isOnline = useNetworkManger();
   const isFirstRender = useRef(true);
-  const isModelViewerRoute = pathname.startsWith('/model-viewer');
 
   const deviceRotation = useDeviceRotation();
 
   const initContext = async () => {
     try {
-      if (isModelViewerRoute) {
-        setIsInitialized(true);
-        return;
-      }
-
       await initDeviceConfigService();
       setIsInitialized(true);
     } catch (error) {
@@ -232,33 +225,20 @@ export const AppProvider = ({ children }: AppContextProps) => {
   }, []);
 
   useEffect(() => {
-    if (isModelViewerRoute) {
-      setIsInitialized(true);
-      return;
-    }
-
     if (appRemoteConfig.defaultPlaylistURL && isFallbackPlaylist) {
       fallbackPlaylist();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: react when URL + fallback flag change only
-  }, [appRemoteConfig.defaultPlaylistURL, isFallbackPlaylist, isModelViewerRoute]);
+  }, [appRemoteConfig.defaultPlaylistURL, isFallbackPlaylist]);
 
   useEffect(() => {
-    if (isModelViewerRoute) {
-      return;
-    }
-
     initContext().catch((error: unknown) => {
       console.error('[AppContext] Error initializing context:', error);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot boot
-  }, [isModelViewerRoute]);
+  }, []);
 
   useEffect(() => {
-    if (isModelViewerRoute) {
-      return;
-    }
-
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
@@ -275,7 +255,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
           console.error('[AppContext] Error getting cast info:', error);
         });
     }
-  }, [isOnline, isModelViewerRoute]);
+  }, [isOnline]);
 
   return (
     <AppContext.Provider

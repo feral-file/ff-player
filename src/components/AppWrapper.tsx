@@ -169,11 +169,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
 // Wrapper component that conditionally renders based on initialization state
 const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { context } = useAppContext();
-  const pathname = usePathname();
-  const isModelViewerRoute = pathname.startsWith('/model-viewer');
-  const appContent = isModelViewerRoute ? (
-    <>{children}</>
-  ) : context.isInitialized ? (
+  const appContent = context.isInitialized ? (
     <InitializedAppWrapper>{children}</InitializedAppWrapper>
   ) : (
     <LoadingWrapper />
@@ -183,7 +179,7 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     <>
       {appContent}
       {/* Keep the CDP-driven mint pairing listener mounted during boot. */}
-      {!isModelViewerRoute && <MintPairingOverlay />}
+      <MintPairingOverlay />
     </>
   );
 };

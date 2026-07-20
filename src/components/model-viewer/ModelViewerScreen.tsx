@@ -71,8 +71,7 @@ interface ModelViewerScreenProps {
  * Render a full-bleed model-viewer surface for glTF / GLB assets.
  *
  * The component owns the custom-element bootstrap and its loading overlay so
- * callers can mount it either directly in the playlist or inside the dedicated
- * `/model-viewer` route without duplicating the WebGL wiring.
+ * playlist playback can mount the WebGL surface without duplicating that wiring.
  */
 export default function ModelViewerScreen({
   src,
@@ -80,22 +79,18 @@ export default function ModelViewerScreen({
   onError,
 }: ModelViewerScreenProps) {
   const viewerRef = useRef<HTMLElement | null>(null);
-  const { isResolvingSource, resolvedSrc } = useResolvedModelSource(src);
+  const resolvedSrc = src ?? '';
   const hasSource = resolvedSrc.trim().length > 0;
   const hasBootstrapError = useModelViewerBootstrap(onError);
   const { isLoaded, hasError } = useModelViewerPlaybackState({
     hasSource,
-    isResolvingSource,
     onError,
     onLoad,
     resolvedSrc,
     viewerRef,
   });
   const showLoadingOverlay =
-    (hasSource || isResolvingSource) &&
-    !isLoaded &&
-    !hasError &&
-    !hasBootstrapError;
+    hasSource && !isLoaded && !hasError && !hasBootstrapError;
 
   useModelViewerCursorLock(
     viewerRef,
@@ -171,39 +166,14 @@ function useModelViewerBootstrap(onError?: () => void) {
   return hasBootstrapError;
 }
 
-function useResolvedModelSource(src?: string | null) {
-  const shouldReadQuery = src === undefined || src === null;
-  const [querySrc, setQuerySrc] = useState<string | null>(null);
-  const [isQueryResolved, setIsQueryResolved] = useState(!shouldReadQuery);
-
-  useEffect(() => {
-    if (src !== undefined && src !== null) {
-      setQuerySrc(null);
-      setIsQueryResolved(true);
-      return;
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    setQuerySrc(params.get('src'));
-    setIsQueryResolved(true);
-  }, [src]);
-
-  return {
-    isResolvingSource: shouldReadQuery && !isQueryResolved,
-    resolvedSrc: src ?? querySrc ?? '',
-  };
-}
-
 function useModelViewerPlaybackState({
   hasSource,
-  isResolvingSource,
   onError,
   onLoad,
   resolvedSrc,
   viewerRef,
 }: {
   hasSource: boolean;
-  isResolvingSource: boolean;
   onError?: () => void;
   onLoad?: () => void;
   resolvedSrc: string;
@@ -223,12 +193,6 @@ function useModelViewerPlaybackState({
   }, [onError]);
 
   useEffect(() => {
-    if (isResolvingSource) {
-      setIsLoaded(false);
-      setHasError(false);
-      return undefined;
-    }
-
     if (!hasSource) {
       setIsLoaded(false);
       setHasError(true);
@@ -254,7 +218,7 @@ function useModelViewerPlaybackState({
         onErrorRef.current?.();
       }
     );
-  }, [hasSource, isResolvingSource, resolvedSrc, viewerRef]);
+  }, [hasSource, resolvedSrc, viewerRef]);
 
   return { isLoaded, hasError };
 }

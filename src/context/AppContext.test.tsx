@@ -3,7 +3,7 @@ import { LocalStorageItem } from '@/constants';
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { axiosGet, canvasServiceMocks, deviceManager, navigationState } =
+const { axiosGet, canvasServiceMocks, deviceManager } =
   vi.hoisted(() => {
     const deviceManager = {
       getDeviceDisplaySettings: vi.fn().mockResolvedValue(null),
@@ -22,9 +22,6 @@ const { axiosGet, canvasServiceMocks, deviceManager, navigationState } =
         setCastInfo: vi.fn(),
       },
       deviceManager,
-      navigationState: {
-        pathname: '/',
-      },
     };
   });
 
@@ -66,7 +63,6 @@ vi.mock('next/navigation', () => ({
     push: vi.fn(),
     replace: vi.fn(),
   }),
-  usePathname: () => navigationState.pathname,
 }));
 
 vi.mock('@/services/cdp-handler/CDPRequestHandler', () => ({
@@ -95,7 +91,6 @@ describe('AppContext boot recovery', () => {
   // vitest.config enables restoreMocks, which strips mockResolvedValue / mockImplementation
   // from hoisted spies before each test; re-apply defaults here.
   beforeEach(() => {
-    navigationState.pathname = '/';
     deviceManager.getItem.mockResolvedValue('true');
     deviceManager.getCastInfo.mockResolvedValue(null);
     deviceManager.getDeviceDisplaySettings.mockResolvedValue(null);
@@ -136,35 +131,4 @@ describe('AppContext boot recovery', () => {
     });
   });
 
-  it('initializes the isolated model-viewer route without boot recovery', async () => {
-    navigationState.pathname = '/model-viewer';
-    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
-    axiosGet.mockResolvedValueOnce({
-      data: {
-        duration: 1000,
-        defaultPlaylistURL: 'https://example.com/default-playlist',
-      },
-    });
-
-    render(
-      <AppProvider>
-        <div data-testid="model-viewer-ready" />
-      </AppProvider>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('model-viewer-ready')).toBeTruthy();
-    });
-
-    await waitFor(() => {
-      expect(deviceManager.getDeviceDisplaySettings).not.toHaveBeenCalled();
-      expect(deviceManager.getItem).not.toHaveBeenCalledWith(
-        LocalStorageItem.versionUpdateReload
-      );
-      expect(deviceManager.getBootPlaylist).not.toHaveBeenCalled();
-      expect(deviceManager.getCastInfo).not.toHaveBeenCalled();
-      expect(canvasServiceMocks.castPlaylistByURL).not.toHaveBeenCalled();
-      expect(canvasServiceMocks.setCastInfo).not.toHaveBeenCalled();
-    });
-  });
 });
