@@ -5,18 +5,17 @@
  * authority.
  */
 import type { DP1Item } from '@/models/dp1.model';
-import { DP1Service } from '@/services/DP1Service';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clearRefManifestDisplayCache,
   loadRefManifestDisplay,
 } from './playlistDisplayPreference';
 
-vi.mock('@/services/DP1Service', () => ({
-  DP1Service: { getItemRef: vi.fn(), getPlaylist: vi.fn() },
-}));
+const { getItemRefMock } = vi.hoisted(() => ({ getItemRefMock: vi.fn() }));
 
-const getItemRefMock = vi.mocked(DP1Service).getItemRef;
+vi.mock('@/services/DP1Service', () => ({
+  DP1Service: { getItemRef: getItemRefMock, getPlaylist: vi.fn() },
+}));
 
 /** A ref item with an optional refHash version identity. */
 function refItem(refHash?: string): DP1Item {
