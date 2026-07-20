@@ -3,6 +3,7 @@ export enum PreviewHTMLTag {
   iframe = 'iframe',
   iframePDF = 'iframePDF',
   object = 'object',
+  model = 'model',
   video = 'video',
   audio = 'audio',
   image = 'image',
