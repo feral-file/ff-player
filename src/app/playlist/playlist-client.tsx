@@ -5,7 +5,6 @@ import { useAppContext } from '@/context/AppContext';
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import {
-  defaultDP1DisplayPreference,
   DP1DisplayPreference,
   DP1Defaults,
   DP1Item,
@@ -26,11 +25,7 @@ import {
 } from '@/utils/playlist';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
-import {
-  loadRefManifestDisplay,
-  mergeItemDisplayPreference,
-  reportPlaylistDisplayPreferenceError,
-} from '@/utils/playlistDisplayPreference';
+import { resolveAndApplyItemDisplayPreference } from '@/utils/playlistDisplayPreference';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 // 'sourceEnd' means the media just ended (display.loop=false) and needs a
@@ -176,29 +171,11 @@ export default function PlaylistClient() {
         }
       };
 
-      try {
-        // No-ref items resolve synchronously so first render is not deferred
-        // by a microtask; only the ref-manifest layer is asynchronous.
-        if (!activeRef) {
-          apply(mergeItemDisplayPreference(dp1Item, playlistDefaultsSettings));
-          return;
-        }
-        const refDisplay = await loadRefManifestDisplay(dp1Item);
-        apply(
-          mergeItemDisplayPreference(
-            dp1Item,
-            playlistDefaultsSettings,
-            refDisplay
-          )
-        );
-      } catch (error: unknown) {
-        reportPlaylistDisplayPreferenceError(
-          'mergeOrApplyDisplayPreference',
-          error,
-          { itemId: activeItemId, ref: activeRef }
-        );
-        apply(defaultDP1DisplayPreference);
-      }
+      await resolveAndApplyItemDisplayPreference(
+        dp1Item,
+        playlistDefaultsSettings,
+        apply
+      );
     },
     [playlistDefaultsSettings]
   );
@@ -374,12 +351,19 @@ export default function PlaylistClient() {
         currentItem,
         normalizedIndex
       );
+      const deviceDefault = DeviceManager.getCachedDefaultItemDurationSeconds();
+      // With a device default set, a ref item whose merge has not landed yet
+      // arms no timer at all: neither its own duration (which could advance
+      // before a longer owner default gets its chance) nor the override
+      // (whose gates are unknown). The merge is bounded
+      // (REF_MANIFEST_GATE_TIMEOUT_MS), so the re-arm effect always follows.
+      if (!mergedDisplay && deviceDefault !== null && currentItem.ref) {
+        return;
+      }
       const duration = resolveSlotDurationSeconds({
         item: currentItem,
         playlistDefaults: playlistDefaultsSettings,
-        deviceDefaultDurationSeconds: mergedDisplay
-          ? DeviceManager.getCachedDefaultItemDurationSeconds()
-          : null,
+        deviceDefaultDurationSeconds: mergedDisplay ? deviceDefault : null,
         mergedDisplay,
       });
       if (duration <= 0 || duration >= NO_DURATION_VALUE) {

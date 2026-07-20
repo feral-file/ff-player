@@ -59,6 +59,18 @@ async function setDeviceDefault(seconds: number | null): Promise<void> {
   await DeviceManager.setDefaultItemDurationSeconds(seconds);
 }
 
+/**
+ * Advance fake time in act-sized steps. Effects (including the merge-landed
+ * re-arm) flush at each act boundary, so stepped advancement lets timers
+ * scheduled by those effects fire within the same logical wait — mirroring
+ * real time, where effects run between timer ticks.
+ */
+async function advanceSteps(totalMs: number, stepMs = 5000): Promise<void> {
+  for (let t = 0; t < totalMs; t += stepMs) {
+    await advanceMs(Math.min(stepMs, totalMs - t));
+  }
+}
+
 describe('PlaylistClient — device default duration vs ref-manifest gates', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -162,6 +174,57 @@ describe('PlaylistClient — bounded manifest wait', () => {
 
 });
 
+describe('PlaylistClient — in-session updateDefaultDuration', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(async () => {
+    teardownPlaylistWiringTest();
+    await setDeviceDefault(null);
+    vi.clearAllMocks();
+  });
+
+  it('re-arms the active slot mid-session and clears with null', async () => {
+    const items = [item('a', 300), item('b', 300), item('c', 300)];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    const { rerender } = render(<PlaylistHarness castInfo={initial} />);
+    await advanceMs(0);
+
+    // Mid-slot: the owner sets 60s via the real command path.
+    await advanceSteps(30000);
+    canvasService.processMessage({
+      command: 'updateDefaultDuration',
+      request: { durationSeconds: 60 },
+    });
+    rerender(
+      <PlaylistHarness castInfo={canvasService.getCastInfo() ?? null} />
+    );
+
+    // The active slot re-arms from now: advance at +60s, not the item's 300s
+    // from slot entry, and without invoking the artwork reload path.
+    const g = globalThis as { __artworkReloadInvocations?: number };
+    const reloadsBefore = g.__artworkReloadInvocations ?? 0;
+    await advanceSteps(60000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+    expect(g.__artworkReloadInvocations ?? 0).toBe(reloadsBefore);
+
+    // Clearing with null restores the playlist's own timing for later slots.
+    canvasService.processMessage({
+      command: 'updateDefaultDuration',
+      request: { durationSeconds: null },
+    });
+    rerender(
+      <PlaylistHarness castInfo={canvasService.getCastInfo() ?? null} />
+    );
+    await advanceSteps(60000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+    await advanceSteps(240000);
+    expect(canvasService.getCastInfo()?.index).toBe(2);
+  });
+});
+
 describe('PlaylistClient — merge-cache lifetime', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -193,16 +256,19 @@ describe('PlaylistClient — merge-cache lifetime', () => {
     const vetoed = [
       { ...refItem('a', 30), display: { userOverrides: false } } as DP1Item,
       item('b', 300),
+      item('c', 300),
     ];
     const next = displayCast(vetoed, 0, LoopMode.playlist);
     canvasService.setCastInfo(next, false);
     rerender(<PlaylistHarness castInfo={next} />);
 
+    // Hold pre-merge; the bounded merge (~10s) lands carrying the sync veto,
+    // so the 30s baseline restarts then and the device default never arms.
     await advanceMs(0);
-    await advanceMs(5000);
+    await advanceSteps(5000);
     expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
 
-    await advanceMs(25000);
+    await advanceSteps(35000);
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 
@@ -219,6 +285,7 @@ describe('PlaylistClient — merge-cache lifetime', () => {
     const items = [
       refItem('a', 30),
       { ...refItem('a', 30), display: { userOverrides: false } } as DP1Item,
+      item('c', 300),
     ];
     const initial = displayCast(items, 0, LoopMode.playlist);
     canvasService.setCastInfo(initial, false);
@@ -226,32 +293,36 @@ describe('PlaylistClient — merge-cache lifetime', () => {
 
     // Slot 0: merge lands permissive, device default advances at 5s.
     await advanceMs(0);
-    await advanceMs(5000);
+    await advanceSteps(5000);
     expect(canvasService.getCastInfo()?.index).toBe(1);
 
     // Slot 1: same id/ref, merge pending. A stale slot-0 merge must not arm
-    // the 5s override; the slot's own 30s duration governs.
-    await advanceMs(5000);
+    // the 5s override: the slot holds until its own bounded merge lands with
+    // the sync veto (~10s in), then its 30s baseline governs from there.
+    await advanceSteps(35000);
     expect(canvasService.getCastInfo()?.index).toBe(1);
-    await advanceMs(25000);
-    expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
+    await advanceSteps(5000);
+    expect(canvasService.getCastInfo()?.index).toBe(2);
   });
 
-  it('does not apply the override before the merge for the slot lands', async () => {
+  it('holds a ref slot pre-merge, then applies the override after the bound', async () => {
     await setDeviceDefault(5);
-    // Manifest never resolves: the pre-merge window persists for the whole
-    // test, so the item's own duration must govern the timer.
+    // Manifest never resolves. With a device default set, the slot arms no
+    // timer pre-merge — the item's short duration must not advance ahead of
+    // the owner's longer setting, nor may the override fire against unknown
+    // gates. The bounded merge (~10s) lands permissive and arms the 5s
+    // override, advancing at ~15s.
     getItemRefMock.mockReturnValue(new Promise(() => undefined) as never);
-    const items = [refItem('a', 30), item('b', 300)];
+    const items = [refItem('a', 30), item('b', 300), item('c', 300)];
     const initial = displayCast(items, 0, LoopMode.playlist);
     canvasService.setCastInfo(initial, false);
     render(<PlaylistHarness castInfo={initial} />);
 
     await advanceMs(0);
-    await advanceMs(5000);
+    await advanceSteps(5000);
     expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
 
-    await advanceMs(25000);
+    await advanceSteps(10000);
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 });

@@ -61,27 +61,21 @@ export function mergeItemDisplayPreference(
 }
 
 /**
- * Load the display preference carried by an item's `ref` manifest, or
- * undefined when the item has no ref or the manifest cannot be fetched.
- * Fetch failures are reported and swallowed so the merge continues with the
- * synchronous layers only — a missing manifest must not blank the artwork.
- */
-/**
  * Upper bound on how long the display-preference merge waits for a ref
- * manifest. The slot timer holds the device default duration back until the
- * merge lands (so a manifest-carried artist veto is never beaten by a fetch),
- * which means an unbounded fetch would silently drop the owner's setting for
- * the whole slot. After this window the merge proceeds with the synchronous
- * layers only — bounded deferral instead of indefinite suppression.
+ * manifest before applying the synchronous layers. The slot timer holds the
+ * device default duration back until a merge lands (so a manifest-carried
+ * artist veto is never beaten by a fetch); this bound guarantees a merge
+ * always lands, so the owner's setting is deferred briefly, never dropped.
+ * A manifest resolving after the bound is still honored when it arrives —
+ * the bound only stops the timer gate from waiting, it discards nothing.
  */
 export const REF_MANIFEST_GATE_TIMEOUT_MS = 10_000;
 
 /**
  * Load the display preference carried by an item's `ref` manifest, or
- * undefined when the item has no ref, the fetch fails, or the bounded wait
- * (REF_MANIFEST_GATE_TIMEOUT_MS) elapses first. Failures are reported and
- * swallowed so the merge continues with the synchronous layers only — a
- * missing manifest must not blank the artwork or strand the slot timer.
+ * undefined when the item has no ref or the manifest cannot be fetched.
+ * Fetch failures are reported and swallowed — a missing manifest must not
+ * blank the artwork or strand the slot timer.
  */
 export async function loadRefManifestDisplay(
   dp1Item: DP1Item
@@ -89,17 +83,9 @@ export async function loadRefManifestDisplay(
   if (!dp1Item.ref) {
     return undefined;
   }
-  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   try {
     // TODO: Implement ref hash verification
-    const manifest = await Promise.race([
-      DP1Service.getItemRef(dp1Item.ref),
-      new Promise<null>(resolve => {
-        timeoutHandle = setTimeout(() => {
-          resolve(null);
-        }, REF_MANIFEST_GATE_TIMEOUT_MS);
-      }),
-    ]);
+    const manifest = await DP1Service.getItemRef(dp1Item.ref);
     return manifest?.controls?.display;
   } catch (error: unknown) {
     reportPlaylistDisplayPreferenceError('getItemRef', error, {
@@ -107,7 +93,63 @@ export async function loadRefManifestDisplay(
       itemId: dp1Item.id,
     });
     return undefined;
-  } finally {
-    clearTimeout(timeoutHandle);
+  }
+}
+
+/**
+ * Resolve and apply the display preference for a playlist slot.
+ *
+ * No-ref items apply their merge synchronously (first render is not deferred
+ * by a microtask). Ref items wait for the manifest up to
+ * REF_MANIFEST_GATE_TIMEOUT_MS; if it has not resolved by then, the merge is
+ * applied with the synchronous layers so the slot timer can proceed, and the
+ * original fetch is kept alive: a manifest that resolves late is re-applied
+ * so its display preferences (veto, loop, scaling, background, interaction)
+ * still take effect for the slot. [apply] is invoked once or twice and must
+ * guard against stale slots itself.
+ */
+export async function resolveAndApplyItemDisplayPreference(
+  dp1Item: DP1Item,
+  playlistDefaults: DP1Defaults | null,
+  apply: (merged: DP1DisplayPreference) => void
+): Promise<void> {
+  try {
+    if (!dp1Item.ref) {
+      apply(mergeItemDisplayPreference(dp1Item, playlistDefaults));
+      return;
+    }
+
+    const refPromise = loadRefManifestDisplay(dp1Item);
+    const timedOut = Symbol('refManifestTimeout');
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    const raced = await Promise.race([
+      refPromise,
+      new Promise<typeof timedOut>(resolve => {
+        timeoutHandle = setTimeout(() => {
+          resolve(timedOut);
+        }, REF_MANIFEST_GATE_TIMEOUT_MS);
+      }),
+    ]).finally(() => {
+      clearTimeout(timeoutHandle);
+    });
+
+    if (raced !== timedOut) {
+      apply(mergeItemDisplayPreference(dp1Item, playlistDefaults, raced));
+      return;
+    }
+
+    // Bounded merge now so the slot timer is not stranded...
+    apply(mergeItemDisplayPreference(dp1Item, playlistDefaults));
+    // ...but keep listening: a late manifest still owns display authority.
+    const late = await refPromise;
+    if (late !== undefined) {
+      apply(mergeItemDisplayPreference(dp1Item, playlistDefaults, late));
+    }
+  } catch (error: unknown) {
+    reportPlaylistDisplayPreferenceError('mergeOrApplyDisplayPreference', error, {
+      itemId: dp1Item.id,
+      ref: dp1Item.ref,
+    });
+    apply(defaultDP1DisplayPreference);
   }
 }
