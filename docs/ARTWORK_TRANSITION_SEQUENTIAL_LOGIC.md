@@ -7,7 +7,7 @@ This document explains the transition model currently implemented in `src/compon
 Artwork transitions in ArtworkPlayer to use a 2-slot overlay model with safer media lifecycle handling and improved transition stability.
 
 - Implemented two-slot transition pipeline (slots[0|1]) with per-slot state:
-  - previewURL, previewType, displayPreviewURL, displaySoftwareURL, isStreaming, loading, iframeKey
+  - previewURL, previewType, displayPreviewURL, displaySoftwareURL, mimeType, isStreaming, loading, iframeKey
 - Added per-slot opacity/z-order transition control:
   - slotOpacity, activeSlot, topSlotIndex
 - Added stale-transition guards:
@@ -37,6 +37,7 @@ The player uses two visual slots:
   - `previewType`
   - `displayPreviewURL`
   - `displaySoftwareURL`
+  - `mimeType`
   - `isStreaming`
   - `loading`
   - `iframeKey`

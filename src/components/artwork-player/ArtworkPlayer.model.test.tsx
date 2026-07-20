@@ -1,6 +1,6 @@
 import { AppContext } from '@/context/AppContext';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
@@ -32,6 +32,7 @@ vi.mock('@sentry/nextjs', () => ({
 
 const MODEL_URL =
   'https://ipfs.filebase.io/ipfs/bafybeiht7hyohzvnje3aozwfkoqowuvmb7fooqh4pbyigzv6qm2dolwgxu';
+const IMAGE_URL = 'https://example.com/image.png';
 
 function renderWithContext(ui: React.ReactElement): ReturnType<typeof render> {
   const value = {
@@ -127,5 +128,63 @@ describe('ArtworkPlayer — GLB / model mime routing', () => {
     expect(container.querySelector('iframe')).toBeNull();
     expect(container.querySelector('object')).toBeNull();
     expect(modelViewerEl.getAttribute('src')).toBe(MODEL_URL);
+  });
+});
+
+describe('ArtworkPlayer — model runtime error handling', () => {
+  it('commits a failed model slot over the previous artwork on runtime error', async () => {
+    const { container, rerender } = renderWithContext(
+      <ArtworkPlayer
+        previewURL={IMAGE_URL}
+        artworkPreviewMIMEType="image/png"
+        displayPreferences={defaultDP1DisplayPreference}
+      />
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector('img')).toBeTruthy();
+    });
+
+    rerender(
+      <AppContext.Provider
+        value={
+          {
+            context: {
+              isInitialized: true,
+              isOnline: true,
+              appRemoteConfig: {},
+              displaySettings: null,
+              cursorPositions: null,
+              castInfo: null,
+            },
+          } as never
+        }>
+        <ArtworkPlayer
+          previewURL={MODEL_URL}
+          artworkPreviewMIMEType="model/gltf-binary"
+          displayPreferences={defaultDP1DisplayPreference}
+        />
+      </AppContext.Provider>
+    );
+
+    const modelViewerEl = await waitFor(() => {
+      const node = container.querySelector('model-viewer');
+      if (!node) {
+        throw new Error('model-viewer element was not rendered');
+      }
+      return node;
+    });
+
+    modelViewerEl.dispatchEvent(new Event('error'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('img')).toBeNull();
+    });
+
+    expect(screen.queryByText('Loading 3D model')).toBeNull();
   });
 });

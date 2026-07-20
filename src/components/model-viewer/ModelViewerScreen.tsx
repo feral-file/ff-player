@@ -80,38 +80,22 @@ export default function ModelViewerScreen({
   onError,
 }: ModelViewerScreenProps) {
   const viewerRef = useRef<HTMLElement | null>(null);
-  const onErrorRef = useRef(onError);
-  const resolvedSrc = useResolvedModelSource(src);
+  const { isResolvingSource, resolvedSrc } = useResolvedModelSource(src);
   const hasSource = resolvedSrc.trim().length > 0;
-  const [hasBootstrapError, setHasBootstrapError] = useState(false);
+  const hasBootstrapError = useModelViewerBootstrap(onError);
   const { isLoaded, hasError } = useModelViewerPlaybackState({
     hasSource,
+    isResolvingSource,
     onError,
     onLoad,
     resolvedSrc,
     viewerRef,
   });
-  useEffect(() => {
-    onErrorRef.current = onError;
-  }, [onError]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void import('@google/model-viewer').catch((error: unknown) => {
-      if (cancelled) {
-        return;
-      }
-
-      console.error('[ModelViewer] Failed to load model-viewer element:', error);
-      setHasBootstrapError(true);
-      onErrorRef.current?.();
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const showLoadingOverlay =
+    (hasSource || isResolvingSource) &&
+    !isLoaded &&
+    !hasError &&
+    !hasBootstrapError;
 
   useModelViewerCursorLock(
     viewerRef,
@@ -141,7 +125,7 @@ export default function ModelViewerScreen({
           src={resolvedSrc}
         />
       )}
-      {hasSource && !isLoaded && !hasError && !hasBootstrapError && (
+      {showLoadingOverlay && (
         <div style={overlayStyle}>
           <div style={spinnerStyle} />
           <div>
@@ -158,30 +142,68 @@ export default function ModelViewerScreen({
   );
 }
 
+function useModelViewerBootstrap(onError?: () => void) {
+  const onErrorRef = useRef(onError);
+  const [hasBootstrapError, setHasBootstrapError] = useState(false);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void import('@google/model-viewer').catch((error: unknown) => {
+      if (cancelled) {
+        return;
+      }
+
+      console.error('[ModelViewer] Failed to load model-viewer element:', error);
+      setHasBootstrapError(true);
+      onErrorRef.current?.();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return hasBootstrapError;
+}
+
 function useResolvedModelSource(src?: string | null) {
+  const shouldReadQuery = src === undefined || src === null;
   const [querySrc, setQuerySrc] = useState<string | null>(null);
+  const [isQueryResolved, setIsQueryResolved] = useState(!shouldReadQuery);
 
   useEffect(() => {
     if (src !== undefined && src !== null) {
       setQuerySrc(null);
+      setIsQueryResolved(true);
       return;
     }
 
     const params = new URLSearchParams(window.location.search);
     setQuerySrc(params.get('src'));
+    setIsQueryResolved(true);
   }, [src]);
 
-  return src ?? querySrc ?? '';
+  return {
+    isResolvingSource: shouldReadQuery && !isQueryResolved,
+    resolvedSrc: src ?? querySrc ?? '',
+  };
 }
 
 function useModelViewerPlaybackState({
   hasSource,
+  isResolvingSource,
   onError,
   onLoad,
   resolvedSrc,
   viewerRef,
 }: {
   hasSource: boolean;
+  isResolvingSource: boolean;
   onError?: () => void;
   onLoad?: () => void;
   resolvedSrc: string;
@@ -201,6 +223,12 @@ function useModelViewerPlaybackState({
   }, [onError]);
 
   useEffect(() => {
+    if (isResolvingSource) {
+      setIsLoaded(false);
+      setHasError(false);
+      return undefined;
+    }
+
     if (!hasSource) {
       setIsLoaded(false);
       setHasError(true);
@@ -251,7 +279,7 @@ function useModelViewerPlaybackState({
       viewer.removeEventListener('load', markLoaded);
       viewer.removeEventListener('error', handleError);
     };
-  }, [hasSource, resolvedSrc, viewerRef]);
+  }, [hasSource, isResolvingSource, resolvedSrc, viewerRef]);
 
   return { isLoaded, hasError };
 }
