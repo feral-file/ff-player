@@ -113,7 +113,10 @@ export default function ModelViewerScreen({
     };
   }, []);
 
-  useModelViewerCursorLock(viewerRef, hasSource);
+  useModelViewerCursorLock(
+    viewerRef,
+    hasSource && !hasError && !hasBootstrapError
+  );
 
   return (
     <main style={shellStyle}>

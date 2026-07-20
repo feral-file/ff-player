@@ -82,7 +82,31 @@ describe('ModelViewerScreen cursor lock', () => {
       'style#ff-model-viewer-cursor-lock'
     );
     expect(appendChild).toHaveBeenCalledTimes(1);
-    const style = appendChild.mock.calls[0][0] as HTMLStyleElement;
+    const style = appendChild.mock.calls[0][0];
     expect(style.textContent).toContain('cursor: none !important;');
+  });
+
+  it('stops cursor-lock retries when model-viewer reports an error', async () => {
+    vi.useFakeTimers();
+
+    const onError = vi.fn();
+    const setTimeoutSpy = vi.spyOn(window, 'setTimeout');
+
+    render(
+      <ModelViewerScreen
+        src="https://example.com/model-without-shadow-root.glb"
+        onError={onError}
+      />
+    );
+
+    const viewer = document.querySelector('model-viewer') as HTMLElement | null;
+    expect(viewer).toBeTruthy();
+
+    viewer?.dispatchEvent(new Event('error'));
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
   });
 });
