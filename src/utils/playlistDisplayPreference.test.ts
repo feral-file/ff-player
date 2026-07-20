@@ -8,6 +8,7 @@ import type { DP1Item } from '@/models/dp1.model';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clearRefManifestDisplayCache,
+  clearUnversionedRefManifestDisplayCache,
   loadRefManifestDisplay,
 } from './playlistDisplayPreference';
 
@@ -61,6 +62,30 @@ describe('loadRefManifestDisplay session cache', () => {
     expect(v1?.userOverrides).toBe(false);
     expect(v2?.userOverrides).toBe(true);
     expect(getItemRefMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('a fresh-cast boundary drops only hash-less entries', async () => {
+    getItemRefMock.mockResolvedValueOnce({
+      controls: { display: { userOverrides: false } },
+    } as never);
+    getItemRefMock.mockResolvedValueOnce({
+      controls: { display: { loop: false } },
+    } as never);
+    getItemRefMock.mockResolvedValueOnce({
+      controls: { display: { userOverrides: true } },
+    } as never);
+
+    await loadRefManifestDisplay(refItem());
+    await loadRefManifestDisplay(refItem('h1'));
+    clearUnversionedRefManifestDisplayCache();
+
+    // Hash-less entry refetches (new manifest content honored)...
+    const refetched = await loadRefManifestDisplay(refItem());
+    expect(refetched?.userOverrides).toBe(true);
+    // ...while the hashed entry stays cached.
+    const cached = await loadRefManifestDisplay(refItem('h1'));
+    expect(cached?.loop).toBe(false);
+    expect(getItemRefMock).toHaveBeenCalledTimes(3);
   });
 
   it('does not cache failures', async () => {

@@ -26,7 +26,10 @@ import {
 } from '@/utils/playlist';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
-import { resolveAndApplyItemDisplayPreference } from '@/utils/playlistDisplayPreference';
+import {
+  clearUnversionedRefManifestDisplayCache,
+  resolveAndApplyItemDisplayPreference,
+} from '@/utils/playlistDisplayPreference';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 // 'sourceEnd' means the media just ended (display.loop=false) and needs a
@@ -505,8 +508,11 @@ export default function PlaylistClient() {
         holdAfterFinalSlotRef.current = false;
         // A fresh display replaces items and defaults wholesale; a cached
         // merge from the previous list may share id/ref with a new item yet
-        // carry outdated gate fields, so it must not survive the swap.
+        // carry outdated gate fields, so it must not survive the swap. The
+        // same boundary refreshes hash-less ref manifests, whose content may
+        // have changed without a version identity to detect it by.
         mergedDisplayForItemRef.current = null;
+        clearUnversionedRefManifestDisplayCache();
         loopModeRef.current = coerceLoopMode(castInfo.loopMode);
         if (castInfo.playlist?.items?.length) {
           setPlaylistDefaultsSettings(castInfo.playlist.defaults ?? null);

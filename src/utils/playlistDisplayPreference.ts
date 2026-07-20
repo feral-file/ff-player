@@ -99,6 +99,19 @@ export function clearRefManifestDisplayCache(): void {
 }
 
 /**
+ * Drop cached displays for refs without a refHash. Hash-less refs have no
+ * version identity, so a fresh cast is the only safe refresh boundary for
+ * them; hashed entries are content-addressed and stay valid for the session.
+ */
+export function clearUnversionedRefManifestDisplayCache(): void {
+  for (const key of [...refDisplayCache.keys()]) {
+    if (key.endsWith('#')) {
+      refDisplayCache.delete(key);
+    }
+  }
+}
+
+/**
  * Load the display preference carried by an item's `ref` manifest, or
  * undefined when the item has no ref or the manifest cannot be fetched.
  * Resolved results are session-cached by ref URL; fetch failures are
