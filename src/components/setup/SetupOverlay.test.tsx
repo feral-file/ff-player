@@ -1,10 +1,20 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CustomEventName, SetupDisplayState } from '@/models/custom_event';
 import SetupOverlay from './SetupOverlay';
 
+// Renders the QR value as a DOM attribute instead of drawing modules, so
+// tests can assert on the exact WIFI: payload without decoding a QR image.
+vi.mock('qrcode.react', () => ({
+  QRCodeSVG: ({ value }: { value: string }) => <svg data-qr-value={value} />,
+}));
+
 function displaySetup(detail: Record<string, unknown>) {
   window.dispatchEvent(new CustomEvent(CustomEventName.SetupDisplay, { detail }));
+}
+
+function qrValue(container: HTMLElement): string | null {
+  return container.querySelector('svg')?.getAttribute('data-qr-value') ?? null;
 }
 
 describe('SetupOverlay known states (connectivity)', () => {
@@ -32,6 +42,19 @@ describe('SetupOverlay known states (connectivity)', () => {
     expect(container.querySelector('svg')).not.toBeNull();
   });
 
+  it('encodes a WPA QR payload when a password is present', async () => {
+    const { container } = render(<SetupOverlay />);
+
+    displaySetup({
+      state: SetupDisplayState.SoftApQr,
+      ssid: 'FF1-Setup-ABCD',
+      password: 'correct-horse',
+    });
+
+    await screen.findByText('Connect to Set Up This Device');
+    expect(qrValue(container)).toBe('WIFI:T:WPA;S:FF1-Setup-ABCD;P:correct-horse;;');
+  });
+
   it('omits the password line when softap_qr has no password', async () => {
     render(<SetupOverlay />);
 
@@ -42,6 +65,46 @@ describe('SetupOverlay known states (connectivity)', () => {
 
     expect(await screen.findByText('Network: FF1-Setup-ABCD')).toBeTruthy();
     expect(screen.queryByText(/^Password:/)).toBeNull();
+  });
+
+  it('encodes a nopass QR payload with no P: field when there is no password', async () => {
+    const { container } = render(<SetupOverlay />);
+
+    displaySetup({
+      state: SetupDisplayState.SoftApQr,
+      ssid: 'FF1-Setup-ABCD',
+    });
+
+    await screen.findByText('Network: FF1-Setup-ABCD');
+    expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
+  });
+
+  it('encodes an empty-string password (falsy, not just undefined) as nopass too', async () => {
+    const { container } = render(<SetupOverlay />);
+
+    displaySetup({
+      state: SetupDisplayState.SoftApQr,
+      ssid: 'FF1-Setup-ABCD',
+      password: '',
+    });
+
+    await screen.findByText('Network: FF1-Setup-ABCD');
+    expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
+  });
+
+  it('backslash-escapes WIFI: special characters in the SSID and password', async () => {
+    const { container } = render(<SetupOverlay />);
+
+    displaySetup({
+      state: SetupDisplayState.SoftApQr,
+      ssid: 'FF1;Setup:ABCD',
+      password: 'pa,ss"w\\ord;1',
+    });
+
+    await screen.findByText('Connect to Set Up This Device');
+    expect(qrValue(container)).toBe(
+      'WIFI:T:WPA;S:FF1\\;Setup\\:ABCD;P:pa\\,ss\\"w\\\\ord\\;1;;'
+    );
   });
 
   it('renders the joining state', async () => {
@@ -98,6 +161,33 @@ describe('SetupOverlay known states (update, claim, reset)', () => {
     expect(await screen.findByText('Updating Device Software…')).toBeTruthy();
     expect(screen.queryByText(/%$/)).toBeNull();
   });
+
+  it.each([NaN, Infinity, -Infinity])(
+    'renders no percentage line for non-finite progress (%s)',
+    async (progress) => {
+      render(<SetupOverlay />);
+
+      displaySetup({ state: SetupDisplayState.Updating, progress });
+
+      expect(await screen.findByText('Updating Device Software…')).toBeTruthy();
+      expect(screen.queryByText(/%$/)).toBeNull();
+    }
+  );
+
+  it.each([
+    [150, '100%'],
+    [-10, '0%'],
+  ])(
+    'clamps out-of-range progress %s to %s',
+    async (progress, expected) => {
+      render(<SetupOverlay />);
+
+      displaySetup({ state: SetupDisplayState.Updating, progress });
+
+      expect(await screen.findByText('Updating Device Software…')).toBeTruthy();
+      expect(screen.getByText(expected)).toBeTruthy();
+    }
+  );
 
   it('renders claim_qr with a QR code for the provided url', async () => {
     const { container } = render(<SetupOverlay />);

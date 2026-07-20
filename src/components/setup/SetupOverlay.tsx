@@ -14,12 +14,29 @@ const hiddenDisplay: SetupDisplayDetail = { state: SetupDisplayState.Hidden };
 const qrSize = 320;
 
 /**
- * Builds a `WIFI:` QR payload for the setup hotspot. Escaping is intentionally
- * skipped: `feral-controld` generates the SSID/password for this hotspot and
- * controls their character set, so this stays a straight template.
+ * Escapes the characters the `WIFI:` URI convention treats as field
+ * separators/terminators (`\`, `;`, `,`, `:`, `"`) with a backslash.
+ * `feral-controld` currently generates SSIDs/passwords from a charset that
+ * doesn't need this, but that's an implementation detail of the daemon, not
+ * a guarantee of the wire contract — escaping here means the QR keeps
+ * scanning correctly instead of silently truncating a field if that charset
+ * ever changes.
+ */
+function escapeWifiField(value: string): string {
+  return value.replace(/([\\;,:"])/g, '\\$1');
+}
+
+/**
+ * Builds a `WIFI:` QR payload for the setup hotspot. Uses `T:nopass` with no
+ * `P:` field when there's no password, since an empty `P:` after `T:WPA`
+ * makes phones attempt (and fail) WPA auth with an empty key.
  */
 function softApQrValue(ssid: string, password: string | undefined): string {
-  return `WIFI:T:WPA;S:${ssid};P:${password ?? ''};;`;
+  const escapedSsid = escapeWifiField(ssid);
+  if (!password) {
+    return `WIFI:T:nopass;S:${escapedSsid};;`;
+  }
+  return `WIFI:T:WPA;S:${escapedSsid};P:${escapeWifiField(password)};;`;
 }
 
 function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
@@ -79,8 +96,18 @@ function UpdatingPanel({ display }: { display: SetupDisplayDetail }) {
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
         <p className={styles.title}>Updating Device Software&hellip;</p>
-        {typeof display.progress === 'number' ? (
-          <p className={styles.subtitle}>{Math.round(display.progress)}%</p>
+        {/* Defensive: the CDP validator already rejects non-finite progress,
+            but guarding here means a stray NaN/Infinity renders no percent
+            line instead of "NaN%"/"Infinity%" if that guard is ever bypassed
+            or loosened. Clamp to [0,100] so an out-of-range value controld
+            never intends to send (e.g. 150) shows "100%", not "150%". */}
+        {Number.isFinite(display.progress) ? (
+          <p className={styles.subtitle}>
+            {Math.round(
+              Math.min(100, Math.max(0, display.progress as number)),
+            )}
+            %
+          </p>
         ) : null}
       </div>
     </section>

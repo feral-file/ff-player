@@ -283,6 +283,16 @@ describe('CDPRequestHandler setup display command (rejected requests)', () => {
     });
   });
 
+  it.each([NaN, Infinity, -Infinity])(
+    'rejects updating requests with non-finite progress (%s)',
+    (progress) => {
+      expectInvalidSetupDisplayRequest({
+        state: SetupDisplayState.Updating,
+        progress,
+      });
+    }
+  );
+
   it('rejects join_failed requests with a non-string reason', () => {
     expectInvalidSetupDisplayRequest({
       state: SetupDisplayState.JoinFailed,

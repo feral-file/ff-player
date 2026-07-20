@@ -305,9 +305,12 @@ function isSetupDisplayDetail(request: unknown): request is SetupDisplayDetail {
     }
 
     case SetupDisplayState.Updating: {
+      // `Number.isFinite` (not `typeof === 'number'`) rejects NaN/Infinity,
+      // which would otherwise pass the type check and reach the overlay as
+      // "NaN%"/"Infinity%".
       if (
         detail.progress !== undefined &&
-        typeof detail.progress !== 'number'
+        !Number.isFinite(detail.progress)
       ) {
         return false;
       }
