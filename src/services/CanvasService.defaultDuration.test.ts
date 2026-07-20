@@ -14,7 +14,6 @@ const playlist = (id: string, items: DP1Item[]): DP1Call => ({
   items,
 });
 
-// eslint-disable-next-line max-lines-per-function -- one scenario table for the whole command
 describe('CanvasService updateDefaultDuration', () => {
   beforeEach(() => {
     // getStatus reads window.location to derive sleep state; the node test
