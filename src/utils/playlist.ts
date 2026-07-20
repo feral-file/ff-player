@@ -21,11 +21,14 @@ export function isNoDurationItem(item: DP1Item | undefined): boolean {
 }
 
 /**
- * A fully merged display preference tagged with the item it was resolved
+ * A fully merged display preference tagged with the slot it was resolved
  * for. The tag lets slot-timer scheduling reject a stale merge left over
- * from a previous slot (see mergedDisplayForSlot).
+ * from another slot (see mergedDisplayForSlot). The normalized index is part
+ * of the identity because DP-1 playlists may repeat the same id/ref with
+ * per-slot display fields — id/ref alone cannot tell such slots apart.
  */
 export interface SlotMergedDisplay {
+  index: number;
   itemId: string | undefined;
   ref: string | undefined;
   display: DP1DisplayPreference;
@@ -33,13 +36,19 @@ export interface SlotMergedDisplay {
 
 /**
  * Returns the stored merged display preference only when it was resolved
- * for [item]; null otherwise (including before any merge has landed).
+ * for the slot at [index] holding [item]; null otherwise (including before
+ * any merge has landed for that slot).
  */
 export function mergedDisplayForSlot(
   stored: SlotMergedDisplay | null,
-  item: DP1Item
+  item: DP1Item,
+  index: number
 ): DP1DisplayPreference | null {
-  if (!stored || stored.itemId !== item.id || stored.ref !== item.ref) {
+  if (
+    stored?.index !== index ||
+    stored.itemId !== item.id ||
+    stored.ref !== item.ref
+  ) {
     return null;
   }
   return stored.display;

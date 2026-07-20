@@ -170,6 +170,37 @@ describe('PlaylistClient — merge-cache lifetime and pre-merge window', () => {
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 
+  it('does not reuse a same-id slot merge across an in-playlist advance', async () => {
+    await setDeviceDefault(5);
+    // Slot 0 and slot 1 share id/ref; slot 1 is sync-vetoed per-slot. Slot
+    // 0's merge resolves permissive; slot 1's manifest merge stays pending,
+    // so only its slot-keyed (absent) merge may gate the device default.
+    getItemRefMock
+      .mockResolvedValueOnce(
+        manifestWithDisplay({ userOverrides: true }) as never
+      )
+      .mockReturnValue(new Promise(() => undefined) as never);
+    const items = [
+      refItem('a', 30),
+      { ...refItem('a', 30), display: { userOverrides: false } } as DP1Item,
+    ];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    render(<PlaylistHarness castInfo={initial} />);
+
+    // Slot 0: merge lands permissive, device default advances at 5s.
+    await advanceMs(0);
+    await advanceMs(5000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+
+    // Slot 1: same id/ref, merge pending. A stale slot-0 merge must not arm
+    // the 5s override; the slot's own 30s duration governs.
+    await advanceMs(5000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+    await advanceMs(25000);
+    expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
+  });
+
   it('does not apply the override before the merge for the slot lands', async () => {
     await setDeviceDefault(5);
     // Manifest never resolves: the pre-merge window persists for the whole

@@ -144,19 +144,30 @@ export default function PlaylistClient() {
   }, [triggerArtworkRefresh]);
 
   const handleItemDisplayPreference = useCallback(
-    async (dp1Item: DP1Item) => {
+    async (dp1Item: DP1Item, slotIndex: number) => {
       const activeItemId = dp1Item.id;
       const activeRef = dp1Item.ref;
 
-      // Apply only if this merge still describes the item on screen; a slot
-      // change while the ref manifest loaded makes the result stale.
+      // Apply only if this merge still describes the slot on screen; a slot
+      // change while the ref manifest loaded makes the result stale. The
+      // index is part of the guard because same-id/ref slots may carry
+      // different per-slot display fields.
       const apply = (merged: DP1DisplayPreference) => {
         const currentItem = currentItemRef.current;
         if (!currentItem) {
           return;
         }
-        if (currentItem.id === activeItemId && currentItem.ref === activeRef) {
+        const activeIndex = normalizePlaylistIndex(
+          currentIndexRef.current,
+          playlistRef.current.length
+        );
+        if (
+          activeIndex === slotIndex &&
+          currentItem.id === activeItemId &&
+          currentItem.ref === activeRef
+        ) {
           mergedDisplayForItemRef.current = {
+            index: slotIndex,
             itemId: activeItemId,
             ref: activeRef,
             display: merged,
@@ -376,7 +387,8 @@ export default function PlaylistClient() {
       // this scheduling path after the cache is already set.
       const mergedDisplay = mergedDisplayForSlot(
         mergedDisplayForItemRef.current,
-        currentItem
+        currentItem,
+        normalizedIndex
       );
       const duration = resolveSlotDurationSeconds({
         item: currentItem,
@@ -437,7 +449,7 @@ export default function PlaylistClient() {
     const normalizedIndex = normalizePlaylistIndex(currentIndex, playlist.length);
     const currentItem = playlist[normalizedIndex];
 
-    void handleItemDisplayPreference(currentItem);
+    void handleItemDisplayPreference(currentItem, normalizedIndex);
     setCastPreviewURL(currentItem.source);
     scheduleCurrentItemTimer(normalizedIndex, playlist);
 
