@@ -83,9 +83,12 @@ interface ResolveSlotDurationSecondsOptions {
  * per-field; this codebase carries it as a single boolean, default true.)
  * - `loop: false` declares a time-based source that plays its natural length
  * and advances at end-of-stream. The override is skipped so a non-looping
- * film is never cut short by the device setting. Loop has no effect on
- * non-time-based sources per the spec, and defaults to true, so only items
- * that explicitly opt out of looping take this path.
+ * film is never cut short by the device setting. This veto is deliberately
+ * blanket: the gate cannot know an item's medium (DP-1 items carry only a
+ * source URL; type is resolved at render), so an explicit `loop: false` on
+ * any item reads as "do not re-time me". Per the spec loop has no effect on
+ * non-time-based sources and defaults to true, so only items that explicitly
+ * opt out take this path — for them the conservative read costs nothing.
  *
  * Gate fields come from `mergedDisplay` — the same merged preference
  * rendering applies, including the async `item.ref` manifest layer — when the

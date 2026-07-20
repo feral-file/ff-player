@@ -229,6 +229,36 @@ describe('PlaylistClient — in-session updateDefaultDuration', () => {
   });
 });
 
+describe('PlaylistClient — baseline timing without a device default', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(async () => {
+    teardownPlaylistWiringTest();
+    clearRefManifestDisplayCache();
+    await setDeviceDefault(null);
+    vi.clearAllMocks();
+  });
+
+  it('a landing merge does not restart the baseline timer', async () => {
+    // No device default: the merge cannot change the timer, so a ref item
+    // whose manifest lands mid-slot must keep its elapsed time — a 30s item
+    // advances at 30s, not 30s after the ~10s bounded merge.
+    getItemRefMock.mockReturnValue(new Promise(() => undefined) as never);
+    const items = [refItem('a', 30), item('b', 300), item('c', 300)];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    render(<PlaylistHarness castInfo={initial} />);
+
+    await advanceMs(0);
+    await advanceSteps(25000);
+    expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
+    await advanceSteps(5000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+});
+
 describe('PlaylistClient — late manifest vetoes', () => {
   beforeEach(() => {
     vi.useFakeTimers();

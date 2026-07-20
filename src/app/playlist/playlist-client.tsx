@@ -445,6 +445,13 @@ export default function PlaylistClient() {
     if (currentIndexRef.current < 0 || playlistRef.current.length === 0) {
       return;
     }
+    // Without a device default the merge cannot change the timer (only the
+    // item duration governs), so skip the re-arm and let the entry-armed
+    // baseline keep its elapsed time — ref items must not restart at 10s
+    // just because their manifest landed.
+    if (DeviceManager.getCachedDefaultItemDurationSeconds() === null) {
+      return;
+    }
     scheduleCurrentItemTimer(currentIndexRef.current, playlistRef.current);
   }, [currentItemDisplayPreference, scheduleCurrentItemTimer]);
 

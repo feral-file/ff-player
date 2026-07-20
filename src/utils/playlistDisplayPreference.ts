@@ -84,6 +84,15 @@ export const REF_MANIFEST_GATE_TIMEOUT_MS = 10_000;
 // transient fetch errors retry on the next visit.
 const refDisplayCache = new Map<string, DP1DisplayPreference | undefined>();
 
+/**
+ * Cache identity for a ref manifest. DP-1 models refHash as the integrity /
+ * version identity of an HTTPS ref, so a refreshed item with the same URL but
+ * a different refHash must not inherit a prior manifest's display authority.
+ */
+function refCacheKey(dp1Item: DP1Item): string {
+  return `${dp1Item.ref ?? ''}#${dp1Item.refHash ?? ''}`;
+}
+
 /** Test hook: reset the session ref-display cache. */
 export function clearRefManifestDisplayCache(): void {
   refDisplayCache.clear();
@@ -101,14 +110,15 @@ export async function loadRefManifestDisplay(
   if (!dp1Item.ref) {
     return undefined;
   }
-  if (refDisplayCache.has(dp1Item.ref)) {
-    return refDisplayCache.get(dp1Item.ref);
+  const cacheKey = refCacheKey(dp1Item);
+  if (refDisplayCache.has(cacheKey)) {
+    return refDisplayCache.get(cacheKey);
   }
   try {
     // TODO: Implement ref hash verification
     const manifest = await DP1Service.getItemRef(dp1Item.ref);
     const display = manifest?.controls?.display;
-    refDisplayCache.set(dp1Item.ref, display);
+    refDisplayCache.set(cacheKey, display);
     return display;
   } catch (error: unknown) {
     reportPlaylistDisplayPreferenceError('getItemRef', error, {
