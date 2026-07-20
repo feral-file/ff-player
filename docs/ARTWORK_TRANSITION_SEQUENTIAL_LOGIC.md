@@ -7,12 +7,14 @@ This document explains the transition model currently implemented in `src/compon
 Artwork transitions in ArtworkPlayer to use a 2-slot overlay model with safer media lifecycle handling and improved transition stability.
 
 - Implemented two-slot transition pipeline (slots[0|1]) with per-slot state:
-  - previewURL, previewType, displayPreviewURL, displaySoftwareURL, isStreaming, loading, iframeKey
+  - previewURL, previewType, displayPreviewURL, displaySoftwareURL, mimeType, isStreaming, loading, iframeKey
 - Added per-slot opacity/z-order transition control:
   - slotOpacity, activeSlot, topSlotIndex
 - Added stale-transition guards:
   - incomingSlotRef, pendingReadySlotRef, transitionTokenRef, timeout cancellation
 - Kept heavy embedded content (iframe, object) on sequential handoff to reduce performance/GPU pressure.
+- Model MIME types now render through `ModelViewerScreen` directly inside `ArtworkPlayer` so glTF / GLB assets stay inside the playlist transition pipeline instead of falling back to the raw binary/object path.
+- Model-viewer bootstrap/load failures still clear the loading indicators and commit the failed model slot so the error modal replaces the outgoing artwork instead of leaving the prior slot visible underneath it.
 - Added per-slot media/HLS bookkeeping:
   - hlsInstancesRef, hlsLoadedURLRef, playedVideoURLRef
 - Split streaming video setup by slot (avoid cross-slot teardown/re-attach side effects).
@@ -35,6 +37,7 @@ The player uses two visual slots:
   - `previewType`
   - `displayPreviewURL`
   - `displaySoftwareURL`
+  - `mimeType`
   - `isStreaming`
   - `loading`
   - `iframeKey`
@@ -122,7 +125,7 @@ Code references:
 The transition mode is decided when incoming slot is ready:
 
 - **Sequential** if either side is heavy embedded:
-  - heavy embedded means `iframe`, `iframePDF`, `object`
+  - heavy embedded means `iframe`, `object`, `model`
 - **Overlap crossfade** for other combinations
 
 ### Sequential flow

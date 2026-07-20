@@ -47,6 +47,7 @@ import {
 } from '@/models';
 import { useArtworkSettings } from '@/services/custom-hooks/useArtworkSettings';
 import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
+import ModelViewerScreen from '../model-viewer/ModelViewerScreen';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
 const RENDER_LOADING_DELAY_MS = 2000;
@@ -58,6 +59,7 @@ interface SlotLayer {
   previewURL: string;
   displayPreviewURL: string;
   displaySoftwareURL: string;
+  mimeType: string | null;
   previewType: PreviewHTMLTag | null;
   isStreaming: boolean;
   loading: boolean;
@@ -78,6 +80,7 @@ function createSlotLayer(
     previewURL,
     displayPreviewURL: '',
     displaySoftwareURL: '',
+    mimeType: null,
     previewType: null,
     isStreaming: false,
     loading: true,
@@ -87,7 +90,16 @@ function createSlotLayer(
 }
 
 function isEmbeddedHeavy(t: PreviewHTMLTag | null): boolean {
-  return t === PreviewHTMLTag.iframe || t === PreviewHTMLTag.object;
+  return (
+    t === PreviewHTMLTag.iframe ||
+    t === PreviewHTMLTag.object ||
+    t === PreviewHTMLTag.model
+  );
+}
+
+function isModelMimeType(type: string): boolean {
+  const mediaType = type.split(';')[0].trim().toLowerCase();
+  return mediaType === 'model/gltf-binary' || mediaType === 'model/gltf+json';
 }
 
 const ArtworkPlayer = ({
@@ -228,6 +240,11 @@ const ArtworkPlayer = ({
     if (renderStatusRef.current === RenderStatus.ready) {
       return;
     }
+    // Model-viewer failures commit the slot via loadedSource then mark failed.
+    // Transition completion must not overwrite that failed status with ready.
+    if (renderStatusRef.current === RenderStatus.failed) {
+      return;
+    }
     renderStatusRef.current = RenderStatus.ready;
     canvasService.setRenderStatus(RenderStatus.ready);
     setGlobalLoading(false);
@@ -315,6 +332,14 @@ const ArtworkPlayer = ({
     if (type.match(MIMETypeSvg)) {
       // SVG files (especially with scripts) should use object tag.
       return { previewType: PreviewHTMLTag.object, isStreaming: false };
+    }
+
+    if (isModelMimeType(type)) {
+      // GLB / glTF files need the model-viewer surface so the browser renders
+      // the asset instead of treating it as a raw binary/object payload.
+      // Keep them on the heavy embedded path so the transition waits for the
+      // WebGL surface to report readiness.
+      return { previewType: PreviewHTMLTag.model, isStreaming: false };
     }
 
     if (FileUseObject.includes(type) || type.match(MIMETypeObject)) {
@@ -429,12 +454,24 @@ const ArtworkPlayer = ({
   );
 
   const loadedSource = useCallback(
-    (slotIndex: SlotIndex, expectedLayer?: SlotLayer) => {
+    (slotIndex: SlotIndex, expectedLayer?: SlotLayer): boolean => {
       if (!isCurrentArtworkSlot(slotIndex, expectedLayer)) {
-        return;
+        return false;
       }
+
+      // If incomingSlotRef gets out-of-sync (e.g. playlist boundary / rapid source churn),
+      // allow rebind only when the currently pointed slot no longer matches current URL.
+      const currentIncoming = incomingSlotRef.current;
+      if (currentIncoming !== null && currentIncoming !== slotIndex) {
+        const incomingLayer = slotsRef.current[currentIncoming];
+        if (incomingLayer?.previewURL === previewURLRef.current) {
+          return false;
+        }
+      }
+
       incomingSlotRef.current = slotIndex;
       markSlotReady(slotIndex);
+      return true;
     },
     [isCurrentArtworkSlot, markSlotReady]
   );
@@ -675,6 +712,41 @@ const ArtworkPlayer = ({
     }
   };
 
+  const handleModelLoad = (slotIndex: SlotIndex, layer?: SlotLayer) => {
+    if (loadedSource(slotIndex, layer)) {
+      setShowMessageModal(false);
+    }
+  };
+
+  const clearLoadingIndicators = useCallback(() => {
+    setGlobalLoading(false);
+    setShowLoading(false);
+    if (loadingDelayRef.current) {
+      clearTimeout(loadingDelayRef.current);
+      loadingDelayRef.current = undefined;
+    }
+  }, []);
+
+  /**
+   * Keep model-viewer failures inside the transition pipeline so the failed
+   * incoming slot becomes the committed artwork state instead of leaving the
+   * previous slot visible underneath the error modal.
+   * Also publish RenderStatus.failed so status polls match the error UI.
+   */
+  const handleModelLoadError = (slotIndex: SlotIndex, layer?: SlotLayer) => {
+    if (!loadedSource(slotIndex, layer)) {
+      return;
+    }
+
+    clearLoadingIndicators();
+    markArtworkFailed();
+    setMessageModalText(null);
+    setMessageModalTitle(
+      'The artwork cannot be displayed correctly on this device.'
+    );
+    setShowMessageModal(true);
+  };
+
   useEffect(() => {
     let cancelled = false;
     const url = previewURL;
@@ -730,11 +802,13 @@ const ArtworkPlayer = ({
       return next;
     });
 
+    let resolvedMimeType = artworkPreviewMIMEType?.toLowerCase() ?? '';
     const detectPreviewType = async (): Promise<{
       previewType: PreviewHTMLTag;
       isStreaming: boolean;
     }> => {
       if (artworkPreviewMIMEType) {
+        resolvedMimeType = artworkPreviewMIMEType.toLowerCase();
         const cfg = getPreviewTypeConfig(artworkPreviewMIMEType);
         Sentry.addBreadcrumb({
           category: 'ArtworkPlayer',
@@ -744,6 +818,7 @@ const ArtworkPlayer = ({
         return cfg;
       }
       const contentType = await getContentTypeFromURL(url);
+      resolvedMimeType = contentType.toLowerCase();
       const cfg = getPreviewTypeConfig(contentType);
       Sentry.addBreadcrumb({
         category: 'ArtworkPlayer',
@@ -756,8 +831,8 @@ const ArtworkPlayer = ({
     detectPreviewType()
       .then(cfg => {
         if (cancelled || previewURLRef.current !== url) {return;}
+        const incoming = incomingSlotRef.current;
         setSlots(prev => {
-          const incoming = incomingSlotRef.current;
           if (incoming === null) {return prev;}
           const layer = prev[incoming];
           if (layer?.previewURL !== url) {return prev;}
@@ -768,6 +843,7 @@ const ArtworkPlayer = ({
             isStreaming: cfg.isStreaming,
             displayPreviewURL: url,
             displaySoftwareURL: url,
+            mimeType: resolvedMimeType,
           };
           return next;
         });
@@ -787,6 +863,7 @@ const ArtworkPlayer = ({
             isStreaming: false,
             displayPreviewURL: url,
             displaySoftwareURL: url,
+            mimeType: null,
           };
           return next;
         });
@@ -1041,6 +1118,7 @@ const ArtworkPlayer = ({
         let softwareURL = slot.displayPreviewURL;
         if (
           slot.previewType === PreviewHTMLTag.iframe &&
+          !isModelMimeType(slot.mimeType ?? '') &&
           !slot.displayPreviewURL.includes('base64')
         ) {
           const displayMode =
@@ -1202,6 +1280,8 @@ const ArtworkPlayer = ({
   }, [previewURL]);
 
   const showSlowLoadingSpinner = () => {
+    // When the remote-config flag is on, show for every media type — including
+    // model-viewer — once markArtworkLoading has flipped showLoading.
     return showLoading && globalLoading && showRenderLoadingOverlay;
   };
 
@@ -1249,6 +1329,7 @@ const ArtworkPlayer = ({
           <object
             style={{ width: '100%', height: '100%' }}
             data={slot.displayPreviewURL}
+            type={slot.mimeType ?? undefined}
             onLoad={() => {
               loadedSource(slotIndex, slot);
             }}
@@ -1257,6 +1338,20 @@ const ArtworkPlayer = ({
             }}>
             Not supported
           </object>
+        )}
+        {slot.previewType === PreviewHTMLTag.model && (
+          <div style={{ width: '100%', height: '100%' }}>
+            <ModelViewerScreen
+              key={slot.iframeKey}
+              src={slot.displayPreviewURL}
+              onLoad={() => {
+                handleModelLoad(slotIndex, slot);
+              }}
+              onError={() => {
+                handleModelLoadError(slotIndex, slot);
+              }}
+            />
+          </div>
         )}
         {slot.previewType === PreviewHTMLTag.video && (
           <video

@@ -149,7 +149,7 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
     }
 
     handleCastCommand();
-  }, [castInfo, pathname, castState, router]);
+  }, [castInfo, castState, pathname, router]);
 
   return (
     <div

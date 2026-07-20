@@ -1,25 +1,29 @@
 import { AppProvider } from '@/context/AppContext';
 import { LocalStorageItem } from '@/constants';
-import { canvasService } from '@/services/CanvasService';
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { axiosGet, deviceManager } = vi.hoisted(() => {
-  const deviceManager = {
-    getDeviceDisplaySettings: vi.fn().mockResolvedValue(null),
-    getItem: vi.fn().mockResolvedValue('true'),
-    removeItem: vi.fn().mockResolvedValue(undefined),
-    getBootPlaylist: vi.fn(),
-    getCastInfo: vi.fn().mockResolvedValue(null),
-    setItem: vi.fn().mockResolvedValue(undefined),
-    setDeviceDisplaySettings: vi.fn().mockResolvedValue(undefined),
-    setDeviceInfo: vi.fn().mockResolvedValue(undefined),
-  };
-  return {
-    axiosGet: vi.fn(),
-    deviceManager,
-  };
-});
+const { axiosGet, canvasServiceMocks, deviceManager } =
+  vi.hoisted(() => {
+    const deviceManager = {
+      getDeviceDisplaySettings: vi.fn().mockResolvedValue(null),
+      getItem: vi.fn().mockResolvedValue('true'),
+      removeItem: vi.fn().mockResolvedValue(undefined),
+      getBootPlaylist: vi.fn(),
+      getCastInfo: vi.fn().mockResolvedValue(null),
+      setItem: vi.fn().mockResolvedValue(undefined),
+      setDeviceDisplaySettings: vi.fn().mockResolvedValue(undefined),
+      setDeviceInfo: vi.fn().mockResolvedValue(undefined),
+    };
+    return {
+      axiosGet: vi.fn(),
+      canvasServiceMocks: {
+        castPlaylistByURL: vi.fn(() => Promise.resolve(undefined)),
+        setCastInfo: vi.fn(),
+      },
+      deviceManager,
+    };
+  });
 
 vi.mock('axios', () => ({
   default: {
@@ -69,8 +73,8 @@ vi.mock('@/services/cdp-handler/CDPRequestHandler', () => ({
 
 vi.mock('@/services/CanvasService', () => ({
   canvasService: {
-    castPlaylistByURL: vi.fn(() => Promise.resolve(undefined)),
-    setCastInfo: vi.fn(),
+    castPlaylistByURL: canvasServiceMocks.castPlaylistByURL,
+    setCastInfo: canvasServiceMocks.setCastInfo,
   },
 }));
 
@@ -94,7 +98,7 @@ describe('AppContext boot recovery', () => {
     deviceManager.setItem.mockResolvedValue(undefined);
     deviceManager.setDeviceDisplaySettings.mockResolvedValue(undefined);
     deviceManager.setDeviceInfo.mockResolvedValue(undefined);
-    vi.mocked(canvasService).castPlaylistByURL.mockImplementation(() =>
+    canvasServiceMocks.castPlaylistByURL.mockImplementation(() =>
       Promise.resolve(undefined)
     );
   });
@@ -126,4 +130,5 @@ describe('AppContext boot recovery', () => {
       expect(deviceManager.getBootPlaylist).not.toHaveBeenCalled();
     });
   });
+
 });
