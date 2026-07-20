@@ -92,13 +92,29 @@ function findInvalidArtworkSource(
 }
 
 /**
+ * Selected artwork identity for render-status continuity.
+ * Id alone is not enough: refreshPlaylist can keep the same id while replacing
+ * `source`, and status polls must not keep the prior ready/failed for the new URL.
+ * Shuffle remaps that keep the same id+source intentionally preserve status.
+ */
+function isSameSelectedArtworkIdentity(
+  previous: DP1Item | undefined,
+  next: DP1Item | undefined
+): boolean {
+  if (previous === undefined || next === undefined) {
+    return false;
+  }
+  return previous.id === next.id && previous.source === next.source;
+}
+
+/**
  * Resolve the render status to publish with a cast-info update.
  *
  * Index-only transitions often spread the previous castInfo, which would keep
  * the prior artwork's ready/failed across the gap before ArtworkPlayer marks
- * pending. When the selected item identity changes, force pending immediately
- * so status polls never attribute the old lifecycle to the new artwork.
- * Shuffle remaps that keep the same item id intentionally preserve status.
+ * pending. When the selected artwork identity (id + source) changes, force
+ * pending immediately so status polls never attribute the old lifecycle to the
+ * new artwork. Same-id source replacement on refresh is treated as a new load.
  */
 function resolveRenderStatusForCastInfo(
   previous: CastInfo | null,
@@ -116,13 +132,9 @@ function resolveRenderStatusForCastInfo(
     previousIndex !== undefined &&
     nextIndex !== undefined
   ) {
-    const previousItemId = previousItems.at(previousIndex)?.id;
-    const nextItemId = nextItems.at(nextIndex)?.id;
-    if (
-      previousItemId !== undefined &&
-      nextItemId !== undefined &&
-      previousItemId !== nextItemId
-    ) {
+    const previousItem = previousItems.at(previousIndex);
+    const nextItem = nextItems.at(nextIndex);
+    if (!isSameSelectedArtworkIdentity(previousItem, nextItem)) {
       return RenderStatus.pending;
     }
   }

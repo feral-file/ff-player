@@ -282,6 +282,38 @@ it('preserves render status when cast info updates without changing artwork', ()
   expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
 });
 
+it('resets render status to pending when refresh replaces source for the same item id', () => {
+  const service = canvasService as unknown as {
+    refreshPlaylist(newItems: DP1Item[] | undefined): { ok: boolean };
+  };
+  const previousItem = {
+    ...item('A'),
+    source: 'https://example.com/old.jpg',
+  } as DP1Item;
+  const refreshedItem = {
+    ...item('A'),
+    source: 'https://example.com/new.jpg',
+  } as DP1Item;
+
+  canvasService.setCastInfo(
+    {
+      castCommand: CastCommand.displayPlaylist,
+      playlist: playlist('active', [previousItem]),
+      index: 0,
+      renderStatus: RenderStatus.ready,
+    },
+    false
+  );
+  canvasService.setRenderStatus(RenderStatus.ready);
+
+  expect(service.refreshPlaylist([refreshedItem])).toEqual({ ok: true });
+  expect(canvasService.getCastInfo()?.playlist?.items?.[0]?.source).toBe(
+    'https://example.com/new.jpg'
+  );
+  expect(canvasService.getCastInfo()?.renderStatus).toBe(RenderStatus.pending);
+  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+});
+
 it('does not report persisted ready after cast info recovery hydrate', async () => {
   const DeviceManager = (await import('@/utils/DeviceManager')).default;
   const getCachedCastInfo = vi
