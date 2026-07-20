@@ -47,6 +47,9 @@ export interface CheckDeviceStatusReply extends Reply {
   deviceSettings?: {
     scaling?: Scaling;
     orientation?: ViewMode;
+    // Device-level default item duration in seconds; absent means "auto"
+    // (no device override, the playlist's duration cascade stands).
+    defaultDuration?: number;
   };
 
   sleepMode?: boolean;
@@ -118,3 +121,12 @@ export type SetLoopReply = Reply;
 
 export type DisplayDefaultPlaylistRequest = Request;
 export type DisplayDefaultPlaylistReply = Reply;
+
+/**
+ * Sets the device-level default item duration (DP-1 §4.1 device-level
+ * override). `durationSeconds` null/absent clears the override ("auto").
+ */
+export interface UpdateDefaultDurationRequest extends Request {
+  durationSeconds?: number | null;
+}
+export type UpdateDefaultDurationReply = Reply;

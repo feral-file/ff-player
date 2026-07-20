@@ -1,11 +1,13 @@
-import type { DP1Item } from '@/models/dp1.model';
+import type { DP1Defaults, DP1Item } from '@/models/dp1.model';
 import { LoopMode } from '@/models/cast_info.model';
+import { NO_DURATION_VALUE } from '@/constants';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   normalizePlaylistIndex,
   resolveItemIndexInNewItems,
   resolveQueuedPlaylistNextIndex,
   resolveSequentialPlaylistAdvance,
+  resolveSlotDurationSeconds,
   shouldApplyQueuedPlaylistOnShuffleOrRefresh,
   shouldResumeSlotTimerAfterSetLoop,
 } from './playlist';
@@ -193,5 +195,153 @@ describe('queued playlist apply / setLoop resume guards', () => {
         playlistLength: 3,
       })
     ).toBe(false);
+  });
+});
+
+const timedItem = (id: string, duration?: number): DP1Item =>
+  ({ id, source: '', license: {}, duration }) as DP1Item;
+
+const noDefaults: DP1Defaults | null = null;
+
+describe('device default duration resolution', () => {
+  it('returns the item duration when no device override is set', () => {
+    expect(
+      resolveSlotDurationSeconds({
+        item: timedItem('A', 300),
+        playlistDefaults: noDefaults,
+        deviceDefaultDurationSeconds: null,
+      })
+    ).toBe(300);
+  });
+
+  it('replaces the item duration with the device override by default', () => {
+    expect(
+      resolveSlotDurationSeconds({
+        item: timedItem('A', 300),
+        playlistDefaults: noDefaults,
+        deviceDefaultDurationSeconds: 600,
+      })
+    ).toBe(600);
+  });
+
+  it('applies the device override to items with no usable duration', () => {
+    expect(
+      resolveSlotDurationSeconds({
+        item: timedItem('A'),
+        playlistDefaults: noDefaults,
+        deviceDefaultDurationSeconds: 60,
+      })
+    ).toBe(60);
+    expect(
+      resolveSlotDurationSeconds({
+        item: timedItem('A', NO_DURATION_VALUE),
+        playlistDefaults: noDefaults,
+        deviceDefaultDurationSeconds: 60,
+      })
+    ).toBe(60);
+  });
+
+});
+
+describe('device default duration gates', () => {
+  it('respects the artist veto (userOverrides=false) on the item', () => {
+    const vetoed = {
+      ...timedItem('A', 300),
+      display: { userOverrides: false },
+    } as DP1Item;
+    expect(
+      resolveSlotDurationSeconds({
+        item: vetoed,
+        playlistDefaults: noDefaults,
+        deviceDefaultDurationSeconds: 600,
+      })
+    ).toBe(300);
+  });
+
+  it('never cuts short a natural-length (loop=false) item', () => {
+    const naturalLength = {
+      ...timedItem('A'),
+      display: { loop: false },
+    } as DP1Item;
+    expect(
+      resolveSlotDurationSeconds({
+        item: naturalLength,
+        playlistDefaults: noDefaults,
+        deviceDefaultDurationSeconds: 600,
+      })
+    ).toBe(NO_DURATION_VALUE);
+  });
+
+  it('honors playlist defaults.display in the gate merge', () => {
+    const defaults = {
+      display: { userOverrides: false },
+      license: {},
+      duration: 0,
+    } as unknown as DP1Defaults;
+    expect(
+      resolveSlotDurationSeconds({
+        item: timedItem('A', 300),
+        playlistDefaults: defaults,
+        deviceDefaultDurationSeconds: 600,
+      })
+    ).toBe(300);
+  });
+
+  it('lets the item display win the gate merge over playlist defaults', () => {
+    const defaults = {
+      display: { userOverrides: false },
+      license: {},
+      duration: 0,
+    } as unknown as DP1Defaults;
+    const optedIn = {
+      ...timedItem('A', 300),
+      display: { userOverrides: true },
+    } as DP1Item;
+    expect(
+      resolveSlotDurationSeconds({
+        item: optedIn,
+        playlistDefaults: defaults,
+        deviceDefaultDurationSeconds: 600,
+      })
+    ).toBe(600);
+  });
+});
+
+describe('device default duration merged-display authority', () => {
+  it('gates on the merged display when provided (manifest veto wins)', () => {
+    expect(
+      resolveSlotDurationSeconds({
+        item: timedItem('A', 300),
+        playlistDefaults: noDefaults,
+        deviceDefaultDurationSeconds: 600,
+        mergedDisplay: { userOverrides: false },
+      })
+    ).toBe(300);
+  });
+
+  it('merged display is authoritative over the synchronous item fields', () => {
+    const syncVetoed = {
+      ...timedItem('A', 300),
+      display: { userOverrides: false },
+    } as DP1Item;
+    expect(
+      resolveSlotDurationSeconds({
+        item: syncVetoed,
+        playlistDefaults: noDefaults,
+        deviceDefaultDurationSeconds: 600,
+        mergedDisplay: { userOverrides: true, loop: true },
+      })
+    ).toBe(600);
+  });
+
+  it('merged loop=false keeps natural-length playback', () => {
+    expect(
+      resolveSlotDurationSeconds({
+        item: timedItem('A', NO_DURATION_VALUE),
+        playlistDefaults: noDefaults,
+        deviceDefaultDurationSeconds: 600,
+        mergedDisplay: { loop: false },
+      })
+    ).toBe(NO_DURATION_VALUE);
   });
 });

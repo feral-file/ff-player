@@ -7,6 +7,7 @@ import {
   NowDisplayReply,
   SchedulePlaylistRequest,
   SchedulePlaylistReply,
+  UpdateDefaultDurationRequest,
 } from '@/models/cast_request_reply.model';
 import * as Sentry from '@sentry/nextjs';
 import {
@@ -256,6 +257,31 @@ class CanvasService {
     return pending;
   }
 
+  /**
+   * Publishes a slot-index transition from the playlist route. Drops the
+   * update when castInfo is absent or already reports this index under
+   * updateIndex — collapsing same-tick races where the duration timer and a
+   * source-end event both try to publish the same advance.
+   */
+  public publishIndexUpdate(index: number): void {
+    const currentCastInfo = this.castInfo;
+    if (!currentCastInfo) {
+      return;
+    }
+    if (
+      currentCastInfo.castCommand === CastCommand.updateIndex &&
+      currentCastInfo.index === index
+    ) {
+      return;
+    }
+
+    this.setCastInfo({
+      ...currentCastInfo,
+      castCommand: CastCommand.updateIndex,
+      index,
+    });
+  }
+
   public executeScheduledDP1Task(dp1CallData: DP1Call): void {
     console.log('[CanvasService] Executing scheduled DP1 task with data');
     this.nowDisplayPlaylist({ dp1CallData });
@@ -374,6 +400,10 @@ class CanvasService {
           return this.setLoop(requestJson as SetLoopRequest);
         case CastCommand.displayDefaultPlaylist:
           return this.displayDefaultPlaylist();
+        case CastCommand.updateDefaultDuration:
+          return this.updateDefaultDuration(
+            requestJson as UpdateDefaultDurationRequest
+          );
         default:
           console.error(`[CAST] Unknown command: ${command}`);
           return { ok: false };
@@ -423,6 +453,8 @@ class CanvasService {
             DeviceManager.getCachedDeviceDisplaySettings()?.scaling ??
             DisplaySettings.defaultScaling,
           orientation: DeviceManager.getCachedViewMode() ?? ViewMode.landscape,
+          defaultDuration:
+            DeviceManager.getCachedDefaultItemDurationSeconds() ?? undefined,
         },
 
         isPaused: window.location.pathname === '/sleep',
@@ -725,6 +757,44 @@ class CanvasService {
         shuffle: false,
         index: newIndex,
         playlist: { ...this.castInfo.playlist, items: restored },
+      });
+    }
+
+    return { ok: true };
+  }
+
+  /**
+   * Sets (or clears, with null/absent durationSeconds) the persisted
+   * device-level default item duration — the viewer's "each work displays
+   * this long" override (DP-1 §4.1 device-level overrides). The value is
+   * cached synchronously before the IndexedDB write settles, then castInfo is
+   * republished so the playlist route re-arms the active slot timer against
+   * the new value without restarting playback.
+   */
+  private updateDefaultDuration(
+    request: UpdateDefaultDurationRequest | undefined
+  ): Reply {
+    // A missing request envelope means "clear" — same as an explicit null.
+    const raw = request?.durationSeconds ?? null;
+    if (raw !== null && (!Number.isFinite(raw) || raw <= 0)) {
+      console.error('[CanvasService] Invalid default duration:', raw);
+      return { ok: false };
+    }
+
+    console.log('[CanvasService] updateDefaultDuration', raw);
+    DeviceManager.setDefaultItemDurationSeconds(raw).catch(
+      (error: unknown) => {
+        console.error(
+          '[CanvasService] Error persisting default duration:',
+          error
+        );
+      }
+    );
+
+    if (this.castInfo) {
+      this.setCastInfo({
+        ...this.castInfo,
+        castCommand: CastCommand.updateDefaultDuration,
       });
     }
 

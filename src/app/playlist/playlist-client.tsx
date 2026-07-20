@@ -4,52 +4,25 @@ import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { useAppContext } from '@/context/AppContext';
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
-import {
-  defaultDP1DisplayPreference,
-  DP1DisplayPreference,
-  DP1Defaults,
-  DP1Item,
-} from '@/models/dp1.model';
+import { DP1Defaults, DP1Item } from '@/models/dp1.model';
 import { NO_DURATION_VALUE } from '@/constants';
 import { canvasService } from '@/services/CanvasService';
-import { DP1Service } from '@/services/DP1Service';
 import {
   isNoDurationItem,
   itemIdentityFor,
+  mergedDisplayForSlot,
   normalizePlaylistIndex,
   resolveQueuedPlaylistNextIndex,
   resolveSequentialPlaylistAdvance,
+  resolveSlotDurationSeconds,
   shouldApplyQueuedPlaylistOnShuffleOrRefresh,
+  shouldHoldForPendingMerge,
   shouldResumeSlotTimerAfterSetLoop,
 } from '@/utils/playlist';
+import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
-import * as Sentry from '@sentry/nextjs';
+import { usePlaylistItemDisplayPreference } from './usePlaylistItemDisplayPreference';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-
-function reportPlaylistDisplayPreferenceError(
-  phase: string,
-  error: unknown,
-  extra?: Record<string, unknown>
-): void {
-  const message = `[PlaylistClient] Error handling item display preference (${phase})`;
-  console.error(
-    message,
-    error instanceof Error ? error.message : String(error)
-  );
-  if (error instanceof Error) {
-    Sentry.captureException(error, {
-      extra: { phase, ...extra },
-    });
-  } else {
-    Sentry.captureMessage(message, {
-      extra: {
-        error: String(error),
-        phase,
-        ...extra,
-      },
-    });
-  }
-}
 
 // 'sourceEnd' means the media just ended (display.loop=false) and needs a
 // reload to restart playback; 'timer' lets the natively-looping element
@@ -58,19 +31,20 @@ type AdvanceCause = 'timer' | 'sourceEnd';
 
 // eslint-disable-next-line max-lines-per-function
 export default function PlaylistClient() {
-  const { context } = useAppContext();
-  const castInfo = context.castInfo;
+  const castInfo = useAppContext().context.castInfo;
 
   const [playlist, setPlaylist] = useState<DP1Item[]>([]);
   const [playlistDefaultsSettings, setPlaylistDefaultsSettings] =
     useState<DP1Defaults | null>(null);
-  const [currentItemDisplayPreference, setCurrentItemDisplayPreference] =
-    useState<DP1DisplayPreference | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const artworkPerformReloadRef = useRef<(() => void) | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
+  // Wall-clock moment the active slot last (re)started, so a merge-landed
+  // re-arm can preserve elapsed time for baseline durations instead of
+  // granting a vetoed item a fresh full interval.
+  const slotStartedAtRef = useRef<number>(0);
   const currentItemRef = useRef<DP1Item>();
   const currentIndexRef = useRef<number>(-1);
   const playlistRef = useRef<DP1Item[]>([]);
@@ -81,6 +55,20 @@ export default function PlaylistClient() {
   currentIndexRef.current = currentIndex;
   playlistRef.current = playlist;
   playlistLengthRef.current = playlist.length;
+
+  const {
+    preference: currentItemDisplayPreference,
+    mergedDisplayRef: mergedDisplayForItemRef,
+    resolveForSlot: handleItemDisplayPreference,
+    clearMergedDisplayForNewCast,
+    clearMergedDisplay,
+    reset: resetItemDisplayPreference,
+  } = usePlaylistItemDisplayPreference({
+    playlistDefaults: playlistDefaultsSettings,
+    currentItemRef,
+    currentIndexRef,
+    playlistRef,
+  });
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -157,92 +145,9 @@ export default function PlaylistClient() {
     };
   }, [triggerArtworkRefresh]);
 
-  const handleItemDisplayPreference = useCallback(
-    async (dp1Item: DP1Item) => {
-      const activeItemId = dp1Item.id;
-      const activeRef = dp1Item.ref;
-
-      try {
-        // 4) Playlist defaults.display (lowest priority)
-        const base: DP1DisplayPreference = {
-          ...defaultDP1DisplayPreference,
-          ...(playlistDefaultsSettings?.display ?? {}),
-        };
-
-        // 3) Content loaded from item.ref
-        let refDisplay: DP1DisplayPreference | undefined;
-        try {
-          if (dp1Item.ref) {
-            // TODO: Implement ref hash verification
-            const manifest = await DP1Service.getItemRef(dp1Item.ref);
-            refDisplay = manifest?.controls?.display;
-          }
-        } catch (error: unknown) {
-          reportPlaylistDisplayPreferenceError('getItemRef', error, {
-            ref: dp1Item.ref,
-            itemId: dp1Item.id,
-          });
-          // Ref load failed; continue merge without manifest display.
-        }
-
-        // 2) Item override.display (medium priority)
-        let overriddenDisplay: DP1DisplayPreference | undefined;
-        if (dp1Item.override?.display) {
-          overriddenDisplay = dp1Item.override.display;
-        }
-
-        // 1) Item display (highest priority)
-        const merged: DP1DisplayPreference = {
-          ...base,
-          ...(refDisplay ?? {}),
-          ...(overriddenDisplay ?? {}),
-          ...(dp1Item.display ?? {}),
-        };
-
-        const currentItem = currentItemRef.current;
-        if (!currentItem) {
-          return;
-        }
-        if (currentItem.id === activeItemId && currentItem.ref === activeRef) {
-          setCurrentItemDisplayPreference(merged);
-        }
-      } catch (error: unknown) {
-        reportPlaylistDisplayPreferenceError(
-          'mergeOrApplyDisplayPreference',
-          error,
-          { itemId: activeItemId, ref: activeRef }
-        );
-        const currentItem = currentItemRef.current;
-        if (!currentItem) {
-          return;
-        }
-        if (currentItem.id === activeItemId && currentItem.ref === activeRef) {
-          setCurrentItemDisplayPreference(defaultDP1DisplayPreference);
-        }
-      }
-    },
-    [playlistDefaultsSettings]
-  );
-
-  // Drops a no-op updateIndex transition (cast already at this index).
-  // Collapses same-tick races where timer + onSourceEnded both publish.
+  // Same-tick dedupe of index transitions lives with the cast state owner.
   const publishCurrentIndex = useCallback((index: number) => {
-    const currentCastInfo = canvasService.getCastInfo();
-    if (!currentCastInfo) {
-      return;
-    }
-    if (
-      currentCastInfo.castCommand === CastCommand.updateIndex &&
-      currentCastInfo.index === index
-    ) {
-      return;
-    }
-
-    canvasService.setCastInfo({
-      ...currentCastInfo,
-      castCommand: CastCommand.updateIndex,
-      index,
-    });
+    canvasService.publishIndexUpdate(index);
   }, []);
 
   const applyQueuedPlaylistIfExists = useCallback(
@@ -259,6 +164,9 @@ export default function PlaylistClient() {
       }
 
       holdAfterFinalSlotRef.current = false;
+      // Queued refresh/shuffle replaces the item list; same-id items may
+      // carry changed display fields, so the cached merge cannot be trusted.
+      clearMergedDisplay();
 
       const hasDeferredRefresh = canvasService.hasDeferredRefreshPlaylist();
       const currentCastInfo = canvasService.getCastInfo();
@@ -291,7 +199,7 @@ export default function PlaylistClient() {
 
       return { applied: true };
     },
-    [publishCurrentIndex]
+    [clearMergedDisplay, publishCurrentIndex]
   );
 
   // Advance away from the slot at `fromIndex`. Shared by the duration-based
@@ -383,21 +291,68 @@ export default function PlaylistClient() {
   const scheduleCurrentItemTimer = useCallback(
     function scheduleCurrentItemTimer(
       index: number,
-      snapshot: DP1Item[]
+      snapshot: DP1Item[],
+      preserveElapsed = false
     ): void {
       clearTimer();
 
       if (!snapshot.length) {
         return;
       }
+      if (!preserveElapsed) {
+        slotStartedAtRef.current = Date.now();
+      }
 
       const normalizedIndex = normalizePlaylistIndex(index, snapshot.length);
       const currentItem = snapshot[normalizedIndex];
 
-      const duration = currentItem.duration ?? 0;
+      // Device-level default duration (viewer override): applied only once
+      // this slot's fully merged display preference — including the async
+      // ref-manifest layer — is known, so a manifest-carried
+      // userOverrides=false (artist veto) or loop=false (natural length) can
+      // never be beaten to the timer by a slow fetch. Until the merge lands
+      // the item's own duration stands; the re-arm effect below reschedules
+      // with the override the moment the merge resolves. The cached read is
+      // safe here: updateDefaultDuration republishes castInfo, which re-runs
+      // this scheduling path after the cache is already set.
+      const mergedDisplay = mergedDisplayForSlot(
+        mergedDisplayForItemRef.current,
+        currentItem,
+        normalizedIndex
+      );
+      const deviceDefault = DeviceManager.getCachedDefaultItemDurationSeconds();
+      if (
+        shouldHoldForPendingMerge({
+          item: currentItem,
+          mergedDisplay,
+          deviceDefaultDurationSeconds: deviceDefault,
+        })
+      ) {
+        return;
+      }
+      const duration = resolveSlotDurationSeconds({
+        item: currentItem,
+        playlistDefaults: playlistDefaultsSettings,
+        deviceDefaultDurationSeconds: mergedDisplay ? deviceDefault : null,
+        mergedDisplay,
+      });
       if (duration <= 0 || duration >= NO_DURATION_VALUE) {
         return;
       }
+
+      // A merge-landed re-arm that resolves to the item's own duration (the
+      // override was withheld — artist veto or no default) must not grant a
+      // fresh interval: the artwork has been on screen since slot entry, so
+      // only the remaining time is scheduled. Override re-arms deliberately
+      // restart from zero (owner just changed the pacing).
+      const keepElapsed =
+        preserveElapsed &&
+        duration === (currentItem.duration ?? NO_DURATION_VALUE);
+      const delayMs = Math.max(
+        duration * 1000 -
+          (keepElapsed ? Date.now() - slotStartedAtRef.current : 0),
+        0
+      );
 
       timerRef.current = setTimeout(() => {
         // The timeout is firing now, so the previous handle is no longer active.
@@ -405,9 +360,14 @@ export default function PlaylistClient() {
         // artwork" state after repeat-off stops progression.
         timerRef.current = undefined;
         advanceFromSlot(normalizedIndex, snapshot);
-      }, duration * 1000);
+      }, delayMs);
     },
-    [advanceFromSlot, clearTimer]
+    [
+      advanceFromSlot,
+      clearTimer,
+      mergedDisplayForItemRef,
+      playlistDefaultsSettings,
+    ]
   );
 
   // Triggered by ArtworkPlayer when a time-based source (video or audio) ends
@@ -446,7 +406,7 @@ export default function PlaylistClient() {
     const normalizedIndex = normalizePlaylistIndex(currentIndex, playlist.length);
     const currentItem = playlist[normalizedIndex];
 
-    void handleItemDisplayPreference(currentItem);
+    void handleItemDisplayPreference(currentItem, normalizedIndex);
     setCastPreviewURL(currentItem.source);
     scheduleCurrentItemTimer(normalizedIndex, playlist);
 
@@ -462,6 +422,28 @@ export default function PlaylistClient() {
     scheduleCurrentItemTimer,
   ]);
 
+  // Once the async display-preference merge (incl. the ref-manifest layer)
+  // lands for the current slot, re-arm its timer: the initial arm ran without
+  // the device override (merge unknown), and only the merged preference may
+  // grant it. Restart-from-zero on re-arm is deliberate — manifest loads
+  // settle well before any human-scale duration elapses.
+  useEffect(() => {
+    if (!currentItemDisplayPreference) {
+      return;
+    }
+    if (currentIndexRef.current < 0 || playlistRef.current.length === 0) {
+      return;
+    }
+    // Without a device default the merge cannot change the timer (only the
+    // item duration governs), so skip the re-arm and let the entry-armed
+    // baseline keep its elapsed time — ref items must not restart at 10s
+    // just because their manifest landed.
+    if (DeviceManager.getCachedDefaultItemDurationSeconds() === null) {
+      return;
+    }
+    scheduleCurrentItemTimer(currentIndexRef.current, playlistRef.current, true);
+  }, [currentItemDisplayPreference, scheduleCurrentItemTimer]);
+
   // eslint-disable-next-line max-lines-per-function
   useEffect(() => {
     if (!castInfo) {
@@ -472,7 +454,7 @@ export default function PlaylistClient() {
       setPlaylist([]);
       setCurrentIndex(-1);
       setPlaylistDefaultsSettings(null);
-      setCurrentItemDisplayPreference(null);
+      resetItemDisplayPreference();
       setCastPreviewURL(null);
       return;
     }
@@ -480,6 +462,7 @@ export default function PlaylistClient() {
     switch (castInfo.castCommand) {
       case CastCommand.displayPlaylist: {
         holdAfterFinalSlotRef.current = false;
+        clearMergedDisplayForNewCast();
         loopModeRef.current = coerceLoopMode(castInfo.loopMode);
         if (castInfo.playlist?.items?.length) {
           setPlaylistDefaultsSettings(castInfo.playlist.defaults ?? null);
@@ -498,7 +481,7 @@ export default function PlaylistClient() {
           setPlaylist([]);
           setCurrentIndex(-1);
           setPlaylistDefaultsSettings(null);
-          setCurrentItemDisplayPreference(null);
+          resetItemDisplayPreference();
           setCastPreviewURL(null);
         }
         break;
@@ -527,7 +510,7 @@ export default function PlaylistClient() {
         setPlaylist([]);
         setCurrentIndex(-1);
         setPlaylistDefaultsSettings(null);
-        setCurrentItemDisplayPreference(null);
+        resetItemDisplayPreference();
         setCastPreviewURL(null);
         break;
       }
@@ -564,6 +547,21 @@ export default function PlaylistClient() {
         break;
       }
 
+      case CastCommand.updateDefaultDuration: {
+        // The device default duration changed. Re-arm the active slot's
+        // timer so the new value applies to the artwork currently on screen
+        // without restarting playback. The full interval restarts from now —
+        // deliberately simple; elapsed-time credit is not worth the state.
+        // Repeat-off hold is preserved: re-arming on the held final slot just
+        // schedules an advance that resolveSequentialPlaylistAdvance turns
+        // into another hold.
+        scheduleCurrentItemTimer(
+          currentIndexRef.current,
+          playlistRef.current
+        );
+        break;
+      }
+
       case CastCommand.setLoop: {
         const nextLoopMode = coerceLoopMode(castInfo.loopMode);
         const activePlaylist = playlistRef.current;
@@ -593,8 +591,10 @@ export default function PlaylistClient() {
   }, [
     applyQueuedPlaylistIfExists,
     castInfo,
+    clearMergedDisplayForNewCast,
     clearTimer,
     replayCurrentSlot,
+    resetItemDisplayPreference,
     scheduleCurrentItemTimer,
     triggerArtworkRefresh,
   ]);
