@@ -4,18 +4,13 @@ import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import { useAppContext } from '@/context/AppContext';
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
-import {
-  DP1DisplayPreference,
-  DP1Defaults,
-  DP1Item,
-} from '@/models/dp1.model';
+import { DP1Defaults, DP1Item } from '@/models/dp1.model';
 import { NO_DURATION_VALUE } from '@/constants';
 import { canvasService } from '@/services/CanvasService';
 import {
   isNoDurationItem,
   itemIdentityFor,
   mergedDisplayForSlot,
-  mergeStillDescribesActiveSlot,
   normalizePlaylistIndex,
   resolveQueuedPlaylistNextIndex,
   resolveSequentialPlaylistAdvance,
@@ -23,14 +18,10 @@ import {
   shouldApplyQueuedPlaylistOnShuffleOrRefresh,
   shouldHoldForPendingMerge,
   shouldResumeSlotTimerAfterSetLoop,
-  type SlotMergedDisplay,
 } from '@/utils/playlist';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
-import {
-  clearUnversionedRefManifestDisplayCache,
-  resolveAndApplyItemDisplayPreference,
-} from '@/utils/playlistDisplayPreference';
+import { usePlaylistItemDisplayPreference } from './usePlaylistItemDisplayPreference';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 // 'sourceEnd' means the media just ended (display.loop=false) and needs a
@@ -45,8 +36,6 @@ export default function PlaylistClient() {
   const [playlist, setPlaylist] = useState<DP1Item[]>([]);
   const [playlistDefaultsSettings, setPlaylistDefaultsSettings] =
     useState<DP1Defaults | null>(null);
-  const [currentItemDisplayPreference, setCurrentItemDisplayPreference] =
-    useState<DP1DisplayPreference | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
   const artworkPerformReloadRef = useRef<(() => void) | null>(null);
@@ -57,10 +46,6 @@ export default function PlaylistClient() {
   // granting a vetoed item a fresh full interval.
   const slotStartedAtRef = useRef<number>(0);
   const currentItemRef = useRef<DP1Item>();
-  // Fully merged display preference (incl. async ref-manifest layer), tagged
-  // with its item so the slot timer's default-duration gate reads the same
-  // preference rendering applies and never a stale merge from a prior slot.
-  const mergedDisplayForItemRef = useRef<SlotMergedDisplay | null>(null);
   const currentIndexRef = useRef<number>(-1);
   const playlistRef = useRef<DP1Item[]>([]);
   const playlistLengthRef = useRef<number>(0);
@@ -70,6 +55,20 @@ export default function PlaylistClient() {
   currentIndexRef.current = currentIndex;
   playlistRef.current = playlist;
   playlistLengthRef.current = playlist.length;
+
+  const {
+    preference: currentItemDisplayPreference,
+    mergedDisplayRef: mergedDisplayForItemRef,
+    resolveForSlot: handleItemDisplayPreference,
+    clearMergedDisplayForNewCast,
+    clearMergedDisplay,
+    reset: resetItemDisplayPreference,
+  } = usePlaylistItemDisplayPreference({
+    playlistDefaults: playlistDefaultsSettings,
+    currentItemRef,
+    currentIndexRef,
+    playlistRef,
+  });
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -146,47 +145,6 @@ export default function PlaylistClient() {
     };
   }, [triggerArtworkRefresh]);
 
-  const handleItemDisplayPreference = useCallback(
-    async (dp1Item: DP1Item, slotIndex: number) => {
-      const activeItemId = dp1Item.id;
-      const activeRef = dp1Item.ref;
-
-      // Apply only if this merge still describes the slot on screen; a slot
-      // change while the ref manifest loaded makes the result stale. The
-      // index is part of the guard because same-id/ref slots may carry
-      // different per-slot display fields.
-      const apply = (merged: DP1DisplayPreference) => {
-        const activeIndex = normalizePlaylistIndex(
-          currentIndexRef.current,
-          playlistRef.current.length
-        );
-        const stillActive = mergeStillDescribesActiveSlot({
-          activeIndex,
-          activeItem: currentItemRef.current,
-          slotIndex,
-          itemId: activeItemId,
-          ref: activeRef,
-        });
-        if (stillActive) {
-          mergedDisplayForItemRef.current = {
-            index: slotIndex,
-            itemId: activeItemId,
-            ref: activeRef,
-            display: merged,
-          };
-          setCurrentItemDisplayPreference(merged);
-        }
-      };
-
-      await resolveAndApplyItemDisplayPreference(
-        dp1Item,
-        playlistDefaultsSettings,
-        apply
-      );
-    },
-    [playlistDefaultsSettings]
-  );
-
   // Same-tick dedupe of index transitions lives with the cast state owner.
   const publishCurrentIndex = useCallback((index: number) => {
     canvasService.publishIndexUpdate(index);
@@ -208,7 +166,7 @@ export default function PlaylistClient() {
       holdAfterFinalSlotRef.current = false;
       // Queued refresh/shuffle replaces the item list; same-id items may
       // carry changed display fields, so the cached merge cannot be trusted.
-      mergedDisplayForItemRef.current = null;
+      clearMergedDisplay();
 
       const hasDeferredRefresh = canvasService.hasDeferredRefreshPlaylist();
       const currentCastInfo = canvasService.getCastInfo();
@@ -241,7 +199,7 @@ export default function PlaylistClient() {
 
       return { applied: true };
     },
-    [publishCurrentIndex]
+    [clearMergedDisplay, publishCurrentIndex]
   );
 
   // Advance away from the slot at `fromIndex`. Shared by the duration-based
@@ -404,7 +362,12 @@ export default function PlaylistClient() {
         advanceFromSlot(normalizedIndex, snapshot);
       }, delayMs);
     },
-    [advanceFromSlot, clearTimer, playlistDefaultsSettings]
+    [
+      advanceFromSlot,
+      clearTimer,
+      mergedDisplayForItemRef,
+      playlistDefaultsSettings,
+    ]
   );
 
   // Triggered by ArtworkPlayer when a time-based source (video or audio) ends
@@ -487,12 +450,11 @@ export default function PlaylistClient() {
       clearTimer();
       holdAfterFinalSlotRef.current = false;
       currentItemRef.current = undefined;
-      mergedDisplayForItemRef.current = null;
       loopModeRef.current = LoopMode.playlist;
       setPlaylist([]);
       setCurrentIndex(-1);
       setPlaylistDefaultsSettings(null);
-      setCurrentItemDisplayPreference(null);
+      resetItemDisplayPreference();
       setCastPreviewURL(null);
       return;
     }
@@ -500,13 +462,7 @@ export default function PlaylistClient() {
     switch (castInfo.castCommand) {
       case CastCommand.displayPlaylist: {
         holdAfterFinalSlotRef.current = false;
-        // A fresh display replaces items and defaults wholesale; a cached
-        // merge from the previous list may share id/ref with a new item yet
-        // carry outdated gate fields, so it must not survive the swap. The
-        // same boundary refreshes hash-less ref manifests, whose content may
-        // have changed without a version identity to detect it by.
-        mergedDisplayForItemRef.current = null;
-        clearUnversionedRefManifestDisplayCache();
+        clearMergedDisplayForNewCast();
         loopModeRef.current = coerceLoopMode(castInfo.loopMode);
         if (castInfo.playlist?.items?.length) {
           setPlaylistDefaultsSettings(castInfo.playlist.defaults ?? null);
@@ -525,7 +481,7 @@ export default function PlaylistClient() {
           setPlaylist([]);
           setCurrentIndex(-1);
           setPlaylistDefaultsSettings(null);
-          setCurrentItemDisplayPreference(null);
+          resetItemDisplayPreference();
           setCastPreviewURL(null);
         }
         break;
@@ -554,7 +510,7 @@ export default function PlaylistClient() {
         setPlaylist([]);
         setCurrentIndex(-1);
         setPlaylistDefaultsSettings(null);
-        setCurrentItemDisplayPreference(null);
+        resetItemDisplayPreference();
         setCastPreviewURL(null);
         break;
       }
@@ -635,8 +591,10 @@ export default function PlaylistClient() {
   }, [
     applyQueuedPlaylistIfExists,
     castInfo,
+    clearMergedDisplayForNewCast,
     clearTimer,
     replayCurrentSlot,
+    resetItemDisplayPreference,
     scheduleCurrentItemTimer,
     triggerArtworkRefresh,
   ]);
