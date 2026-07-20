@@ -124,6 +124,52 @@ describe('PlaylistClient — device default duration vs ref-manifest gates', () 
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 
+});
+
+describe('PlaylistClient — merge-cache lifetime and pre-merge window', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(async () => {
+    teardownPlaylistWiringTest();
+    await setDeviceDefault(null);
+    vi.clearAllMocks();
+  });
+
+  it('drops the cached merge when a new playlist replaces the item', async () => {
+    await setDeviceDefault(5);
+    // First display: manifest allows overrides; the merge lands and the
+    // device default becomes armed for item 'a'.
+    getItemRefMock.mockResolvedValue(
+      manifestWithDisplay({ userOverrides: true }) as never
+    );
+    const permissive = [refItem('a', 30), item('b', 300)];
+    const initial = displayCast(permissive, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    const { rerender } = render(<PlaylistHarness castInfo={initial} />);
+    await advanceMs(0);
+
+    // New display carries the same id/ref item, now sync-vetoed, with its
+    // manifest merge kept pending. A stale cached merge (userOverrides=true)
+    // must not let the device default cut the new slot short.
+    getItemRefMock.mockReturnValue(new Promise(() => undefined) as never);
+    const vetoed = [
+      { ...refItem('a', 30), display: { userOverrides: false } } as DP1Item,
+      item('b', 300),
+    ];
+    const next = displayCast(vetoed, 0, LoopMode.playlist);
+    canvasService.setCastInfo(next, false);
+    rerender(<PlaylistHarness castInfo={next} />);
+
+    await advanceMs(0);
+    await advanceMs(5000);
+    expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
+
+    await advanceMs(25000);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
   it('does not apply the override before the merge for the slot lands', async () => {
     await setDeviceDefault(5);
     // Manifest never resolves: the pre-merge window persists for the whole

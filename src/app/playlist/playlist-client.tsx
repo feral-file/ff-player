@@ -227,6 +227,9 @@ export default function PlaylistClient() {
       }
 
       holdAfterFinalSlotRef.current = false;
+      // Queued refresh/shuffle replaces the item list; same-id items may
+      // carry changed display fields, so the cached merge cannot be trusted.
+      mergedDisplayForItemRef.current = null;
 
       const hasDeferredRefresh = canvasService.hasDeferredRefreshPlaylist();
       const currentCastInfo = canvasService.getCastInfo();
@@ -484,6 +487,10 @@ export default function PlaylistClient() {
     switch (castInfo.castCommand) {
       case CastCommand.displayPlaylist: {
         holdAfterFinalSlotRef.current = false;
+        // A fresh display replaces items and defaults wholesale; a cached
+        // merge from the previous list may share id/ref with a new item yet
+        // carry outdated gate fields, so it must not survive the swap.
+        mergedDisplayForItemRef.current = null;
         loopModeRef.current = coerceLoopMode(castInfo.loopMode);
         if (castInfo.playlist?.items?.length) {
           setPlaylistDefaultsSettings(castInfo.playlist.defaults ?? null);
