@@ -69,7 +69,15 @@ const PLAYLIST_SOURCE_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
  */
 function isSupportedArtworkSource(source: string): boolean {
   try {
-    const url = new URL(source, 'https://ff-player.invalid/');
+    const normalizedSource = source.trim();
+    if (!normalizedSource) {
+      return false;
+    }
+    if (normalizedSource.startsWith('data:')) {
+      return true;
+    }
+
+    const url = new URL(normalizedSource);
     return PLAYLIST_SOURCE_PROTOCOLS.has(url.protocol);
   } catch {
     return false;

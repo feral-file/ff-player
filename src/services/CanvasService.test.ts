@@ -36,6 +36,7 @@ const service = canvasService as unknown as {
   onRefreshArtwork: (() => boolean) | null;
 };
 
+// eslint-disable-next-line max-lines-per-function -- Keep the refreshArtwork scenarios together; they share a compact helper surface.
 describe('CanvasService refreshArtwork', () => {
   afterEach(() => {
     canvasService.setCastInfo(null, false);
@@ -105,6 +106,39 @@ describe('CanvasService refreshArtwork', () => {
     });
     expect(reply).toEqual({ ok: false });
     expect(refreshSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns ok:false when refresh receives a relative source path', () => {
+    canvasService.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: playlist('active', ['A', 'B'].map(item)),
+        index: 1,
+        renderStatus: undefined,
+      },
+      false
+    );
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.displayPlaylist,
+      request: {
+        refresh: true,
+        dp1_call: playlist('refreshed', [
+          {
+            id: 'bad-refresh',
+            title: 'Relative Source',
+            source: 'artwork.png',
+            license: {},
+          } as DP1Item,
+        ]),
+      },
+    });
+
+    expect(reply).toEqual({ ok: false });
+    expect(
+      canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)
+    ).toEqual(['A', 'B']);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 });
 

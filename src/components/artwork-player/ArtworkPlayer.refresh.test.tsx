@@ -4,7 +4,9 @@
  */
 import { AppContext } from '@/context/AppContext';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { RenderStatus } from '@/models';
+import { canvasService } from '@/services/CanvasService';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
@@ -40,7 +42,15 @@ vi.mock('@sentry/nextjs', () => ({
 
 const hlsTest = vi.hoisted(() => ({
   loadSource: vi.fn(),
+  mediaAttachedHandlers: [] as (() => void)[],
+  errorHandlers: [] as ((event: string, data: HlsErrorData) => void)[],
 }));
+
+interface HlsErrorData {
+  fatal?: boolean;
+  type?: string;
+  details?: string;
+}
 
 vi.mock('hls.js', () => {
   const Events = {
@@ -75,12 +85,19 @@ vi.mock('hls.js', () => {
       });
     }
 
-    on(event: string, handler: () => void): void {
+    on(
+      event: string,
+      handler: (() => void) | ((event: string, data: HlsErrorData) => void)
+    ): void {
       if (event === Events.MEDIA_ATTACHED) {
-        this.mediaAttachedHandler = handler;
+        const mediaHandler = handler as () => void;
+        this.mediaAttachedHandler = mediaHandler;
+        hlsTest.mediaAttachedHandlers.push(mediaHandler);
       }
       if (event === Events.ERROR) {
-        /* no-op: tests do not emit errors */
+        hlsTest.errorHandlers.push(
+          handler as (event: string, data: HlsErrorData) => void
+        );
       }
     }
 
@@ -102,6 +119,8 @@ const IMAGE_PREVIEW_URL = 'https://feralfile.com/test/artwork-refresh.jpg';
 const VIDEO_PREVIEW_URL = 'https://feralfile.com/test/artwork-video-refresh.mp4';
 /** ipfs.io is in KNOWN_ORIGINS so streaming setup can attach without blob fetch. */
 const HLS_PREVIEW_URL = 'https://ipfs.io/ipfs/QmTest/stream.m3u8';
+const HLS_PREVIEW_URL_B = 'https://ipfs.io/ipfs/QmTestB/stream.m3u8';
+const HLS_PREVIEW_URL_C = 'https://ipfs.io/ipfs/QmTestC/stream.m3u8';
 /** data: HTML so jsdom can complete iframe `load` without network (external src often never fires). */
 function renderWithContext(ui: React.ReactElement): ReturnType<typeof render> {
   const value = {
@@ -119,12 +138,42 @@ function renderWithContext(ui: React.ReactElement): ReturnType<typeof render> {
   );
 }
 
+function artworkPlayerWithContext(
+  previewURL: string,
+  itemIdentity: string
+): React.ReactElement {
+  return (
+    <AppContext.Provider
+      value={
+        {
+          context: {
+            isInitialized: true,
+            isOnline: true,
+            appRemoteConfig: {},
+            displaySettings: null,
+            cursorPositions: null,
+            castInfo: null,
+          },
+        } as never
+      }>
+      <ArtworkPlayer
+        previewURL={previewURL}
+        artworkPreviewMIMEType="application/vnd.apple.mpegurl"
+        displayPreferences={defaultDP1DisplayPreference}
+        itemIdentity={itemIdentity}
+      />
+    </AppContext.Provider>
+  );
+}
+
 describe('ArtworkPlayer — refresh reload tick (image)', () => {
   let playSpy: ReturnType<typeof vi.spyOn>;
   let pauseSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     mediaLoadInstrumentation.calls.length = 0;
+    hlsTest.mediaAttachedHandlers.length = 0;
+    hlsTest.errorHandlers.length = 0;
     playSpy = vi
       .spyOn(HTMLVideoElement.prototype, 'play')
       .mockImplementation(() => Promise.resolve());
@@ -136,6 +185,8 @@ describe('ArtworkPlayer — refresh reload tick (image)', () => {
   afterEach(() => {
     playSpy.mockRestore();
     pauseSpy.mockRestore();
+    canvasService.setCastInfo(null, false);
+    canvasService.setRenderStatus(undefined);
     cleanup();
   });
 
@@ -231,6 +282,196 @@ describe('ArtworkPlayer — refresh reload tick (HLS)', () => {
     await waitFor(() => {
       expect(hlsTest.loadSource.mock.calls.length).toBeGreaterThan(countBefore);
     });
+  });
+});
+
+describe('ArtworkPlayer — stale HLS media errors', () => {
+  let playSpy: ReturnType<typeof vi.spyOn>;
+  let pauseSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    mediaLoadInstrumentation.calls.length = 0;
+    hlsTest.mediaAttachedHandlers.length = 0;
+    hlsTest.errorHandlers.length = 0;
+    playSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'play')
+      .mockImplementation(() => Promise.resolve());
+    pauseSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'pause')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    playSpy.mockRestore();
+    pauseSpy.mockRestore();
+    canvasService.setCastInfo(null, false);
+    canvasService.setRenderStatus(undefined);
+    cleanup();
+  });
+
+  it('ignores a stale outgoing HLS media error after same-URL identity takeover', async () => {
+    hlsTest.loadSource.mockClear();
+
+    const { rerender } = render(
+      artworkPlayerWithContext(HLS_PREVIEW_URL, 'item-old')
+    );
+
+    await waitFor(() => {
+      expect(hlsTest.errorHandlers.length).toBeGreaterThan(0);
+    });
+
+    const staleErrorHandler = hlsTest.errorHandlers[0];
+    const staleHandlerCount = hlsTest.errorHandlers.length;
+
+    rerender(artworkPlayerWithContext(HLS_PREVIEW_URL, 'item-new'));
+
+    await waitFor(() => {
+      expect(hlsTest.errorHandlers.length).toBeGreaterThan(staleHandlerCount);
+    });
+    await waitFor(() => {
+      expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    });
+
+    act(() => {
+      staleErrorHandler('error', {
+        fatal: true,
+        type: 'mediaError',
+      });
+    });
+
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    expect(
+      screen.queryByText('The artwork cannot be displayed correctly on this device.')
+    ).toBeNull();
+  });
+});
+
+describe('ArtworkPlayer — stale HLS media errors after slot reuse', () => {
+  let playSpy: ReturnType<typeof vi.spyOn>;
+  let pauseSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    mediaLoadInstrumentation.calls.length = 0;
+    hlsTest.errorHandlers.length = 0;
+    playSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'play')
+      .mockImplementation(() => Promise.resolve());
+    pauseSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'pause')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    playSpy.mockRestore();
+    pauseSpy.mockRestore();
+    canvasService.setCastInfo(null, false);
+    canvasService.setRenderStatus(undefined);
+    cleanup();
+  });
+
+  it('ignores a stale HLS media error after the same slot index is reused', async () => {
+    const { rerender } = render(
+      artworkPlayerWithContext(HLS_PREVIEW_URL, 'item-old')
+    );
+
+    await waitFor(() => {
+      expect(hlsTest.errorHandlers.length).toBeGreaterThan(0);
+    });
+
+    const staleErrorHandler = hlsTest.errorHandlers[0];
+    const firstHandlerCount = hlsTest.errorHandlers.length;
+
+    rerender(artworkPlayerWithContext(HLS_PREVIEW_URL_B, 'item-middle'));
+    await waitFor(() => {
+      expect(hlsTest.errorHandlers.length).toBeGreaterThan(firstHandlerCount);
+    });
+    await waitFor(() => {
+      expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    });
+
+    const secondHandlerCount = hlsTest.errorHandlers.length;
+
+    rerender(artworkPlayerWithContext(HLS_PREVIEW_URL_C, 'item-current'));
+    await waitFor(() => {
+      expect(hlsTest.errorHandlers.length).toBeGreaterThan(secondHandlerCount);
+    });
+    await waitFor(() => {
+      expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    });
+
+    act(() => {
+      staleErrorHandler('error', {
+        fatal: true,
+        type: 'mediaError',
+      });
+    });
+
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    expect(
+      screen.queryByText('The artwork cannot be displayed correctly on this device.')
+    ).toBeNull();
+  });
+});
+
+describe('ArtworkPlayer — stale HLS media-attached after slot reuse', () => {
+  let playSpy: ReturnType<typeof vi.spyOn>;
+  let pauseSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    mediaLoadInstrumentation.calls.length = 0;
+    hlsTest.mediaAttachedHandlers.length = 0;
+    hlsTest.errorHandlers.length = 0;
+    playSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'play')
+      .mockImplementation(() => Promise.resolve());
+    pauseSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'pause')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    playSpy.mockRestore();
+    pauseSpy.mockRestore();
+    canvasService.setCastInfo(null, false);
+    canvasService.setRenderStatus(undefined);
+    cleanup();
+  });
+
+  it('ignores stale HLS media-attached readiness after slot reuse', async () => {
+    hlsTest.loadSource.mockClear();
+    const { rerender } = render(
+      artworkPlayerWithContext(HLS_PREVIEW_URL, 'item-old')
+    );
+
+    await waitFor(() => {
+      expect(hlsTest.mediaAttachedHandlers.length).toBeGreaterThan(0);
+    });
+
+    const staleMediaAttached = hlsTest.mediaAttachedHandlers[0];
+    const firstHandlerCount = hlsTest.mediaAttachedHandlers.length;
+
+    rerender(artworkPlayerWithContext(HLS_PREVIEW_URL_B, 'item-middle'));
+    await waitFor(() => {
+      expect(hlsTest.mediaAttachedHandlers.length).toBeGreaterThan(firstHandlerCount);
+    });
+    await waitFor(() => {
+      expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    });
+
+    const secondHandlerCount = hlsTest.mediaAttachedHandlers.length;
+
+    rerender(artworkPlayerWithContext(HLS_PREVIEW_URL_C, 'item-current'));
+    await waitFor(() => {
+      expect(hlsTest.mediaAttachedHandlers.length).toBeGreaterThan(secondHandlerCount);
+    });
+
+    const loadSourceCount = hlsTest.loadSource.mock.calls.length;
+
+    act(() => {
+      staleMediaAttached();
+    });
+
+    expect(hlsTest.loadSource.mock.calls.length).toBe(loadSourceCount);
   });
 });
 

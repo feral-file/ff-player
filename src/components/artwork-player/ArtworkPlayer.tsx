@@ -249,6 +249,44 @@ const ArtworkPlayer = ({
     clearLoadingDelay();
   }, [clearLoadingDelay]);
 
+  const isCurrentArtworkSlot = useCallback(
+    (slotIndex: SlotIndex, expectedLayer?: SlotLayer) => {
+      const currentURL = previewURLRef.current;
+      const slot = slotsRef.current[slotIndex];
+      if (!slot) {
+        return false;
+      }
+      if (
+        expectedLayer &&
+        (slot.previewURL !== expectedLayer.previewURL ||
+          slot.itemIdentity !== expectedLayer.itemIdentity ||
+          slot.iframeKey !== expectedLayer.iframeKey)
+      ) {
+        return false;
+      }
+      if (slot.previewURL !== currentURL) {
+        return false;
+      }
+      if (slot.itemIdentity !== itemIdentityRef.current) {
+        return false;
+      }
+
+      const currentIncoming = incomingSlotRef.current;
+      if (currentIncoming !== null && currentIncoming !== slotIndex) {
+        const incomingLayer = slotsRef.current[currentIncoming];
+        if (
+          incomingLayer?.previewURL === currentURL &&
+          incomingLayer.itemIdentity === itemIdentityRef.current
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    },
+    []
+  );
+
   useEffect(() => {
     return () => {
       canvasService.setRenderStatus(undefined);
@@ -391,34 +429,25 @@ const ArtworkPlayer = ({
   );
 
   const loadedSource = useCallback(
-    (slotIndex: SlotIndex) => {
-      const currentURL = previewURLRef.current;
-      const slot = slotsRef.current[slotIndex];
-      if (
-        slot?.previewURL !== currentURL ||
-        slot?.itemIdentity !== itemIdentityRef.current
-      ) {
+    (slotIndex: SlotIndex, expectedLayer?: SlotLayer) => {
+      if (!isCurrentArtworkSlot(slotIndex, expectedLayer)) {
         return;
-      }
-      const currentIncoming = incomingSlotRef.current;
-      if (currentIncoming !== null && currentIncoming !== slotIndex) {
-        const incomingLayer = slotsRef.current[currentIncoming];
-        if (
-          incomingLayer?.previewURL === currentURL &&
-          incomingLayer.itemIdentity === itemIdentityRef.current
-        ) {
-          return;
-        }
       }
       incomingSlotRef.current = slotIndex;
       markSlotReady(slotIndex);
     },
-    [markSlotReady]
+    [isCurrentArtworkSlot, markSlotReady]
   );
 
   const handleArtworkRenderFailure = useCallback(
-    (slotIndex?: SlotIndex) => {
+    (slotIndex?: SlotIndex, expectedLayer?: SlotLayer) => {
       if (renderStatusRef.current === RenderStatus.failed) {
+        return;
+      }
+      if (
+        slotIndex !== undefined &&
+        !isCurrentArtworkSlot(slotIndex, expectedLayer)
+      ) {
         return;
       }
       if (slotIndex !== undefined) {
@@ -431,7 +460,7 @@ const ArtworkPlayer = ({
       );
       setShowMessageModal(true);
     },
-    [markArtworkFailed, updateSlot]
+    [isCurrentArtworkSlot, markArtworkFailed, updateSlot]
   );
 
   const playVideoForSlot = useCallback(
@@ -442,6 +471,7 @@ const ArtworkPlayer = ({
     ) => {
       const targetSlot = incomingSlotRef.current ?? activeSlotRef.current;
       if (
+        !isCurrentArtworkSlot(slotIndex, layer) ||
         playedVideoURLRef.current[slotIndex] === layer.previewURL ||
         targetSlot !== slotIndex
       ) {
@@ -451,7 +481,7 @@ const ArtworkPlayer = ({
       playedVideoURLRef.current[slotIndex] = layer.previewURL;
       const playPromise = videoElement.play() as Promise<void> | undefined;
       if (!playPromise) {
-        loadedSource(slotIndex);
+        loadedSource(slotIndex, layer);
         return;
       }
 
@@ -461,10 +491,10 @@ const ArtworkPlayer = ({
           reTryToPlayVideo(slotIndex);
         })
         .finally(() => {
-          loadedSource(slotIndex);
+          loadedSource(slotIndex, layer);
         });
     },
-    [loadedSource]
+    [isCurrentArtworkSlot, loadedSource]
   );
 
   const setupStreamingVideoForSlot = useCallback(
@@ -492,6 +522,9 @@ const ArtworkPlayer = ({
         hlsInstancesRef.current[slotIndex] = hlsInstance;
         hlsInstance.attachMedia(videoElement);
         hlsInstance.on(Hls.Events.MEDIA_ATTACHED, () => {
+          if (!isCurrentArtworkSlot(slotIndex, layer)) {
+            return;
+          }
           const sourceURL = `${layer.displayPreviewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`;
           if (hlsLoadedURLRef.current[slotIndex] !== sourceURL) {
             hlsLoadedURLRef.current[slotIndex] = sourceURL;
@@ -501,9 +534,11 @@ const ArtworkPlayer = ({
         });
         hlsInstance.on(Hls.Events.ERROR, function (_event, data) {
           if (data.fatal) {
-            handleArtworkRenderFailure(slotIndex);
+            handleArtworkRenderFailure(slotIndex, layer);
             hlsInstance?.destroy();
-            hlsInstancesRef.current[slotIndex] = null;
+            if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
+              hlsInstancesRef.current[slotIndex] = null;
+            }
             return;
           }
           switch (data.type) {
@@ -515,9 +550,11 @@ const ArtworkPlayer = ({
               }
               break;
             default:
-              handleArtworkRenderFailure(slotIndex);
+              handleArtworkRenderFailure(slotIndex, layer);
               hlsInstance?.destroy();
-              hlsInstancesRef.current[slotIndex] = null;
+              if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
+                hlsInstancesRef.current[slotIndex] = null;
+              }
               break;
           }
         });
@@ -535,7 +572,7 @@ const ArtworkPlayer = ({
         }
       };
     },
-    [handleArtworkRenderFailure, playVideoForSlot]
+    [handleArtworkRenderFailure, isCurrentArtworkSlot, playVideoForSlot]
   );
 
   useLayoutEffect(() => {
@@ -629,10 +666,10 @@ const ArtworkPlayer = ({
     }, FADE_IN_OUT_DURATION_MS);
   }, [markArtworkReady, pauseAndTeardownSlot, slots]);
 
-  const handleIframeLoad = (slotIndex: SlotIndex) => {
+  const handleIframeLoad = (slotIndex: SlotIndex, layer: SlotLayer) => {
     if (isWebGLAvailable()) {
       setShowMessageModal(false);
-      loadedSource(slotIndex);
+      loadedSource(slotIndex, layer);
     } else {
       handleWebGLLost();
     }
@@ -816,8 +853,11 @@ const ArtworkPlayer = ({
 
       const handleMediaError =
         (mediaType: BlobLoadedMediaType) => (error: Error) => {
+          if (!isCurrentArtworkSlot(slotIndex, layer)) {
+            return;
+          }
           console.error(`[ArtworkPlayer] ${mediaType} load failed:`, error);
-          handleArtworkRenderFailure(slotIndex);
+          handleArtworkRenderFailure(slotIndex, layer);
           Sentry.captureMessage(`[ArtworkPlayer] ${mediaType} load failed`, {
             level: 'error',
             extra: { displayPreviewURL: layer.displayPreviewURL, mediaType },
@@ -832,7 +872,7 @@ const ArtworkPlayer = ({
         ) {
           const el = imageRefs[slotIndex].current;
           el.onload = () => {
-            loadedSource(slotIndex);
+            loadedSource(slotIndex, layer);
           };
           el.onerror = () => {
             handleMediaError('image')(new Error('Image load failed'));
@@ -846,13 +886,13 @@ const ArtworkPlayer = ({
             mediaType: 'image',
             element: el,
             onLoad: () => {
-              loadedSource(slotIndex);
+              loadedSource(slotIndex, layer);
             },
             onError: handleMediaError('image'),
             signal: abortController.signal,
           });
           if (el.complete && el.naturalWidth > 0) {
-            loadedSource(slotIndex);
+            loadedSource(slotIndex, layer);
           }
         } else if (
           layer.previewType === PreviewHTMLTag.video &&
@@ -876,7 +916,7 @@ const ArtworkPlayer = ({
             mediaType: 'video',
             element: el,
             onLoad: () => {
-              loadedSource(slotIndex);
+              loadedSource(slotIndex, layer);
             },
             onError: handleMediaError('video'),
             signal: abortController.signal,
@@ -888,7 +928,7 @@ const ArtworkPlayer = ({
           const el = audioRefs[slotIndex].current;
           // createMediaLoader().loadMedia sets src only; it never invokes onLoad (see mediaLoader.ts).
           const handleAudioReady = () => {
-            loadedSource(slotIndex);
+            loadedSource(slotIndex, layer);
           };
           el.addEventListener('loadeddata', handleAudioReady);
           el.onerror = () => {
@@ -903,7 +943,7 @@ const ArtworkPlayer = ({
             mediaType: 'audio',
             element: el,
             onLoad: () => {
-              loadedSource(slotIndex);
+              loadedSource(slotIndex, layer);
             },
             onError: handleMediaError('audio'),
             signal: abortController.signal,
@@ -924,6 +964,7 @@ const ArtworkPlayer = ({
     [
       handleArtworkRenderFailure,
       clearLoadingDelay,
+      isCurrentArtworkSlot,
       loadedSource,
       playVideoForSlot,
       markArtworkLoading,
@@ -1018,8 +1059,8 @@ const ArtworkPlayer = ({
     });
   }, [displaySettings, context.deviceRotation?.viewMode, slots]);
 
-  const handleLoadIframeError = (slotIndex: SlotIndex) => {
-    handleArtworkRenderFailure(slotIndex);
+  const handleLoadIframeError = (slotIndex: SlotIndex, layer: SlotLayer) => {
+    handleArtworkRenderFailure(slotIndex, layer);
   };
 
   const reloadIframe = (slotIndex: SlotIndex) => {
@@ -1209,10 +1250,10 @@ const ArtworkPlayer = ({
             style={{ width: '100%', height: '100%' }}
             data={slot.displayPreviewURL}
             onLoad={() => {
-              loadedSource(slotIndex);
+              loadedSource(slotIndex, slot);
             }}
             onError={() => {
-              handleArtworkRenderFailure(slotIndex);
+              handleArtworkRenderFailure(slotIndex, slot);
             }}>
             Not supported
           </object>
@@ -1281,10 +1322,10 @@ const ArtworkPlayer = ({
               className={styles.iframe}
               src={slot.displaySoftwareURL}
               onLoad={() => {
-                handleIframeLoad(slotIndex);
+                handleIframeLoad(slotIndex, slot);
               }}
               onError={() => {
-                handleLoadIframeError(slotIndex);
+                handleLoadIframeError(slotIndex, slot);
               }}
               sandbox="allow-same-origin allow-scripts"
               tabIndex={0}
@@ -1296,10 +1337,10 @@ const ArtworkPlayer = ({
               className={styles.iframe}
               src={slot.displaySoftwareURL}
               onLoad={() => {
-                handleIframeLoad(slotIndex);
+                handleIframeLoad(slotIndex, slot);
               }}
               onError={() => {
-                handleLoadIframeError(slotIndex);
+                handleLoadIframeError(slotIndex, slot);
               }}
               tabIndex={0}
             />

@@ -112,3 +112,69 @@ it('returns ok:false when a playlist item source uses an unsupported URL', () =>
   ).toEqual(['A']);
   expect(canvasService.getStatus().renderStatus).toBeUndefined();
 });
+
+it('returns ok:false when a playlist item source is a relative path', () => {
+  canvasService.setCastInfo(
+    {
+      castCommand: CastCommand.displayPlaylist,
+      playlist: playlist('old', ['A'].map(item)),
+      index: 0,
+      renderStatus: RenderStatus.ready,
+    },
+    false
+  );
+
+  const reply = canvasService.processMessage({
+    command: CastCommand.displayPlaylist,
+    request: {
+      intent: { action: DP1Action.NowDisplay },
+      dp1_call: playlist('new', [
+        {
+          id: 'bad-2',
+          title: 'Relative Source',
+          source: 'artwork.jpg',
+          license: {},
+        } as DP1Item,
+      ]),
+    },
+  });
+
+  expect(reply).toEqual({ ok: false });
+  expect(
+    canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)
+  ).toEqual(['A']);
+  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+});
+
+it('returns ok:false when a playlist item source is protocol-relative', () => {
+  canvasService.setCastInfo(
+    {
+      castCommand: CastCommand.displayPlaylist,
+      playlist: playlist('old', ['A'].map(item)),
+      index: 0,
+      renderStatus: RenderStatus.ready,
+    },
+    false
+  );
+
+  const reply = canvasService.processMessage({
+    command: CastCommand.displayPlaylist,
+    request: {
+      intent: { action: DP1Action.NowDisplay },
+      dp1_call: playlist('new', [
+        {
+          id: 'bad-3',
+          title: 'Protocol Relative Source',
+          source: '//cdn.example.com/artwork.jpg',
+          license: {},
+        } as DP1Item,
+      ]),
+    },
+  });
+
+  expect(reply).toEqual({ ok: false });
+  expect(
+    canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)
+  ).toEqual(['A']);
+  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+});

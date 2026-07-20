@@ -1,3 +1,4 @@
+/* eslint-disable max-lines-per-function -- This file intentionally groups scenario tests for the render-status flow. */
 import { AppContext } from '@/context/AppContext';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
 import { RenderStatus } from '@/models';
@@ -8,8 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
 
 const loaderState = vi.hoisted(() => ({
-  mode: 'fast' as 'fast' | 'slow' | 'fail' | 'cached',
+  mode: 'fast' as 'fast' | 'slow' | 'fail' | 'slow-fail' | 'manual' | 'cached',
   delays: [] as number[],
+  calls: [] as {
+    onLoad?: () => void;
+    onError?: (error: Error) => void;
+  }[],
 }));
 
 vi.mock('@/utils/mediaLoader', async importOriginal => {
@@ -37,6 +42,19 @@ vi.mock('@/utils/mediaLoader', async importOriginal => {
 
         if (loaderState.mode === 'fail') {
           options.onError?.(new Error('load failed'));
+          return undefined;
+        }
+
+        if (loaderState.mode === 'slow-fail') {
+          const delay = loaderState.delays.shift() ?? 2500;
+          setTimeout(() => {
+            options.onError?.(new Error('load failed'));
+          }, delay);
+          return undefined;
+        }
+
+        if (loaderState.mode === 'manual') {
+          loaderState.calls.push(options);
           return undefined;
         }
 
@@ -95,12 +113,13 @@ function buildArtworkProvider(
 function artworkTree(
   previewURL: string,
   appRemoteConfig?: Record<string, unknown>,
-  itemIdentity?: string
+  itemIdentity?: string,
+  artworkPreviewMIMEType = 'image/jpeg'
 ): React.ReactElement {
   return buildArtworkProvider(
     <ArtworkPlayer
       previewURL={previewURL}
-      artworkPreviewMIMEType="image/jpeg"
+      artworkPreviewMIMEType={artworkPreviewMIMEType}
       displayPreferences={defaultDP1DisplayPreference}
       itemIdentity={itemIdentity}
     />,
@@ -111,9 +130,17 @@ function artworkTree(
 function renderArtworkPlayer(
   previewURL: string,
   appRemoteConfig?: Record<string, unknown>,
-  itemIdentity?: string
+  itemIdentity?: string,
+  artworkPreviewMIMEType = 'image/jpeg'
 ) {
-  return render(artworkTree(previewURL, appRemoteConfig, itemIdentity));
+  return render(
+    artworkTree(
+      previewURL,
+      appRemoteConfig,
+      itemIdentity,
+      artworkPreviewMIMEType
+    )
+  );
 }
 
 async function advanceTimersBy(ms: number) {
@@ -139,6 +166,7 @@ async function flushTimers() {
 beforeEach(() => {
   loaderState.mode = 'fast';
   loaderState.delays = [];
+  loaderState.calls = [];
 });
 
 afterEach(() => {
@@ -239,6 +267,210 @@ describe('ArtworkPlayer render status - ready and failure transitions', () => {
     });
 
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.loading);
+  });
+
+  it('ignores a stale error after a newer artwork has taken over', async () => {
+    vi.useFakeTimers();
+    loaderState.mode = 'manual';
+
+    const { rerender } = renderArtworkPlayer(
+      'https://feralfile.com/test/stale-error-old.jpg',
+      undefined,
+      'item-old'
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+    const staleError = loaderState.calls[0]?.onError;
+    expect(staleError).toBeTypeOf('function');
+
+    loaderState.mode = 'fast';
+    rerender(
+      artworkTree(
+        'https://feralfile.com/test/stale-error-new.jpg',
+        undefined,
+        'item-new'
+      )
+    );
+
+    await flushTimers();
+    await flushTimers();
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    expect(screen.queryByText('The artwork cannot be displayed correctly on this device.')).toBeNull();
+
+    staleError?.(new Error('load failed'));
+    await settleReact();
+
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    expect(screen.queryByText('The artwork cannot be displayed correctly on this device.')).toBeNull();
+  });
+
+  it('ignores a stale outgoing video load error after same-URL identity takeover', async () => {
+    vi.useFakeTimers();
+    loaderState.mode = 'manual';
+    vi.spyOn(HTMLVideoElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(HTMLVideoElement.prototype, 'pause').mockImplementation(
+      () => undefined
+    );
+
+    const sharedURL = 'https://feralfile.com/test/shared-video.mp4';
+    const { rerender } = renderArtworkPlayer(
+      sharedURL,
+      undefined,
+      'item-old',
+      'video/mp4'
+    );
+
+    await settleReact();
+
+    const staleError = loaderState.calls[0]?.onError;
+    expect(staleError).toBeTypeOf('function');
+
+    rerender(
+      artworkTree(sharedURL, undefined, 'item-new', 'video/mp4')
+    );
+
+    await settleReact();
+    expect(loaderState.calls.length).toBeGreaterThanOrEqual(2);
+
+    await act(async () => {
+      loaderState.calls[1]?.onLoad?.();
+      await Promise.resolve();
+    });
+
+    await advanceTimersBy(650);
+
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+
+    staleError?.(new Error('stale video load failed'));
+    await settleReact();
+
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    expect(
+      screen.queryByText('The artwork cannot be displayed correctly on this device.')
+    ).toBeNull();
+  });
+
+  it('ignores a stale video load error after the same slot index is reused', async () => {
+    vi.useFakeTimers();
+    loaderState.mode = 'manual';
+    vi.spyOn(HTMLVideoElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(HTMLVideoElement.prototype, 'pause').mockImplementation(
+      () => undefined
+    );
+
+    const { rerender } = renderArtworkPlayer(
+      'https://feralfile.com/test/video-old.mp4',
+      undefined,
+      'item-old',
+      'video/mp4'
+    );
+    await settleReact();
+    const staleError = loaderState.calls[0]?.onError;
+    expect(staleError).toBeTypeOf('function');
+
+    await act(async () => {
+      loaderState.calls[0]?.onLoad?.();
+      await Promise.resolve();
+    });
+
+    rerender(
+      artworkTree(
+        'https://feralfile.com/test/video-middle.mp4',
+        undefined,
+        'item-middle',
+        'video/mp4'
+      )
+    );
+    await settleReact();
+    await act(async () => {
+      loaderState.calls[1]?.onLoad?.();
+      await Promise.resolve();
+    });
+    await advanceTimersBy(650);
+
+    rerender(
+      artworkTree(
+        'https://feralfile.com/test/video-current.mp4',
+        undefined,
+        'item-current',
+        'video/mp4'
+      )
+    );
+    await settleReact();
+    await act(async () => {
+      loaderState.calls[2]?.onLoad?.();
+      await Promise.resolve();
+    });
+    await advanceTimersBy(650);
+
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+
+    staleError?.(new Error('old slot video load failed'));
+    await settleReact();
+
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    expect(
+      screen.queryByText('The artwork cannot be displayed correctly on this device.')
+    ).toBeNull();
+  });
+
+  it('ignores a stale video load success after the same slot index is reused', async () => {
+    vi.useFakeTimers();
+    loaderState.mode = 'manual';
+    vi.spyOn(HTMLVideoElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(HTMLVideoElement.prototype, 'pause').mockImplementation(
+      () => undefined
+    );
+
+    const { rerender } = renderArtworkPlayer(
+      'https://feralfile.com/test/success-old.mp4',
+      undefined,
+      'item-old',
+      'video/mp4'
+    );
+    await settleReact();
+    const staleLoad = loaderState.calls[0]?.onLoad;
+    expect(staleLoad).toBeTypeOf('function');
+
+    await act(async () => {
+      loaderState.calls[0]?.onLoad?.();
+      await Promise.resolve();
+    });
+
+    rerender(
+      artworkTree(
+        'https://feralfile.com/test/success-middle.mp4',
+        undefined,
+        'item-middle',
+        'video/mp4'
+      )
+    );
+    await settleReact();
+    await act(async () => {
+      loaderState.calls[1]?.onLoad?.();
+      await Promise.resolve();
+    });
+    await advanceTimersBy(650);
+
+    rerender(
+      artworkTree(
+        'https://feralfile.com/test/success-current.mp4',
+        undefined,
+        'item-current',
+        'video/mp4'
+      )
+    );
+    await settleReact();
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+
+    staleLoad?.();
+    await settleReact();
+
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
   });
 });
 
