@@ -15,6 +15,7 @@ interface DeviceManagerInternals {
   initialized: boolean;
 }
 
+/** Typed access to DeviceManager private state for race setup. */
 function internals(): DeviceManagerInternals {
   return DeviceManager as unknown as DeviceManagerInternals;
 }
@@ -33,13 +34,14 @@ describe('DeviceManager.setDefaultItemDurationSeconds preload race', () => {
     s.initPromise = null;
     s.cache.delete(LocalStorageItem.defaultItemDuration);
 
-    let releasePreload: (value: string | null) => void = () => {};
+    let releasePreload: ((value: string | null) => void) | undefined;
     const gate = new Promise<string | null>(resolve => {
       releasePreload = resolve;
     });
+    const durationKey: string = LocalStorageItem.defaultItemDuration;
     vi.spyOn(indexedDBStorage, 'getItem').mockImplementation(
       async (key: string) => {
-        if (key === LocalStorageItem.defaultItemDuration) {
+        if (key === durationKey) {
           return gate;
         }
         return null;
@@ -52,7 +54,7 @@ describe('DeviceManager.setDefaultItemDurationSeconds preload race', () => {
 
     // The preload read for this key resolves after the setter's synchronous
     // cache write — the historical clobber scenario.
-    releasePreload('300');
+    releasePreload?.('300');
     await initialize;
     await write;
 

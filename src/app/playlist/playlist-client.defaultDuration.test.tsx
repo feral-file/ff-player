@@ -126,19 +126,6 @@ describe('PlaylistClient — device default duration vs ref-manifest gates', () 
 
 });
 
-describe('PlaylistClient — merge-cache lifetime and pre-merge window', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(async () => {
-    teardownPlaylistWiringTest();
-    await setDeviceDefault(null);
-    vi.clearAllMocks();
-  });
-
-});
-
 describe('PlaylistClient — bounded manifest wait', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -171,6 +158,19 @@ describe('PlaylistClient — bounded manifest wait', () => {
     await advanceMs(5000);
     await advanceMs(5000);
     expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
+});
+
+describe('PlaylistClient — merge-cache lifetime', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(async () => {
+    teardownPlaylistWiringTest();
+    await setDeviceDefault(null);
+    vi.clearAllMocks();
   });
 
   it('drops the cached merge when a new playlist replaces the item', async () => {
