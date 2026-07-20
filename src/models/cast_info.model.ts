@@ -23,6 +23,7 @@ export enum CastCommand {
   setShuffle = 'setShuffle',
   setLoop = 'setLoop',
   displayDefaultPlaylist = 'displayDefaultPlaylist',
+  updateDefaultDuration = 'updateDefaultDuration',
 }
 
 export interface CastInfo {

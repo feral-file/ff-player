@@ -6,6 +6,7 @@ export enum LocalStorageItem {
   dp1ScheduledTask = 'dp1_scheduled_tasks',
   bootPlaylist = 'boot_playlist',
   versionUpdateReload = 'versionUpdateReload',
+  defaultItemDuration = 'defaultItemDuration',
 }
 
 export const AppSettings = {

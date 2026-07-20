@@ -25,6 +25,11 @@ const useCastInfo = () => {
         CastCommand.refreshPlaylist,
         CastCommand.setShuffle,
         CastCommand.setLoop,
+        // Persisting the raw command would make boot replay a control-only
+        // command with no playlist populate step (black screen); like the
+        // others above, a duration change mid-playback must recover as a
+        // full displayPlaylist.
+        CastCommand.updateDefaultDuration,
       ].includes(castInfo.castCommand)
     );
   };

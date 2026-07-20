@@ -1,4 +1,11 @@
 /** @vitest-environment jsdom */
+/**
+ * Persistence contracts for useCastInfo:
+ * - strip ephemeral renderStatus before IndexedDB write
+ * - skip persist thrash when only renderStatus changes
+ * - rewrite playlist-control commands (including updateDefaultDuration) to
+ *   displayPlaylist so AppContext boot replay can populate the playlist route
+ */
 import { CastCommand, RenderStatus, type CastInfo } from '@/models';
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
@@ -34,6 +41,25 @@ function makePlaylist(): DP1Call {
   } as DP1Call;
 }
 
+const item = (id: string): DP1Item =>
+  ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
+
+const playlist = (id: string): DP1Call => ({
+  dpVersion: '1',
+  id,
+  title: id,
+  items: [item('a'), item('b')],
+});
+
+/** A two-item cast at index 1 carrying [castCommand]. */
+function castWith(castCommand: CastCommand): CastInfo {
+  return {
+    castCommand,
+    playlist: playlist('pl'),
+    index: 1,
+  };
+}
+
 beforeEach(() => {
   setDeviceInfo.mockImplementation(() => Promise.resolve(undefined));
 });
@@ -48,12 +74,12 @@ afterEach(() => {
 describe('useCastInfo persistence strip', () => {
   it('strips renderStatus before persisting cast info', async () => {
     renderHook(() => useCastInfo());
-    const playlist = makePlaylist();
+    const activePlaylist = makePlaylist();
 
     act(() => {
       canvasService.onCastInfoChange?.({
         castCommand: CastCommand.displayPlaylist,
-        playlist,
+        playlist: activePlaylist,
         index: 0,
         renderStatus: RenderStatus.ready,
       });
@@ -68,7 +94,7 @@ describe('useCastInfo persistence strip', () => {
     )?.[0];
     expect(stored).toEqual({
       castCommand: CastCommand.displayPlaylist,
-      playlist,
+      playlist: activePlaylist,
       index: 0,
     });
     expect(stored).not.toHaveProperty('renderStatus');
@@ -76,12 +102,12 @@ describe('useCastInfo persistence strip', () => {
 
   it('rewrites playlist-control commands and strips renderStatus', async () => {
     renderHook(() => useCastInfo());
-    const playlist = makePlaylist();
+    const activePlaylist = makePlaylist();
 
     act(() => {
       canvasService.onCastInfoChange?.({
         castCommand: CastCommand.updateIndex,
-        playlist,
+        playlist: activePlaylist,
         index: 0,
         renderStatus: RenderStatus.loading,
       });
@@ -93,7 +119,7 @@ describe('useCastInfo persistence strip', () => {
 
     expect(setDeviceInfo.mock.calls.at(-1)?.[0]).toEqual({
       castCommand: CastCommand.displayPlaylist,
-      playlist,
+      playlist: activePlaylist,
       index: 0,
     });
   });
@@ -102,12 +128,12 @@ describe('useCastInfo persistence strip', () => {
 describe('useCastInfo persistence thrash', () => {
   it('does not persist again when only renderStatus changes', async () => {
     renderHook(() => useCastInfo());
-    const playlist = makePlaylist();
+    const activePlaylist = makePlaylist();
 
     act(() => {
       canvasService.onCastInfoChange?.({
         castCommand: CastCommand.displayPlaylist,
-        playlist,
+        playlist: activePlaylist,
         index: 0,
         renderStatus: RenderStatus.pending,
       });
@@ -120,7 +146,7 @@ describe('useCastInfo persistence thrash', () => {
     act(() => {
       canvasService.onCastInfoChange?.({
         castCommand: CastCommand.displayPlaylist,
-        playlist,
+        playlist: activePlaylist,
         index: 0,
         renderStatus: RenderStatus.loading,
       });
@@ -135,7 +161,7 @@ describe('useCastInfo persistence thrash', () => {
     act(() => {
       canvasService.onCastInfoChange?.({
         castCommand: CastCommand.displayPlaylist,
-        playlist,
+        playlist: activePlaylist,
         index: 1,
         renderStatus: RenderStatus.ready,
       });
@@ -147,8 +173,46 @@ describe('useCastInfo persistence thrash', () => {
 
     expect(setDeviceInfo.mock.calls.at(-1)?.[0]).toEqual({
       castCommand: CastCommand.displayPlaylist,
-      playlist,
+      playlist: activePlaylist,
       index: 1,
     });
+  });
+});
+
+describe('useCastInfo persistence rewrite', () => {
+  it('persists updateDefaultDuration as displayPlaylist for boot recovery', async () => {
+    renderHook(() => useCastInfo());
+
+    act(() => {
+      canvasService.setCastInfo(castWith(CastCommand.updateDefaultDuration));
+    });
+
+    await waitFor(() => {
+      expect(setDeviceInfo).toHaveBeenCalled();
+    });
+
+    const persisted = setDeviceInfo.mock.calls.at(-1)?.[0];
+    expect(persisted?.castCommand).toBe(CastCommand.displayPlaylist);
+    expect(persisted?.playlist?.items?.map(entry => entry.id)).toEqual([
+      'a',
+      'b',
+    ]);
+    expect(persisted?.index).toBe(1);
+  });
+
+  it('persists non-control commands unchanged', async () => {
+    renderHook(() => useCastInfo());
+
+    act(() => {
+      canvasService.setCastInfo(castWith(CastCommand.displayPlaylist));
+    });
+
+    await waitFor(() => {
+      expect(setDeviceInfo).toHaveBeenCalled();
+    });
+
+    expect(setDeviceInfo.mock.calls.at(-1)?.[0]?.castCommand).toBe(
+      CastCommand.displayPlaylist
+    );
   });
 });
