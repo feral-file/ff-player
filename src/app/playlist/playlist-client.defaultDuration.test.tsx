@@ -360,7 +360,7 @@ describe('PlaylistClient — late manifest vetoes', () => {
   });
 });
 
-describe('PlaylistClient — merge-cache lifetime', () => {
+describe('PlaylistClient — recasts and local layer precedence', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -440,6 +440,20 @@ describe('PlaylistClient — merge-cache lifetime', () => {
     expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
     await advanceSteps(60000);
     expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
+});
+
+describe('PlaylistClient — merge-cache lifetime', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(async () => {
+    teardownPlaylistWiringTest();
+    clearRefManifestDisplayCache();
+    await setDeviceDefault(null);
+    vi.clearAllMocks();
   });
 
   it('drops the cached merge when a new playlist replaces the item', async () => {

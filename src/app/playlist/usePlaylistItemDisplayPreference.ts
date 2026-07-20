@@ -102,22 +102,20 @@ export function usePlaylistItemDisplayPreference(options: {
   // refreshes hash-less ref manifests, whose content may have changed
   // without a version identity to detect it by. The rendered preference is
   // kept until the new slot's merge lands so the artwork does not unmount.
-  const clearMergedDisplayForNewCast = useCallback(() => {
-    generationRef.current++;
-    mergedDisplayRef.current = null;
-    clearUnversionedRefManifestDisplayCache();
-  }, []);
-
   const clearMergedDisplay = useCallback(() => {
     generationRef.current++;
     mergedDisplayRef.current = null;
   }, []);
 
+  const clearMergedDisplayForNewCast = useCallback(() => {
+    clearMergedDisplay();
+    clearUnversionedRefManifestDisplayCache();
+  }, [clearMergedDisplay]);
+
   const reset = useCallback(() => {
-    generationRef.current++;
-    mergedDisplayRef.current = null;
+    clearMergedDisplay();
     setPreference(null);
-  }, []);
+  }, [clearMergedDisplay]);
 
   return {
     preference,
