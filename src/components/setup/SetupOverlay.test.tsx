@@ -42,6 +42,55 @@ describe('SetupOverlay known states (connectivity)', () => {
     expect(container.querySelector('svg')).not.toBeNull();
   });
 
+  it('omits the password line when softap_qr has no password', async () => {
+    render(<SetupOverlay />);
+
+    displaySetup({
+      state: SetupDisplayState.SoftApQr,
+      ssid: 'FF1-Setup-ABCD',
+    });
+
+    expect(await screen.findByText('Network: FF1-Setup-ABCD')).toBeTruthy();
+    expect(screen.queryByText(/^Password:/)).toBeNull();
+  });
+
+  it('renders the joining state', async () => {
+    render(<SetupOverlay />);
+
+    displaySetup({ state: SetupDisplayState.Joining });
+
+    expect(await screen.findByText('Connecting to Wi-Fi…')).toBeTruthy();
+  });
+
+  it('renders join_failed with the provided reason', async () => {
+    render(<SetupOverlay />);
+
+    displaySetup({
+      state: SetupDisplayState.JoinFailed,
+      reason: 'Incorrect password.',
+    });
+
+    expect(await screen.findByText("Couldn't Connect to Wi-Fi")).toBeTruthy();
+    expect(screen.getByText('Incorrect password.')).toBeTruthy();
+    expect(
+      screen.getByText("Reconnect to the device's setup hotspot and try again.")
+    ).toBeTruthy();
+  });
+
+  it('renders join_failed without a reason line when none is provided', async () => {
+    render(<SetupOverlay />);
+
+    displaySetup({ state: SetupDisplayState.JoinFailed });
+
+    expect(await screen.findByText("Couldn't Connect to Wi-Fi")).toBeTruthy();
+  });
+});
+
+describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it('encodes a WPA QR payload when a password is present', async () => {
     const { container } = render(<SetupOverlay />);
 
@@ -53,18 +102,6 @@ describe('SetupOverlay known states (connectivity)', () => {
 
     await screen.findByText('Connect to Set Up This Device');
     expect(qrValue(container)).toBe('WIFI:T:WPA;S:FF1-Setup-ABCD;P:correct-horse;;');
-  });
-
-  it('omits the password line when softap_qr has no password', async () => {
-    render(<SetupOverlay />);
-
-    displaySetup({
-      state: SetupDisplayState.SoftApQr,
-      ssid: 'FF1-Setup-ABCD',
-    });
-
-    expect(await screen.findByText('Network: FF1-Setup-ABCD')).toBeTruthy();
-    expect(screen.queryByText(/^Password:/)).toBeNull();
   });
 
   it('encodes a nopass QR payload with no P: field when there is no password', async () => {
@@ -105,37 +142,6 @@ describe('SetupOverlay known states (connectivity)', () => {
     expect(qrValue(container)).toBe(
       'WIFI:T:WPA;S:FF1\\;Setup\\:ABCD;P:pa\\,ss\\"w\\\\ord\\;1;;'
     );
-  });
-
-  it('renders the joining state', async () => {
-    render(<SetupOverlay />);
-
-    displaySetup({ state: SetupDisplayState.Joining });
-
-    expect(await screen.findByText('Connecting to Wi-Fi…')).toBeTruthy();
-  });
-
-  it('renders join_failed with the provided reason', async () => {
-    render(<SetupOverlay />);
-
-    displaySetup({
-      state: SetupDisplayState.JoinFailed,
-      reason: 'Incorrect password.',
-    });
-
-    expect(await screen.findByText("Couldn't Connect to Wi-Fi")).toBeTruthy();
-    expect(screen.getByText('Incorrect password.')).toBeTruthy();
-    expect(
-      screen.getByText("Reconnect to the device's setup hotspot and try again.")
-    ).toBeTruthy();
-  });
-
-  it('renders join_failed without a reason line when none is provided', async () => {
-    render(<SetupOverlay />);
-
-    displaySetup({ state: SetupDisplayState.JoinFailed });
-
-    expect(await screen.findByText("Couldn't Connect to Wi-Fi")).toBeTruthy();
   });
 });
 

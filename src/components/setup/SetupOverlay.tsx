@@ -92,22 +92,22 @@ function JoinFailedPanel({ display }: { display: SetupDisplayDetail }) {
 }
 
 function UpdatingPanel({ display }: { display: SetupDisplayDetail }) {
+  // Defensive: the CDP validator already rejects non-finite progress, but
+  // guarding here means a stray NaN/Infinity renders no percent line instead
+  // of "NaN%"/"Infinity%" if that guard is ever bypassed or loosened. Clamp
+  // to [0,100] so an out-of-range value controld never intends to send
+  // (e.g. 150) shows "100%", not "150%".
+  const { progress } = display;
+  const percent =
+    typeof progress === 'number' && Number.isFinite(progress)
+      ? Math.round(Math.min(100, Math.max(0, progress)))
+      : null;
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
         <p className={styles.title}>Updating Device Software&hellip;</p>
-        {/* Defensive: the CDP validator already rejects non-finite progress,
-            but guarding here means a stray NaN/Infinity renders no percent
-            line instead of "NaN%"/"Infinity%" if that guard is ever bypassed
-            or loosened. Clamp to [0,100] so an out-of-range value controld
-            never intends to send (e.g. 150) shows "100%", not "150%". */}
-        {Number.isFinite(display.progress) ? (
-          <p className={styles.subtitle}>
-            {Math.round(
-              Math.min(100, Math.max(0, display.progress as number)),
-            )}
-            %
-          </p>
+        {percent !== null ? (
+          <p className={styles.subtitle}>{percent}%</p>
         ) : null}
       </div>
     </section>
