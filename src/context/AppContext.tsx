@@ -3,6 +3,7 @@
 import {
   ReactNode,
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -26,6 +27,7 @@ import { CDPRequestHandler } from '@/services/cdp-handler/CDPRequestHandler';
 import useCursorPositions, {
   CursorPosition,
 } from '@/services/custom-hooks/useCursorPositions';
+import { CustomEventName } from '@/models/custom_event';
 import { normalizePlaylistIndex } from '@/utils/playlist';
 import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
 import { useRouter } from 'next/navigation';
@@ -73,7 +75,19 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const [appRemoteConfig, setAppConfig] = useState({} as AppRemoteConfig);
   const remoteConfigService = useRef(new RemoteConfigService());
   const [isInitialized, setIsInitialized] = useState(false);
-  const [isFallbackPlaylist, setIsFallbackPlaylist] = useState(false);
+  // Fallback-playlist request state. `active` drives the retry loop below;
+  // `nonce` distinguishes repeated requests so an explicit
+  // displayDefaultPlaylist command restarts the loop (fresh backoff,
+  // immediate attempt) even when a run is already active or just finished.
+  // One state object so a request is a single update — never an intermediate
+  // render where only half the request has landed.
+  const [fallbackRequest, setFallbackRequest] = useState({
+    active: false,
+    nonce: 0,
+  });
+  const requestFallbackPlaylist = useCallback(() => {
+    setFallbackRequest(prev => ({ active: true, nonce: prev.nonce + 1 }));
+  }, []);
 
   const { castInfo, setCastInfo } = useCastInfo();
   const { displaySettings, setDisplaySettings } = useDeviceSettings();
@@ -159,13 +173,13 @@ export const AppProvider = ({ children }: AppContextProps) => {
       const hasCriticalTemp = criticalTempValue === 'true';
       if (hasCriticalTemp) {
         // Fetch and cast default playlist after critical temp reset
-        setIsFallbackPlaylist(true);
+        requestFallbackPlaylist();
         await DeviceManager.removeItem(LocalStorageItem.criticalTemp);
         return;
       }
 
       if (castInfo.castCommand?.toString() === 'castDaily') {
-        setIsFallbackPlaylist(true);
+        requestFallbackPlaylist();
         return;
       }
 
@@ -189,7 +203,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
     } else {
       // Cast default playlist
       console.log('[AppContext] No castInfo found, fetching default playlist');
-      setIsFallbackPlaylist(true);
+      requestFallbackPlaylist();
     }
   };
 
@@ -235,10 +249,16 @@ export const AppProvider = ({ children }: AppContextProps) => {
   //   - re-keying on `isOnline`, so the moment Wi-Fi provisioning lands the
   //     next attempt fires immediately (art is ready behind the setup overlay
   //     before the claim even completes). The re-key also resets the backoff.
-  // Success clears `isFallbackPlaylist`, which ends the loop; a later
-  // castDaily/critical-temp boot sets it again and re-arms this effect.
+  // Success clears `fallbackRequest.active`, which ends the loop; a later
+  // castDaily/critical-temp boot requests it again and re-arms this effect.
+  //
+  // This loop is also the ONLY resolver for the displayDefaultPlaylist CDP
+  // command (claim-time push, OOM recovery): CanvasService dispatches
+  // DisplayDefaultPlaylist instead of fetching remote config itself, so the
+  // pushed playlist and the player's own pull can never disagree on the URL.
+  // The request nonce restarts the loop so those requests fire immediately.
   useEffect(() => {
-    if (!(appRemoteConfig.defaultPlaylistURL && isFallbackPlaylist)) {
+    if (!(appRemoteConfig.defaultPlaylistURL && fallbackRequest.active)) {
       return;
     }
     let cancelled = false;
@@ -254,7 +274,16 @@ export const AppProvider = ({ children }: AppContextProps) => {
         return;
       }
       if (casted) {
-        setIsFallbackPlaylist(false);
+        // Only settle the request THIS run was started for. A new request can
+        // land while the cast is in flight, and React may batch its
+        // {active:true, nonce+1} update into the same commit as this
+        // clear — an unguarded clear would swallow that request before its
+        // effect run ever fires.
+        setFallbackRequest(prev =>
+          prev.nonce === fallbackRequest.nonce
+            ? { ...prev, active: false }
+            : prev
+        );
         if (window.location.pathname !== '/') {
           router.push('/');
         }
@@ -275,7 +304,27 @@ export const AppProvider = ({ children }: AppContextProps) => {
         clearTimeout(retryTimer);
       }
     };
-  }, [appRemoteConfig.defaultPlaylistURL, isFallbackPlaylist, isOnline, router]);
+  }, [appRemoteConfig.defaultPlaylistURL, fallbackRequest, isOnline, router]);
+
+  // displayDefaultPlaylist command → re-enter the fallback flow above. The
+  // conditional (onlyIfNoPlaylist) no-op already happened in CanvasService;
+  // any event that reaches here is an unconditional "cast the default now".
+  useEffect(() => {
+    const handleDefaultPlaylistRequest = () => {
+      console.log('[AppContext] displayDefaultPlaylist requested');
+      requestFallbackPlaylist();
+    };
+    window.addEventListener(
+      CustomEventName.DisplayDefaultPlaylist,
+      handleDefaultPlaylistRequest
+    );
+    return () => {
+      window.removeEventListener(
+        CustomEventName.DisplayDefaultPlaylist,
+        handleDefaultPlaylistRequest
+      );
+    };
+  }, [requestFallbackPlaylist]);
 
   useEffect(() => {
     initContext().catch((error: unknown) => {

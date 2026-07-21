@@ -1,6 +1,7 @@
 import { AppProvider } from '@/context/AppContext';
 import { LocalStorageItem } from '@/constants';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { CustomEventName } from '@/models/custom_event';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { axiosGet, canvasServiceMocks, deviceManager } =
@@ -59,12 +60,13 @@ vi.mock('@/services/custom-hooks/useCursorPositions', () => ({
   default: vi.fn(() => ({ cursorPositions: null })),
 }));
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-  }),
-}));
+vi.mock('next/navigation', () => {
+  // Stable identity like the real router: a fresh object per render would
+  // re-run the fallback-loop effect (router is in its deps) on every render
+  // and make attempt counts nondeterministic.
+  const router = { push: vi.fn(), replace: vi.fn() };
+  return { useRouter: () => router };
+});
 
 vi.mock('@/services/cdp-handler/CDPRequestHandler', () => ({
   CDPRequestHandler: {
@@ -83,28 +85,31 @@ vi.mock('@/utils/DeviceManager', () => ({
   default: deviceManager,
 }));
 
+afterEach(() => {
+  // No vitest globals → RTL never auto-registers its cleanup, so providers
+  // from earlier tests stay mounted and their window listeners keep firing.
+  cleanup();
+  vi.useRealTimers();
+  vi.clearAllMocks();
+  vi.unstubAllEnvs();
+});
+
+// vitest.config enables restoreMocks, which strips mockResolvedValue / mockImplementation
+// from hoisted spies before each test; re-apply defaults here.
+beforeEach(() => {
+  deviceManager.getItem.mockResolvedValue('true');
+  deviceManager.getCastInfo.mockResolvedValue(null);
+  deviceManager.getDeviceDisplaySettings.mockResolvedValue(null);
+  deviceManager.removeItem.mockResolvedValue(undefined);
+  deviceManager.setItem.mockResolvedValue(undefined);
+  deviceManager.setDeviceDisplaySettings.mockResolvedValue(undefined);
+  deviceManager.setDeviceInfo.mockResolvedValue(undefined);
+  canvasServiceMocks.castPlaylistByURL.mockImplementation(() =>
+    Promise.resolve(true)
+  );
+});
+
 describe('AppContext boot recovery', () => {
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.clearAllMocks();
-    vi.unstubAllEnvs();
-  });
-
-  // vitest.config enables restoreMocks, which strips mockResolvedValue / mockImplementation
-  // from hoisted spies before each test; re-apply defaults here.
-  beforeEach(() => {
-    deviceManager.getItem.mockResolvedValue('true');
-    deviceManager.getCastInfo.mockResolvedValue(null);
-    deviceManager.getDeviceDisplaySettings.mockResolvedValue(null);
-    deviceManager.removeItem.mockResolvedValue(undefined);
-    deviceManager.setItem.mockResolvedValue(undefined);
-    deviceManager.setDeviceDisplaySettings.mockResolvedValue(undefined);
-    deviceManager.setDeviceInfo.mockResolvedValue(undefined);
-    canvasServiceMocks.castPlaylistByURL.mockImplementation(() =>
-      Promise.resolve(true)
-    );
-  });
-
   it('skips boot playlist restoration after a version update reload', async () => {
     vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
     axiosGet.mockResolvedValueOnce({
@@ -174,6 +179,105 @@ describe('AppContext boot recovery', () => {
       await vi.advanceTimersByTimeAsync(120_000);
     });
     expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(2);
+  });
+
+});
+
+describe('AppContext displayDefaultPlaylist requests', () => {
+  it('re-arms the fallback loop when a displayDefaultPlaylist event arrives', async () => {
+    // CanvasService delegates the displayDefaultPlaylist CDP command here via
+    // the DisplayDefaultPlaylist event, so a controld push (claim-time kick,
+    // OOM recovery) resolves the playlist through the same loop as the
+    // player's own pull — even after that loop already finished.
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    axiosGet.mockResolvedValueOnce({
+      data: {
+        duration: 1000,
+        defaultPlaylistURL: 'https://example.com/default-playlist',
+      },
+    });
+
+    vi.useFakeTimers();
+    render(
+      <AppProvider>
+        <div data-testid="app-ready" />
+      </AppProvider>
+    );
+
+    // Boot fallback casts once and clears the flag.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(1);
+
+    // A pushed default-playlist request restarts the loop immediately.
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(CustomEventName.DisplayDefaultPlaylist));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not lose a request that arrives while an attempt is in flight', async () => {
+    // The success handler clears `active` with a nonce guard: if the pushed
+    // request's {active:true, nonce+1} update commits together with the
+    // in-flight attempt's clear (React batching), an unguarded clear would
+    // swallow the push before its effect run ever fired.
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    axiosGet.mockResolvedValueOnce({
+      data: {
+        duration: 1000,
+        defaultPlaylistURL: 'https://example.com/default-playlist',
+      },
+    });
+    let resolveFirst: ((casted: boolean) => void) | undefined;
+    canvasServiceMocks.castPlaylistByURL
+      .mockImplementationOnce(
+        () =>
+          new Promise<boolean>(resolve => {
+            resolveFirst = resolve;
+          })
+      )
+      .mockImplementation(() => Promise.resolve(true));
+
+    vi.useFakeTimers();
+    render(
+      <AppProvider>
+        <div data-testid="app-ready" />
+      </AppProvider>
+    );
+
+    // Boot fallback starts its first attempt, which hangs in flight.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(1);
+
+    // A push lands mid-flight, then the in-flight attempt succeeds. Whatever
+    // the interleaving (cancelled attempt or same-commit batching), the
+    // pushed request must still produce a cast.
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(CustomEventName.DisplayDefaultPlaylist)
+      );
+      resolveFirst?.(true);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const castsAfterPush =
+      canvasServiceMocks.castPlaylistByURL.mock.calls.length;
+    expect(castsAfterPush).toBeGreaterThanOrEqual(2);
+
+    // And the loop settled — no runaway retries after the successful cast.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL.mock.calls.length).toBe(
+      castsAfterPush
+    );
   });
 
 });

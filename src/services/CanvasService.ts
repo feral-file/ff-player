@@ -31,6 +31,7 @@ import {
   SetSleepModeReply,
   SetShuffleRequest,
   SetLoopRequest,
+  DisplayDefaultPlaylistRequest,
   DisplayDefaultPlaylistReply,
 } from '@/models';
 import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
@@ -58,7 +59,6 @@ import {
 import { coerceLoopMode } from '@/utils/loopMode';
 import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
-import RemoteConfigService from './remoteConfigService';
 
 /**
  * Owns the in-browser FF1 playback session state that cast commands and route
@@ -412,7 +412,9 @@ class CanvasService {
         case CastCommand.setLoop:
           return this.setLoop(requestJson as SetLoopRequest);
         case CastCommand.displayDefaultPlaylist:
-          return this.displayDefaultPlaylist();
+          return this.displayDefaultPlaylist(
+            requestJson as DisplayDefaultPlaylistRequest
+          );
         case CastCommand.updateDefaultDuration:
           return this.updateDefaultDuration(
             requestJson as UpdateDefaultDurationRequest
@@ -938,17 +940,36 @@ class CanvasService {
     return { ok: true };
   }
 
-  private displayDefaultPlaylist(): DisplayDefaultPlaylistReply {
-    new RemoteConfigService()
-      .getAppRemoteConfig()
-      .then(config => this.castPlaylistByURL(config.defaultPlaylistURL))
-      .catch((error: unknown) => {
-        console.error(
-          '[CanvasService] Error displaying default playlist:',
-          error
-        );
-        return { ok: false };
-      });
+  /**
+   * Delegates to AppContext's fallback-playlist loop instead of resolving
+   * `defaultPlaylistURL` here. This handler and the boot fallback previously
+   * fetched remote config through two separate RemoteConfigService instances,
+   * which could disagree (an offline boot caches the hardcoded fallback URL
+   * while this handler's fresh fetch returns the published one), so a
+   * controld-pushed default playlist could differ from the one the player
+   * pulls on its own. One dispatch path means one playlist source, and the
+   * loop's retry/backoff covers transient fetch failures for free.
+   *
+   * The `onlyIfNoPlaylist` flag gives callers "make sure something is
+   * playing" semantics: if a playlist is already on screen (for example when
+   * the boot fallback recovered before feral-controld's first-pair push
+   * arrived), the request is a no-op instead of stomping playback. OOM
+   * recovery omits the flag on purpose — it wants the default to replace
+   * possibly-OOM-causing content.
+   */
+  private displayDefaultPlaylist(
+    request?: DisplayDefaultPlaylistRequest
+  ): DisplayDefaultPlaylistReply {
+    if (request?.onlyIfNoPlaylist && this.castInfo?.playlist?.items?.length) {
+      console.log(
+        '[CanvasService] Playlist already displaying, skipping default playlist'
+      );
+      return { ok: true };
+    }
+
+    window.dispatchEvent(
+      new CustomEvent(CustomEventName.DisplayDefaultPlaylist as string)
+    );
     return { ok: true };
   }
 }

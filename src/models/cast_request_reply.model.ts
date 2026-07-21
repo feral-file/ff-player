@@ -119,7 +119,14 @@ export interface SetLoopRequest extends Request {
 }
 export type SetLoopReply = Reply;
 
-export type DisplayDefaultPlaylistRequest = Request;
+export interface DisplayDefaultPlaylistRequest extends Request {
+  // "Make sure something is playing" semantics: when true, the request is a
+  // no-op if a playlist is already on screen (e.g. the boot fallback already
+  // recovered playback before feral-controld's first-pair push arrived).
+  // Absent/false keeps the historical force-reset behavior OOM recovery
+  // relies on to replace possibly-OOM-causing content.
+  onlyIfNoPlaylist?: boolean;
+}
 export type DisplayDefaultPlaylistReply = Reply;
 
 /**

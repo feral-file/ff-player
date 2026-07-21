@@ -5,6 +5,10 @@ export enum WatchdogEvent {
 
 export enum CustomEventName {
   ConnectivityChange = 'connectivityChange',
+  // CanvasService → AppContext: a displayDefaultPlaylist command asked for the
+  // default playlist; AppContext re-arms its boot fallback loop so the command
+  // and the player's own pull resolve the playlist through one code path.
+  DisplayDefaultPlaylist = 'displayDefaultPlaylist',
   MintPairingDisplay = 'mintPairingDisplay',
   Navigate = 'navigate',
   SetupDisplay = 'setupDisplay',
