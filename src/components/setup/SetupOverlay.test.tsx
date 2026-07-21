@@ -221,7 +221,29 @@ describe('SetupOverlay known states (update, claim, reset)', () => {
     }
   );
 
-  it('renders claim_qr with a QR code for the provided url', async () => {
+  it('renders claim_qr with app-discovery as primary and the QR as backup', async () => {
+    const { container } = render(<SetupOverlay />);
+
+    displaySetup({
+      state: SetupDisplayState.ClaimQr,
+      url: 'https://feralfile.com/device_connect?token=abc',
+      device_name: 'FF1-8EVTK3RE',
+    });
+
+    expect(await screen.findByText('One Last Step')).toBeTruthy();
+    // Primary path: open the app on the same Wi-Fi; it discovers by name.
+    expect(screen.getByText('FF1-8EVTK3RE')).toBeTruthy();
+    expect(
+      screen.getByText(/same Wi-Fi\s+network — it will find/)
+    ).toBeTruthy();
+    // Backup path: the QR, explicitly framed as the fallback.
+    expect(
+      screen.getByText(/Frame not showing up in the app\? Scan this code/)
+    ).toBeTruthy();
+    expect(container.querySelector('svg')).not.toBeNull();
+  });
+
+  it('renders claim_qr generically when no device name is provided', async () => {
     const { container } = render(<SetupOverlay />);
 
     displaySetup({
@@ -229,8 +251,31 @@ describe('SetupOverlay known states (update, claim, reset)', () => {
       url: 'https://feralfile.com/device_connect?token=abc',
     });
 
-    expect(await screen.findByText('Scan to Finish Setup')).toBeTruthy();
+    expect(await screen.findByText('One Last Step')).toBeTruthy();
+    expect(screen.getByText(/it will find\s+this frame\s+automatically/)).toBeTruthy();
     expect(container.querySelector('svg')).not.toBeNull();
+  });
+
+  it('renders the scanning state while the pre-hotspot Wi-Fi scan runs', async () => {
+    render(<SetupOverlay />);
+
+    displaySetup({ state: SetupDisplayState.Scanning });
+
+    expect(await screen.findByText('Looking for Wi-Fi Networks…')).toBeTruthy();
+    expect(
+      screen.getByText('The setup screen will appear here in a moment.')
+    ).toBeTruthy();
+  });
+
+  it('renders the finalizing state between join success and the claim step', async () => {
+    render(<SetupOverlay />);
+
+    displaySetup({ state: SetupDisplayState.Finalizing });
+
+    expect(await screen.findByText('Wi-Fi Connected')).toBeTruthy();
+    expect(
+      screen.getByText(/Getting this frame ready… This can take a minute\./)
+    ).toBeTruthy();
   });
 
   it('renders the factory_reset state with a do-not-power-off warning', async () => {

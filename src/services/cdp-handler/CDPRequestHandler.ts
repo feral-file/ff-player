@@ -321,6 +321,12 @@ function isSetupDisplayDetail(request: unknown): request is SetupDisplayDetail {
       if (typeof detail.url !== 'string' || !detail.url.trim()) {
         return false;
       }
+      if (
+        detail.device_name !== undefined &&
+        typeof detail.device_name !== 'string'
+      ) {
+        return false;
+      }
       break;
     }
 

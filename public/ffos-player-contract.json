@@ -17,10 +17,12 @@
       "version": 1,
       "requestKey": "request",
       "states": [
+        "scanning",
         "softap_qr",
         "joining",
         "join_failed",
         "updating",
+        "finalizing",
         "claim_qr",
         "factory_reset",
         "ready",
@@ -38,7 +40,8 @@
           "optional": ["progress"]
         },
         "claim_qr": {
-          "required": ["url"]
+          "required": ["url"],
+          "optional": ["device_name"]
         }
       },
       "notes": "Requests missing a required field for their state are rejected with {ok:false}. progress must be a finite number. The player renders overlay-driving commands (mintPairingDisplay, setupDisplay) without arbitration, so the controller must keep at most one non-hidden at a time.",

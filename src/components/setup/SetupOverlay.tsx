@@ -106,11 +106,50 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   );
 }
 
+/**
+ * Pre-hotspot scan: `feral-controld` completes a full Wi-Fi scan before it
+ * raises the setup hotspot (the single radio cannot scan once the AP holds
+ * it), so this is the first thing a factory-fresh device shows. Rendering it
+ * — rather than a black screen — is what tells the user the frame is alive
+ * and the QR screen is coming.
+ */
+function ScanningPanel() {
+  return (
+    <section className={styles.overlay} aria-live="polite">
+      <div className={styles.panel}>
+        <p className={styles.title}>Looking for Wi-Fi Networks&hellip;</p>
+        <p className={styles.subtitle}>
+          The setup screen will appear here in a moment.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function JoiningPanel() {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
         <p className={styles.title}>Connecting to Wi-Fi&hellip;</p>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Post-join finalization: covers the relayer-topic wait plus the pre-claim
+ * update check (and its retries) between a successful Wi-Fi join and the
+ * claim screen. Without this state that window is a silent black screen and
+ * users assume setup stalled.
+ */
+function FinalizingPanel() {
+  return (
+    <section className={styles.overlay} aria-live="polite">
+      <div className={styles.panel}>
+        <p className={styles.title}>Wi-Fi Connected</p>
+        <p className={styles.subtitle}>
+          Getting this frame ready&hellip; This can take a minute.
+        </p>
       </div>
     </section>
   );
@@ -166,19 +205,41 @@ function FactoryResetPanel() {
   );
 }
 
+/**
+ * Claim step. The PRIMARY path is app auto-discovery: the app browses mDNS
+ * (`_ff1._tcp`) on the local network and finds this frame by its advertised
+ * name, so a user on the same Wi-Fi only needs to open the app. The QR code
+ * is deliberately framed as the backup for when discovery fails (cross-VLAN,
+ * multicast-filtering APs, or the phone on a different network).
+ */
 function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
+  const frameName = display.device_name?.trim();
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Scan to Finish Setup</p>
-        {display.url ? (
-          <div className={styles.qrFrame}>
-            <QRCodeSVG value={display.url} size={qrSize} marginSize={2} />
-          </div>
-        ) : null}
+        <p className={styles.title}>One Last Step</p>
         <p className={styles.subtitle}>
-          Scan the code with the Feral File app to link this device.
+          Open the Feral File app on a phone connected to the same Wi-Fi
+          network — it will find{' '}
+          {frameName ? (
+            <>
+              <strong>{frameName}</strong>
+            </>
+          ) : (
+            'this frame'
+          )}{' '}
+          automatically.
         </p>
+        {display.url ? (
+          <>
+            <p className={styles.stepLabel}>
+              Frame not showing up in the app? Scan this code instead.
+            </p>
+            <div className={styles.qrFrame}>
+              <QRCodeSVG value={display.url} size={qrSize} marginSize={2} />
+            </div>
+          </>
+        ) : null}
       </div>
     </section>
   );
@@ -211,12 +272,20 @@ export default function SetupOverlay() {
   // while `default` still safely no-ops for any other runtime string,
   // including future contract states this build doesn't recognize yet.
   switch (display.state as SetupDisplayState) {
+    case SetupDisplayState.Scanning: {
+      return <ScanningPanel />;
+    }
+
     case SetupDisplayState.SoftApQr: {
       return <SoftApQrPanel display={display} />;
     }
 
     case SetupDisplayState.Joining: {
       return <JoiningPanel />;
+    }
+
+    case SetupDisplayState.Finalizing: {
+      return <FinalizingPanel />;
     }
 
     case SetupDisplayState.JoinFailed: {

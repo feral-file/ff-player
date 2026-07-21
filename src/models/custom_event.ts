@@ -45,10 +45,12 @@ export interface MintPairingDisplayDetail {
 export enum SetupDisplayState {
   Hidden = 'hidden',
   Ready = 'ready',
+  Scanning = 'scanning',
   SoftApQr = 'softap_qr',
   Joining = 'joining',
   JoinFailed = 'join_failed',
   Updating = 'updating',
+  Finalizing = 'finalizing',
   ClaimQr = 'claim_qr',
   FactoryReset = 'factory_reset',
 }
@@ -62,4 +64,8 @@ export interface SetupDisplayDetail {
   reason?: string;
   progress?: number;
   url?: string;
+  // claim_qr only: the device's mDNS-advertised name (e.g. "FF1-8EVTK3RE"),
+  // woven into the "the app finds this frame automatically" guidance.
+  // snake_case matches the setupDisplay wire contract field.
+  device_name?: string;
 }
