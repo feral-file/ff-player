@@ -1,6 +1,6 @@
 import { AppProvider } from '@/context/AppContext';
 import { LocalStorageItem } from '@/constants';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { axiosGet, canvasServiceMocks, deviceManager } =
@@ -18,7 +18,8 @@ const { axiosGet, canvasServiceMocks, deviceManager } =
     return {
       axiosGet: vi.fn(),
       canvasServiceMocks: {
-        castPlaylistByURL: vi.fn(() => Promise.resolve(undefined)),
+        // Resolves the new boolean contract: true = playlist fetched AND cast.
+        castPlaylistByURL: vi.fn(() => Promise.resolve(true)),
         setCastInfo: vi.fn(),
       },
       deviceManager,
@@ -84,6 +85,7 @@ vi.mock('@/utils/DeviceManager', () => ({
 
 describe('AppContext boot recovery', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
     vi.unstubAllEnvs();
   });
@@ -99,7 +101,7 @@ describe('AppContext boot recovery', () => {
     deviceManager.setDeviceDisplaySettings.mockResolvedValue(undefined);
     deviceManager.setDeviceInfo.mockResolvedValue(undefined);
     canvasServiceMocks.castPlaylistByURL.mockImplementation(() =>
-      Promise.resolve(undefined)
+      Promise.resolve(true)
     );
   });
 
@@ -129,6 +131,49 @@ describe('AppContext boot recovery', () => {
       );
       expect(deviceManager.getBootPlaylist).not.toHaveBeenCalled();
     });
+  });
+
+  it('retries the fallback playlist on backoff until it casts, then stops', async () => {
+    // First-time SoftAP setup boots the kiosk into the player with no
+    // connectivity, so the boot fallback fetch fails; the old one-shot
+    // behavior left the device with no artwork forever. The loop must retry
+    // (backoff or isOnline re-key) and end on the first successful cast.
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    axiosGet.mockResolvedValueOnce({
+      data: {
+        duration: 1000,
+        defaultPlaylistURL: 'https://example.com/default-playlist',
+      },
+    });
+    canvasServiceMocks.castPlaylistByURL
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+
+    vi.useFakeTimers();
+    render(
+      <AppProvider>
+        <div data-testid="app-ready" />
+      </AppProvider>
+    );
+
+    // Flush boot promises: config fetch + castInfo miss → first (failing)
+    // fallback attempt.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(1);
+
+    // Initial backoff elapses → second attempt, which succeeds.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(2);
+
+    // Success cleared the fallback flag: no further attempts ever fire.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(2);
   });
 
 });

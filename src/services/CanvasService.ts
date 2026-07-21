@@ -287,13 +287,24 @@ class CanvasService {
     this.nowDisplayPlaylist({ dp1CallData });
   }
 
-  public async castPlaylistByURL(playlistURL: string): Promise<void> {
+  /**
+   * Fetch the playlist at `playlistURL` and cast it as the current display.
+   *
+   * Returns true only when the playlist was fetched AND the displayPlaylist
+   * message was accepted. Returns false (never throws) on a fetch failure, an
+   * empty playlist, or a rejected message — callers own the retry policy. The
+   * boot fallback in AppContext depends on this signal: the player can load
+   * with no connectivity at all (SoftAP first-time setup boots the kiosk
+   * straight into the player), so a swallowed failure here used to strand a
+   * freshly-paired device with no default playlist.
+   */
+  public async castPlaylistByURL(playlistURL: string): Promise<boolean> {
     try {
       console.log('[CanvasService] Fetching playlist from:', playlistURL);
       const defaultPlaylist = await DP1Service.getPlaylist(playlistURL);
 
       if (!defaultPlaylist) {
-        return;
+        return false;
       }
 
       console.log('[CanvasService] Default playlist fetched, casting...');
@@ -316,14 +327,16 @@ class CanvasService {
 
       if (reply?.ok) {
         console.log('[CanvasService] Default playlist cast successfully');
-      } else {
-        console.error(
-          '[CanvasService] Failed to cast default playlist:',
-          JSON.stringify(reply)
-        );
+        return true;
       }
+      console.error(
+        '[CanvasService] Failed to cast default playlist:',
+        JSON.stringify(reply)
+      );
+      return false;
     } catch (error) {
       console.error('[CanvasService] Error in castPlaylistByURL:', error);
+      return false;
     }
   }
 

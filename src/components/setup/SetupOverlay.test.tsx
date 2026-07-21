@@ -171,7 +171,7 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
   });
 });
 
-describe('SetupOverlay known states (update, claim, reset)', () => {
+describe('SetupOverlay known states (updating progress)', () => {
   afterEach(() => {
     cleanup();
   });
@@ -220,6 +220,16 @@ describe('SetupOverlay known states (update, claim, reset)', () => {
       expect(screen.getByText(expected)).toBeTruthy();
     }
   );
+
+});
+
+// Split from the updating-progress describe above only to satisfy the
+// max-lines-per-function lint gate; the grouping carries no behavioral
+// meaning.
+describe('SetupOverlay known states (claim, scanning, reset)', () => {
+  afterEach(() => {
+    cleanup();
+  });
 
   it('renders claim_qr with app-discovery as primary and the QR as backup', async () => {
     const { container } = render(<SetupOverlay />);
