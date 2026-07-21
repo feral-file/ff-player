@@ -11,4 +11,13 @@
   pointer-events: none;
   background: #000000;
   border: 0;
+  opacity: 1;
+  // Exit fade, matching ArtworkPlayer's FADE_IN_OUT_DURATION_MS so the setup
+  // artwork leaves like any outgoing artwork on a cast command. Duration must
+  // stay in sync with FADE_OUT_MS in SetupArtworkBackground.tsx.
+  transition: opacity 650ms ease;
+}
+
+.fading {
+  opacity: 0;
 }

@@ -1,9 +1,10 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CustomEventName, SetupDisplayState } from '@/models/custom_event';
 import { AppContext } from '@/context/AppContext';
 import { CastCommand, CastInfo } from '@/models';
 import SetupOverlay from './SetupOverlay';
+import { FADE_OUT_MS } from './SetupArtworkBackground';
 
 // Renders the QR value as a DOM attribute instead of drawing modules, so
 // tests can assert on the exact WIFI: payload without decoding a QR image.
@@ -355,19 +356,6 @@ describe('SetupOverlay hide and unknown-state behavior', () => {
     });
   });
 
-  it('unmounts the background artwork together with the panels on hidden', async () => {
-    const { container } = render(<SetupOverlay />);
-
-    displaySetup({ state: SetupDisplayState.Joining });
-    await screen.findByText('Connecting to Wi-Fi…');
-    expect(container.querySelector('iframe')).not.toBeNull();
-
-    displaySetup({ state: SetupDisplayState.Hidden });
-    await waitFor(() => {
-      expect(container.querySelector('iframe')).toBeNull();
-    });
-  });
-
   it('renders nothing for an unrecognized future state instead of erroring', async () => {
     // Extensibility invariant: a state this build doesn't know about (e.g. a
     // future LAN pairing-approval overlay) must no-op, not throw or fall back
@@ -385,9 +373,18 @@ describe('SetupOverlay hide and unknown-state behavior', () => {
       requesterName: 'Living Room TV',
     });
 
+    // No panel for the unknown state; the panel drops immediately and the
+    // background follows once its exit fade completes.
     await waitFor(() => {
-      expect(container.firstChild).toBeNull();
+      expect(container.querySelector('section')).toBeNull();
     });
+    expect(screen.queryByText('Connecting to Wi-Fi…')).toBeNull();
+    await waitFor(
+      () => {
+        expect(container.firstChild).toBeNull();
+      },
+      { timeout: FADE_OUT_MS * 3 }
+    );
   });
 });
 
@@ -456,11 +453,37 @@ describe('SetupOverlay bundled artwork background', () => {
 
 // Lifecycle invariants: the artwork must keep running uninterrupted across
 // setup state transitions (same DOM node — a remount would restart the
-// generative piece), and must yield the moment any cast becomes active
-// mid-setup (e.g. the boot fallback playlist landing once Wi-Fi joins).
+// generative piece), and every exit — overlay hiding or a cast starting
+// mid-setup — plays the standard fade instead of a hard cut.
 describe('SetupOverlay bundled artwork background lifecycle', () => {
   afterEach(() => {
+    vi.useRealTimers();
     cleanup();
+  });
+
+  it('fades the background artwork out on hidden instead of hard-cutting', () => {
+    vi.useFakeTimers();
+    const { container } = render(<SetupOverlay />);
+
+    act(() => {
+      displaySetup({ state: SetupDisplayState.Joining });
+    });
+    expect(screen.getByText('Connecting to Wi-Fi…')).toBeTruthy();
+    expect(container.querySelector('iframe')).not.toBeNull();
+
+    act(() => {
+      displaySetup({ state: SetupDisplayState.Hidden });
+    });
+    // The panel is gone immediately, but the artwork stays mounted for its
+    // exit fade (the player's standard cast-fade duration)...
+    expect(screen.queryByText('Connecting to Wi-Fi…')).toBeNull();
+    expect(container.querySelector('iframe')).not.toBeNull();
+
+    // ...and unmounts once the fade has played.
+    act(() => {
+      vi.advanceTimersByTime(FADE_OUT_MS + 50);
+    });
+    expect(container.querySelector('iframe')).toBeNull();
   });
 
   it('keeps the same iframe node across panel state transitions', async () => {
@@ -477,11 +500,14 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
     expect(container.querySelector('iframe')).toBe(iframe);
   });
 
-  it('removes the background when a cast starts mid-setup', async () => {
+  it('fades the background out when a cast starts mid-setup', () => {
+    vi.useFakeTimers();
     const { container, rerender } = render(overlayWithCastInfo(null));
 
-    displaySetup({ state: SetupDisplayState.Finalizing });
-    await screen.findByText('Wi-Fi Connected');
+    act(() => {
+      displaySetup({ state: SetupDisplayState.Finalizing });
+    });
+    expect(screen.getByText('Wi-Fi Connected')).toBeTruthy();
     expect(container.querySelector('iframe')).not.toBeNull();
 
     rerender(
@@ -490,8 +516,41 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
       } as CastInfo)
     );
 
+    // Still mounted while its exit fade plays, gone after.
+    expect(container.querySelector('iframe')).not.toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(FADE_OUT_MS + 50);
+    });
     expect(container.querySelector('iframe')).toBeNull();
     // The panel itself must survive the handoff — only the background yields.
     expect(screen.getByText('Wi-Fi Connected')).toBeTruthy();
+  });
+
+  it('cancels a pending fade-out when a panel re-shows, keeping the same node', () => {
+    vi.useFakeTimers();
+    const { container } = render(<SetupOverlay />);
+
+    act(() => {
+      displaySetup({ state: SetupDisplayState.Joining });
+    });
+    const iframe = container.querySelector('iframe');
+    expect(iframe).not.toBeNull();
+
+    // Hide, then re-show mid-fade (e.g. join_failed after a hidden blip): the
+    // pending unmount must be cancelled and the SAME iframe restored to full
+    // opacity — a remount would restart the generative piece.
+    act(() => {
+      displaySetup({ state: SetupDisplayState.Hidden });
+    });
+    act(() => {
+      vi.advanceTimersByTime(FADE_OUT_MS / 2);
+    });
+    act(() => {
+      displaySetup({ state: SetupDisplayState.JoinFailed });
+    });
+    act(() => {
+      vi.advanceTimersByTime(FADE_OUT_MS * 2);
+    });
+    expect(container.querySelector('iframe')).toBe(iframe);
   });
 });

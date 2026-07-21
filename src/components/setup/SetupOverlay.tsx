@@ -313,9 +313,11 @@ function renderSetupPanel(display: SetupDisplayDetail): ReactElement | null {
  *
  * Any visible panel gets the bundled artwork layered beneath it (see
  * SetupArtworkBackground for why it's iframe-based and cast-gated). The
- * background is a stable sibling of the panel, so it stays mounted — and the
- * artwork keeps running uninterrupted — across setup state transitions, and
- * unmounts only when the overlay hides entirely.
+ * background is a stable, ALWAYS-rendered sibling of the panel: it stays
+ * mounted — and the artwork keeps running uninterrupted — across setup state
+ * transitions, and it must stay in the tree when the overlay hides so it can
+ * play its exit fade (the player's standard cast fade) instead of
+ * hard-cutting off screen; it unmounts itself once that fade completes.
  */
 export default function SetupOverlay() {
   const [display, setDisplay] =
@@ -333,13 +335,10 @@ export default function SetupOverlay() {
   }, []);
 
   const panel = renderSetupPanel(display);
-  if (!panel) {
-    return null;
-  }
 
   return (
     <>
-      <SetupArtworkBackground />
+      <SetupArtworkBackground panelVisible={panel !== null} />
       {panel}
     </>
   );
