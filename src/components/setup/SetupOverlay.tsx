@@ -13,6 +13,21 @@ const hiddenDisplay: SetupDisplayDetail = { state: SetupDisplayState.Hidden };
 
 const qrSize = 320;
 
+// Slightly smaller than qrSize so the two softap_qr step codes fit side by
+// side within the panel's max-width on 1080p output.
+const stepQrSize = 280;
+
+/**
+ * Canonical client-facing address of the provisioning portal. This is NOT the
+ * hotspot gateway IP: the image's dnsmasq answers every DNS name with
+ * 192.0.2.1 (a public-looking TEST-NET address — Samsung One UI refuses
+ * captive-portal detection when probe hostnames resolve to private IPs) and
+ * an nftables rule redirects 192.0.2.1:80 back to the portal. Must stay in
+ * sync with `captive.conf` / `nftables.conf` in the `ffos` repo and the
+ * captive-detection section of `ffos-user` docs/api-design.md.
+ */
+const portalUrl = 'http://192.0.2.1/';
+
 /**
  * Escapes the characters the `WIFI:` URI convention treats as field
  * separators/terminators (`\`, `;`, `,`, `:`, `"`) with a backslash.
@@ -39,26 +54,52 @@ function softApQrValue(ssid: string, password: string | undefined): string {
   return `WIFI:T:WPA;S:${escapedSsid};P:${escapeWifiField(password)};;`;
 }
 
+/**
+ * Two-step guidance instead of a single join QR: the auto-opening captive
+ * sheet cannot be relied on across phones. iOS joins scanned `WIFI:` codes
+ * from the Camera without ever raising the captive-portal sheet (it only
+ * appears on a manual join from Settings), and some Android builds surface
+ * the "sign in" notification silently or not at all. The second QR (and the
+ * spelled-out address) is the deterministic path to the portal once the
+ * phone is on the hotspot — it must encode `portalUrl`, which the hotspot's
+ * DNS/NAT layers guarantee is reachable. Step order also fixes the DOM order
+ * (join QR first); tests rely on that to address each code.
+ */
 function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   const ssid = display.ssid ?? '';
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Connect to Set Up This Device</p>
-        <div className={styles.qrFrame}>
-          <QRCodeSVG
-            value={softApQrValue(ssid, display.password)}
-            size={qrSize}
-            marginSize={2}
-          />
+        <p className={`${styles.title} ${styles.softApTitle}`}>
+          Connect to Set Up This Device
+        </p>
+        <div className={styles.steps}>
+          <div className={styles.step}>
+            <p className={styles.stepLabel}>1. Scan to join the setup network</p>
+            <div className={styles.qrFrame}>
+              <QRCodeSVG
+                value={softApQrValue(ssid, display.password)}
+                size={stepQrSize}
+                marginSize={2}
+              />
+            </div>
+            <p className={styles.credential}>Network: {ssid}</p>
+            {display.password ? (
+              <p className={styles.credential}>Password: {display.password}</p>
+            ) : null}
+          </div>
+          <div className={styles.step}>
+            <p className={styles.stepLabel}>2. Scan to open the setup page</p>
+            <div className={styles.qrFrame}>
+              <QRCodeSVG value={portalUrl} size={stepQrSize} marginSize={2} />
+            </div>
+            <p className={styles.credential}>{portalUrl}</p>
+          </div>
         </div>
-        <p className={styles.credential}>Network: {ssid}</p>
-        {display.password ? (
-          <p className={styles.credential}>Password: {display.password}</p>
-        ) : null}
-        <p className={styles.subtitle}>
-          Scan the code, or join the network manually using the details
-          above, then follow the prompts on your phone.
+        <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
+          If the setup page doesn&apos;t open on its own, scan the second code
+          or enter the address above in your phone&apos;s browser while
+          connected to the network.
         </p>
       </div>
     </section>
