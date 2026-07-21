@@ -207,29 +207,34 @@ function FactoryResetPanel() {
 }
 
 /**
- * Claim step. The PRIMARY path is app auto-discovery: the app browses mDNS
- * (`_ff1._tcp`) on the local network and finds this frame by its advertised
- * name, so a user on the same Wi-Fi only needs to open the app. The QR code
- * is deliberately framed as the backup for when discovery fails (cross-VLAN,
- * multicast-filtering APs, or the phone on a different network).
+ * Pairing screen. Shown for the first-pair claim during setup AND whenever a
+ * user later asks to pair another phone (`showPairingQRCode` from the app),
+ * so the copy must read as a general "pair the app with this frame" page —
+ * not as a final setup step. The PRIMARY path is app auto-discovery: the app
+ * browses mDNS (`_ff1._tcp`) on the local network and finds this frame by
+ * its advertised name. The app only auto-prompts to pair when the frame has
+ * no pairing yet (first claim); once claimed, additional phones must add the
+ * frame manually inside the app — the "If pairing doesn't start
+ * automatically" line is what routes that second case without a separate
+ * screen. The QR code is deliberately framed as the backup for when
+ * discovery fails (cross-VLAN, multicast-filtering APs, or the phone on a
+ * different network).
  */
 function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
   const frameName = display.device_name?.trim();
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>One Last Step</p>
+        <p className={styles.title}>Pair with the Feral File App</p>
         <p className={styles.subtitle}>
           Open the Feral File app on a phone connected to the same Wi-Fi
-          network — it will find{' '}
+          network. If pairing doesn&apos;t start automatically, add{' '}
           {frameName ? (
-            <>
-              <strong>{frameName}</strong>
-            </>
+            <strong>{frameName}</strong>
           ) : (
             'this frame'
           )}{' '}
-          automatically.
+          in the app.
         </p>
         {display.url ? (
           <>

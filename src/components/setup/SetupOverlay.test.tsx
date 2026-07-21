@@ -243,11 +243,12 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
       device_name: 'FF1-8EVTK3RE',
     });
 
-    expect(await screen.findByText('One Last Step')).toBeTruthy();
-    // Primary path: open the app on the same Wi-Fi; it discovers by name.
+    expect(await screen.findByText('Pair with the Feral File App')).toBeTruthy();
+    // Primary path: open the app on the same Wi-Fi; the manual-add line
+    // covers already-claimed frames, where the app won't auto-prompt.
     expect(screen.getByText('FF1-8EVTK3RE')).toBeTruthy();
     expect(
-      screen.getByText(/same Wi-Fi\s+network — it will find/)
+      screen.getByText(/If pairing doesn't start automatically, add/)
     ).toBeTruthy();
     // Backup path: the QR, explicitly framed as the fallback.
     expect(
@@ -264,8 +265,8 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
       url: 'https://feralfile.com/device_connect?token=abc',
     });
 
-    expect(await screen.findByText('One Last Step')).toBeTruthy();
-    expect(screen.getByText(/it will find\s+this frame\s+automatically/)).toBeTruthy();
+    expect(await screen.findByText('Pair with the Feral File App')).toBeTruthy();
+    expect(screen.getByText(/add\s+this frame\s+in the app/)).toBeTruthy();
     expect(container.querySelector('svg')).not.toBeNull();
   });
 
