@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { ReactElement, useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   CustomEventName,
   SetupDisplayDetail,
   SetupDisplayState,
 } from '@/models/custom_event';
+import SetupArtworkBackground from './SetupArtworkBackground';
 import styles from './SetupOverlay.module.scss';
 
 const hiddenDisplay: SetupDisplayDetail = { state: SetupDisplayState.Hidden };
@@ -246,31 +247,13 @@ function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
 }
 
 /**
- * SetupOverlay renders the device's out-of-box and recovery setup flow
- * (Wi-Fi hotspot join, firmware update, claim pairing) above whatever else
- * is mounted. `feral-controld` owns lifecycle state and drives this display
- * through the `setupDisplay` CDP command; it is the launcher-ui replacement
- * for those screens now that setup lives inside ff-player.
+ * Maps a setupDisplay state to its panel, or null for states that show
+ * nothing. `display.state` is `string` (see SetupDisplayState doc comment),
+ * so cast it for the switch: known branches stay type-checked against the
+ * enum, while `default` still safely no-ops for any other runtime string,
+ * including future contract states this build doesn't recognize yet.
  */
-export default function SetupOverlay() {
-  const [display, setDisplay] =
-    useState<SetupDisplayDetail>(hiddenDisplay);
-
-  useEffect(() => {
-    const handleDisplay = (event: Event) => {
-      setDisplay((event as CustomEvent<SetupDisplayDetail>).detail);
-    };
-
-    window.addEventListener(CustomEventName.SetupDisplay, handleDisplay);
-    return () => {
-      window.removeEventListener(CustomEventName.SetupDisplay, handleDisplay);
-    };
-  }, []);
-
-  // `display.state` is `string` (see SetupDisplayState doc comment), so cast
-  // it for the switch: known branches stay type-checked against the enum,
-  // while `default` still safely no-ops for any other runtime string,
-  // including future contract states this build doesn't recognize yet.
+function renderSetupPanel(display: SetupDisplayDetail): ReactElement | null {
   switch (display.state as SetupDisplayState) {
     case SetupDisplayState.Scanning: {
       return <ScanningPanel />;
@@ -319,4 +302,45 @@ export default function SetupOverlay() {
       return null;
     }
   }
+}
+
+/**
+ * SetupOverlay renders the device's out-of-box and recovery setup flow
+ * (Wi-Fi hotspot join, firmware update, claim pairing) above whatever else
+ * is mounted. `feral-controld` owns lifecycle state and drives this display
+ * through the `setupDisplay` CDP command; it is the launcher-ui replacement
+ * for those screens now that setup lives inside ff-player.
+ *
+ * Any visible panel gets the bundled artwork layered beneath it (see
+ * SetupArtworkBackground for why it's iframe-based and cast-gated). The
+ * background is a stable sibling of the panel, so it stays mounted — and the
+ * artwork keeps running uninterrupted — across setup state transitions, and
+ * unmounts only when the overlay hides entirely.
+ */
+export default function SetupOverlay() {
+  const [display, setDisplay] =
+    useState<SetupDisplayDetail>(hiddenDisplay);
+
+  useEffect(() => {
+    const handleDisplay = (event: Event) => {
+      setDisplay((event as CustomEvent<SetupDisplayDetail>).detail);
+    };
+
+    window.addEventListener(CustomEventName.SetupDisplay, handleDisplay);
+    return () => {
+      window.removeEventListener(CustomEventName.SetupDisplay, handleDisplay);
+    };
+  }, []);
+
+  const panel = renderSetupPanel(display);
+  if (!panel) {
+    return null;
+  }
+
+  return (
+    <>
+      <SetupArtworkBackground />
+      {panel}
+    </>
+  );
 }

@@ -1,0 +1,14 @@
+// Sits one layer below the setup overlay panels (z-index 1000): the panels'
+// existing rgba(0, 0, 0, 0.82) scrim dims the artwork, so setup text and QR
+// contrast stay exactly as they were before the background existed. Do not
+// raise this z-index to or above the overlay's.
+.background {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  background: #000000;
+  border: 0;
+}

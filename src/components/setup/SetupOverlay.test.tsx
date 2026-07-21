@@ -1,6 +1,8 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CustomEventName, SetupDisplayState } from '@/models/custom_event';
+import { AppContext } from '@/context/AppContext';
+import { CastCommand, CastInfo } from '@/models';
 import SetupOverlay from './SetupOverlay';
 
 // Renders the QR value as a DOM attribute instead of drawing modules, so
@@ -353,6 +355,19 @@ describe('SetupOverlay hide and unknown-state behavior', () => {
     });
   });
 
+  it('unmounts the background artwork together with the panels on hidden', async () => {
+    const { container } = render(<SetupOverlay />);
+
+    displaySetup({ state: SetupDisplayState.Joining });
+    await screen.findByText('Connecting to Wi-Fi…');
+    expect(container.querySelector('iframe')).not.toBeNull();
+
+    displaySetup({ state: SetupDisplayState.Hidden });
+    await waitFor(() => {
+      expect(container.querySelector('iframe')).toBeNull();
+    });
+  });
+
   it('renders nothing for an unrecognized future state instead of erroring', async () => {
     // Extensibility invariant: a state this build doesn't know about (e.g. a
     // future LAN pairing-approval overlay) must no-op, not throw or fall back
@@ -373,5 +388,110 @@ describe('SetupOverlay hide and unknown-state behavior', () => {
     await waitFor(() => {
       expect(container.firstChild).toBeNull();
     });
+  });
+});
+
+// The bundled-artwork background must render under every visible panel while
+// nothing is cast, and must never cover a live cast (e.g. an OTA `updating`
+// overlay raised over the user's playing artwork) — see
+// SetupArtworkBackground for the design rationale.
+function overlayWithCastInfo(castInfo: CastInfo | null) {
+  return (
+    <AppContext.Provider
+      value={{
+        context: {
+          isInitialized: true,
+          isOnline: false,
+          appRemoteConfig: { defaultPlaylistURL: '' },
+          castInfo,
+          displaySettings: null,
+          cursorPositions: null,
+        },
+      }}>
+      <SetupOverlay />
+    </AppContext.Provider>
+  );
+}
+
+describe('SetupOverlay bundled artwork background', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('renders the same-origin bundled artwork beneath a visible panel', async () => {
+    const { container } = render(overlayWithCastInfo(null));
+
+    displaySetup({ state: SetupDisplayState.Scanning });
+    await screen.findByText('Looking for Wi-Fi Networks…');
+
+    const iframe = container.querySelector('iframe');
+    expect(iframe?.getAttribute('src')).toBe('/setup-artwork/index.html');
+    expect(iframe?.getAttribute('sandbox')).toBe(
+      'allow-same-origin allow-scripts'
+    );
+  });
+
+  it('does not render the background while a cast is active', async () => {
+    const { container } = render(
+      overlayWithCastInfo({
+        castCommand: CastCommand.displayPlaylist,
+      } as CastInfo)
+    );
+
+    displaySetup({ state: SetupDisplayState.Updating, progress: 10 });
+    await screen.findByText('Updating Device Software…');
+
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('renders the background when mounted without an AppProvider', async () => {
+    const { container } = render(<SetupOverlay />);
+
+    displaySetup({ state: SetupDisplayState.FactoryReset });
+    await screen.findByText('Resetting to Factory Settings…');
+
+    expect(container.querySelector('iframe')).not.toBeNull();
+  });
+});
+
+// Lifecycle invariants: the artwork must keep running uninterrupted across
+// setup state transitions (same DOM node — a remount would restart the
+// generative piece), and must yield the moment any cast becomes active
+// mid-setup (e.g. the boot fallback playlist landing once Wi-Fi joins).
+describe('SetupOverlay bundled artwork background lifecycle', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('keeps the same iframe node across panel state transitions', async () => {
+    const { container } = render(<SetupOverlay />);
+
+    displaySetup({ state: SetupDisplayState.Scanning });
+    await screen.findByText('Looking for Wi-Fi Networks…');
+    const iframe = container.querySelector('iframe');
+    expect(iframe).not.toBeNull();
+
+    displaySetup({ state: SetupDisplayState.Joining });
+    await screen.findByText('Connecting to Wi-Fi…');
+
+    expect(container.querySelector('iframe')).toBe(iframe);
+  });
+
+  it('removes the background when a cast starts mid-setup', async () => {
+    const { container, rerender } = render(overlayWithCastInfo(null));
+
+    displaySetup({ state: SetupDisplayState.Finalizing });
+    await screen.findByText('Wi-Fi Connected');
+    expect(container.querySelector('iframe')).not.toBeNull();
+
+    rerender(
+      overlayWithCastInfo({
+        castCommand: CastCommand.displayPlaylist,
+      } as CastInfo)
+    );
+
+    expect(container.querySelector('iframe')).toBeNull();
+    // The panel itself must survive the handoff — only the background yields.
+    expect(screen.getByText('Wi-Fi Connected')).toBeTruthy();
   });
 });
