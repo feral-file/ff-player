@@ -4,7 +4,7 @@
 import { CastCommand } from '@/models';
 import { CustomEventName } from '@/models/custom_event';
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
 
 const item = (id: string): DP1Item =>
@@ -43,6 +43,13 @@ const dispatchedEvents = (spy: { mock: { calls: [Event][] } }) =>
 // playlist source. `onlyIfNoPlaylist` (claim-time push) no-ops when content
 // is already on screen; the bare command (OOM recovery) always forces.
 describe('CanvasService displayDefaultPlaylist', () => {
+  beforeEach(() => {
+    // These tests cover POST-hydration semantics; the boot-hydration gate
+    // (one-way per page load) is exercised in CanvasService.bootHydration
+    // tests. Settle it up front (idempotent across this file's tests).
+    canvasService.completeBootCastHydration();
+  });
+
   afterEach(() => {
     canvasService.setCastInfo(null, false);
     vi.restoreAllMocks();

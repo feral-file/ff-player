@@ -136,6 +136,13 @@ export const AppProvider = ({ children }: AppContextProps) => {
       await initCastInfo();
     } catch (error) {
       console.log('Error init device manager', error);
+    } finally {
+      // Ends CanvasService's hydration gate on EVERY path (restored, fallen
+      // back, castDaily/critical-temp, or thrown): a deferred
+      // onlyIfNoPlaylist push re-evaluates now that castInfo is
+      // authoritative. A stuck-open gate would silently drop claim-time
+      // pushes forever, so this must not depend on initCastInfo succeeding.
+      canvasService.completeBootCastHydration();
     }
   };
 

@@ -25,6 +25,7 @@ const { axiosGet, canvasServiceMocks, deviceManager } =
         castPlaylistByURL: vi.fn<
           (playlistURL: string, shouldAbort?: () => boolean) => Promise<boolean>
         >(() => Promise.resolve(true)),
+        completeBootCastHydration: vi.fn(),
         setCastInfo: vi.fn(),
       },
       deviceManager,
@@ -81,6 +82,7 @@ vi.mock('@/services/cdp-handler/CDPRequestHandler', () => ({
 vi.mock('@/services/CanvasService', () => ({
   canvasService: {
     castPlaylistByURL: canvasServiceMocks.castPlaylistByURL,
+    completeBootCastHydration: canvasServiceMocks.completeBootCastHydration,
     setCastInfo: canvasServiceMocks.setCastInfo,
   },
 }));

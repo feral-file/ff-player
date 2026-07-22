@@ -82,6 +82,14 @@ class CanvasService {
   // request that landed while the attempt was in flight — the case
   // AppContext's nonce guard exists to preserve.
   private castingFallbackPlaylist = false;
+  // True until AppContext finishes restoring persisted cast state at boot
+  // (initCastInfo spans several async DeviceManager reads while the CDP
+  // entry point is already live). While pending, castInfo === null means
+  // "unknown", not "empty screen", so `onlyIfNoPlaylist` requests defer to
+  // completeBootCastHydration() instead of deciding against a null that a
+  // restore is about to overwrite.
+  private bootCastHydrationPending = true;
+  private deferredConditionalDefaultRequest = false;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
   /**
    * Playlist route registers a cache-bust reload for the active artwork.
@@ -999,21 +1007,65 @@ class CanvasService {
    * arrived), the request is a no-op instead of stomping playback. OOM
    * recovery omits the flag on purpose — it wants the default to replace
    * possibly-OOM-causing content.
+   *
+   * While boot cast hydration is still pending, an `onlyIfNoPlaylist`
+   * request is DEFERRED instead of answered: `castInfo` is null until
+   * AppContext finishes restoring persisted cast state, so answering "no
+   * playlist" in that window would arm the fallback and later cast the
+   * default over the user's restored playlist. The reply is still ok — the
+   * command's "make sure something plays" contract is honored either way
+   * once the deferred re-evaluation runs. Forced requests are NOT deferred:
+   * they are newer intent than any persisted state and must win over a
+   * restore, which is exactly what the undisturbed fallback loop does.
    */
   private displayDefaultPlaylist(
     request?: DisplayDefaultPlaylistRequest
   ): DisplayDefaultPlaylistReply {
-    if (request?.onlyIfNoPlaylist && this.castInfo?.playlist?.items?.length) {
-      console.log(
-        '[CanvasService] Playlist already displaying, skipping default playlist'
-      );
-      return { ok: true };
+    if (request?.onlyIfNoPlaylist) {
+      if (this.bootCastHydrationPending) {
+        console.log(
+          '[CanvasService] Deferring conditional default playlist until boot hydration completes'
+        );
+        this.deferredConditionalDefaultRequest = true;
+        return { ok: true };
+      }
+      if (this.castInfo?.playlist?.items?.length) {
+        console.log(
+          '[CanvasService] Playlist already displaying, skipping default playlist'
+        );
+        return { ok: true };
+      }
     }
 
     window.dispatchEvent(
       new CustomEvent(CustomEventName.DisplayDefaultPlaylist as string)
     );
     return { ok: true };
+  }
+
+  /**
+   * Called by AppContext once boot cast restoration has settled (restored,
+   * fallen back, or failed — the caller invokes this in a finally). Ends the
+   * hydration gate above and re-evaluates a deferred `onlyIfNoPlaylist`
+   * request against the now-authoritative castInfo: a restored playlist
+   * makes it a no-op; an empty screen dispatches it. One-way per page load —
+   * hydration happens once, and a reload rebuilds this service.
+   *
+   * On boot paths that already armed the fallback themselves (no castInfo,
+   * castDaily, critical-temp), the replay re-arms it once more via the same
+   * event. That is intentional redundancy, not a bug: both requests resolve
+   * to the same default playlist and AppContext's nonce guard makes the
+   * extra re-arm harmless.
+   */
+  public completeBootCastHydration() {
+    if (!this.bootCastHydrationPending) {
+      return;
+    }
+    this.bootCastHydrationPending = false;
+    if (this.deferredConditionalDefaultRequest) {
+      this.deferredConditionalDefaultRequest = false;
+      this.displayDefaultPlaylist({ onlyIfNoPlaylist: true });
+    }
   }
 }
 
