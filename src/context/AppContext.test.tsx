@@ -278,6 +278,30 @@ describe('AppContext explicit-cast cancellation', () => {
     });
     expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(1);
   });
+
+  it('a default-playlist push arriving after an explicit cast still casts', async () => {
+    // Ordering contract: both signals are synchronous window events, so the
+    // command that arrived last wins — explicit-then-default must leave the
+    // request active and cast the forced default.
+    bootWithDefaultPlaylist();
+
+    // Boot fallback casts once and settles.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(CustomEventName.ExplicitPlaylistCast)
+      );
+      window.dispatchEvent(
+        new CustomEvent(CustomEventName.DisplayDefaultPlaylist)
+      );
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('AppContext displayDefaultPlaylist requests', () => {
