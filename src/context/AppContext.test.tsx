@@ -20,7 +20,11 @@ const { axiosGet, canvasServiceMocks, deviceManager } =
       axiosGet: vi.fn(),
       canvasServiceMocks: {
         // Resolves the new boolean contract: true = playlist fetched AND cast.
-        castPlaylistByURL: vi.fn(() => Promise.resolve(true)),
+        // Typed with the real two-arg signature so tests can read the
+        // shouldAbort callback back out of mock.calls.
+        castPlaylistByURL: vi.fn<
+          (playlistURL: string, shouldAbort?: () => boolean) => Promise<boolean>
+        >(() => Promise.resolve(true)),
         setCastInfo: vi.fn(),
       },
       deviceManager,
@@ -181,6 +185,99 @@ describe('AppContext boot recovery', () => {
     expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(2);
   });
 
+});
+
+// Shared boot for the explicit-cast cancellation tests: remote config with a
+// default playlist URL, fake timers, and a mounted provider. Keeps each test
+// (and the describe callback) inside the max-lines-per-function gate.
+const bootWithDefaultPlaylist = () => {
+  vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+  axiosGet.mockResolvedValueOnce({
+    data: {
+      duration: 1000,
+      defaultPlaylistURL: 'https://example.com/default-playlist',
+    },
+  });
+  vi.useFakeTimers();
+  render(
+    <AppProvider>
+      <div data-testid="app-ready" />
+    </AppProvider>
+  );
+};
+
+describe('AppContext explicit-cast cancellation', () => {
+  it('an explicit cast cancels a pending fallback retry', async () => {
+    // A failed attempt leaves the request active with a retry timer armed.
+    // If the controller casts real content in that window, the retry must
+    // never fire — it would replace the explicit cast with the default
+    // playlist.
+    canvasServiceMocks.castPlaylistByURL.mockResolvedValueOnce(false);
+    bootWithDefaultPlaylist();
+
+    // Boot fallback attempt fails → retry armed on backoff.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(1);
+
+    // Explicit cast lands (CanvasService announces it) → loop cancelled.
+    // Flush the state update first so the effect cleanup clears the armed
+    // retry timer, THEN advance time: the real sequence is cast-then-wait,
+    // and advancing in the same tick would race the timer against React.
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(CustomEventName.ExplicitPlaylistCast)
+      );
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // The armed retry and all later backoff windows stay silent.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(1);
+  });
+
+  it('an explicit cast flips the in-flight abort hook before the commit', async () => {
+    // The cast commit happens inside castPlaylistByURL after its fetch
+    // resolves; AppContext's own `cancelled` check runs only after that, so
+    // the loop must hand CanvasService a shouldAbort callback that reflects
+    // cancellation while the fetch is still in flight.
+    let resolveFirst: ((casted: boolean) => void) | undefined;
+    canvasServiceMocks.castPlaylistByURL.mockImplementationOnce(
+      () =>
+        new Promise<boolean>(resolve => {
+          resolveFirst = resolve;
+        })
+    );
+    bootWithDefaultPlaylist();
+
+    // First attempt hangs with its fetch in flight.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(1);
+    const shouldAbort = canvasServiceMocks.castPlaylistByURL.mock.calls[0][1];
+    expect(shouldAbort?.()).toBe(false);
+
+    // Explicit cast lands mid-flight: the hook must flip so CanvasService
+    // drops the stale cast, and the aborted (false) result must not
+    // schedule another retry.
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(CustomEventName.ExplicitPlaylistCast)
+      );
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(shouldAbort?.()).toBe(true);
+
+    await act(async () => {
+      resolveFirst?.(false);
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('AppContext displayDefaultPlaylist requests', () => {

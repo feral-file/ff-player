@@ -74,6 +74,14 @@ class CanvasService {
   // Refresh payload deferred because the currently playing item is absent from
   // the new list. Kept private so getStatus never exposes staging state.
   private deferredRefreshPlaylist: DP1Call | null = null;
+  // True only while castPlaylistByURL's own displayPlaylist message is being
+  // processed (that chain is fully synchronous), so nowDisplayPlaylist can
+  // tell the boot-fallback cast apart from an explicit controller cast and
+  // skip the ExplicitPlaylistCast dispatch. The fallback settling itself must
+  // not look like an explicit cast: it would cancel a displayDefaultPlaylist
+  // request that landed while the attempt was in flight — the case
+  // AppContext's nonce guard exists to preserve.
+  private castingFallbackPlaylist = false;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
   /**
    * Playlist route registers a cache-bust reload for the active artwork.
@@ -297,13 +305,27 @@ class CanvasService {
    * with no connectivity at all (SoftAP first-time setup boots the kiosk
    * straight into the player), so a swallowed failure here used to strand a
    * freshly-paired device with no default playlist.
+   *
+   * `shouldAbort` is re-checked between the fetch resolving and the cast
+   * committing. The fetch can be in flight when an explicit cast lands; the
+   * commit happens inside this method, so without this hook the caller's own
+   * cancellation flag is checked too late and the stale fallback fetch would
+   * overwrite the explicit cast.
    */
-  public async castPlaylistByURL(playlistURL: string): Promise<boolean> {
+  public async castPlaylistByURL(
+    playlistURL: string,
+    shouldAbort?: () => boolean
+  ): Promise<boolean> {
     try {
       console.log('[CanvasService] Fetching playlist from:', playlistURL);
       const defaultPlaylist = await DP1Service.getPlaylist(playlistURL);
 
       if (!defaultPlaylist) {
+        return false;
+      }
+
+      if (shouldAbort?.()) {
+        console.log('[CanvasService] Fallback cast aborted before commit');
         return false;
       }
 
@@ -321,9 +343,18 @@ class CanvasService {
         },
       };
 
-      // Simulate processMessage with the built message data
+      // Simulate processMessage with the built message data. The flag marks
+      // the synchronous processMessage → nowDisplayPlaylist chain as
+      // fallback-originated so it does not announce itself as an explicit
+      // cast (see castingFallbackPlaylist).
       console.log('[CanvasService] Processing default playlist message');
-      const reply = canvasService.processMessage(messageData);
+      this.castingFallbackPlaylist = true;
+      let reply: Reply | undefined;
+      try {
+        reply = canvasService.processMessage(messageData);
+      } finally {
+        this.castingFallbackPlaylist = false;
+      }
 
       if (reply?.ok) {
         console.log('[CanvasService] Default playlist cast successfully');
@@ -695,6 +726,18 @@ class CanvasService {
       loopMode: LoopMode.playlist,
       shuffle: false,
     });
+    // Explicit content is now on screen — tell AppContext so an active
+    // boot-fallback retry (failed or still fetching) cannot fire later and
+    // replace it with the default playlist. The fallback's own cast is
+    // excluded: its lifecycle ends via the loop's nonce-guarded clear. The
+    // window guard keeps node-environment unit tests (no DOM) from turning a
+    // successful display into an ok:false reply — the event is a
+    // browser-only signal.
+    if (!this.castingFallbackPlaylist && typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent(CustomEventName.ExplicitPlaylistCast as string)
+      );
+    }
     return { ok: true };
   }
 

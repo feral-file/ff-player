@@ -9,6 +9,15 @@ export enum CustomEventName {
   // default playlist; AppContext re-arms its boot fallback loop so the command
   // and the player's own pull resolve the playlist through one code path.
   DisplayDefaultPlaylist = 'displayDefaultPlaylist',
+  // CanvasService → AppContext: an explicit (non-fallback) playlist display
+  // committed. AppContext cancels any active boot-fallback retry so a pending
+  // default-playlist attempt can never overwrite content the controller just
+  // cast. Deliberately emitted by every nowDisplayPlaylist commit — including
+  // scheduled DP1 playlists firing and displayAtBoot — because any real
+  // content on screen ends the fallback's "guarantee something is playing"
+  // job. The fallback's own cast intentionally does NOT dispatch this — its
+  // settling is handled by the loop's nonce-guarded clear.
+  ExplicitPlaylistCast = 'explicitPlaylistCast',
   MintPairingDisplay = 'mintPairingDisplay',
   Navigate = 'navigate',
   SetupDisplay = 'setupDisplay',

@@ -251,6 +251,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
   //     before the claim even completes). The re-key also resets the backoff.
   // Success clears `fallbackRequest.active`, which ends the loop; a later
   // castDaily/critical-temp boot requests it again and re-arms this effect.
+  // An explicit cast landing mid-loop also ends it (ExplicitPlaylistCast
+  // listener below): the fallback exists to guarantee SOMETHING is playing,
+  // so once the controller casts real content, a lingering retry must not
+  // replace it with the default playlist.
   //
   // This loop is also the ONLY resolver for the displayDefaultPlaylist CDP
   // command (claim-time push, OOM recovery): CanvasService dispatches
@@ -267,8 +271,13 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
     const attempt = async () => {
       console.log('[AppContext] Fallback default playlist attempt');
+      // `() => cancelled` lets CanvasService drop the cast between its fetch
+      // resolving and the commit: an explicit cast can land while the fetch
+      // is in flight, and the `cancelled` check below runs only after the
+      // commit already happened inside castPlaylistByURL.
       const casted = await canvasService.castPlaylistByURL(
-        appRemoteConfig.defaultPlaylistURL
+        appRemoteConfig.defaultPlaylistURL,
+        () => cancelled
       );
       if (cancelled) {
         return;
@@ -305,6 +314,31 @@ export const AppProvider = ({ children }: AppContextProps) => {
       }
     };
   }, [appRemoteConfig.defaultPlaylistURL, fallbackRequest, isOnline, router]);
+
+  // Explicit (non-fallback) cast committed → cancel any active fallback
+  // request so a pending retry or in-flight attempt can never overwrite the
+  // controller's content with the default playlist. Ordering with a
+  // concurrent displayDefaultPlaylist request is inherent: both signals are
+  // synchronous window events, so whichever command arrived last wins —
+  // explicit-then-default stays active (forced default retained),
+  // default-then-explicit ends up cancelled (explicit cast wins).
+  useEffect(() => {
+    const handleExplicitCast = () => {
+      setFallbackRequest(prev =>
+        prev.active ? { ...prev, active: false } : prev
+      );
+    };
+    window.addEventListener(
+      CustomEventName.ExplicitPlaylistCast,
+      handleExplicitCast
+    );
+    return () => {
+      window.removeEventListener(
+        CustomEventName.ExplicitPlaylistCast,
+        handleExplicitCast
+      );
+    };
+  }, []);
 
   // displayDefaultPlaylist command → re-enter the fallback flow above. The
   // conditional (onlyIfNoPlaylist) no-op already happened in CanvasService;
