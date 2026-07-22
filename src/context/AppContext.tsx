@@ -27,7 +27,10 @@ import { CDPRequestHandler } from '@/services/cdp-handler/CDPRequestHandler';
 import useCursorPositions, {
   CursorPosition,
 } from '@/services/custom-hooks/useCursorPositions';
-import { CustomEventName } from '@/models/custom_event';
+import {
+  ConnectivityEventDetail,
+  CustomEventName,
+} from '@/models/custom_event';
 import { normalizePlaylistIndex } from '@/utils/playlist';
 import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
 import { useRouter } from 'next/navigation';
@@ -85,9 +88,28 @@ export const AppProvider = ({ children }: AppContextProps) => {
     active: false,
     nonce: 0,
   });
+  // Synchronous mirror of "an explicit cast landed after the current
+  // fallback request was armed". The ExplicitPlaylistCast handler also clears
+  // `active` via setState, but that only reaches the in-flight attempt when
+  // React re-runs the effect cleanup — a default-playlist fetch resolving
+  // before that flush would still commit over the explicit cast. The ref
+  // flips inside the event handler itself, so `shouldAbort` sees the
+  // cancellation in the same task with no dependence on React scheduling.
+  // Re-arming a request resets it, preserving explicit-then-default ordering.
+  const explicitCastSinceRequestRef = useRef(false);
   const requestFallbackPlaylist = useCallback(() => {
+    explicitCastSinceRequestRef.current = false;
     setFallbackRequest(prev => ({ active: true, nonce: prev.nonce + 1 }));
   }, []);
+  // Counts every "online" connectivity NOTIFICATION, not the derived
+  // isOnline boolean. useNetworkManger starts at `true`, so on an offline
+  // SoftAP boot the first ConnectivityChange({isOnline: true}) is a
+  // true→true no-op that never re-keys the fallback effect — the device
+  // would sit out the 5–60s backoff instead of retrying the moment
+  // provisioning lands. A counter re-keys on the notification itself, so
+  // even a repeated `true` restarts the loop (harmless when idle: the
+  // effect early-returns unless a request is active).
+  const [onlineSignal, setOnlineSignal] = useState(0);
 
   const { castInfo, setCastInfo } = useCastInfo();
   const { displaySettings, setDisplaySettings } = useDeviceSettings();
@@ -246,7 +268,8 @@ export const AppProvider = ({ children }: AppContextProps) => {
   // which is what masked this.) Two recovery signals cooperate:
   //   - a capped exponential backoff, for the case where connectivity exists
   //     but the fetch fails transiently;
-  //   - re-keying on `isOnline`, so the moment Wi-Fi provisioning lands the
+  //   - re-keying on `onlineSignal` (every online connectivity notification,
+  //     not the derived boolean), so the moment Wi-Fi provisioning lands the
   //     next attempt fires immediately (art is ready behind the setup overlay
   //     before the claim even completes). The re-key also resets the backoff.
   // Success clears `fallbackRequest.active`, which ends the loop; a later
@@ -271,13 +294,15 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
     const attempt = async () => {
       console.log('[AppContext] Fallback default playlist attempt');
-      // `() => cancelled` lets CanvasService drop the cast between its fetch
+      // The hook lets CanvasService drop the cast between its fetch
       // resolving and the commit: an explicit cast can land while the fetch
       // is in flight, and the `cancelled` check below runs only after the
-      // commit already happened inside castPlaylistByURL.
+      // commit already happened inside castPlaylistByURL. The ref is the
+      // synchronous half — `cancelled` alone flips only when React runs this
+      // effect's cleanup, which can be after the fetch resolves.
       const casted = await canvasService.castPlaylistByURL(
         appRemoteConfig.defaultPlaylistURL,
-        () => cancelled
+        () => cancelled || explicitCastSinceRequestRef.current
       );
       if (cancelled) {
         return;
@@ -313,7 +338,28 @@ export const AppProvider = ({ children }: AppContextProps) => {
         clearTimeout(retryTimer);
       }
     };
-  }, [appRemoteConfig.defaultPlaylistURL, fallbackRequest, isOnline, router]);
+  }, [appRemoteConfig.defaultPlaylistURL, fallbackRequest, onlineSignal, router]);
+
+  // Feed `onlineSignal` from the raw ConnectivityChange event stream (see the
+  // declaration comment for why the isOnline boolean is not enough).
+  useEffect(() => {
+    const handleConnectivityChange = (event: Event) => {
+      const detail = (event as CustomEvent<ConnectivityEventDetail>).detail;
+      if (detail.isOnline) {
+        setOnlineSignal(prev => prev + 1);
+      }
+    };
+    window.addEventListener(
+      CustomEventName.ConnectivityChange,
+      handleConnectivityChange
+    );
+    return () => {
+      window.removeEventListener(
+        CustomEventName.ConnectivityChange,
+        handleConnectivityChange
+      );
+    };
+  }, []);
 
   // Explicit (non-fallback) cast committed → cancel any active fallback
   // request so a pending retry or in-flight attempt can never overwrite the
@@ -324,6 +370,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
   // default-then-explicit ends up cancelled (explicit cast wins).
   useEffect(() => {
     const handleExplicitCast = () => {
+      // Ref first: it must be visible to an in-flight attempt's shouldAbort
+      // in this same task; the state update below only stops FUTURE effect
+      // runs and clears the armed retry timer once React flushes.
+      explicitCastSinceRequestRef.current = true;
       setFallbackRequest(prev =>
         prev.active ? { ...prev, active: false } : prev
       );

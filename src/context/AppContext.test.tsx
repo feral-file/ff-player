@@ -268,9 +268,13 @@ describe('AppContext explicit-cast cancellation', () => {
       window.dispatchEvent(
         new CustomEvent(CustomEventName.ExplicitPlaylistCast)
       );
+      // Same-task assertion, BEFORE any await lets React flush: the
+      // fallback fetch can resolve before React commits the state update
+      // and runs the effect cleanup that sets `cancelled`, so the hook must
+      // report cancellation synchronously via the event handler's ref.
+      expect(shouldAbort?.()).toBe(true);
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(shouldAbort?.()).toBe(true);
 
     await act(async () => {
       resolveFirst?.(false);
@@ -283,6 +287,15 @@ describe('AppContext explicit-cast cancellation', () => {
     // Ordering contract: both signals are synchronous window events, so the
     // command that arrived last wins — explicit-then-default must leave the
     // request active and cast the forced default.
+    let resolveSecond: ((casted: boolean) => void) | undefined;
+    canvasServiceMocks.castPlaylistByURL
+      .mockImplementationOnce(() => Promise.resolve(true))
+      .mockImplementationOnce(
+        () =>
+          new Promise<boolean>(resolve => {
+            resolveSecond = resolve;
+          })
+      );
     bootWithDefaultPlaylist();
 
     // Boot fallback casts once and settles.
@@ -297,6 +310,47 @@ describe('AppContext explicit-cast cancellation', () => {
       );
       window.dispatchEvent(
         new CustomEvent(CustomEventName.DisplayDefaultPlaylist)
+      );
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(2);
+
+    // Re-arming reset the synchronous cancel ref: the forced default's own
+    // in-flight attempt must NOT be aborted by the explicit cast that
+    // preceded the push.
+    const secondAbort = canvasServiceMocks.castPlaylistByURL.mock.calls[1][1];
+    expect(secondAbort?.()).toBe(false);
+
+    await act(async () => {
+      resolveSecond?.(true);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  });
+});
+
+describe('AppContext connectivity re-key', () => {
+  it('an online notification retries immediately instead of waiting out the backoff', async () => {
+    // useNetworkManger boots at `true`, so on an offline SoftAP boot the
+    // first ConnectivityChange({isOnline: true}) is a true→true no-op that
+    // never re-keyed the old isOnline-based effect — a failed boot attempt
+    // sat out the full 5–60s backoff. The loop must re-key on the
+    // notification itself.
+    canvasServiceMocks.castPlaylistByURL.mockResolvedValueOnce(false);
+    bootWithDefaultPlaylist();
+
+    // Offline boot: first attempt fails, retry armed on the 5s backoff.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(1);
+
+    // Provisioning lands well before the backoff expires: the online
+    // notification must fire a fresh attempt immediately.
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(CustomEventName.ConnectivityChange, {
+          detail: { isOnline: true },
+        })
       );
       await vi.advanceTimersByTimeAsync(0);
     });
