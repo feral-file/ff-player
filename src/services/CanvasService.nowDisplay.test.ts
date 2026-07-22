@@ -4,6 +4,7 @@ import { DP1Action, type DP1Call, type DP1Item } from '@/models/dp1.model';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
 import DP1ScheduleService from './DP1ScheduleService';
+import DeviceManager from '@/utils/DeviceManager';
 
 const item = (id: string): DP1Item =>
   ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
@@ -209,6 +210,44 @@ it('returns ok:false when a playlist item source uses a non-web scheme', () => {
   });
 
   expect(reply).toEqual({ ok: false });
+  expect(
+    canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)
+  ).toEqual(['A']);
+  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+});
+
+it('does not persist DisplayAtBoot playlists when source validation fails', () => {
+  const setBootPlaylistSpy = vi
+    .spyOn(DeviceManager, 'setBootPlaylist')
+    .mockResolvedValue(undefined);
+
+  canvasService.setCastInfo(
+    {
+      castCommand: CastCommand.displayPlaylist,
+      playlist: playlist('old', ['A'].map(item)),
+      index: 0,
+      renderStatus: RenderStatus.ready,
+    },
+    false
+  );
+
+  const reply = canvasService.processMessage({
+    command: CastCommand.displayPlaylist,
+    request: {
+      intent: { action: DP1Action.DisplayAtBoot },
+      dp1_call: playlist('boot', [
+        {
+          id: 'bad-boot-1',
+          title: 'Broken Boot Source',
+          source: 'invalid://source',
+          license: {},
+        } as DP1Item,
+      ]),
+    },
+  });
+
+  expect(reply).toEqual({ ok: false });
+  expect(setBootPlaylistSpy).not.toHaveBeenCalled();
   expect(
     canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)
   ).toEqual(['A']);

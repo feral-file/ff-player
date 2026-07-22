@@ -42,6 +42,10 @@ vi.mock('@sentry/nextjs', () => ({
 
 const hlsTest = vi.hoisted(() => ({
   loadSource: vi.fn(),
+  instances: [] as {
+    recoverMediaError: ReturnType<typeof vi.fn>;
+    destroy: ReturnType<typeof vi.fn>;
+  }[],
   mediaAttachedHandlers: [] as (() => void)[],
   errorHandlers: [] as ((event: string, data: HlsErrorData) => void)[],
 }));
@@ -74,6 +78,10 @@ vi.mock('hls.js', () => {
 
     static isSupported(): boolean {
       return true;
+    }
+
+    constructor() {
+      hlsTest.instances.push(this);
     }
 
     private mediaAttachedHandler: (() => void) | undefined;
@@ -172,6 +180,7 @@ describe('ArtworkPlayer — refresh reload tick (image)', () => {
 
   beforeEach(() => {
     mediaLoadInstrumentation.calls.length = 0;
+    hlsTest.instances.length = 0;
     hlsTest.mediaAttachedHandlers.length = 0;
     hlsTest.errorHandlers.length = 0;
     playSpy = vi
@@ -236,6 +245,9 @@ describe('ArtworkPlayer — refresh reload tick (HLS)', () => {
 
   beforeEach(() => {
     mediaLoadInstrumentation.calls.length = 0;
+    hlsTest.instances.length = 0;
+    hlsTest.mediaAttachedHandlers.length = 0;
+    hlsTest.errorHandlers.length = 0;
     playSpy = vi
       .spyOn(HTMLVideoElement.prototype, 'play')
       .mockImplementation(() => Promise.resolve());
@@ -283,6 +295,34 @@ describe('ArtworkPlayer — refresh reload tick (HLS)', () => {
       expect(hlsTest.loadSource.mock.calls.length).toBeGreaterThan(countBefore);
     });
   });
+
+  it('recovers a current-slot fatal HLS stall without publishing failed', async () => {
+    render(artworkPlayerWithContext(HLS_PREVIEW_URL, 'hls-stall-item'));
+
+    await waitFor(() => {
+      expect(hlsTest.errorHandlers.length).toBeGreaterThan(0);
+    });
+    await waitFor(() => {
+      expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    });
+
+    const activeHls = hlsTest.instances[0];
+    act(() => {
+      hlsTest.errorHandlers[0]('error', {
+        fatal: true,
+        type: 'mediaError',
+        details: 'bufferNudgeOnStall',
+      });
+    });
+
+    expect(activeHls.recoverMediaError).toHaveBeenCalledTimes(1);
+    expect(activeHls.destroy).not.toHaveBeenCalled();
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    expect(
+      screen.queryByText('The artwork cannot be displayed correctly on this device.')
+    ).toBeNull();
+  });
+
 });
 
 describe('ArtworkPlayer — stale HLS media errors', () => {
@@ -291,6 +331,7 @@ describe('ArtworkPlayer — stale HLS media errors', () => {
 
   beforeEach(() => {
     mediaLoadInstrumentation.calls.length = 0;
+    hlsTest.instances.length = 0;
     hlsTest.mediaAttachedHandlers.length = 0;
     hlsTest.errorHandlers.length = 0;
     playSpy = vi
@@ -344,6 +385,7 @@ describe('ArtworkPlayer — stale HLS media errors', () => {
       screen.queryByText('The artwork cannot be displayed correctly on this device.')
     ).toBeNull();
   });
+
 });
 
 describe('ArtworkPlayer — stale HLS media errors after slot reuse', () => {
@@ -352,6 +394,7 @@ describe('ArtworkPlayer — stale HLS media errors after slot reuse', () => {
 
   beforeEach(() => {
     mediaLoadInstrumentation.calls.length = 0;
+    hlsTest.instances.length = 0;
     hlsTest.errorHandlers.length = 0;
     playSpy = vi
       .spyOn(HTMLVideoElement.prototype, 'play')
@@ -419,6 +462,7 @@ describe('ArtworkPlayer — stale HLS media-attached after slot reuse', () => {
 
   beforeEach(() => {
     mediaLoadInstrumentation.calls.length = 0;
+    hlsTest.instances.length = 0;
     hlsTest.mediaAttachedHandlers.length = 0;
     hlsTest.errorHandlers.length = 0;
     playSpy = vi

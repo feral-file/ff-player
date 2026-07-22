@@ -570,20 +570,29 @@ const ArtworkPlayer = ({
           playVideoForSlot(slotIndex, layer, videoElement);
         });
         hlsInstance.on(Hls.Events.ERROR, function (_event, data) {
-          if (data.fatal) {
-            handleArtworkRenderFailure(slotIndex, layer);
-            hlsInstance?.destroy();
-            if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
-              hlsInstancesRef.current[slotIndex] = null;
-            }
-            return;
-          }
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
+              if (data.fatal) {
+                handleArtworkRenderFailure(slotIndex, layer);
+                hlsInstance?.destroy();
+                if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
+                  hlsInstancesRef.current[slotIndex] = null;
+                }
+              }
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
               if (data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL) {
-                hlsInstance?.recoverMediaError();
+                if (isCurrentArtworkSlot(slotIndex, layer)) {
+                  hlsInstance?.recoverMediaError();
+                }
+                break;
+              }
+              if (data.fatal) {
+                handleArtworkRenderFailure(slotIndex, layer);
+                hlsInstance?.destroy();
+                if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
+                  hlsInstancesRef.current[slotIndex] = null;
+                }
               }
               break;
             default:
@@ -1123,7 +1132,7 @@ const ArtworkPlayer = ({
         ) {
           const displayMode =
             displaySettings.scaling === Scaling.Fill ? 'crop' : 'fit';
-          const u = new URL(slot.displayPreviewURL);
+          const u = new URL(slot.displayPreviewURL, window.location.href);
           u.search += `&display_mode=${displayMode}`;
           softwareURL = u.toString();
         }
