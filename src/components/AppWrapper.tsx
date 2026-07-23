@@ -180,11 +180,15 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     <>
       {appContent}
       {/* Keep the CDP-driven mint pairing listener mounted during boot.
-          Both overlays paint fixed full-screen at the same z-index with no
-          arbitration between them, so `feral-controld` must keep at most one
-          of mintPairingDisplay/setupDisplay in a non-hidden state at a time
-          (documented in ffos-player-contract.json); if both were active, the
-          later-mounted SetupOverlay would cover the pairing code. */}
+          Both overlays paint fixed full-screen at the same z-index; the
+          player arbitrates conflicts last-command-wins (each overlay yields
+          when the other receives a renderable non-hidden state — see the
+          arbitration listeners in MintPairingOverlay/SetupOverlay), so the
+          newest command deterministically owns the screen even if
+          `feral-controld` briefly leaves both active. The contract still
+          asks controld to keep at most one non-hidden at a time
+          (ffos-player-contract.json); arbitration is the player-side
+          guarantee when that is violated. */}
       <MintPairingOverlay />
       {/* Keep the CDP-driven setup listener mounted during boot. */}
       <SetupOverlay />

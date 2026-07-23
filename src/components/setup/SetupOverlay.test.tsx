@@ -1,9 +1,14 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CustomEventName, SetupDisplayState } from '@/models/custom_event';
+import {
+  CustomEventName,
+  MintPairingDisplayState,
+  SetupDisplayState,
+  isRenderableSetupDisplayState,
+} from '@/models/custom_event';
 import { AppContext } from '@/context/AppContext';
 import { CastCommand, CastInfo } from '@/models';
-import SetupOverlay from './SetupOverlay';
+import SetupOverlay, { renderSetupPanel } from './SetupOverlay';
 import { FADE_OUT_MS } from './SetupArtworkBackground';
 
 // Renders the QR value as a DOM attribute instead of drawing modules, so
@@ -418,9 +423,9 @@ describe('SetupOverlay bundled artwork background', () => {
 
     const iframe = container.querySelector('iframe');
     expect(iframe?.getAttribute('src')).toBe('/setup-artwork/index.html');
-    expect(iframe?.getAttribute('sandbox')).toBe(
-      'allow-same-origin allow-scripts'
-    );
+    // allow-scripts WITHOUT allow-same-origin: the pair together would let
+    // the same-origin artwork document strip its own sandbox.
+    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');
   });
 
   it('does not render the background while a cast is active', async () => {
@@ -547,5 +552,62 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
       vi.advanceTimersByTime(FADE_OUT_MS * 2);
     });
     expect(container.querySelector('iframe')).toBe(iframe);
+  });
+});
+
+describe('SetupOverlay arbitration with mintPairingDisplay', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  function displayMintPairing(detail: Record<string, unknown>) {
+    window.dispatchEvent(
+      new CustomEvent(CustomEventName.MintPairingDisplay, { detail })
+    );
+  }
+
+  it('yields to a non-hidden mintPairingDisplay command (last command wins)', async () => {
+    render(<SetupOverlay />);
+
+    displaySetup({ state: SetupDisplayState.Scanning });
+    await screen.findByText('Looking for Wi-Fi Networks…');
+
+    displayMintPairing({
+      state: MintPairingDisplayState.PairingCode,
+      pairingCode: 'PAIR-123',
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('Looking for Wi-Fi Networks…')).toBeNull();
+    });
+  });
+
+  it('keeps its panel when mintPairingDisplay goes hidden', async () => {
+    render(<SetupOverlay />);
+
+    displaySetup({ state: SetupDisplayState.Scanning });
+    await screen.findByText('Looking for Wi-Fi Networks…');
+
+    displayMintPairing({ state: MintPairingDisplayState.Hidden });
+    expect(await screen.findByText('Looking for Wi-Fi Networks…')).toBeTruthy();
+  });
+
+  it('isRenderableSetupDisplayState agrees with renderSetupPanel for every known state', () => {
+    // The arbitration predicate and the panel switch encode the same
+    // "does this state paint pixels" knowledge in two places; this pins
+    // them together so they cannot drift.
+    for (const state of Object.values(SetupDisplayState)) {
+      const rendersPanel =
+        renderSetupPanel({ state, ssid: 'x', url: 'https://x', progress: 1 }) !==
+        null;
+      expect(
+        isRenderableSetupDisplayState(state),
+        `state ${state} renderable mismatch`
+      ).toBe(rendersPanel);
+    }
+
+    // Extensibility invariant: unknown future states paint nothing AND are
+    // not renderable, so they never blank the pairing code.
+    expect(renderSetupPanel({ state: 'future_lan_approval' })).toBeNull();
+    expect(isRenderableSetupDisplayState('future_lan_approval')).toBe(false);
   });
 });

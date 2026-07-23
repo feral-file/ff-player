@@ -77,9 +77,14 @@ export default function SetupArtworkBackground({
         show ? styles.background : `${styles.background} ${styles.fading}`
       }
       src={setupArtworkUrl}
-      // Same sandbox the artwork player grants HTML artworks; same-origin is
-      // required for the artwork to load its sibling p5.min.js.
-      sandbox="allow-same-origin allow-scripts"
+      // allow-scripts ONLY. The artwork is an inline p5 sketch plus a
+      // classic sibling <script src="./p5.min.js"> — neither needs a
+      // same-origin browsing context (classic script loads work from an
+      // opaque origin; the sketch touches no storage, no fetch, no parent).
+      // Granting allow-same-origin alongside allow-scripts would let this
+      // same-origin document reach the parent and strip its own sandbox
+      // attribute, defeating the boundary entirely.
+      sandbox="allow-scripts"
       title="Setup background artwork"
     />
   );

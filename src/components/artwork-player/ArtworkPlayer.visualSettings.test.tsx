@@ -323,3 +323,59 @@ describe('ArtworkPlayer — deferred outgoing HLS teardown', () => {
     });
   });
 });
+
+describe('ArtworkPlayer — failed incoming loads release the settings latch', () => {
+  it('a failed incoming image commits and later settings still apply', async () => {
+    const { container, rerender } = await renderCommittedImageA('#111111');
+
+    rerender(
+      playerEl({
+        previewURL: IMAGE_URL_B,
+        mime: 'image/png',
+        itemIdentity: 'item-b',
+        preference: { background: '#222222' },
+      })
+    );
+    await waitFor(() => {
+      expect(container.querySelectorAll('img')).toHaveLength(2);
+    });
+
+    // The incoming image fails. The failure must flow through the
+    // transition pipeline and commit the failed slot — an abandoned
+    // incoming claim would wedge the settings latch and freeze the stage
+    // on item A's committed settings. Firing on every img is safe: the
+    // active slot's stale failure is dropped by loadedSource's URL guard.
+    act(() => {
+      container.querySelectorAll('img').forEach(img => {
+        img.dispatchEvent(new Event('error'));
+      });
+    });
+    await waitFor(
+      () => {
+        expect(stageOf(container).style.backgroundColor).toBe(
+          'rgb(34, 34, 34)'
+        );
+      },
+      { timeout: TRANSITION_WAIT_MS }
+    );
+
+    // Latch released: a live settings change for the on-screen (failed)
+    // item applies immediately instead of waiting for the next artwork.
+    rerender(
+      playerEl({
+        previewURL: IMAGE_URL_B,
+        mime: 'image/png',
+        itemIdentity: 'item-b',
+        preference: { background: '#333333' },
+      })
+    );
+    await waitFor(() => {
+      expect(stageOf(container).style.backgroundColor).toBe('rgb(51, 51, 51)');
+    });
+  });
+
+  // No iframe-failure counterpart: React only attaches `load` listeners to
+  // iframe/object/embed elements, so their onError props never fire and the
+  // iframe wedge is unreachable in practice. handleLoadIframeError still
+  // routes through loadedSource defensively, matching the model contract.
+});

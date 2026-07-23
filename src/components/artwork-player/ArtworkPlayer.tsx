@@ -859,6 +859,13 @@ const ArtworkPlayer = ({
             level: 'error',
             extra: { displayPreviewURL: layer.displayPreviewURL, mediaType },
           });
+          // Commit the failed slot through the transition pipeline (same
+          // contract as handleModelLoadError): a claim abandoned on failure
+          // wedges the visual-settings latch — incomingSlotRef stays set,
+          // every later settings update reads as "transition pending", and
+          // the artwork on screen stops receiving settings until the next
+          // artwork request. loadedSource's URL guard drops stale failures.
+          loadedSource(slotIndex);
       };
 
       const loadMedia = async () => {
@@ -1085,6 +1092,15 @@ const ArtworkPlayer = ({
   ]);
 
   const handleLoadIframeError = (slotIndex: SlotIndex) => {
+    // Route the failure through the transition pipeline like model failures
+    // (handleModelLoadError): abandoning the incoming claim wedges the
+    // visual-settings latch and the on-screen artwork stops receiving
+    // settings updates until the next artwork request. A stale slot (the
+    // playlist already moved on) commits nothing and must not raise the
+    // modal over the artwork that superseded it.
+    if (!loadedSource(slotIndex)) {
+      return;
+    }
     clearLoadingIndicators();
     updateSlot(slotIndex, { loading: false });
     setMessageModalTitle(

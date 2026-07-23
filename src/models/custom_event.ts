@@ -68,6 +68,24 @@ export enum SetupDisplayState {
   FactoryReset = 'factory_reset',
 }
 
+/**
+ * True when this player build will actually paint a panel for a setupDisplay
+ * `state`. Owns the overlay-arbitration decision: MintPairingOverlay yields
+ * only to setup states that put real pixels on screen. Hidden/Ready render
+ * nothing by contract, and unknown future states render nothing by the
+ * extensibility invariant (see SetupOverlay's renderSetupPanel) — blanking
+ * the pairing code for an invisible panel would hide the accepted
+ * mintPairingDisplay command entirely. Keep in sync with renderSetupPanel;
+ * the SetupOverlay tests assert the two agree for every known state.
+ */
+export function isRenderableSetupDisplayState(state: string): boolean {
+  return (
+    Object.values(SetupDisplayState).includes(state as SetupDisplayState) &&
+    state !== (SetupDisplayState.Hidden as string) &&
+    state !== (SetupDisplayState.Ready as string)
+  );
+}
+
 export interface SetupDisplayDetail {
   // Intentionally `string`, not `SetupDisplayState`, so the CDP handler can
   // accept and forward states this player build does not yet recognize.

@@ -195,15 +195,42 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
     castInfo ??= await DeviceManager.getCastInfo();
 
-    if (castInfo) {
-      const criticalTempValue = await DeviceManager.getItem(
-        LocalStorageItem.criticalTemp
+    const criticalTempValue = castInfo
+      ? await DeviceManager.getItem(LocalStorageItem.criticalTemp)
+      : null;
+
+    // A live cast command can commit while the storage reads above are in
+    // flight: the CDP entry point is up before hydration finishes, so a
+    // forced displayDefaultPlaylist (OOM-recovery reload) or an explicit
+    // cast can already be on screen by now. Everything read from storage is
+    // by definition staler than a live command, so acting on it — restoring
+    // castInfo over a just-cast forced default, or arming the fallback from
+    // a stale castDaily/critical-temp marker — would overwrite content the
+    // controller just chose. Boot's job (ensure something is playing) is
+    // already done; bail out. One-shot markers need no cleanup here: any
+    // live displayPlaylist/displayDefaultPlaylist command already cleared
+    // criticalTemp in CanvasService's commandHandler. Everything below this
+    // check is synchronous, so no further command can interleave before the
+    // boot decision applies.
+    if (canvasService.getCastInfo()) {
+      console.log(
+        '[AppContext] Live cast committed during hydration, skipping boot cast state'
       );
-      const hasCriticalTemp = criticalTempValue === 'true';
-      if (hasCriticalTemp) {
-        // Fetch and cast default playlist after critical temp reset
+      return;
+    }
+
+    if (castInfo) {
+      if (criticalTempValue === 'true') {
+        // Fetch and cast default playlist after critical temp reset.
         requestFallbackPlaylist();
-        await DeviceManager.removeItem(LocalStorageItem.criticalTemp);
+        // Fire-and-forget (same idiom as CanvasService's commandHandler):
+        // awaiting here would reopen an interleaving window after the
+        // live-cast check above.
+        DeviceManager.removeItem(LocalStorageItem.criticalTemp).catch(
+          (error: unknown) => {
+            console.error('[AppContext] Error removing criticalTemp:', error);
+          }
+        );
         return;
       }
 

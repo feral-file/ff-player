@@ -1,5 +1,6 @@
 import { AppProvider } from '@/context/AppContext';
 import { LocalStorageItem } from '@/constants';
+import { CastCommand, type CastInfo } from '@/models';
 import { CustomEventName } from '@/models/custom_event';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -26,6 +27,7 @@ const { axiosGet, canvasServiceMocks, deviceManager } =
           (playlistURL: string, shouldAbort?: () => boolean) => Promise<boolean>
         >(() => Promise.resolve(true)),
         completeBootCastHydration: vi.fn(),
+        getCastInfo: vi.fn<() => CastInfo | null>(() => null),
         setCastInfo: vi.fn(),
       },
       deviceManager,
@@ -83,6 +85,7 @@ vi.mock('@/services/CanvasService', () => ({
   canvasService: {
     castPlaylistByURL: canvasServiceMocks.castPlaylistByURL,
     completeBootCastHydration: canvasServiceMocks.completeBootCastHydration,
+    getCastInfo: canvasServiceMocks.getCastInfo,
     setCastInfo: canvasServiceMocks.setCastInfo,
   },
 }));
@@ -113,6 +116,7 @@ beforeEach(() => {
   canvasServiceMocks.castPlaylistByURL.mockImplementation(() =>
     Promise.resolve(true)
   );
+  canvasServiceMocks.getCastInfo.mockImplementation(() => null);
 });
 
 describe('AppContext boot recovery', () => {
@@ -357,6 +361,91 @@ describe('AppContext connectivity re-key', () => {
       await vi.advanceTimersByTimeAsync(0);
     });
     expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('AppContext boot hydration vs live casts', () => {
+  const bootWithDelayedHydration = () => {
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    axiosGet.mockResolvedValueOnce({
+      data: {
+        duration: 1000,
+        defaultPlaylistURL: 'https://example.com/default-playlist',
+      },
+    });
+    // versionUpdateReload short-circuits the boot-playlist read; criticalTemp
+    // must NOT read as set or the restore path under test is never reached.
+    deviceManager.getItem.mockImplementation((key: LocalStorageItem) =>
+      Promise.resolve(
+        key === LocalStorageItem.versionUpdateReload ? 'true' : null
+      )
+    );
+    let resolveHydration: ((castInfo: CastInfo | null) => void) | undefined;
+    deviceManager.getCastInfo.mockImplementation(
+      () =>
+        new Promise<CastInfo | null>(resolve => {
+          resolveHydration = resolve;
+        })
+    );
+    render(
+      <AppProvider>
+        <div data-testid="app-ready" />
+      </AppProvider>
+    );
+    return () => resolveHydration;
+  };
+
+  const persistedCastInfo = () =>
+    ({ castCommand: CastCommand.displayPlaylist }) as CastInfo;
+
+  it('does not restore persisted cast state over a cast committed during hydration', async () => {
+    // Forced-push race: the CDP entry point is live before hydration
+    // finishes, so a forced displayDefaultPlaylist can fetch AND commit the
+    // default playlist while initCastInfo is still awaiting storage. The
+    // restore must then be skipped — applying stale persisted state would
+    // overwrite the cast the controller just committed.
+    const hydration = bootWithDelayedHydration();
+    await waitFor(() => {
+      expect(deviceManager.getCastInfo).toHaveBeenCalled();
+    });
+
+    // The forced default committed while getCastInfo was still pending.
+    canvasServiceMocks.getCastInfo.mockImplementation(persistedCastInfo);
+    await act(async () => {
+      hydration()?.(persistedCastInfo());
+      // Flush initCastInfo's continuation past the resolved read.
+      await Promise.resolve();
+    });
+
+    // completeBootCastHydration fires in the finally AFTER initCastInfo
+    // fully unwound — waiting for it proves the skip actually ran rather
+    // than the continuation simply not having reached the restore yet.
+    await waitFor(() => {
+      expect(canvasServiceMocks.completeBootCastHydration).toHaveBeenCalled();
+    });
+    expect(canvasServiceMocks.setCastInfo).not.toHaveBeenCalled();
+  });
+
+  it('still restores persisted cast state when nothing committed during hydration', async () => {
+    const hydration = bootWithDelayedHydration();
+    await waitFor(() => {
+      expect(deviceManager.getCastInfo).toHaveBeenCalled();
+    });
+
+    await act(async () => {
+      hydration()?.(persistedCastInfo());
+      // Flush initCastInfo's continuation past the resolved read.
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(canvasServiceMocks.setCastInfo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          castCommand: CastCommand.displayPlaylist,
+        }),
+        false
+      );
+    });
   });
 });
 

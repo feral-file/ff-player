@@ -4,6 +4,8 @@ import { ReactElement, useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   CustomEventName,
+  MintPairingDisplayDetail,
+  MintPairingDisplayState,
   SetupDisplayDetail,
   SetupDisplayState,
 } from '@/models/custom_event';
@@ -242,8 +244,14 @@ function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
  * so cast it for the switch: known branches stay type-checked against the
  * enum, while `default` still safely no-ops for any other runtime string,
  * including future contract states this build doesn't recognize yet.
+ *
+ * Exported for the tests that assert this mapping agrees with
+ * `isRenderableSetupDisplayState` (overlay arbitration) for every known
+ * state — the two must not drift.
  */
-function renderSetupPanel(display: SetupDisplayDetail): ReactElement | null {
+export function renderSetupPanel(
+  display: SetupDisplayDetail
+): ReactElement | null {
   switch (display.state as SetupDisplayState) {
     case SetupDisplayState.Scanning: {
       return <ScanningPanel />;
@@ -321,6 +329,31 @@ export default function SetupOverlay() {
     window.addEventListener(CustomEventName.SetupDisplay, handleDisplay);
     return () => {
       window.removeEventListener(CustomEventName.SetupDisplay, handleDisplay);
+    };
+  }, []);
+
+  // Overlay arbitration, last command wins (mirror of the listener in
+  // MintPairingOverlay): a non-hidden mintPairingDisplay command supersedes
+  // whatever setup panel is showing, so the newest command always owns the
+  // screen. Hiding the panel also lets SetupArtworkBackground play its exit
+  // fade, exactly as if setupDisplay itself had gone hidden.
+  useEffect(() => {
+    const handleMintPairing = (event: Event) => {
+      const detail = (event as CustomEvent<MintPairingDisplayDetail>).detail;
+      if (detail.state !== MintPairingDisplayState.Hidden) {
+        setDisplay(hiddenDisplay);
+      }
+    };
+
+    window.addEventListener(
+      CustomEventName.MintPairingDisplay,
+      handleMintPairing
+    );
+    return () => {
+      window.removeEventListener(
+        CustomEventName.MintPairingDisplay,
+        handleMintPairing
+      );
     };
   }, []);
 

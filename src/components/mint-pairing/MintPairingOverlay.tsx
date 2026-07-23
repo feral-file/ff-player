@@ -5,6 +5,8 @@ import {
   CustomEventName,
   MintPairingDisplayDetail,
   MintPairingDisplayState,
+  SetupDisplayDetail,
+  isRenderableSetupDisplayState,
 } from '@/models/custom_event';
 import styles from './MintPairingOverlay.module.scss';
 
@@ -39,6 +41,31 @@ export default function MintPairingOverlay() {
       window.removeEventListener(
         CustomEventName.MintPairingDisplay,
         handleDisplay
+      );
+    };
+  }, []);
+
+  // Overlay arbitration, last command wins (mirrored in SetupOverlay): both
+  // overlays paint fixed full-screen at the same z-index, so if
+  // feral-controld raises a renderable setupDisplay state while the pairing
+  // panel is up, this panel yields — the newest command is what's on
+  // screen, deterministically, instead of DOM mount order deciding. States
+  // this build can't render are ignored: SetupOverlay shows nothing for
+  // them, and blanking the pairing code for an invisible panel would hide
+  // the accepted command entirely.
+  useEffect(() => {
+    const handleSetupDisplay = (event: Event) => {
+      const detail = (event as CustomEvent<SetupDisplayDetail>).detail;
+      if (isRenderableSetupDisplayState(detail.state)) {
+        setDisplay(hiddenDisplay);
+      }
+    };
+
+    window.addEventListener(CustomEventName.SetupDisplay, handleSetupDisplay);
+    return () => {
+      window.removeEventListener(
+        CustomEventName.SetupDisplay,
+        handleSetupDisplay
       );
     };
   }, []);
