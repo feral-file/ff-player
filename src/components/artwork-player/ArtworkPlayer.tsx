@@ -197,6 +197,50 @@ const ArtworkPlayer = ({
 
   const cursorRef = useRef<CursorLayerHandle>(null);
 
+  // ---- Latched visual settings -------------------------------------------
+  // `displaySettings` flips to the NEXT item's preferences the moment the
+  // playlist advances, but the incoming artwork only becomes visible after
+  // load + fade (often seconds later). Painting background/margin/scaling
+  // straight from `displaySettings` restyled the OUTGOING artwork with the
+  // incoming item's settings for that whole window (background snapping
+  // early, margins resizing the old artwork). The stage therefore renders
+  // from `committedVisualSettings`, which swaps only at the moments a
+  // transition commits (`setActiveSlot`), so whatever is on screen always
+  // pairs with its own item's visual settings.
+  //
+  // Trade-off: during the crossfade the INCOMING slot briefly renders with
+  // the outgoing item's scaling. That is bounded (FADE_IN_OUT_DURATION_MS,
+  // at partial opacity) and strictly less visible than the old behavior —
+  // the fully-visible outgoing artwork restyling seconds before the swap.
+  const [committedVisualSettings, setCommittedVisualSettings] =
+    useState(displaySettings);
+  const displaySettingsRef = useRef(displaySettings);
+  useLayoutEffect(() => {
+    displaySettingsRef.current = displaySettings;
+  }, [displaySettings]);
+
+  /** Swap the stage onto the settings that are current at commit time. */
+  const commitVisualSettings = useCallback(() => {
+    setCommittedVisualSettings(displaySettingsRef.current);
+  }, []);
+
+  // Settings changes that arrive while NO transition is pending (e.g. the
+  // user adjusts background/margin from the app for the artwork already on
+  // screen) must apply immediately — only transition-driven changes wait
+  // for commit. "Pending" covers both a claimed incoming slot and the gap
+  // where `previewURL` moved ahead of the committed active layer but the
+  // slot-setup effect has not claimed an incoming slot yet.
+  useEffect(() => {
+    const activeLayer = slotsRef.current[activeSlotRef.current];
+    const transitionPending =
+      incomingSlotRef.current !== null ||
+      (activeLayer !== null &&
+        activeLayer.previewURL !== previewURLRef.current);
+    if (!transitionPending) {
+      setCommittedVisualSettings(displaySettings);
+    }
+  }, [displaySettings]);
+
   function getPreviewTypeConfig(type: string): {
     previewType: PreviewHTMLTag;
     isStreaming: boolean;
@@ -277,6 +321,27 @@ const ArtworkPlayer = ({
     hlsInstancesRef.current[slotIndex]?.destroy();
     hlsInstancesRef.current[slotIndex] = null;
     hlsLoadedURLRef.current[slotIndex] = '';
+    videoRefs[slotIndex].current?.pause();
+    audioRefs[slotIndex].current?.pause();
+    playedVideoURLRef.current[slotIndex] = '';
+  }, []);
+
+  // Fade-start half of teardown: silence the outgoing slot WITHOUT the
+  // synchronous `Hls.destroy()` cost. This runs inside the layout effect
+  // that kicks off the fade — before the browser paints the first fade
+  // frame — so heavy work here janks the fade's opening frames (destroy
+  // detaches MediaSource and frees up to 60MB of buffers, and detaching
+  // can also blank the outgoing frame instead of freezing it). stopLoad()
+  // still cuts network use immediately; the full destroy runs after the
+  // fade, via `setupStreamingVideoForSlot`'s effect cleanup, when the
+  // post-fade timeout removes the outgoing slot layer.
+  //
+  // Option A visual safety is preserved: the pause here, the visible-slot
+  // gating in the isOnline effect, and playVideoForSlot's target-slot guard
+  // are what keep the hidden outgoing video from resuming — destroy timing
+  // was never load-bearing for that.
+  const pauseSlotPlayback = useCallback((slotIndex: SlotIndex) => {
+    hlsInstancesRef.current[slotIndex]?.stopLoad();
     videoRefs[slotIndex].current?.pause();
     audioRefs[slotIndex].current?.pause();
     playedVideoURLRef.current[slotIndex] = '';
@@ -485,6 +550,7 @@ const ArtworkPlayer = ({
     const other = (readySlot === 0 ? 1 : 0) as SlotIndex;
     const otherLayer = slots[other];
     if (!otherLayer) {
+      commitVisualSettings();
       setSlotOpacity(readySlot === 0 ? [1, 0] : [0, 1]);
       setActiveSlot(readySlot);
       incomingSlotRef.current = null;
@@ -511,7 +577,11 @@ const ArtworkPlayer = ({
     if (transitionTimeoutRef.current)
       {clearTimeout(transitionTimeoutRef.current);}
 
-    pauseAndTeardownSlot(outgoing);
+    // Pause-only here (not pauseAndTeardownSlot): the sync Hls.destroy()
+    // used to run in this pre-paint phase and jank the fade's first frames.
+    // Destroy now happens via the streaming effect cleanup when the timeout
+    // below removes the outgoing slot layer.
+    pauseSlotPlayback(outgoing);
     setTopSlotIndex(incoming);
 
     if (sequential) {
@@ -528,6 +598,10 @@ const ArtworkPlayer = ({
           next[outgoing] = null;
           return next;
         });
+        // Commit at the midpoint: the outgoing artwork is fully faded out,
+        // so the incoming item's background/margin/scaling take over just
+        // as its artwork fades in.
+        commitVisualSettings();
         setSlotOpacity(incoming === 0 ? [1, 0] : [0, 1]);
         setActiveSlot(incoming);
         incomingSlotRef.current = null;
@@ -549,11 +623,15 @@ const ArtworkPlayer = ({
         next[outgoing] = null;
         return next;
       });
+      // Commit at crossfade end: the outgoing artwork is gone, so the
+      // stage swap is only visible in letterbox/margin areas (softened by
+      // the container's background-color transition).
+      commitVisualSettings();
       setActiveSlot(incoming);
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
     }, FADE_IN_OUT_DURATION_MS);
-  }, [slots, pauseAndTeardownSlot]);
+  }, [slots, pauseSlotPlayback, commitVisualSettings]);
 
   const handleIframeLoad = (slotIndex: SlotIndex) => {
     if (isWebGLAvailable()) {
@@ -781,6 +859,13 @@ const ArtworkPlayer = ({
             level: 'error',
             extra: { displayPreviewURL: layer.displayPreviewURL, mediaType },
           });
+          // Commit the failed slot through the transition pipeline (same
+          // contract as handleModelLoadError): a claim abandoned on failure
+          // wedges the visual-settings latch — incomingSlotRef stays set,
+          // every later settings update reads as "transition pending", and
+          // the artwork on screen stops receiving settings until the next
+          // artwork request. loadedSource's URL guard drops stale failures.
+          loadedSource(slotIndex);
       };
 
       const loadMedia = async () => {
@@ -790,9 +875,31 @@ const ArtworkPlayer = ({
           imageRefs[slotIndex].current
         ) {
           const el = imageRefs[slotIndex].current;
-          el.onload = () => {
-            loadedSource(slotIndex);
+          // Pre-decode before reporting ready: without it, a large image's
+          // first rasterization lands on the first painted frame of the
+          // crossfade and janks it on kiosk hardware. decode() rejections
+          // (or browsers without it) still mark the slot ready — painting
+          // undecoded is the old behavior, not an error, and loadedSource's
+          // URL guard drops stale results if the slot moved on meanwhile.
+          const markImageReady = () => {
+            let decoded: Promise<unknown>;
+            try {
+              decoded =
+                typeof el.decode === 'function'
+                  ? el.decode()
+                  : Promise.resolve();
+            } catch {
+              decoded = Promise.resolve();
+            }
+            void decoded
+              .catch(() => undefined)
+              .finally(() => {
+                if (!isCancelled) {
+                  loadedSource(slotIndex);
+                }
+              });
           };
+          el.onload = markImageReady;
           el.onerror = () => {
             handleMediaError('image')(new Error('Image load failed'));
           };
@@ -804,9 +911,10 @@ const ArtworkPlayer = ({
             url: layer.displayPreviewURL,
             mediaType: 'image',
             element: el,
-            onLoad: () => {
-              loadedSource(slotIndex);
-            },
+            // Defensive parity with el.onload: the loader currently never
+            // invokes onLoad (it only sets src), but if it ever does, the
+            // decode gate must not be bypassed.
+            onLoad: markImageReady,
             onError: handleMediaError('image'),
             signal: abortController.signal,
           });
@@ -950,8 +1058,20 @@ const ArtworkPlayer = ({
           !isModelMimeType(slot.mimeType ?? '') &&
           !slot.displayPreviewURL.includes('base64')
         ) {
+          // Per-slot settings: only the slot claimed as the incoming
+          // transition target takes the live (next item's) scaling; any
+          // other slot is on-screen artwork and must keep its committed
+          // scaling — otherwise its softwareURL changes at playlist-advance
+          // time and the iframe reloads (blanks) seconds before the
+          // transition swaps it out. Keyed off incomingSlotRef (not a
+          // previewURL comparison) because adjacent playlist items can
+          // share the same URL while differing in scaling.
+          const slotSettings =
+            incomingSlotRef.current === i
+              ? displaySettings
+              : (committedVisualSettings ?? displaySettings);
           const displayMode =
-            displaySettings.scaling === Scaling.Fill ? 'crop' : 'fit';
+            slotSettings.scaling === Scaling.Fill ? 'crop' : 'fit';
           const u = new URL(slot.displayPreviewURL);
           u.search += `&display_mode=${displayMode}`;
           softwareURL = u.toString();
@@ -964,9 +1084,23 @@ const ArtworkPlayer = ({
       if (changedCount === 0) {return prev;}
       return next;
     });
-  }, [displaySettings, context.deviceRotation?.viewMode, slots]);
+  }, [
+    displaySettings,
+    committedVisualSettings,
+    context.deviceRotation?.viewMode,
+    slots,
+  ]);
 
   const handleLoadIframeError = (slotIndex: SlotIndex) => {
+    // Route the failure through the transition pipeline like model failures
+    // (handleModelLoadError): abandoning the incoming claim wedges the
+    // visual-settings latch and the on-screen artwork stops receiving
+    // settings updates until the next artwork request. A stale slot (the
+    // playlist already moved on) commits nothing and must not raise the
+    // modal over the artwork that superseded it.
+    if (!loadedSource(slotIndex)) {
+      return;
+    }
     clearLoadingIndicators();
     updateSlot(slotIndex, { loading: false });
     setMessageModalTitle(
@@ -1161,7 +1295,11 @@ const ArtworkPlayer = ({
               style={{
                 width: '100%',
                 height: '100%',
-                objectFit: convertScalingToObjectFit(displaySettings?.scaling),
+                // Committed (not live) settings: the on-screen artwork keeps
+                // its own item's fit until the transition commits.
+                objectFit: convertScalingToObjectFit(
+                  committedVisualSettings?.scaling
+                ),
               }}
               className={styles.image}
               alt="Preview"
@@ -1205,7 +1343,14 @@ const ArtworkPlayer = ({
             style={{
               width: '100%',
               height: '100%',
-              objectFit: convertScalingToObjectFit(displaySettings?.scaling),
+              // Committed (not live) settings: the on-screen artwork keeps
+              // its own item's fit until the transition commits. `loop` /
+              // `autoPlay` below intentionally stay LIVE — they are
+              // behavioral (end-of-stream gating), not visual staging, and
+              // must reflect the current item's contract immediately.
+              objectFit: convertScalingToObjectFit(
+                committedVisualSettings?.scaling
+              ),
             }}
             autoPlay={false}
             loop={displaySettings?.loop ?? true}
@@ -1289,12 +1434,16 @@ const ArtworkPlayer = ({
       <div
         style={{
           display: 'flex',
-          backgroundColor: displaySettings?.background ?? '#000000',
+          // Committed settings, not live: background/margin swap only when a
+          // transition commits so the outgoing artwork never restyles early.
+          // The background-color transition softens the commit-time swap in
+          // letterbox/margin areas (the artworks themselves crossfade).
+          backgroundColor: committedVisualSettings?.background ?? '#000000',
           justifyContent: 'center',
           position: 'relative',
-          transition: 'padding 0.2s ease',
-          padding: displaySettings?.margin
-            ? getDP1Margin(displaySettings.margin)
+          transition: 'padding 0.2s ease, background-color 0.2s ease',
+          padding: committedVisualSettings?.margin
+            ? getDP1Margin(committedVisualSettings.margin)
             : '0px',
           width: '100vw',
           height: '100vh',

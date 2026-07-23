@@ -5,6 +5,8 @@ import {
   CustomEventName,
   MintPairingDisplayDetail,
   MintPairingDisplayState,
+  SetupDisplayDetail,
+  SetupDisplayState,
   WatchdogEvent,
 } from '@/models/custom_event';
 import {
@@ -14,6 +16,7 @@ import {
 
 const pingCommand = 'ping';
 const mintPairingDisplayCommand = 'mintPairingDisplay';
+const setupDisplayCommand = 'setupDisplay';
 
 /** Bridges native CDP callbacks into player services and browser events. */
 export class CDPRequestHandler {
@@ -126,6 +129,14 @@ export class CDPRequestHandler {
         break;
       }
 
+      case setupDisplayCommand: {
+        reply = {
+          messageID,
+          message: this.handleSetupDisplay(wsMessage.request),
+        };
+        break;
+      }
+
       default: {
         const responseMessage = canvasService.processMessage(wsMessage);
         reply = {
@@ -149,6 +160,19 @@ export class CDPRequestHandler {
         CustomEventName.MintPairingDisplay,
         { detail: request }
       )
+    );
+    return { ok: true };
+  }
+
+  private handleSetupDisplay(request: unknown) {
+    if (!isSetupDisplayDetail(request)) {
+      return { ok: false, error: 'Invalid setup display request' };
+    }
+
+    window.dispatchEvent(
+      new CustomEvent<SetupDisplayDetail>(CustomEventName.SetupDisplay, {
+        detail: request,
+      })
     );
     return { ok: true };
   }
@@ -235,6 +259,80 @@ function isMintPairingDisplayDetail(
     typeof detail.browserName !== 'string'
   ) {
     return false;
+  }
+
+  return true;
+}
+
+/**
+ * Validate CDP-owned setup overlay state before dispatching it. Only the
+ * per-field shape for states this handler recognizes is enforced; unrecognized
+ * `state` values are accepted as long as `state` itself is a non-empty
+ * string, per the `setupDisplay` extensibility invariant (see
+ * `SetupDisplayState` in models/custom_event.ts) — `SetupOverlay` is
+ * responsible for safely no-oping on states it doesn't understand.
+ */
+function isSetupDisplayDetail(request: unknown): request is SetupDisplayDetail {
+  if (!request || typeof request !== 'object') {
+    return false;
+  }
+
+  const detail = request as Partial<SetupDisplayDetail>;
+  if (typeof detail.state !== 'string' || !detail.state.trim()) {
+    return false;
+  }
+
+  // `detail.state` is `string` (see SetupDisplayState doc comment), so cast
+  // it for the switch: known branches stay type-checked against the enum,
+  // while `default` still catches any other runtime string, including
+  // future contract states this build doesn't recognize yet.
+  switch (detail.state as SetupDisplayState) {
+    case SetupDisplayState.SoftApQr: {
+      if (typeof detail.ssid !== 'string' || !detail.ssid.trim()) {
+        return false;
+      }
+      if (detail.password !== undefined && typeof detail.password !== 'string') {
+        return false;
+      }
+      break;
+    }
+
+    case SetupDisplayState.JoinFailed: {
+      if (detail.reason !== undefined && typeof detail.reason !== 'string') {
+        return false;
+      }
+      break;
+    }
+
+    case SetupDisplayState.Updating: {
+      // `Number.isFinite` (not `typeof === 'number'`) rejects NaN/Infinity,
+      // which would otherwise pass the type check and reach the overlay as
+      // "NaN%"/"Infinity%".
+      if (
+        detail.progress !== undefined &&
+        !Number.isFinite(detail.progress)
+      ) {
+        return false;
+      }
+      break;
+    }
+
+    case SetupDisplayState.ClaimQr: {
+      if (typeof detail.url !== 'string' || !detail.url.trim()) {
+        return false;
+      }
+      if (
+        detail.device_name !== undefined &&
+        typeof detail.device_name !== 'string'
+      ) {
+        return false;
+      }
+      break;
+    }
+
+    default: {
+      break;
+    }
   }
 
   return true;

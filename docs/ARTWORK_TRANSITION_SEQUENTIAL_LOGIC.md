@@ -144,12 +144,14 @@ The transition mode is decided when incoming slot is ready:
 
 ## 6) Video -> video crossfade mode (Option A)
 
-With Option A, `video -> video` uses overlap crossfade (opacity blend), but the outgoing slot is still paused/teardown’d immediately.
+With Option A, `video -> video` uses overlap crossfade (opacity blend), but the outgoing slot is still paused immediately.
 
 Safety comes from two guards:
 
-1. Immediate teardown: `pauseAndTeardownSlot(outgoing)` runs before either branch starts.
+1. Immediate pause: `pauseSlotPlayback(outgoing)` runs before either branch starts. It pauses the media elements, resets the played-URL guard, and calls `stopLoad()` on any HLS instance — but deliberately does NOT `Hls.destroy()`. The synchronous destroy used to run inside the pre-paint layout effect that starts the fade, which janked the fade's opening frames (MediaSource detach + buffer free) and could blank the outgoing frame instead of freezing it. The full destroy now happens after the fade, via `setupStreamingVideoForSlot`'s effect cleanup, when the post-fade timeout removes the outgoing slot layer. `pauseAndTeardownSlot` (immediate destroy) still runs in the `previewURL` effect's stale-overlay collapse, where nothing is animating.
 2. Readiness target guard: `loadedSource(slotIndex)` only marks the slot ready when that slot is the current transition target (`incomingSlotRef ?? activeSlot`).
+
+The pause, the visible-slot gating in the `isOnline` effect (§7), and `playVideoForSlot`'s target-slot guard are what keep the hidden outgoing video from resuming — destroy timing is not load-bearing for that.
 
 ## 7) Online/offline playback safety
 
@@ -180,3 +182,20 @@ A callback is ignored if any of these are true:
 - `transitionTokenRef` changed before timeout callback executes
 
 This is the main mechanism that prevents old transitions from reappearing.
+
+## 9) Latched visual settings (background / margin / scaling)
+
+`displaySettings` (from `useArtworkSettings`) flips to the NEXT item's preferences the moment the playlist advances — but the incoming artwork only becomes visible after load + fade, often seconds later. The stage therefore renders from `committedVisualSettings`, a latched copy that swaps only when a transition commits (`setActiveSlot`):
+
+- Container `backgroundColor` and `padding` (margin) — latched. A `background-color 0.2s` transition softens the commit-time swap in letterbox/margin areas.
+- Image/video `objectFit` (scaling) — latched. Trade-off: during the crossfade the incoming slot briefly renders with the outgoing item's scaling (bounded by `FADE_IN_OUT_DURATION_MS`, at partial opacity). This is deliberately preferred over the old behavior, where the fully-visible outgoing artwork restyled seconds before the swap.
+- Iframe `display_mode` URL rewriting — per-slot: only the slot currently claimed as the incoming transition target (`incomingSlotRef`) uses live settings; every other slot keeps committed settings. Otherwise the outgoing iframe's `displaySoftwareURL` changes at playlist-advance time and the iframe reloads (blanks) mid-display. The discriminator is deliberately `incomingSlotRef`, not a `previewURL` comparison, because adjacent playlist items can share the same URL while differing in scaling.
+- `loop` / `autoPlay` — intentionally LIVE, not latched. They are behavioral (end-of-stream gating per DP-1 §4.1), not visual staging, and must reflect the current item immediately.
+
+Commit points: the first-load path (no other layer), the sequential-mode midpoint timeout, and the overlap-mode end-of-fade timeout — all in the ready-consume effect.
+
+Live escape hatch: settings changes that arrive while no transition is pending (e.g. the user adjusts background from the app for the artwork already on screen) apply immediately. "Pending" means an incoming slot is claimed (`incomingSlotRef` non-null), or the active slot's layer URL no longer matches the current `previewURL` (the gap before the slot-setup effect claims an incoming slot). Known edge: an image/iframe load failure leaves `incomingSlotRef` claimed, so live settings changes stay held until the next artwork request — the committed settings still match the artwork left on screen, so this is cosmetic-only for the live-adjust case.
+
+## 10) Image pre-decode before ready
+
+The image path awaits `img.decode()` before calling `loadedSource`, so a large image's first rasterization does not land on the first painted frame of the crossfade (which janked the fade on kiosk hardware). `decode()` rejections or absence fall back to marking ready anyway — painting undecoded is the old behavior, not an error — and `loadedSource`'s URL guard drops stale results.

@@ -86,6 +86,8 @@ vi.mock('hls.js', () => {
 
     loadSource = hlsTest.loadSource;
 
+    stopLoad = vi.fn();
+
     destroy = vi.fn();
 
     recoverMediaError = vi.fn();

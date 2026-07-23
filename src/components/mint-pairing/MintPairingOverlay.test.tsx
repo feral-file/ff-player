@@ -94,3 +94,50 @@ describe('MintPairingOverlay', () => {
     ).toBeTruthy();
   });
 });
+
+describe('MintPairingOverlay arbitration with setupDisplay', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  function displaySetup(detail: Record<string, unknown>) {
+    window.dispatchEvent(
+      new CustomEvent(CustomEventName.SetupDisplay, { detail })
+    );
+  }
+
+  it('yields to a renderable setupDisplay state (last command wins)', async () => {
+    render(<MintPairingOverlay />);
+
+    displayMintPairing({
+      state: MintPairingDisplayState.PairingCode,
+      pairingCode: 'PAIR-123',
+    });
+    expect(await screen.findByText('PAIR-123')).toBeTruthy();
+
+    // Both overlays paint full-screen at the same z-index; the newest
+    // command must own the screen instead of DOM mount order.
+    displaySetup({ state: 'scanning' });
+    await waitFor(() => {
+      expect(screen.queryByText('PAIR-123')).toBeNull();
+    });
+  });
+
+  it('ignores setupDisplay states that render nothing', async () => {
+    render(<MintPairingOverlay />);
+
+    displayMintPairing({
+      state: MintPairingDisplayState.PairingCode,
+      pairingCode: 'PAIR-123',
+    });
+    expect(await screen.findByText('PAIR-123')).toBeTruthy();
+
+    // Unknown future states and hidden/ready paint no setup panel, so the
+    // pairing code must stay — blanking it for an invisible panel would
+    // hide the accepted command entirely.
+    displaySetup({ state: 'future_lan_approval' });
+    displaySetup({ state: 'hidden' });
+    displaySetup({ state: 'ready' });
+    expect(await screen.findByText('PAIR-123')).toBeTruthy();
+  });
+});
