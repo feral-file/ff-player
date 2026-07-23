@@ -33,29 +33,6 @@
   text-align: center;
 }
 
-.steps {
-  display: flex;
-  gap: 5vw;
-  align-items: flex-start;
-  justify-content: center;
-}
-
-.step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-
-  .qrFrame {
-    margin-top: 3vh;
-  }
-
-  .credential {
-    margin-top: 2.5vh;
-    font-size: clamp(22px, 3vmin, 80px);
-    white-space: nowrap;
-  }
-}
-
 .stepLabel {
   margin-top: 3vh;
   font-size: clamp(24px, 3.2vmin, 88px);
@@ -77,12 +54,6 @@
     width: 29.6vmin;
     height: 29.6vmin;
   }
-}
-
-.step .qrFrame svg {
-  // 26vmin ≈ the old 280px at 1080p — two of these fit side by side.
-  width: 26vmin;
-  height: 26vmin;
 }
 
 .title {
@@ -107,16 +78,11 @@
   letter-spacing: 0;
 }
 
-// The softap_qr panel packs two QR columns plus a fallback line into a single
-// viewport. The shared type scale above (.title/.subtitle) is sized for the
-// single-QR panels and overflows this layout, so the softap panel steps its
-// own type down one notch instead of shrinking every panel. These overrides
-// share specificity with the base classes and MUST stay below them in this
-// file — source order is what makes them win.
-.softApTitle {
-  font-size: clamp(36px, 5.5vmin, 144px);
-}
-
+// The softap_qr panel stacks a label, QR, credentials AND a fallback line
+// into one viewport, so its fallback line steps down from the shared
+// .subtitle scale instead of shrinking every panel. This override shares
+// specificity with .subtitle and MUST stay below it in this file — source
+// order is what makes it win.
 .softApSubtitle {
   // 111vmin ≈ the old 1200px cap at 1080p.
   max-width: min(86vw, 111vmin);

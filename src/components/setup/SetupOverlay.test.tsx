@@ -16,16 +16,8 @@ function displaySetup(detail: Record<string, unknown>) {
   window.dispatchEvent(new CustomEvent(CustomEventName.SetupDisplay, { detail }));
 }
 
-// softap_qr renders two codes in a fixed DOM order (join QR first, portal QR
-// second — see SoftApQrPanel); qrValue reads the first, qrValues reads all.
 function qrValue(container: HTMLElement): string | null {
   return container.querySelector('svg')?.getAttribute('data-qr-value') ?? null;
-}
-
-function qrValues(container: HTMLElement): (string | null)[] {
-  return Array.from(container.querySelectorAll('svg')).map((svg) =>
-    svg.getAttribute('data-qr-value')
-  );
 }
 
 describe('SetupOverlay known states (connectivity)', () => {
@@ -50,13 +42,15 @@ describe('SetupOverlay known states (connectivity)', () => {
     expect(await screen.findByText('Connect to Set Up This Device')).toBeTruthy();
     expect(screen.getByText('Network: FF1-Setup-ABCD')).toBeTruthy();
     expect(screen.getByText('Password: correct-horse')).toBeTruthy();
-    expect(screen.getByText('1. Scan to join the setup network')).toBeTruthy();
-    expect(screen.getByText('2. Scan to open the setup page')).toBeTruthy();
-    expect(container.querySelectorAll('svg')).toHaveLength(2);
+    expect(screen.getByText('Scan to join the setup network')).toBeTruthy();
+    // Exactly ONE code (the network join). The portal is reached via the
+    // auto-opening captive sheet or by typing the spelled-out address — a
+    // second "open the portal" QR proved confusing and was removed.
+    expect(container.querySelectorAll('svg')).toHaveLength(1);
   });
 
-  it('renders the portal-URL QR as the second softap_qr code', async () => {
-    const { container } = render(<SetupOverlay />);
+  it('spells out the typed portal address as the manual fallback', async () => {
+    render(<SetupOverlay />);
 
     displaySetup({
       state: SetupDisplayState.SoftApQr,
@@ -65,10 +59,10 @@ describe('SetupOverlay known states (connectivity)', () => {
     });
 
     await screen.findByText('Connect to Set Up This Device');
-    // The URL must match the DNS/NAT captive design (192.0.2.1) — a change
-    // here has to move in lockstep with the ffos image config.
-    expect(qrValues(container)[1]).toBe('http://192.0.2.1/');
-    expect(screen.getByText('http://192.0.2.1/')).toBeTruthy();
+    // The address must match the DNS/NAT captive design (ff1.config →
+    // 192.0.2.1) — a change here has to move in lockstep with captive.conf
+    // in the ffos image.
+    expect(screen.getByText('http://ff1.config')).toBeTruthy();
   });
 
   it('omits the password line when softap_qr has no password', async () => {
