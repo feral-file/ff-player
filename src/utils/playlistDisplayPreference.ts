@@ -209,8 +209,10 @@ export function loadRefManifestDisplay(
  * Narrows a manifest metadata block into the tombstone's label fields.
  * Defensive despite the RefManifestMetadata type: manifests are remote JSON
  * and a malformed artists array must degrade to a missing line, not a crash.
+ * Exported because the same block shape can ride inline on a playlist item
+ * (`DP1Item.metadata`, the tolerant read for ref-less playlists).
  */
-function extractManifestLabel(
+export function extractManifestLabel(
   metadata: RefManifest['metadata']
 ): RefManifestLabel | undefined {
   if (!metadata) {

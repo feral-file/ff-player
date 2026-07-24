@@ -15,17 +15,25 @@ export const TOMBSTONE_AUTO_DISMISS_SECONDS = 30;
 // content, PP Mori 12px with 1.4 line-height, 10px padding and internal gap.
 // The timer bar is a 1px #E3E3E3 track across the label's top whose #A0A0A0
 // fill depletes over the auto-dismiss window — the visible countdown.
+//
+// The design canvas is 1280×720, so every px value in the frame is relative
+// to a 720-tall viewport — absolute CSS pixels would render the label at
+// two-thirds size on a 1080p wall and a quarter size at 4K. `designPx`
+// converts frame px to vh so the label holds the designed proportion at any
+// output resolution.
+const designPx = (px: number): string => `${((px / 720) * 100).toFixed(4)}vh`;
+
 const containerStyle: CSSProperties = {
   position: 'absolute',
   left: 0,
   bottom: 0,
   display: 'flex',
   flexDirection: 'column',
-  gap: 10,
-  padding: 10,
+  gap: designPx(10),
+  padding: designPx(10),
   backgroundColor: '#FFFFFF',
   fontFamily: "'PP Mori', sans-serif",
-  fontSize: 12,
+  fontSize: designPx(12),
   fontWeight: 400,
   lineHeight: 1.4,
   color: '#000000',
@@ -37,12 +45,12 @@ const containerStyle: CSSProperties = {
 
 const trackStyle: CSSProperties = {
   width: '100%',
-  height: 1,
+  height: `max(1px, ${designPx(1)})`,
   backgroundColor: '#E3E3E3',
 };
 
 const fillStyle: CSSProperties = {
-  height: 1,
+  height: '100%',
   backgroundColor: '#A0A0A0',
 };
 

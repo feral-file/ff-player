@@ -14,7 +14,10 @@ const { loadRefManifestLabelMock } = vi.hoisted(() => ({
   loadRefManifestLabelMock: vi.fn(),
 }));
 
-vi.mock('@/utils/playlistDisplayPreference', () => ({
+vi.mock('@/utils/playlistDisplayPreference', async importOriginal => ({
+  ...(await importOriginal<
+    typeof import('@/utils/playlistDisplayPreference')
+  >()),
   loadRefManifestLabel: loadRefManifestLabelMock,
 }));
 
@@ -72,6 +75,24 @@ describe('useTombstoneInfo', () => {
     await waitFor(() => {
       expect(result.current.artistName).toBe('Artist B');
     });
+  });
+
+  it('labels from inline item metadata when the item has no ref', () => {
+    loadRefManifestLabelMock.mockResolvedValue(undefined);
+    const inlineItem = {
+      id: 'inline-1',
+      title: 'Sudfah #1',
+      source: 'https://example.com/s',
+      license: 'open',
+      metadata: {
+        title: 'Sudfah #1 (2022)',
+        artists: [{ name: 'Melissa Wiederrecht', id: '' }],
+      },
+    } as unknown as DP1Item;
+
+    const { result } = renderHook(() => useTombstoneInfo(inlineItem));
+    expect(result.current.title).toBe('Sudfah #1 (2022)');
+    expect(result.current.artistName).toBe('Melissa Wiederrecht');
   });
 
   it('drops a manifest that resolves after the item moved on', async () => {

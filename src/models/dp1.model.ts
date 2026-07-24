@@ -59,6 +59,12 @@ export interface DP1Item {
   display?: DP1DisplayPreference;
   repro?: DP1Repro;
   provenance?: DP1Provenance;
+  // Tolerant read of inline label metadata mirroring the ref-manifest
+  // metadata block (dp1 core/v1.1.0 ref-manifest.md §4). Not in playlist
+  // core: playlist builders that host no ref manifest (today's ff-cli) can
+  // carry artist/title data inline for the tombstone (feral-file#3452).
+  // A resolved ref manifest always outranks this.
+  metadata?: RefManifestMetadata;
 }
 
 export enum Scaling {

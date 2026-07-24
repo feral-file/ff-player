@@ -2,10 +2,11 @@
 
 import { DP1Item } from '@/models/dp1.model';
 import {
+  extractManifestLabel,
   loadRefManifestLabel,
   RefManifestLabel,
 } from '@/utils/playlistDisplayPreference';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 /**
  * Resolves tombstone label metadata for the playing item (feral-file#3452).
@@ -56,10 +57,17 @@ export function useTombstoneInfo(item: DP1Item | undefined) {
       ? labelEntry.label
       : null;
 
+  // Inline metadata carried on the item itself (ref-less playlists, e.g.
+  // ff-cli builds). Sits below the ref manifest in precedence.
+  const inlineLabel = useMemo(
+    () => (item?.metadata ? extractManifestLabel(item.metadata) : undefined),
+    [item]
+  );
+
   return {
-    artistName: manifestLabel?.artistNames,
-    // Manifest titles are richer (e.g. include the year); prefer them when
-    // present and fall back to the playlist item's own title.
-    title: manifestLabel?.title ?? item?.title,
+    artistName: manifestLabel?.artistNames ?? inlineLabel?.artistNames,
+    // Manifest titles are richer (e.g. include the year); prefer them, then
+    // inline metadata, then the playlist item's own title.
+    title: manifestLabel?.title ?? inlineLabel?.title ?? item?.title,
   };
 }

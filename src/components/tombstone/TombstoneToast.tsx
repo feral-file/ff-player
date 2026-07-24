@@ -13,10 +13,11 @@ export const TOMBSTONE_TOAST_DURATION_MS = 3000;
 const toastStyle: CSSProperties = {
   position: 'absolute',
   left: '50%',
-  bottom: 40,
+  // Frame px are relative to the 720-tall design canvas (see TombstoneOverlay).
+  bottom: `${((40 / 720) * 100).toFixed(4)}vh`,
   transform: 'translateX(-50%)',
   fontFamily: "'PP Mori', sans-serif",
-  fontSize: 12,
+  fontSize: `${((12 / 720) * 100).toFixed(4)}vh`,
   fontWeight: 400,
   lineHeight: 1.4,
   color: '#FFFFFF',
