@@ -105,6 +105,7 @@ const ArtworkPlayer = ({
   itemIdentity,
   onRegisterArtworkReload,
   onSourceEnded,
+  onItemCommitted,
 }: {
   previewURL: string;
   isCustomView?: boolean;
@@ -124,6 +125,14 @@ const ArtworkPlayer = ({
   // The argument is the firing slot's itemIdentity so the consumer can
   // drop events that arrive after the playlist has already moved past them.
   onSourceEnded?: (itemIdentity: string) => void;
+  // Fired when an incoming slot actually becomes the visible artwork — at
+  // first paint of an initial slot, at crossfade start, or at the sequential
+  // handoff's fade-in. Selection state (currentIndex) moves ahead of this on
+  // slow loads because the outgoing artwork deliberately stays on screen
+  // until incoming media is ready; consumers that describe "what is on the
+  // wall" (the tombstone label, feral-file#3452) must key off this commit,
+  // never off selection.
+  onItemCommitted?: (itemIdentity: string) => void;
 }) => {
   const FADE_IN_OUT_DURATION_MS = 650;
   const { context } = useAppContext();
@@ -555,6 +564,7 @@ const ArtworkPlayer = ({
       setActiveSlot(readySlot);
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
+      onItemCommitted?.(incomingLayer.itemIdentity);
       return;
     }
 
@@ -606,6 +616,9 @@ const ArtworkPlayer = ({
         setActiveSlot(incoming);
         incomingSlotRef.current = null;
         setTopSlotIndex(null);
+        // Sequential handoff: this fade-in is the first moment the incoming
+        // work is on the wall.
+        onItemCommitted?.(incomingLayer.itemIdentity);
       }, FADE_IN_OUT_DURATION_MS);
       return;
     }
@@ -616,6 +629,10 @@ const ArtworkPlayer = ({
       op[incoming] = 1;
       return op;
     });
+    // Crossfade start: the incoming work begins appearing now, so this is
+    // the viewer-truth commit even though slot bookkeeping settles at fade
+    // end in the timeout below.
+    onItemCommitted?.(incomingLayer.itemIdentity);
     transitionTimeoutRef.current = setTimeout(() => {
       if (token !== transitionTokenRef.current) {return;}
       setSlots(prev => {
@@ -631,7 +648,7 @@ const ArtworkPlayer = ({
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
     }, FADE_IN_OUT_DURATION_MS);
-  }, [slots, pauseSlotPlayback, commitVisualSettings]);
+  }, [slots, pauseSlotPlayback, commitVisualSettings, onItemCommitted]);
 
   const handleIframeLoad = (slotIndex: SlotIndex) => {
     if (isWebGLAvailable()) {

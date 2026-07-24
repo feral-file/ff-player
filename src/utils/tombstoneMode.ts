@@ -17,3 +17,18 @@ export function coerceTombstoneMode(raw: string | undefined): TombstoneMode {
     ? (raw as TombstoneMode)
     : TombstoneMode.Timed;
 }
+
+/**
+ * FF1-side confirmation copy for a tombstone mode change (the issue specifies
+ * the Timed wording verbatim; On/Off follow the app control's state labels).
+ */
+export function tombstoneToastText(mode: TombstoneMode): string {
+  switch (mode) {
+    case TombstoneMode.Timed:
+      return "Tombstone timer set to '30s'";
+    case TombstoneMode.On:
+      return "Tombstone set to 'On'";
+    case TombstoneMode.Off:
+      return "Tombstone set to 'Off'";
+  }
+}

@@ -19,32 +19,42 @@ import { useEffect, useState } from 'react';
  * must never disturb playback.
  */
 export function useTombstoneInfo(item: DP1Item | undefined) {
-  const [manifestLabel, setManifestLabel] = useState<RefManifestLabel | null>(
-    null
-  );
+  // The resolved label is stored WITH the item id it belongs to and checked
+  // synchronously at read time. State alone would lag one render behind an
+  // item change (effects run post-render), letting the new item's key render
+  // with the previous item's artist/title — a brief misidentification the
+  // label must never show.
+  const [labelEntry, setLabelEntry] = useState<{
+    forItemId: string;
+    label: RefManifestLabel;
+  } | null>(null);
+  const itemId = item?.id ?? '';
 
   useEffect(() => {
-    setManifestLabel(null);
     if (!item?.ref) {
       return;
     }
     // Stale-result guard rather than an abort: the underlying fetch is shared
     // with the display-preference layer (a late manifest still feeds its
     // session cache); this effect only refuses to apply a label after the
-    // item has moved on — otherwise a resolve settling one microtask after
-    // an item change would pin the previous item's label on the new item.
+    // item has moved on.
     let stale = false;
     loadRefManifestLabel(item)
       .then(label => {
         if (!stale && label) {
-          setManifestLabel(label);
+          setLabelEntry({ forItemId: itemId, label });
         }
       })
       .catch(() => undefined);
     return () => {
       stale = true;
     };
-  }, [item]);
+  }, [item, itemId]);
+
+  const manifestLabel =
+    labelEntry !== null && labelEntry.forItemId === itemId
+      ? labelEntry.label
+      : null;
 
   return {
     artistName: manifestLabel?.artistNames,

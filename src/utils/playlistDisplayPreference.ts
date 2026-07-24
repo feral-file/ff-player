@@ -112,6 +112,7 @@ function refCacheKey(dp1Item: DP1Item): string {
 export function clearRefManifestDisplayCache(): void {
   refDisplayCache.clear();
   refLabelCache.clear();
+  refManifestInFlight.clear();
 }
 
 /**
@@ -130,6 +131,16 @@ export function clearUnversionedRefManifestDisplayCache(): void {
       refLabelCache.delete(key);
     }
   }
+  // Also drop hash-less in-flight entries: without this, one hung manifest
+  // request would pin its key for the whole session — every later visit
+  // would join the dead promise instead of retrying. Dropping the entry
+  // doesn't cancel existing awaiters; it only lets the next cast's visitors
+  // start a fresh attempt.
+  for (const key of Array.from(refManifestInFlight.keys())) {
+    if (key.endsWith('#')) {
+      refManifestInFlight.delete(key);
+    }
+  }
 }
 
 /**
@@ -138,30 +149,60 @@ export function clearUnversionedRefManifestDisplayCache(): void {
  * Resolved results are session-cached by ref URL; fetch failures are
  * reported, swallowed, and left uncached so they retry on the next visit.
  */
-export async function loadRefManifestDisplay(
+// In-flight manifest loads by cache key. The display-preference path and the
+// tombstone label path can request the same manifest in the same tick (both
+// caches miss until the fetch resolves); sharing the pending promise keeps
+// that to one getItemRef call per ref version.
+const refManifestInFlight = new Map<
+  string,
+  Promise<DP1DisplayPreference | undefined>
+>();
+
+/**
+ * Fetches and caches a ref manifest's display preference. Concurrent callers
+ * for the same ref version share the in-flight promise (one getItemRef per
+ * version); the resolved manifest also populates the tombstone label cache.
+ *
+ * Deliberately a flat `.then(onFulfilled, onRejected)` chain rather than an
+ * async wrapper: the slot-timer harness resolves late manifests under fake
+ * timers with a tight microtask budget, and every extra promise-adoption hop
+ * (async-returning-promise, separate catch/finally links) delays the apply
+ * past the flushes the veto path gets. Keep resolution one tick deep.
+ */
+export function loadRefManifestDisplay(
   dp1Item: DP1Item
 ): Promise<DP1DisplayPreference | undefined> {
   if (!dp1Item.ref) {
-    return undefined;
+    return Promise.resolve(undefined);
   }
   const cacheKey = refCacheKey(dp1Item);
   if (refDisplayCache.has(cacheKey)) {
-    return refDisplayCache.get(cacheKey);
+    return Promise.resolve(refDisplayCache.get(cacheKey));
   }
-  try {
-    // TODO: Implement ref hash verification
-    const manifest = await DP1Service.getItemRef(dp1Item.ref);
-    const display = manifest?.controls?.display;
-    refDisplayCache.set(cacheKey, display);
-    refLabelCache.set(cacheKey, extractManifestLabel(manifest?.metadata));
-    return display;
-  } catch (error: unknown) {
-    reportPlaylistDisplayPreferenceError('getItemRef', error, {
-      ref: dp1Item.ref,
-      itemId: dp1Item.id,
-    });
-    return undefined;
+  const inFlight = refManifestInFlight.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
   }
+  // TODO: Implement ref hash verification
+  const load = DP1Service.getItemRef(dp1Item.ref).then(
+    manifest => {
+      refManifestInFlight.delete(cacheKey);
+      const display = manifest?.controls?.display;
+      refDisplayCache.set(cacheKey, display);
+      refLabelCache.set(cacheKey, extractManifestLabel(manifest?.metadata));
+      return display;
+    },
+    (error: unknown) => {
+      refManifestInFlight.delete(cacheKey);
+      reportPlaylistDisplayPreferenceError('getItemRef', error, {
+        ref: dp1Item.ref,
+        itemId: dp1Item.id,
+      });
+      return undefined;
+    }
+  );
+  refManifestInFlight.set(cacheKey, load);
+  return load;
 }
 
 /**

@@ -3,8 +3,8 @@
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import TombstoneOverlay from '@/components/tombstone/TombstoneOverlay';
 import { useAppContext } from '@/context/AppContext';
-import { useTombstoneInfo } from '@/services/custom-hooks/useTombstoneInfo';
-import { coerceTombstoneMode } from '@/utils/tombstoneMode';
+import TombstoneToast from '@/components/tombstone/TombstoneToast';
+import { useTombstone } from './useTombstone';
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import { DP1Defaults, DP1Item } from '@/models/dp1.model';
@@ -617,18 +617,16 @@ export default function PlaylistClient() {
     );
   }, [currentIndex, playlist]);
 
-  // The playing item, state-derived (refs would go stale for render). Feeds
-  // the tombstone label (feral-file#3452); undefined between playlists keeps
-  // the overlay unmounted.
-  const currentItem = useMemo(() => {
-    if (currentIndex < 0 || playlist.length === 0) {
-      return undefined;
-    }
-    return playlist[normalizePlaylistIndex(currentIndex, playlist.length)];
-  }, [currentIndex, playlist]);
-
-  const { artistName: tombstoneArtist, title: tombstoneTitle } =
-    useTombstoneInfo(currentItem);
+  // Tombstone state (feral-file#3452): committed-item tracking, label
+  // resolution, mode coercion, and the FF1-side toast — see useTombstone.
+  const {
+    handleItemCommitted,
+    mode: tombstoneMode,
+    itemKey: tombstoneItemKey,
+    title: tombstoneTitle,
+    artistName: tombstoneArtist,
+    toastText: tombstoneToast,
+  } = useTombstone(playlist, deviceDisplaySettings);
 
   return (
     <>
@@ -640,15 +638,17 @@ export default function PlaylistClient() {
             itemIdentity={currentItemIdentity}
             onRegisterArtworkReload={registerArtworkReload}
             onSourceEnded={handleSourceEnded}
+            onItemCommitted={handleItemCommitted}
           />
         )}
         <TombstoneOverlay
-          mode={coerceTombstoneMode(deviceDisplaySettings?.tombstone)}
-          itemKey={currentItemIdentity}
+          mode={tombstoneMode}
+          itemKey={tombstoneItemKey}
           title={tombstoneTitle}
           artistName={tombstoneArtist}
           curatorName={castInfo?.playlist?.curator}
         />
+        <TombstoneToast text={tombstoneToast} />
       </div>
     </>
   );
