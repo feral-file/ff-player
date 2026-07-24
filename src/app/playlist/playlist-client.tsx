@@ -1,7 +1,10 @@
 'use client';
 
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
+import TombstoneOverlay from '@/components/tombstone/TombstoneOverlay';
 import { useAppContext } from '@/context/AppContext';
+import { useTombstoneInfo } from '@/services/custom-hooks/useTombstoneInfo';
+import { coerceTombstoneMode } from '@/utils/tombstoneMode';
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import { DP1Defaults, DP1Item } from '@/models/dp1.model';
@@ -32,6 +35,7 @@ type AdvanceCause = 'timer' | 'sourceEnd';
 // eslint-disable-next-line max-lines-per-function
 export default function PlaylistClient() {
   const castInfo = useAppContext().context.castInfo;
+  const deviceDisplaySettings = useAppContext().context.displaySettings;
 
   const [playlist, setPlaylist] = useState<DP1Item[]>([]);
   const [playlistDefaultsSettings, setPlaylistDefaultsSettings] =
@@ -613,6 +617,19 @@ export default function PlaylistClient() {
     );
   }, [currentIndex, playlist]);
 
+  // The playing item, state-derived (refs would go stale for render). Feeds
+  // the tombstone label (feral-file#3452); undefined between playlists keeps
+  // the overlay unmounted.
+  const currentItem = useMemo(() => {
+    if (currentIndex < 0 || playlist.length === 0) {
+      return undefined;
+    }
+    return playlist[normalizePlaylistIndex(currentIndex, playlist.length)];
+  }, [currentIndex, playlist]);
+
+  const { artistName: tombstoneArtist, title: tombstoneTitle } =
+    useTombstoneInfo(currentItem);
+
   return (
     <>
       <div style={{ width: '100%', height: '100%' }}>
@@ -625,6 +642,13 @@ export default function PlaylistClient() {
             onSourceEnded={handleSourceEnded}
           />
         )}
+        <TombstoneOverlay
+          mode={coerceTombstoneMode(deviceDisplaySettings?.tombstone)}
+          itemKey={currentItemIdentity}
+          title={tombstoneTitle}
+          artistName={tombstoneArtist}
+          curatorName={castInfo?.playlist?.curator}
+        />
       </div>
     </>
   );

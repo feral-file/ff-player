@@ -5,6 +5,7 @@ import {
   type DP1Defaults,
   type DP1DisplayPreference,
   type DP1Item,
+  type RefManifest,
 } from '@/models/dp1.model';
 import { DP1Service } from '@/services/DP1Service';
 
@@ -85,6 +86,20 @@ export const REF_MANIFEST_GATE_TIMEOUT_MS = 10_000;
 const refDisplayCache = new Map<string, DP1DisplayPreference | undefined>();
 
 /**
+ * Human-readable label data from a ref manifest's metadata block
+ * (dp1 core/v1.1.0 ref-manifest.md §4), consumed by the tombstone overlay
+ * (feral-file#3452). Cached beside the display preference so the label rides
+ * the same single fetch, the same refHash version identity, and the same
+ * per-cast invalidation instead of growing a second manifest-fetch layer.
+ */
+export interface RefManifestLabel {
+  artistNames?: string;
+  title?: string;
+}
+
+const refLabelCache = new Map<string, RefManifestLabel | undefined>();
+
+/**
  * Cache identity for a ref manifest. DP-1 models refHash as the integrity /
  * version identity of an HTTPS ref, so a refreshed item with the same URL but
  * a different refHash must not inherit a prior manifest's display authority.
@@ -96,6 +111,7 @@ function refCacheKey(dp1Item: DP1Item): string {
 /** Test hook: reset the session ref-display cache. */
 export function clearRefManifestDisplayCache(): void {
   refDisplayCache.clear();
+  refLabelCache.clear();
 }
 
 /**
@@ -107,6 +123,11 @@ export function clearUnversionedRefManifestDisplayCache(): void {
   for (const key of Array.from(refDisplayCache.keys())) {
     if (key.endsWith('#')) {
       refDisplayCache.delete(key);
+    }
+  }
+  for (const key of Array.from(refLabelCache.keys())) {
+    if (key.endsWith('#')) {
+      refLabelCache.delete(key);
     }
   }
 }
@@ -132,6 +153,7 @@ export async function loadRefManifestDisplay(
     const manifest = await DP1Service.getItemRef(dp1Item.ref);
     const display = manifest?.controls?.display;
     refDisplayCache.set(cacheKey, display);
+    refLabelCache.set(cacheKey, extractManifestLabel(manifest?.metadata));
     return display;
   } catch (error: unknown) {
     reportPlaylistDisplayPreferenceError('getItemRef', error, {
@@ -140,6 +162,47 @@ export async function loadRefManifestDisplay(
     });
     return undefined;
   }
+}
+
+/**
+ * Narrows a manifest metadata block into the tombstone's label fields.
+ * Defensive despite the RefManifestMetadata type: manifests are remote JSON
+ * and a malformed artists array must degrade to a missing line, not a crash.
+ */
+function extractManifestLabel(
+  metadata: RefManifest['metadata']
+): RefManifestLabel | undefined {
+  if (!metadata) {
+    return undefined;
+  }
+  const names = Array.isArray(metadata.artists)
+    ? metadata.artists
+        .map(artist => (typeof artist.name === 'string' ? artist.name : null))
+        .filter((name): name is string => Boolean(name))
+    : [];
+  return {
+    artistNames: names.length > 0 ? names.join(', ') : undefined,
+    title: typeof metadata.title === 'string' ? metadata.title : undefined,
+  };
+}
+
+/**
+ * Resolve the tombstone label carried by an item's ref manifest, riding the
+ * same fetch and caches as the display preference. Undefined when the item
+ * has no ref, the manifest cannot be fetched, or it carries no metadata.
+ */
+export async function loadRefManifestLabel(
+  dp1Item: DP1Item
+): Promise<RefManifestLabel | undefined> {
+  if (!dp1Item.ref) {
+    return undefined;
+  }
+  const cacheKey = refCacheKey(dp1Item);
+  if (refLabelCache.has(cacheKey)) {
+    return refLabelCache.get(cacheKey);
+  }
+  await loadRefManifestDisplay(dp1Item);
+  return refLabelCache.get(cacheKey);
 }
 
 /**

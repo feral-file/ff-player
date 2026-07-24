@@ -20,6 +20,11 @@ export interface DP1Call {
   defaults?: DP1Defaults;
   items?: DP1Item[];
   signature?: string;
+  // Human-readable curator name, tolerant read aligned with the DP-1
+  // playlist-group `curator` field (core/v1.1.0). Drives the tombstone's
+  // "Curated by" line (feral-file#3452); absent means the playlist did not
+  // come from a curated source and the line is omitted.
+  curator?: string;
 }
 
 export enum DP1Action {

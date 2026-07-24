@@ -1,5 +1,5 @@
 import { CursorPosition } from '@/services/custom-hooks/useCursorPositions';
-import { TokenDisplaySettings } from './display_settings.model';
+import { TokenDisplaySettings, TombstoneMode } from './display_settings.model';
 import { ErrorType } from './error.model';
 import { DP1Call, DP1Intent, DP1Item, Scaling } from './dp1.model';
 import { CastCommand, LoopMode, ViewMode } from '.';
@@ -50,6 +50,9 @@ export interface CheckDeviceStatusReply extends Reply {
     // Device-level default item duration in seconds; absent means "auto"
     // (no device override, the playlist's duration cascade stands).
     defaultDuration?: number;
+    // Tombstone (museum label) state so ff-app can render the control's
+    // current selection (feral-file#3452).
+    tombstone?: TombstoneMode;
   };
 
   sleepMode?: boolean;
