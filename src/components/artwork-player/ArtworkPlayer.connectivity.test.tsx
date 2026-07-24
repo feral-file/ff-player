@@ -17,7 +17,7 @@
  */
 import { AppContext } from '@/context/AppContext';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
-import { render, waitFor } from '@testing-library/react';
+import { cleanup, render, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
@@ -112,8 +112,20 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // vitest globals are disabled (see vitest.config.ts), so RTL's
+  // auto-cleanup — which only registers via a *global* afterEach — never
+  // fires here. Without an explicit cleanup(), the previous test's
+  // ArtworkPlayer tree stays mounted (effects, timers, the document click
+  // listener) while the next test renders, and any stray play()/pause()
+  // call from the leaked instance lands on the shared
+  // HTMLVideoElement.prototype spy, polluting the next test's assertions.
+  // Restore the spies before cleanup(), matching the other ArtworkPlayer
+  // test files: unmount-triggered pause() calls are safe to run against
+  // jsdom's real (no-op) implementation, so there's no need to keep the
+  // mock alive for teardown.
   playSpy.mockRestore();
   pauseSpy.mockRestore();
+  cleanup();
 });
 
 describe('ArtworkPlayer — isOnline connectivity gating', () => {
