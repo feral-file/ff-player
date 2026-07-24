@@ -54,6 +54,15 @@ const fillStyle: CSSProperties = {
   backgroundColor: '#A0A0A0',
 };
 
+// Title line per the design detail sheet (node 3811-14395 states): bold
+// italic, distinct from the regular-weight artist line. Only PPMori-Regular
+// ships in `public/fonts`, so the browser synthesizes both — shipping the
+// real SemiBold Italic face is a design-assets follow-up flagged in the PR.
+const titleStyle: CSSProperties = {
+  fontWeight: 700,
+  fontStyle: 'italic',
+};
+
 const curatedStyle: CSSProperties = {
   color: '#A0A0A0',
 };
@@ -159,11 +168,14 @@ export default function TombstoneOverlay({
       {mode === TombstoneMode.Timed && visible && (
         <TimerBar seconds={TOMBSTONE_AUTO_DISMISS_SECONDS} runKey={runKey} />
       )}
+      {/* Timer bar, the artist+title info block, and the curated line are
+          separate flex children per the design frame — the container's
+          column gap is what produces the visible space above "Curated by". */}
       <div>
         {artistName && <div>{artistName}</div>}
-        <div>{title}</div>
-        {curatorName && <div style={curatedStyle}>Curated by: {curatorName}</div>}
+        <div style={titleStyle}>{title}</div>
       </div>
+      {curatorName && <div style={curatedStyle}>Curated by: {curatorName}</div>}
     </div>
   );
 }
