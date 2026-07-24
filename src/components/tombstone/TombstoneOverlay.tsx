@@ -33,7 +33,11 @@ const containerStyle: CSSProperties = {
   padding: designPx(10),
   backgroundColor: '#FFFFFF',
   fontFamily: "'PP Mori', sans-serif",
-  fontSize: designPx(12),
+  // Deviation from the frame's 12px, flagged for B&F review: the frame was
+  // designed on a desktop canvas, and 12px-at-720 (18px on a 1080p wall)
+  // sits below TV-distance legibility floors. 16px-at-720 (24px @1080p)
+  // clears the floor while keeping the label quieter than a caption card.
+  fontSize: designPx(16),
   fontWeight: 400,
   lineHeight: 1.4,
   color: '#000000',
