@@ -10,6 +10,7 @@ import {
   clearRefManifestDisplayCache,
   clearUnversionedRefManifestDisplayCache,
   loadRefManifestDisplay,
+  loadRefManifestLabel,
 } from './playlistDisplayPreference';
 
 const { getItemRefMock } = vi.hoisted(() => ({ getItemRefMock: vi.fn() }));
@@ -28,6 +29,39 @@ function refItem(refHash?: string): DP1Item {
     refHash,
   } as DP1Item;
 }
+
+describe('concurrent display and label loads share one fetch', () => {
+  afterEach(() => {
+    clearRefManifestDisplayCache();
+    vi.clearAllMocks();
+  });
+
+  it('issues a single getItemRef when both consumers miss their caches in the same tick', async () => {
+    let resolveManifest: (manifest: unknown) => void = () => undefined;
+    getItemRefMock.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          resolveManifest = resolve;
+        })
+    );
+
+    // Display-preference path and tombstone label path race for the same
+    // uncached ref, exactly like a slot entry does in production.
+    const displayPromise = loadRefManifestDisplay(refItem('h1'));
+    const labelPromise = loadRefManifestLabel(refItem('h1'));
+
+    resolveManifest({
+      controls: { display: { userOverrides: false } },
+      metadata: { title: 'Work (2026)', artists: [{ name: 'Artist' }] },
+    });
+
+    const [display, label] = await Promise.all([displayPromise, labelPromise]);
+    expect(getItemRefMock).toHaveBeenCalledTimes(1);
+    expect(display?.userOverrides).toBe(false);
+    expect(label?.title).toBe('Work (2026)');
+    expect(label?.artistNames).toBe('Artist');
+  });
+});
 
 describe('loadRefManifestDisplay session cache', () => {
   afterEach(() => {

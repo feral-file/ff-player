@@ -57,6 +57,7 @@ import {
   resolveItemIndexInNewItems,
 } from '@/utils/playlist';
 import { coerceLoopMode } from '@/utils/loopMode';
+import { coerceTombstoneMode } from '@/utils/tombstoneMode';
 import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
 
@@ -509,6 +510,12 @@ class CanvasService {
           orientation: DeviceManager.getCachedViewMode() ?? ViewMode.landscape,
           defaultDuration:
             DeviceManager.getCachedDefaultItemDurationSeconds() ?? undefined,
+          // Coerced, not echoed raw: getStatus must report what the overlay
+          // actually does, and the overlay coerces unknown/absent values to
+          // the product default (Timed).
+          tombstone: coerceTombstoneMode(
+            DeviceManager.getCachedDeviceDisplaySettings()?.tombstone
+          ),
         },
 
         isPaused: window.location.pathname === '/sleep',

@@ -5,6 +5,7 @@ import {
   type DP1Defaults,
   type DP1DisplayPreference,
   type DP1Item,
+  type RefManifest,
 } from '@/models/dp1.model';
 import { DP1Service } from '@/services/DP1Service';
 
@@ -85,6 +86,20 @@ export const REF_MANIFEST_GATE_TIMEOUT_MS = 10_000;
 const refDisplayCache = new Map<string, DP1DisplayPreference | undefined>();
 
 /**
+ * Human-readable label data from a ref manifest's metadata block
+ * (dp1 core/v1.1.0 ref-manifest.md §4), consumed by the tombstone overlay
+ * (feral-file#3452). Cached beside the display preference so the label rides
+ * the same single fetch, the same refHash version identity, and the same
+ * per-cast invalidation instead of growing a second manifest-fetch layer.
+ */
+export interface RefManifestLabel {
+  artistNames?: string;
+  title?: string;
+}
+
+const refLabelCache = new Map<string, RefManifestLabel | undefined>();
+
+/**
  * Cache identity for a ref manifest. DP-1 models refHash as the integrity /
  * version identity of an HTTPS ref, so a refreshed item with the same URL but
  * a different refHash must not inherit a prior manifest's display authority.
@@ -96,6 +111,8 @@ function refCacheKey(dp1Item: DP1Item): string {
 /** Test hook: reset the session ref-display cache. */
 export function clearRefManifestDisplayCache(): void {
   refDisplayCache.clear();
+  refLabelCache.clear();
+  refManifestInFlight.clear();
 }
 
 /**
@@ -109,6 +126,21 @@ export function clearUnversionedRefManifestDisplayCache(): void {
       refDisplayCache.delete(key);
     }
   }
+  for (const key of Array.from(refLabelCache.keys())) {
+    if (key.endsWith('#')) {
+      refLabelCache.delete(key);
+    }
+  }
+  // Also drop hash-less in-flight entries: without this, one hung manifest
+  // request would pin its key for the whole session — every later visit
+  // would join the dead promise instead of retrying. Dropping the entry
+  // doesn't cancel existing awaiters; it only lets the next cast's visitors
+  // start a fresh attempt.
+  for (const key of Array.from(refManifestInFlight.keys())) {
+    if (key.endsWith('#')) {
+      refManifestInFlight.delete(key);
+    }
+  }
 }
 
 /**
@@ -117,29 +149,103 @@ export function clearUnversionedRefManifestDisplayCache(): void {
  * Resolved results are session-cached by ref URL; fetch failures are
  * reported, swallowed, and left uncached so they retry on the next visit.
  */
-export async function loadRefManifestDisplay(
+// In-flight manifest loads by cache key. The display-preference path and the
+// tombstone label path can request the same manifest in the same tick (both
+// caches miss until the fetch resolves); sharing the pending promise keeps
+// that to one getItemRef call per ref version.
+const refManifestInFlight = new Map<
+  string,
+  Promise<DP1DisplayPreference | undefined>
+>();
+
+/**
+ * Fetches and caches a ref manifest's display preference. Concurrent callers
+ * for the same ref version share the in-flight promise (one getItemRef per
+ * version); the resolved manifest also populates the tombstone label cache.
+ *
+ * Deliberately a flat `.then(onFulfilled, onRejected)` chain rather than an
+ * async wrapper: the slot-timer harness resolves late manifests under fake
+ * timers with a tight microtask budget, and every extra promise-adoption hop
+ * (async-returning-promise, separate catch/finally links) delays the apply
+ * past the flushes the veto path gets. Keep resolution one tick deep.
+ */
+export function loadRefManifestDisplay(
   dp1Item: DP1Item
 ): Promise<DP1DisplayPreference | undefined> {
+  if (!dp1Item.ref) {
+    return Promise.resolve(undefined);
+  }
+  const cacheKey = refCacheKey(dp1Item);
+  if (refDisplayCache.has(cacheKey)) {
+    return Promise.resolve(refDisplayCache.get(cacheKey));
+  }
+  const inFlight = refManifestInFlight.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
+  }
+  // TODO: Implement ref hash verification
+  const load = DP1Service.getItemRef(dp1Item.ref).then(
+    manifest => {
+      refManifestInFlight.delete(cacheKey);
+      const display = manifest?.controls?.display;
+      refDisplayCache.set(cacheKey, display);
+      refLabelCache.set(cacheKey, extractManifestLabel(manifest?.metadata));
+      return display;
+    },
+    (error: unknown) => {
+      refManifestInFlight.delete(cacheKey);
+      reportPlaylistDisplayPreferenceError('getItemRef', error, {
+        ref: dp1Item.ref,
+        itemId: dp1Item.id,
+      });
+      return undefined;
+    }
+  );
+  refManifestInFlight.set(cacheKey, load);
+  return load;
+}
+
+/**
+ * Narrows a manifest metadata block into the tombstone's label fields.
+ * Defensive despite the RefManifestMetadata type: manifests are remote JSON
+ * and a malformed artists array must degrade to a missing line, not a crash.
+ * Exported because the same block shape can ride inline on a playlist item
+ * (`DP1Item.metadata`, the tolerant read for ref-less playlists).
+ */
+export function extractManifestLabel(
+  metadata: RefManifest['metadata']
+): RefManifestLabel | undefined {
+  if (!metadata) {
+    return undefined;
+  }
+  const names = Array.isArray(metadata.artists)
+    ? metadata.artists
+        .map(artist => (typeof artist.name === 'string' ? artist.name : null))
+        .filter((name): name is string => Boolean(name))
+    : [];
+  return {
+    artistNames: names.length > 0 ? names.join(', ') : undefined,
+    title: typeof metadata.title === 'string' ? metadata.title : undefined,
+  };
+}
+
+/**
+ * Resolve the tombstone label carried by an item's ref manifest, riding the
+ * same fetch and caches as the display preference. Undefined when the item
+ * has no ref, the manifest cannot be fetched, or it carries no metadata.
+ */
+export async function loadRefManifestLabel(
+  dp1Item: DP1Item
+): Promise<RefManifestLabel | undefined> {
   if (!dp1Item.ref) {
     return undefined;
   }
   const cacheKey = refCacheKey(dp1Item);
-  if (refDisplayCache.has(cacheKey)) {
-    return refDisplayCache.get(cacheKey);
+  if (refLabelCache.has(cacheKey)) {
+    return refLabelCache.get(cacheKey);
   }
-  try {
-    // TODO: Implement ref hash verification
-    const manifest = await DP1Service.getItemRef(dp1Item.ref);
-    const display = manifest?.controls?.display;
-    refDisplayCache.set(cacheKey, display);
-    return display;
-  } catch (error: unknown) {
-    reportPlaylistDisplayPreferenceError('getItemRef', error, {
-      ref: dp1Item.ref,
-      itemId: dp1Item.id,
-    });
-    return undefined;
-  }
+  await loadRefManifestDisplay(dp1Item);
+  return refLabelCache.get(cacheKey);
 }
 
 /**
