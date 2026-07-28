@@ -157,14 +157,17 @@ The pause, the visible-slot gating in the `isOnline` effect (§7), and `playVide
 
 Code references:
 
-- `ArtworkPlayer.tsx` lines `786-819` (only play visible target slot videos, pause hidden/offline)
+- `ArtworkPlayer.tsx` lines `1011-1054` (visible/target-slot play gating; `isStreaming`-only connectivity pause)
 
 The online effect now:
 
-- plays video only for slots that are actually visible (`slotOpacity > 0.05`)
-- pauses hidden video slots
+- plays video only for slots that are actually visible (`slotOpacity > 0.05`) and are the current transition target
+- pauses hidden video slots (prevents hidden outgoing video from resuming and flashing)
+- pauses on `!isOnline` **only when `layer.isStreaming` is true** (HLS/live, which must keep fetching new segments to progress)
 
-This prevents hidden outgoing video from resuming and flashing.
+Progressive/local video (`isStreaming: false`) is deliberately NOT paused by connectivity. Its bytes are either already buffered or served locally with no WAN dependency — this includes `feral-controld`'s offline-cache replay, which serves cached video via CDP `Fetch` interception or its local static blob server. Gating that on `isOnline` made cached video freeze like a still image during real offline playback even though playback could continue uninterrupted. Non-streaming video failures are still caught by the element's own `onerror` -> `handleMediaError('video')` path, so no connectivity-based pre-emptive pause is needed for it.
+
+Any future change to this effect's play/pause conditions must preserve the `isStreaming` split above — collapsing it back to a blanket `isOnline` pause reintroduces the offline-cache freeze regression.
 
 ## 8) Stale callback protection summary
 

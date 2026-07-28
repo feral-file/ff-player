@@ -1026,39 +1026,48 @@ const ArtworkPlayer = ({
   /** ----------------------------- END OF MEDIA SETUP ----------------------------------- */
 
   useEffect(() => {
-    if (context.isOnline) {
-      const activeNow = activeSlotRef.current;
-      // During a transition, `topSlotIndex` points to the incoming slot we want to keep playing.
-      // This prevents the `isOnline` effect from re-playing the outgoing slot while opacity state is mid-update.
-      const targetSlot = topSlotIndex ?? activeNow;
-      SLOT_INDICES.forEach(slotIndex => {
-        const layer = slots[slotIndex];
-        const video = videoRefs[slotIndex].current;
-        const visible = slotOpacity[slotIndex] > 0.05;
-        const shouldPlay =
-          layer?.previewType === PreviewHTMLTag.video &&
-          video &&
-          visible &&
-          slotIndex === targetSlot;
-        if (shouldPlay) {
-          if (video.paused) {
-            const playPromise = video.play() as Promise<void> | undefined;
-            void playPromise?.catch((error: unknown) => {
-              console.log(
-                '[ArtworkPlayer] Error play video',
-                JSON.stringify(error)
-              );
-              Sentry.captureMessage('[ArtworkPlayer] Error play video');
-            });
-          }
-        } else {
-          video?.pause();
+    const activeNow = activeSlotRef.current;
+    // During a transition, `topSlotIndex` points to the incoming slot we want to keep playing.
+    // This prevents the `isOnline` effect from re-playing the outgoing slot while opacity state is mid-update.
+    const targetSlot = topSlotIndex ?? activeNow;
+    SLOT_INDICES.forEach(slotIndex => {
+      const layer = slots[slotIndex];
+      const video = videoRefs[slotIndex].current;
+      const visible = slotOpacity[slotIndex] > 0.05;
+      const isVideoLayer = layer?.previewType === PreviewHTMLTag.video;
+      // HLS/live streaming (`isStreaming`) fetches new segments continuously
+      // and stalls without a connection, so it must pause when offline.
+      // Progressive/local video (`isStreaming: false`) has no such
+      // dependency once its bytes are buffered — this includes offline-cache
+      // replay traffic that `feral-controld` serves locally via CDP Fetch
+      // interception or its local static blob server. Gating that on
+      // `isOnline` made every cached video freeze like a still image during
+      // real offline playback even though the bytes were already on disk.
+      // Non-streaming video failures are already surfaced through the
+      // element's own `onerror` -> `handleMediaError('video')` path, so we
+      // don't need a connectivity-based pre-emptive pause for it here.
+      const blockedByConnectivity = Boolean(layer?.isStreaming) && !context.isOnline;
+      const shouldPlay =
+        isVideoLayer &&
+        video &&
+        visible &&
+        slotIndex === targetSlot &&
+        !blockedByConnectivity;
+      if (shouldPlay) {
+        if (video.paused) {
+          const playPromise = video.play() as Promise<void> | undefined;
+          void playPromise?.catch((error: unknown) => {
+            console.log(
+              '[ArtworkPlayer] Error play video',
+              JSON.stringify(error)
+            );
+            Sentry.captureMessage('[ArtworkPlayer] Error play video');
+          });
         }
-      });
-    } else {
-      videoRefs[0].current?.pause();
-      videoRefs[1].current?.pause();
-    }
+      } else {
+        video?.pause();
+      }
+    });
   }, [context.isOnline, slots, slotOpacity, topSlotIndex]);
 
   useEffect(() => {
