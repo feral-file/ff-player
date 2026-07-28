@@ -58,10 +58,14 @@ const fillStyle: CSSProperties = {
   backgroundColor: '#A0A0A0',
 };
 
-// Title line per the design detail sheet (node 3811-14395 states): bold
-// italic, distinct from the regular-weight artist line. Only PPMori-Regular
-// ships in `public/fonts`, so the browser synthesizes both — shipping the
-// real SemiBold Italic face is a design-assets follow-up flagged in the PR.
+// Bold italic title over a regular-weight artist line, matching how ff-app
+// renders the same pair everywhere else: `artwork_credit.dart` styles the
+// artist w400/normal and the title w700/italic, and the now-displaying bar
+// does the same. The wall and the app should not disagree about what an
+// artwork title looks like.
+//
+// The 700/italic face now ships in `public/fonts` (globals.css), so these are
+// real weights rather than browser-synthesized ones.
 const titleStyle: CSSProperties = {
   fontWeight: 700,
   fontStyle: 'italic',
