@@ -91,7 +91,14 @@ function isValidDataUrl(url: URL): boolean {
   const payload = url.pathname.slice(separatorIndex + 1);
 
   if (!metadata.toLowerCase().endsWith(';base64')) {
-    return true;
+    // Raw SVG often contains literal percentage values such as `width="100%"`.
+    // Treat a percent as an attempted URI escape only when it is followed by two
+    // alphanumeric characters; that rejects malformed escapes like `%ZZ` while
+    // retaining the established raw-percent SVG compatibility.
+    const percentEscapeCandidates = payload.match(/%[A-Za-z0-9]{2}/g) ?? [];
+    return percentEscapeCandidates.every(candidate =>
+      /^%[0-9A-Fa-f]{2}$/.test(candidate)
+    );
   }
 
   let decodedPayload: string;
