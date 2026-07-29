@@ -321,8 +321,11 @@ class CanvasService {
 
   /**
    * Publish the live artwork render lifecycle for status replies.
-   * This updates in-memory castInfo only; persistence strips renderStatus so
-   * boot recovery cannot resurrect a ready/failed from a previous page.
+   * This updates in-memory castInfo without emitting a cast command. The
+   * playlist route treats cast-info notifications as playback instructions,
+   * so re-emitting the prior command here would restart the active slot timer.
+   * Persistence strips renderStatus so boot recovery cannot resurrect a
+   * ready/failed from a previous page.
    */
   public setRenderStatus(renderStatus: RenderStatus | undefined) {
     this.renderStatus = renderStatus;
@@ -334,7 +337,6 @@ class CanvasService {
       ...this.castInfo,
       renderStatus,
     };
-    this.onCastInfoChange?.(this.castInfo);
   }
 
   public hasQueuedPlaylistPending(): boolean {

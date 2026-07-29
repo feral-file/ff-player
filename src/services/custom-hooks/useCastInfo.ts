@@ -69,8 +69,8 @@ const useCastInfo = () => {
         }
       : null;
 
-    // setRenderStatus notifies on every pending/loading/ready/failed flip. After
-    // strip, those payloads match the prior write — skip IndexedDB churn.
+    // Render-status changes stay inside CanvasService so they cannot replay a
+    // cast command. Keep this equality guard for other ephemeral-only updates.
     if (
       lastPersistedCastInfoRef.current !== undefined &&
       deepEqual(lastPersistedCastInfoRef.current, castInfoToStore)
