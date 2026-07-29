@@ -42,17 +42,23 @@ const invalidBase64DataPlaylist: DP1Call = {
   ],
 };
 
-const invalidPercentDataPlaylist: DP1Call = {
+const invalidPercentDataPlaylists: DP1Call[] = [
+  'broken%',
+  'broken%2',
+  'broken%A',
+  'broken%G-',
+  'broken%ZZ',
+].map((payload, index) => ({
   ...malformedDataPlaylist,
-  id: 'invalid-percent-data',
+  id: `invalid-percent-data-${String(index)}`,
   items: [
     {
-      id: 'invalid-percent-artwork',
-      source: 'data:image/svg+xml,%ZZ',
+      id: `invalid-percent-artwork-${String(index)}`,
+      source: `data:image/svg+xml,${payload}`,
       license: {},
     } as DP1Item,
   ],
-};
+}));
 
 const validDataPlaylist: DP1Call = {
   ...malformedDataPlaylist,
@@ -196,39 +202,41 @@ it('rejects malformed percent payloads before Now Display, Schedule Play, or ref
     false
   );
 
-  expect(
-    canvasService.processMessage({
-      command: CastCommand.displayPlaylist,
-      request: {
-        intent: { action: DP1Action.NowDisplay },
-        dp1_call: invalidPercentDataPlaylist,
-      },
-    })
-  ).toEqual({ ok: false });
-  expectActivePlayback();
-
-  expect(
-    canvasService.processMessage({
-      command: CastCommand.displayPlaylist,
-      request: {
-        intent: {
-          action: DP1Action.SchedulePlay,
-          schedule_time: '2099-01-01T00:00:00Z',
+  for (const invalidPercentDataPlaylist of invalidPercentDataPlaylists) {
+    expect(
+      canvasService.processMessage({
+        command: CastCommand.displayPlaylist,
+        request: {
+          intent: { action: DP1Action.NowDisplay },
+          dp1_call: invalidPercentDataPlaylist,
         },
-        dp1_call: invalidPercentDataPlaylist,
-      },
-    })
-  ).toEqual({ ok: false });
-  expect(storeSpy).not.toHaveBeenCalled();
-  expectActivePlayback();
+      })
+    ).toEqual({ ok: false });
+    expectActivePlayback();
 
-  expect(
-    canvasService.processMessage({
-      command: CastCommand.displayPlaylist,
-      request: { refresh: true, dp1_call: invalidPercentDataPlaylist },
-    })
-  ).toEqual({ ok: false });
-  expectActivePlayback();
+    expect(
+      canvasService.processMessage({
+        command: CastCommand.displayPlaylist,
+        request: {
+          intent: {
+            action: DP1Action.SchedulePlay,
+            schedule_time: '2099-01-01T00:00:00Z',
+          },
+          dp1_call: invalidPercentDataPlaylist,
+        },
+      })
+    ).toEqual({ ok: false });
+    expect(storeSpy).not.toHaveBeenCalled();
+    expectActivePlayback();
+
+    expect(
+      canvasService.processMessage({
+        command: CastCommand.displayPlaylist,
+        request: { refresh: true, dp1_call: invalidPercentDataPlaylist },
+      })
+    ).toEqual({ ok: false });
+    expectActivePlayback();
+  }
 });
 
 it('accepts valid base64 data URLs with encoded whitespace and fragments', () => {

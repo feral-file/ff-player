@@ -91,14 +91,7 @@ function isValidDataUrl(url: URL): boolean {
   const payload = url.pathname.slice(separatorIndex + 1);
 
   if (!metadata.toLowerCase().endsWith(';base64')) {
-    // Raw SVG often contains literal percentage values such as `width="100%"`.
-    // Treat a percent as an attempted URI escape only when it is followed by two
-    // alphanumeric characters; that rejects malformed escapes like `%ZZ` while
-    // retaining the established raw-percent SVG compatibility.
-    const percentEscapeCandidates = payload.match(/%[A-Za-z0-9]{2}/g) ?? [];
-    return percentEscapeCandidates.every(candidate =>
-      /^%[0-9A-Fa-f]{2}$/.test(candidate)
-    );
+    return hasValidNonBase64PercentEscapes(payload);
   }
 
   let decodedPayload: string;
@@ -122,6 +115,32 @@ function isValidDataUrl(url: URL): boolean {
       ? unpaddedLength % 4 !== 1
       : base64Payload.length % 4 === 0)
   );
+}
+
+/**
+ * Allows literal SVG percentages while rejecting incomplete URI escapes.
+ * A raw SVG percentage is followed by punctuation (for example `100%"`), while
+ * an alphanumeric character means the percent starts an escape attempt. That
+ * attempt must have exactly two hexadecimal characters; otherwise accepting it
+ * would allow an undecodable payload into persisted playback state.
+ */
+function hasValidNonBase64PercentEscapes(payload: string): boolean {
+  for (let percentIndex = payload.indexOf('%'); percentIndex !== -1; ) {
+    const firstCharacter = payload.charAt(percentIndex + 1);
+    const secondCharacter = payload.charAt(percentIndex + 2);
+    if (!firstCharacter) {
+      return false;
+    }
+    if (!/[A-Za-z0-9]/.test(firstCharacter)) {
+      percentIndex = payload.indexOf('%', percentIndex + 1);
+      continue;
+    }
+    if (!/^[0-9A-Fa-f]{2}$/.test(firstCharacter + secondCharacter)) {
+      return false;
+    }
+    percentIndex = payload.indexOf('%', percentIndex + 3);
+  }
+  return true;
 }
 
 /**
