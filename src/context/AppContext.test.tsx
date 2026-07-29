@@ -20,7 +20,14 @@ const { axiosGet, canvasServiceMocks, deviceManager } =
     return {
       axiosGet: vi.fn(),
       canvasServiceMocks: {
-        castPlaylistByURL: vi.fn(() => Promise.resolve(undefined)),
+        // Resolves the new boolean contract: true = playlist fetched AND cast.
+        // Typed with the real two-arg signature so tests can read the
+        // shouldAbort callback back out of mock.calls.
+        castPlaylistByURL: vi.fn<
+          (playlistURL: string, shouldAbort?: () => boolean) => Promise<boolean>
+        >(() => Promise.resolve(true)),
+        completeBootCastHydration: vi.fn(),
+        getCastInfo: vi.fn<() => CastInfo | null>(() => null),
         setCastInfo: vi.fn(),
       },
       deviceManager,
@@ -60,12 +67,13 @@ vi.mock('@/services/custom-hooks/useCursorPositions', () => ({
   default: vi.fn(() => ({ cursorPositions: null })),
 }));
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-  }),
-}));
+vi.mock('next/navigation', () => {
+  // Stable identity like the real router: a fresh object per render would
+  // re-run the fallback-loop effect (router is in its deps) on every render
+  // and make attempt counts nondeterministic.
+  const router = { push: vi.fn(), replace: vi.fn() };
+  return { useRouter: () => router };
+});
 
 vi.mock('@/services/cdp-handler/CDPRequestHandler', () => ({
   CDPRequestHandler: {
@@ -76,6 +84,8 @@ vi.mock('@/services/cdp-handler/CDPRequestHandler', () => ({
 vi.mock('@/services/CanvasService', () => ({
   canvasService: {
     castPlaylistByURL: canvasServiceMocks.castPlaylistByURL,
+    completeBootCastHydration: canvasServiceMocks.completeBootCastHydration,
+    getCastInfo: canvasServiceMocks.getCastInfo,
     setCastInfo: canvasServiceMocks.setCastInfo,
   },
 }));

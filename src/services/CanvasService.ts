@@ -31,6 +31,7 @@ import {
   SetSleepModeReply,
   SetShuffleRequest,
   SetLoopRequest,
+  DisplayDefaultPlaylistRequest,
   DisplayDefaultPlaylistReply,
   RenderStatus,
 } from '@/models';
@@ -60,9 +61,9 @@ import {
   resolveItemIndexInNewItems,
 } from '@/utils/playlist';
 import { coerceLoopMode } from '@/utils/loopMode';
+import { coerceTombstoneMode } from '@/utils/tombstoneMode';
 import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
-import RemoteConfigService from './remoteConfigService';
 
 const PLAYLIST_SOURCE_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
 
@@ -172,6 +173,22 @@ class CanvasService {
   // Refresh payload deferred because the currently playing item is absent from
   // the new list. Kept private so getStatus never exposes staging state.
   private deferredRefreshPlaylist: DP1Call | null = null;
+  // True only while castPlaylistByURL's own displayPlaylist message is being
+  // processed (that chain is fully synchronous), so nowDisplayPlaylist can
+  // tell the boot-fallback cast apart from an explicit controller cast and
+  // skip the ExplicitPlaylistCast dispatch. The fallback settling itself must
+  // not look like an explicit cast: it would cancel a displayDefaultPlaylist
+  // request that landed while the attempt was in flight — the case
+  // AppContext's nonce guard exists to preserve.
+  private castingFallbackPlaylist = false;
+  // True until AppContext finishes restoring persisted cast state at boot
+  // (initCastInfo spans several async DeviceManager reads while the CDP
+  // entry point is already live). While pending, castInfo === null means
+  // "unknown", not "empty screen", so `onlyIfNoPlaylist` requests defer to
+  // completeBootCastHydration() instead of deciding against a null that a
+  // restore is about to overwrite.
+  private bootCastHydrationPending = true;
+  private deferredConditionalDefaultRequest = false;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
   /**
    * Playlist route registers a cache-bust reload for the active artwork.
@@ -416,13 +433,38 @@ class CanvasService {
     this.nowDisplayPlaylist({ dp1CallData });
   }
 
-  public async castPlaylistByURL(playlistURL: string): Promise<void> {
+  /**
+   * Fetch the playlist at `playlistURL` and cast it as the current display.
+   *
+   * Returns true only when the playlist was fetched AND the displayPlaylist
+   * message was accepted. Returns false (never throws) on a fetch failure, an
+   * empty playlist, or a rejected message — callers own the retry policy. The
+   * boot fallback in AppContext depends on this signal: the player can load
+   * with no connectivity at all (SoftAP first-time setup boots the kiosk
+   * straight into the player), so a swallowed failure here used to strand a
+   * freshly-paired device with no default playlist.
+   *
+   * `shouldAbort` is re-checked between the fetch resolving and the cast
+   * committing. The fetch can be in flight when an explicit cast lands; the
+   * commit happens inside this method, so without this hook the caller's own
+   * cancellation flag is checked too late and the stale fallback fetch would
+   * overwrite the explicit cast.
+   */
+  public async castPlaylistByURL(
+    playlistURL: string,
+    shouldAbort?: () => boolean
+  ): Promise<boolean> {
     try {
       console.log('[CanvasService] Fetching playlist from:', playlistURL);
       const defaultPlaylist = await DP1Service.getPlaylist(playlistURL);
 
       if (!defaultPlaylist) {
-        return;
+        return false;
+      }
+
+      if (shouldAbort?.()) {
+        console.log('[CanvasService] Fallback cast aborted before commit');
+        return false;
       }
 
       console.log('[CanvasService] Default playlist fetched, casting...');
@@ -439,20 +481,31 @@ class CanvasService {
         },
       };
 
-      // Simulate processMessage with the built message data
+      // Simulate processMessage with the built message data. The flag marks
+      // the synchronous processMessage → nowDisplayPlaylist chain as
+      // fallback-originated so it does not announce itself as an explicit
+      // cast (see castingFallbackPlaylist).
       console.log('[CanvasService] Processing default playlist message');
-      const reply = canvasService.processMessage(messageData);
+      this.castingFallbackPlaylist = true;
+      let reply: Reply | undefined;
+      try {
+        reply = canvasService.processMessage(messageData);
+      } finally {
+        this.castingFallbackPlaylist = false;
+      }
 
       if (reply?.ok) {
         console.log('[CanvasService] Default playlist cast successfully');
-      } else {
-        console.error(
-          '[CanvasService] Failed to cast default playlist:',
-          JSON.stringify(reply)
-        );
+        return true;
       }
+      console.error(
+        '[CanvasService] Failed to cast default playlist:',
+        JSON.stringify(reply)
+      );
+      return false;
     } catch (error) {
       console.error('[CanvasService] Error in castPlaylistByURL:', error);
+      return false;
     }
   }
 
@@ -528,7 +581,9 @@ class CanvasService {
         case CastCommand.setLoop:
           return this.setLoop(requestJson as SetLoopRequest);
         case CastCommand.displayDefaultPlaylist:
-          return this.displayDefaultPlaylist();
+          return this.displayDefaultPlaylist(
+            requestJson as DisplayDefaultPlaylistRequest
+          );
         case CastCommand.updateDefaultDuration:
           return this.updateDefaultDuration(
             requestJson as UpdateDefaultDurationRequest
@@ -590,6 +645,12 @@ class CanvasService {
           orientation: DeviceManager.getCachedViewMode() ?? ViewMode.landscape,
           defaultDuration:
             DeviceManager.getCachedDefaultItemDurationSeconds() ?? undefined,
+          // Coerced, not echoed raw: getStatus must report what the overlay
+          // actually does, and the overlay coerces unknown/absent values to
+          // the product default (Timed).
+          tombstone: coerceTombstoneMode(
+            DeviceManager.getCachedDeviceDisplaySettings()?.tombstone
+          ),
         },
 
         isPaused: window.location.pathname === '/sleep',
@@ -827,6 +888,18 @@ class CanvasService {
       loopMode: LoopMode.playlist,
       shuffle: false,
     });
+    // Explicit content is now on screen — tell AppContext so an active
+    // boot-fallback retry (failed or still fetching) cannot fire later and
+    // replace it with the default playlist. The fallback's own cast is
+    // excluded: its lifecycle ends via the loop's nonce-guarded clear. The
+    // window guard keeps node-environment unit tests (no DOM) from turning a
+    // successful display into an ok:false reply — the event is a
+    // browser-only signal.
+    if (!this.castingFallbackPlaylist && typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent(CustomEventName.ExplicitPlaylistCast as string)
+      );
+    }
     return { ok: true };
   }
 
@@ -1092,18 +1165,81 @@ class CanvasService {
     return { ok: true };
   }
 
-  private displayDefaultPlaylist(): DisplayDefaultPlaylistReply {
-    new RemoteConfigService()
-      .getAppRemoteConfig()
-      .then(config => this.castPlaylistByURL(config.defaultPlaylistURL))
-      .catch((error: unknown) => {
-        console.error(
-          '[CanvasService] Error displaying default playlist:',
-          error
+  /**
+   * Delegates to AppContext's fallback-playlist loop instead of resolving
+   * `defaultPlaylistURL` here. This handler and the boot fallback previously
+   * fetched remote config through two separate RemoteConfigService instances,
+   * which could disagree (an offline boot caches the hardcoded fallback URL
+   * while this handler's fresh fetch returns the published one), so a
+   * controld-pushed default playlist could differ from the one the player
+   * pulls on its own. One dispatch path means one playlist source, and the
+   * loop's retry/backoff covers transient fetch failures for free.
+   *
+   * The `onlyIfNoPlaylist` flag gives callers "make sure something is
+   * playing" semantics: if a playlist is already on screen (for example when
+   * the boot fallback recovered before feral-controld's first-pair push
+   * arrived), the request is a no-op instead of stomping playback. OOM
+   * recovery omits the flag on purpose — it wants the default to replace
+   * possibly-OOM-causing content.
+   *
+   * While boot cast hydration is still pending, an `onlyIfNoPlaylist`
+   * request is DEFERRED instead of answered: `castInfo` is null until
+   * AppContext finishes restoring persisted cast state, so answering "no
+   * playlist" in that window would arm the fallback and later cast the
+   * default over the user's restored playlist. The reply is still ok — the
+   * command's "make sure something plays" contract is honored either way
+   * once the deferred re-evaluation runs. Forced requests are NOT deferred:
+   * they are newer intent than any persisted state and must win over a
+   * restore, which is exactly what the undisturbed fallback loop does.
+   */
+  private displayDefaultPlaylist(
+    request?: DisplayDefaultPlaylistRequest
+  ): DisplayDefaultPlaylistReply {
+    if (request?.onlyIfNoPlaylist) {
+      if (this.bootCastHydrationPending) {
+        console.log(
+          '[CanvasService] Deferring conditional default playlist until boot hydration completes'
         );
-        return { ok: false };
-      });
+        this.deferredConditionalDefaultRequest = true;
+        return { ok: true };
+      }
+      if (this.castInfo?.playlist?.items?.length) {
+        console.log(
+          '[CanvasService] Playlist already displaying, skipping default playlist'
+        );
+        return { ok: true };
+      }
+    }
+
+    window.dispatchEvent(
+      new CustomEvent(CustomEventName.DisplayDefaultPlaylist as string)
+    );
     return { ok: true };
+  }
+
+  /**
+   * Called by AppContext once boot cast restoration has settled (restored,
+   * fallen back, or failed — the caller invokes this in a finally). Ends the
+   * hydration gate above and re-evaluates a deferred `onlyIfNoPlaylist`
+   * request against the now-authoritative castInfo: a restored playlist
+   * makes it a no-op; an empty screen dispatches it. One-way per page load —
+   * hydration happens once, and a reload rebuilds this service.
+   *
+   * On boot paths that already armed the fallback themselves (no castInfo,
+   * castDaily, critical-temp), the replay re-arms it once more via the same
+   * event. That is intentional redundancy, not a bug: both requests resolve
+   * to the same default playlist and AppContext's nonce guard makes the
+   * extra re-arm harmless.
+   */
+  public completeBootCastHydration() {
+    if (!this.bootCastHydrationPending) {
+      return;
+    }
+    this.bootCastHydrationPending = false;
+    if (this.deferredConditionalDefaultRequest) {
+      this.deferredConditionalDefaultRequest = false;
+      this.displayDefaultPlaylist({ onlyIfNoPlaylist: true });
+    }
   }
 }
 

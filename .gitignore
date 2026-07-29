@@ -1,5 +1,7 @@
 node_modules
 .DS_Store
+.omc
+.omx
 .next
 .env.local
 tsconfig.tsbuildinfo

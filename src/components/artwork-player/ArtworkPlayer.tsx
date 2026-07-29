@@ -110,6 +110,7 @@ const ArtworkPlayer = ({
   itemIdentity,
   onRegisterArtworkReload,
   onSourceEnded,
+  onItemCommitted,
 }: {
   previewURL: string;
   isCustomView?: boolean;
@@ -129,6 +130,14 @@ const ArtworkPlayer = ({
   // The argument is the firing slot's itemIdentity so the consumer can
   // drop events that arrive after the playlist has already moved past them.
   onSourceEnded?: (itemIdentity: string) => void;
+  // Fired when an incoming slot actually becomes the visible artwork — at
+  // first paint of an initial slot, at crossfade start, or at the sequential
+  // handoff's fade-in. Selection state (currentIndex) moves ahead of this on
+  // slow loads because the outgoing artwork deliberately stays on screen
+  // until incoming media is ready; consumers that describe "what is on the
+  // wall" (the tombstone label, feral-file#3452) must key off this commit,
+  // never off selection.
+  onItemCommitted?: (itemIdentity: string) => void;
 }) => {
   const FADE_IN_OUT_DURATION_MS = 650;
   const { context } = useAppContext();
@@ -396,6 +405,27 @@ const ArtworkPlayer = ({
     playedVideoURLRef.current[slotIndex] = '';
   }, []);
 
+  // Fade-start half of teardown: silence the outgoing slot WITHOUT the
+  // synchronous `Hls.destroy()` cost. This runs inside the layout effect
+  // that kicks off the fade — before the browser paints the first fade
+  // frame — so heavy work here janks the fade's opening frames (destroy
+  // detaches MediaSource and frees up to 60MB of buffers, and detaching
+  // can also blank the outgoing frame instead of freezing it). stopLoad()
+  // still cuts network use immediately; the full destroy runs after the
+  // fade, via `setupStreamingVideoForSlot`'s effect cleanup, when the
+  // post-fade timeout removes the outgoing slot layer.
+  //
+  // Option A visual safety is preserved: the pause here, the visible-slot
+  // gating in the isOnline effect, and playVideoForSlot's target-slot guard
+  // are what keep the hidden outgoing video from resuming — destroy timing
+  // was never load-bearing for that.
+  const pauseSlotPlayback = useCallback((slotIndex: SlotIndex) => {
+    hlsInstancesRef.current[slotIndex]?.stopLoad();
+    videoRefs[slotIndex].current?.pause();
+    audioRefs[slotIndex].current?.pause();
+    playedVideoURLRef.current[slotIndex] = '';
+  }, []);
+
   const reTryToPlayVideo = (slotIndex: SlotIndex) => {
     const el = videoRefs[slotIndex].current;
     if (el) {
@@ -639,6 +669,7 @@ const ArtworkPlayer = ({
     const other = (readySlot === 0 ? 1 : 0) as SlotIndex;
     const otherLayer = slots[other];
     if (!otherLayer) {
+      commitVisualSettings();
       setSlotOpacity(readySlot === 0 ? [1, 0] : [0, 1]);
       setActiveSlot(readySlot);
       incomingSlotRef.current = null;
@@ -666,7 +697,11 @@ const ArtworkPlayer = ({
     if (transitionTimeoutRef.current)
       {clearTimeout(transitionTimeoutRef.current);}
 
-    pauseAndTeardownSlot(outgoing);
+    // Pause-only here (not pauseAndTeardownSlot): the sync Hls.destroy()
+    // used to run in this pre-paint phase and jank the fade's first frames.
+    // Destroy now happens via the streaming effect cleanup when the timeout
+    // below removes the outgoing slot layer.
+    pauseSlotPlayback(outgoing);
     setTopSlotIndex(incoming);
 
     if (sequential) {
@@ -683,6 +718,10 @@ const ArtworkPlayer = ({
           next[outgoing] = null;
           return next;
         });
+        // Commit at the midpoint: the outgoing artwork is fully faded out,
+        // so the incoming item's background/margin/scaling take over just
+        // as its artwork fades in.
+        commitVisualSettings();
         setSlotOpacity(incoming === 0 ? [1, 0] : [0, 1]);
         setActiveSlot(incoming);
         incomingSlotRef.current = null;
@@ -698,6 +737,10 @@ const ArtworkPlayer = ({
       op[incoming] = 1;
       return op;
     });
+    // Crossfade start: the incoming work begins appearing now, so this is
+    // the viewer-truth commit even though slot bookkeeping settles at fade
+    // end in the timeout below.
+    onItemCommitted?.(incomingLayer.itemIdentity);
     transitionTimeoutRef.current = setTimeout(() => {
       if (token !== transitionTokenRef.current) {return;}
       setSlots(prev => {
@@ -705,6 +748,10 @@ const ArtworkPlayer = ({
         next[outgoing] = null;
         return next;
       });
+      // Commit at crossfade end: the outgoing artwork is gone, so the
+      // stage swap is only visible in letterbox/margin areas (softened by
+      // the container's background-color transition).
+      commitVisualSettings();
       setActiveSlot(incoming);
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
@@ -960,6 +1007,7 @@ const ArtworkPlayer = ({
           el.onload = () => {
             loadedSource(slotIndex, layer);
           };
+          el.onload = markImageReady;
           el.onerror = () => {
             handleMediaError('image')(new Error('Image load failed'));
           };
@@ -1081,39 +1129,48 @@ const ArtworkPlayer = ({
   /** ----------------------------- END OF MEDIA SETUP ----------------------------------- */
 
   useEffect(() => {
-    if (context.isOnline) {
-      const activeNow = activeSlotRef.current;
-      // During a transition, `topSlotIndex` points to the incoming slot we want to keep playing.
-      // This prevents the `isOnline` effect from re-playing the outgoing slot while opacity state is mid-update.
-      const targetSlot = topSlotIndex ?? activeNow;
-      SLOT_INDICES.forEach(slotIndex => {
-        const layer = slots[slotIndex];
-        const video = videoRefs[slotIndex].current;
-        const visible = slotOpacity[slotIndex] > 0.05;
-        const shouldPlay =
-          layer?.previewType === PreviewHTMLTag.video &&
-          video &&
-          visible &&
-          slotIndex === targetSlot;
-        if (shouldPlay) {
-          if (video.paused) {
-            const playPromise = video.play() as Promise<void> | undefined;
-            void playPromise?.catch((error: unknown) => {
-              console.log(
-                '[ArtworkPlayer] Error play video',
-                JSON.stringify(error)
-              );
-              Sentry.captureMessage('[ArtworkPlayer] Error play video');
-            });
-          }
-        } else {
-          video?.pause();
+    const activeNow = activeSlotRef.current;
+    // During a transition, `topSlotIndex` points to the incoming slot we want to keep playing.
+    // This prevents the `isOnline` effect from re-playing the outgoing slot while opacity state is mid-update.
+    const targetSlot = topSlotIndex ?? activeNow;
+    SLOT_INDICES.forEach(slotIndex => {
+      const layer = slots[slotIndex];
+      const video = videoRefs[slotIndex].current;
+      const visible = slotOpacity[slotIndex] > 0.05;
+      const isVideoLayer = layer?.previewType === PreviewHTMLTag.video;
+      // HLS/live streaming (`isStreaming`) fetches new segments continuously
+      // and stalls without a connection, so it must pause when offline.
+      // Progressive/local video (`isStreaming: false`) has no such
+      // dependency once its bytes are buffered — this includes offline-cache
+      // replay traffic that `feral-controld` serves locally via CDP Fetch
+      // interception or its local static blob server. Gating that on
+      // `isOnline` made every cached video freeze like a still image during
+      // real offline playback even though the bytes were already on disk.
+      // Non-streaming video failures are already surfaced through the
+      // element's own `onerror` -> `handleMediaError('video')` path, so we
+      // don't need a connectivity-based pre-emptive pause for it here.
+      const blockedByConnectivity = Boolean(layer?.isStreaming) && !context.isOnline;
+      const shouldPlay =
+        isVideoLayer &&
+        video &&
+        visible &&
+        slotIndex === targetSlot &&
+        !blockedByConnectivity;
+      if (shouldPlay) {
+        if (video.paused) {
+          const playPromise = video.play() as Promise<void> | undefined;
+          void playPromise?.catch((error: unknown) => {
+            console.log(
+              '[ArtworkPlayer] Error play video',
+              JSON.stringify(error)
+            );
+            Sentry.captureMessage('[ArtworkPlayer] Error play video');
+          });
         }
-      });
-    } else {
-      videoRefs[0].current?.pause();
-      videoRefs[1].current?.pause();
-    }
+      } else {
+        video?.pause();
+      }
+    });
   }, [context.isOnline, slots, slotOpacity, topSlotIndex]);
 
   useEffect(() => {
@@ -1130,6 +1187,18 @@ const ArtworkPlayer = ({
           !isModelMimeType(slot.mimeType ?? '') &&
           !slot.displayPreviewURL.includes('base64')
         ) {
+          // Per-slot settings: only the slot claimed as the incoming
+          // transition target takes the live (next item's) scaling; any
+          // other slot is on-screen artwork and must keep its committed
+          // scaling — otherwise its softwareURL changes at playlist-advance
+          // time and the iframe reloads (blanks) seconds before the
+          // transition swaps it out. Keyed off incomingSlotRef (not a
+          // previewURL comparison) because adjacent playlist items can
+          // share the same URL while differing in scaling.
+          const slotSettings =
+            incomingSlotRef.current === i
+              ? displaySettings
+              : (committedVisualSettings ?? displaySettings);
           const displayMode =
             displaySettings.scaling === Scaling.Fill ? 'crop' : 'fit';
           const u = new URL(slot.displayPreviewURL, window.location.href);
@@ -1144,7 +1213,12 @@ const ArtworkPlayer = ({
       if (changedCount === 0) {return prev;}
       return next;
     });
-  }, [displaySettings, context.deviceRotation?.viewMode, slots]);
+  }, [
+    displaySettings,
+    committedVisualSettings,
+    context.deviceRotation?.viewMode,
+    slots,
+  ]);
 
   const handleLoadIframeError = (slotIndex: SlotIndex, layer: SlotLayer) => {
     handleArtworkRenderFailure(slotIndex, layer);
@@ -1344,7 +1418,11 @@ const ArtworkPlayer = ({
               style={{
                 width: '100%',
                 height: '100%',
-                objectFit: convertScalingToObjectFit(displaySettings?.scaling),
+                // Committed (not live) settings: the on-screen artwork keeps
+                // its own item's fit until the transition commits.
+                objectFit: convertScalingToObjectFit(
+                  committedVisualSettings?.scaling
+                ),
               }}
               className={styles.image}
               alt="Preview"
@@ -1391,7 +1469,14 @@ const ArtworkPlayer = ({
             style={{
               width: '100%',
               height: '100%',
-              objectFit: convertScalingToObjectFit(displaySettings?.scaling),
+              // Committed (not live) settings: the on-screen artwork keeps
+              // its own item's fit until the transition commits. `loop` /
+              // `autoPlay` below intentionally stay LIVE — they are
+              // behavioral (end-of-stream gating), not visual staging, and
+              // must reflect the current item's contract immediately.
+              objectFit: convertScalingToObjectFit(
+                committedVisualSettings?.scaling
+              ),
             }}
             autoPlay={false}
             loop={displaySettings?.loop ?? true}
@@ -1475,12 +1560,16 @@ const ArtworkPlayer = ({
       <div
         style={{
           display: 'flex',
-          backgroundColor: displaySettings?.background ?? '#000000',
+          // Committed settings, not live: background/margin swap only when a
+          // transition commits so the outgoing artwork never restyles early.
+          // The background-color transition softens the commit-time swap in
+          // letterbox/margin areas (the artworks themselves crossfade).
+          backgroundColor: committedVisualSettings?.background ?? '#000000',
           justifyContent: 'center',
           position: 'relative',
-          transition: 'padding 0.2s ease',
-          padding: displaySettings?.margin
-            ? getDP1Margin(displaySettings.margin)
+          transition: 'padding 0.2s ease, background-color 0.2s ease',
+          padding: committedVisualSettings?.margin
+            ? getDP1Margin(committedVisualSettings.margin)
             : '0px',
           width: '100vw',
           height: '100vh',

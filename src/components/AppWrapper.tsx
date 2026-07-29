@@ -14,6 +14,7 @@ import {
 import DP1ScheduleService from '@/services/DP1ScheduleService';
 import ScheduleDisplay from './ScheduleDisplay';
 import MintPairingOverlay from './mint-pairing/MintPairingOverlay';
+import SetupOverlay from './setup/SetupOverlay';
 
 const enum CastState {
   None, // Not casting
@@ -178,8 +179,19 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <>
       {appContent}
-      {/* Keep the CDP-driven mint pairing listener mounted during boot. */}
+      {/* Keep the CDP-driven mint pairing listener mounted during boot.
+          Both overlays paint fixed full-screen at the same z-index; the
+          player arbitrates conflicts last-command-wins (each overlay yields
+          when the other receives a renderable non-hidden state — see the
+          arbitration listeners in MintPairingOverlay/SetupOverlay), so the
+          newest command deterministically owns the screen even if
+          `feral-controld` briefly leaves both active. The contract still
+          asks controld to keep at most one non-hidden at a time
+          (ffos-player-contract.json); arbitration is the player-side
+          guarantee when that is violated. */}
       <MintPairingOverlay />
+      {/* Keep the CDP-driven setup listener mounted during boot. */}
+      <SetupOverlay />
     </>
   );
 };

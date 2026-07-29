@@ -1,5 +1,5 @@
 import { CursorPosition } from '@/services/custom-hooks/useCursorPositions';
-import { TokenDisplaySettings } from './display_settings.model';
+import { TokenDisplaySettings, TombstoneMode } from './display_settings.model';
 import { ErrorType } from './error.model';
 import { DP1Call, DP1Intent, DP1Item, Scaling } from './dp1.model';
 import { CastCommand, LoopMode, RenderStatus, ViewMode } from '.';
@@ -51,6 +51,9 @@ export interface CheckDeviceStatusReply extends Reply {
     // Device-level default item duration in seconds; absent means "auto"
     // (no device override, the playlist's duration cascade stands).
     defaultDuration?: number;
+    // Tombstone (museum label) state so ff-app can render the control's
+    // current selection (feral-file#3452).
+    tombstone?: TombstoneMode;
   };
 
   sleepMode?: boolean;
@@ -120,7 +123,14 @@ export interface SetLoopRequest extends Request {
 }
 export type SetLoopReply = Reply;
 
-export type DisplayDefaultPlaylistRequest = Request;
+export interface DisplayDefaultPlaylistRequest extends Request {
+  // "Make sure something is playing" semantics: when true, the request is a
+  // no-op if a playlist is already on screen (e.g. the boot fallback already
+  // recovered playback before feral-controld's first-pair push arrived).
+  // Absent/false keeps the historical force-reset behavior OOM recovery
+  // relies on to replace possibly-OOM-causing content.
+  onlyIfNoPlaylist?: boolean;
+}
 export type DisplayDefaultPlaylistReply = Reply;
 
 /**

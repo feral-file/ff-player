@@ -20,6 +20,11 @@ export interface DP1Call {
   defaults?: DP1Defaults;
   items?: DP1Item[];
   signature?: string;
+  // Human-readable curator name, tolerant read aligned with the DP-1
+  // playlist-group `curator` field (core/v1.1.0). Drives the tombstone's
+  // "Curated by" line (feral-file#3452); absent means the playlist did not
+  // come from a curated source and the line is omitted.
+  curator?: string;
 }
 
 export enum DP1Action {
@@ -54,6 +59,12 @@ export interface DP1Item {
   display?: DP1DisplayPreference;
   repro?: DP1Repro;
   provenance?: DP1Provenance;
+  // Tolerant read of inline label metadata mirroring the ref-manifest
+  // metadata block (dp1 core/v1.1.0 ref-manifest.md §4). Not in playlist
+  // core: playlist builders that host no ref manifest (today's ff-cli) can
+  // carry artist/title data inline for the tombstone (feral-file#3452).
+  // A resolved ref manifest always outranks this.
+  metadata?: RefManifestMetadata;
 }
 
 export enum Scaling {

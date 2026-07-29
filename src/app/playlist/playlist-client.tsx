@@ -1,7 +1,10 @@
 'use client';
 
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
+import TombstoneOverlay from '@/components/tombstone/TombstoneOverlay';
 import { useAppContext } from '@/context/AppContext';
+import TombstoneToast from '@/components/tombstone/TombstoneToast';
+import { useTombstone } from './useTombstone';
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import { DP1Defaults, DP1Item } from '@/models/dp1.model';
@@ -32,6 +35,7 @@ type AdvanceCause = 'timer' | 'sourceEnd';
 // eslint-disable-next-line max-lines-per-function
 export default function PlaylistClient() {
   const castInfo = useAppContext().context.castInfo;
+  const deviceDisplaySettings = useAppContext().context.displaySettings;
 
   const [playlist, setPlaylist] = useState<DP1Item[]>([]);
   const [playlistDefaultsSettings, setPlaylistDefaultsSettings] =
@@ -613,6 +617,17 @@ export default function PlaylistClient() {
     );
   }, [currentIndex, playlist]);
 
+  // Tombstone state (feral-file#3452): committed-item tracking, label
+  // resolution, mode coercion, and the FF1-side toast — see useTombstone.
+  const {
+    handleItemCommitted,
+    mode: tombstoneMode,
+    itemKey: tombstoneItemKey,
+    title: tombstoneTitle,
+    artistName: tombstoneArtist,
+    toastText: tombstoneToast,
+  } = useTombstone(playlist, deviceDisplaySettings);
+
   return (
     <>
       <div style={{ width: '100%', height: '100%' }}>
@@ -623,8 +638,17 @@ export default function PlaylistClient() {
             itemIdentity={currentItemIdentity}
             onRegisterArtworkReload={registerArtworkReload}
             onSourceEnded={handleSourceEnded}
+            onItemCommitted={handleItemCommitted}
           />
         )}
+        <TombstoneOverlay
+          mode={tombstoneMode}
+          itemKey={tombstoneItemKey}
+          title={tombstoneTitle}
+          artistName={tombstoneArtist}
+          curatorName={castInfo?.playlist?.curator}
+        />
+        <TombstoneToast text={tombstoneToast} />
       </div>
     </>
   );
