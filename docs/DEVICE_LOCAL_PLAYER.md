@@ -42,6 +42,7 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 - The value describes the **current page mount** only. Persistence and boot recovery strip it so IndexedDB cannot resurrect a prior ready/failed before `ArtworkPlayer` publishes a new lifecycle.
 - After boot/hydrate, `renderStatus` may be omitted/`undefined` until the player mounts; treat that as “not yet reported”, not as a terminal failure.
 - `CanvasService` forces `pending` when the selected artwork identity changes (`id` + `source`), including same-id source refresh.
+- Iframe and PDF navigation can complete with a browser-generated error document, and cross-origin iframe failures do not reliably emit an error event. Their `load` event therefore completes the visual transition but deliberately leaves `renderStatus` at `loading`; only a renderer-owned success signal may report `ready`.
 - `showRenderLoadingOverlay` only gates the visible loading overlay; it does not change the codes reported on status polls.
 
 ## Setup overlay background artwork

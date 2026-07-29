@@ -266,13 +266,26 @@ const ArtworkPlayer = ({
     setShowLoading(true);
   }, []);
 
-  const markArtworkReady = useCallback(() => {
+  const markArtworkReady = useCallback((isVerified = true) => {
     if (renderStatusRef.current === RenderStatus.ready) {
       return;
     }
     // Model-viewer failures commit the slot via loadedSource then mark failed.
     // Transition completion must not overwrite that failed status with ready.
     if (renderStatusRef.current === RenderStatus.failed) {
+      return;
+    }
+    if (!isVerified) {
+      // An iframe/PDF load only proves that navigation completed. Browsers can
+      // load an error document after a failed remote navigation, and do not
+      // reliably emit iframe errors for that case. Finish the visual swap so
+      // playback does not wedge, but retain loading to avoid claiming ready
+      // without a renderer-owned success signal.
+      renderStatusRef.current = RenderStatus.loading;
+      canvasService.setRenderStatus(RenderStatus.loading);
+      setGlobalLoading(false);
+      setShowLoading(false);
+      clearLoadingDelay();
       return;
     }
     renderStatusRef.current = RenderStatus.ready;
@@ -698,7 +711,10 @@ const ArtworkPlayer = ({
       setActiveSlot(readySlot);
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
-      markArtworkReady();
+      markArtworkReady(
+        incomingLayer.previewType !== PreviewHTMLTag.iframe &&
+          incomingLayer.previewType !== PreviewHTMLTag.iframePDF
+      );
       onItemCommitted?.(incomingLayer.itemIdentity);
       return;
     }
@@ -751,7 +767,10 @@ const ArtworkPlayer = ({
         setActiveSlot(incoming);
         incomingSlotRef.current = null;
         setTopSlotIndex(null);
-        markArtworkReady();
+        markArtworkReady(
+          incomingLayer.previewType !== PreviewHTMLTag.iframe &&
+            incomingLayer.previewType !== PreviewHTMLTag.iframePDF
+        );
         onItemCommitted?.(incomingLayer.itemIdentity);
       }, FADE_IN_OUT_DURATION_MS);
       return;
@@ -781,7 +800,10 @@ const ArtworkPlayer = ({
       setActiveSlot(incoming);
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
-      markArtworkReady();
+      markArtworkReady(
+        incomingLayer.previewType !== PreviewHTMLTag.iframe &&
+          incomingLayer.previewType !== PreviewHTMLTag.iframePDF
+      );
     }, FADE_IN_OUT_DURATION_MS);
   }, [
     commitVisualSettings,

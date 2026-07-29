@@ -1,4 +1,4 @@
-/* eslint-disable max-lines-per-function -- This file intentionally groups scenario tests for the render-status flow. */
+/* eslint-disable max-lines, max-lines-per-function -- This file intentionally groups scenario tests for the render-status flow. */
 import { AppContext } from '@/context/AppContext';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
 import { RenderStatus } from '@/models';
@@ -163,6 +163,25 @@ async function flushTimers() {
   });
 }
 
+function ensureWebGLConstructors() {
+  if (typeof globalThis.WebGLRenderingContext === 'undefined') {
+    Object.defineProperty(globalThis, 'WebGLRenderingContext', {
+      configurable: true,
+      value: function WebGLRenderingContext() {
+        return undefined;
+      },
+    });
+  }
+  if (typeof globalThis.WebGL2RenderingContext === 'undefined') {
+    Object.defineProperty(globalThis, 'WebGL2RenderingContext', {
+      configurable: true,
+      value: function WebGL2RenderingContext() {
+        return undefined;
+      },
+    });
+  }
+}
+
 beforeEach(() => {
   loaderState.mode = 'fast';
   loaderState.delays = [];
@@ -231,6 +250,41 @@ describe('ArtworkPlayer render status - ready and failure transitions', () => {
     });
     expect(screen.queryByText('Loading...')).toBeNull();
   });
+
+  it.each([
+    ['HTML iframe', 'text/html'],
+    ['PDF iframe', 'application/pdf'],
+  ])(
+    'keeps %s loading after load because navigation is not render verification',
+    async (_label, artworkPreviewMIMEType) => {
+      ensureWebGLConstructors();
+      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+        {} as RenderingContext
+      );
+      const { container } = renderArtworkPlayer(
+        'https://feralfile.com/test/unverified-document',
+        undefined,
+        undefined,
+        artworkPreviewMIMEType
+      );
+
+      const iframe = await waitFor(() => {
+        const node = container.querySelector('iframe');
+        if (!node) {
+          throw new Error('iframe was not rendered');
+        }
+        return node;
+      });
+
+      await act(async () => {
+        iframe.dispatchEvent(new Event('load'));
+        await Promise.resolve();
+      });
+
+      expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.loading);
+      expect(screen.queryByText('Loading...')).toBeNull();
+    }
+  );
 
   it('keeps a stale load from promoting a newer artwork that reuses the same URL', async () => {
     vi.useFakeTimers();

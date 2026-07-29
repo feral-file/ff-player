@@ -142,12 +142,12 @@ describe('ArtworkPlayer WebGL recovery render status', () => {
     vi.useRealTimers();
   });
 
-  it('publishes ready after WebGL loss recovers and the iframe reloads', async () => {
+  it('keeps an iframe loading after WebGL recovery because its load is unverified', async () => {
     const { getListener } = captureWebGLLostListener();
     const { container } = renderHtmlArtwork();
     await settleReact();
     await fireIframeLoad(container);
-    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.loading);
 
     const lostListener = getListener();
     expect(lostListener).toBeTypeOf('function');
@@ -167,6 +167,6 @@ describe('ArtworkPlayer WebGL recovery render status', () => {
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
 
     await fireIframeLoad(container);
-    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.loading);
   });
 });
