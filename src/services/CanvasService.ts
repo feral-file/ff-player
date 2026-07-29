@@ -585,6 +585,22 @@ class CanvasService {
     return { ok: true };
   }
 
+  /**
+   * Re-mounts the artwork currently on screen, for the app's OWN recovery
+   * rather than a controller command. AppContext calls this when WAN
+   * connectivity returns while the selected artwork failed to load: the
+   * remount re-runs exactly the remote asset fetches that died offline, with
+   * the player's normal crossfade, and without touching castInfo or playlist
+   * position. It shares `refreshArtwork`'s pendingRefreshArtwork machinery,
+   * so a nudge that arrives before the playlist route has registered its
+   * handler is replayed once the handler lands instead of being dropped.
+   * Returns whether the refresh was applied; a `false` result is not retried
+   * here, the next connectivity notification is the retry.
+   */
+  public requestArtworkRefresh(): boolean {
+    return this.refreshArtwork().ok;
+  }
+
   private refreshArtwork(): Reply {
     const activeCastInfo = this.castInfo;
     if (!activeCastInfo?.playlist?.items?.length) {

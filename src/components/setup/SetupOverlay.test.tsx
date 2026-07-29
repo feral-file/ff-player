@@ -403,6 +403,10 @@ function overlayWithCastInfo(castInfo: CastInfo | null) {
           castInfo,
           displaySettings: null,
           cursorPositions: null,
+          // Healthy playback: these suites cover the setup-flow branch of
+          // the background's show condition. The offline-degraded branch has
+          // its own matrix in SetupArtworkBackground.test.tsx.
+          playbackDegraded: false,
         },
       }}>
       <SetupOverlay />

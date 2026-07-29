@@ -1,4 +1,4 @@
-import { AppProvider } from '@/context/AppContext';
+import { AppProvider, useAppContext } from '@/context/AppContext';
 import { LocalStorageItem } from '@/constants';
 import { CastCommand, type CastInfo } from '@/models';
 import { CustomEventName } from '@/models/custom_event';
@@ -29,6 +29,7 @@ const { axiosGet, canvasServiceMocks, deviceManager } =
         completeBootCastHydration: vi.fn(),
         getCastInfo: vi.fn<() => CastInfo | null>(() => null),
         setCastInfo: vi.fn(),
+        requestArtworkRefresh: vi.fn<() => boolean>(() => true),
       },
       deviceManager,
     };
@@ -87,6 +88,7 @@ vi.mock('@/services/CanvasService', () => ({
     completeBootCastHydration: canvasServiceMocks.completeBootCastHydration,
     getCastInfo: canvasServiceMocks.getCastInfo,
     setCastInfo: canvasServiceMocks.setCastInfo,
+    requestArtworkRefresh: canvasServiceMocks.requestArtworkRefresh,
   },
 }));
 
@@ -117,7 +119,35 @@ beforeEach(() => {
     Promise.resolve(true)
   );
   canvasServiceMocks.getCastInfo.mockImplementation(() => null);
+  canvasServiceMocks.requestArtworkRefresh.mockImplementation(() => true);
 });
+
+/**
+ * Mounts the provider and exposes the context's degraded-playback setter the
+ * way ArtworkPlayer uses it, so the reconnect tests can drive the real
+ * signal instead of reaching into provider internals.
+ */
+function renderWithDegradedProbe(): {
+  setPlaybackDegraded: (degraded: boolean) => void;
+} {
+  let setter: ((degraded: boolean) => void) | undefined;
+  const Probe = () => {
+    setter = useAppContext().context.setPlaybackDegraded;
+    return <div data-testid="app-ready" />;
+  };
+  render(
+    <AppProvider>
+      <Probe />
+    </AppProvider>
+  );
+  return {
+    setPlaybackDegraded: (degraded: boolean) => {
+      act(() => {
+        setter?.(degraded);
+      });
+    },
+  };
+}
 
 describe('AppContext boot recovery', () => {
   it('skips boot playlist restoration after a version update reload', async () => {
@@ -361,6 +391,102 @@ describe('AppContext connectivity re-key', () => {
       await vi.advanceTimersByTimeAsync(0);
     });
     expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(2);
+  });
+});
+
+// An offline boot restores the persisted playlist but every remote asset
+// fetch behind it is single-attempt, so the wall goes black and nothing ever
+// retried once Wi-Fi came back. ArtworkPlayer reports the failed load through
+// context; this effect turns the next online notification into one refresh.
+describe('AppContext reconnect recovery', () => {
+  const bootProbe = () => {
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    axiosGet.mockResolvedValueOnce({
+      data: {
+        duration: 1000,
+        defaultPlaylistURL: 'https://example.com/default-playlist',
+      },
+    });
+    return renderWithDegradedProbe();
+  };
+
+  const notifyOnline = () => {
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(CustomEventName.ConnectivityChange, {
+          detail: { isOnline: true },
+        })
+      );
+    });
+  };
+
+  it('refreshes as soon as the artwork reports a failed load', async () => {
+    // Covers the ordering where connectivity returned first and the fetch
+    // only gave up seconds later: on a single-item playlist there is no
+    // playlist advance to retry it, so the degraded edge has to be a trigger
+    // in its own right or the wall stays black indefinitely.
+    const probe = bootProbe();
+    await waitFor(() => {
+      expect(screen.getByTestId('app-ready')).toBeTruthy();
+    });
+
+    probe.setPlaybackDegraded(true);
+
+    expect(canvasServiceMocks.requestArtworkRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes again when connectivity returns while still degraded', async () => {
+    const probe = bootProbe();
+    await waitFor(() => {
+      expect(screen.getByTestId('app-ready')).toBeTruthy();
+    });
+
+    probe.setPlaybackDegraded(true);
+    notifyOnline();
+
+    expect(canvasServiceMocks.requestArtworkRefresh).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not refresh when playback is healthy', async () => {
+    bootProbe();
+    await waitFor(() => {
+      expect(screen.getByTestId('app-ready')).toBeTruthy();
+    });
+
+    notifyOnline();
+
+    expect(canvasServiceMocks.requestArtworkRefresh).not.toHaveBeenCalled();
+  });
+
+  it('does not loop while the same artwork keeps failing', async () => {
+    // The refresh re-mounts the SAME previewURL, so a repeat failure finds
+    // the flag already set and ArtworkPlayer writes no new context state.
+    // That is what makes an attempt cap unnecessary — this test pins it.
+    const probe = bootProbe();
+    await waitFor(() => {
+      expect(screen.getByTestId('app-ready')).toBeTruthy();
+    });
+
+    probe.setPlaybackDegraded(true);
+    probe.setPlaybackDegraded(true);
+    probe.setPlaybackDegraded(true);
+
+    expect(canvasServiceMocks.requestArtworkRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops refreshing once the artwork loads successfully', async () => {
+    const probe = bootProbe();
+    await waitFor(() => {
+      expect(screen.getByTestId('app-ready')).toBeTruthy();
+    });
+
+    probe.setPlaybackDegraded(true);
+    expect(canvasServiceMocks.requestArtworkRefresh).toHaveBeenCalledTimes(1);
+
+    probe.setPlaybackDegraded(false);
+    notifyOnline();
+
+    expect(canvasServiceMocks.requestArtworkRefresh).toHaveBeenCalledTimes(1);
   });
 });
 

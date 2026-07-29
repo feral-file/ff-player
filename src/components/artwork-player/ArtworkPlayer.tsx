@@ -206,6 +206,65 @@ const ArtworkPlayer = ({
 
   const cursorRef = useRef<CursorLayerHandle>(null);
 
+  // ---- Degraded-playback signal ------------------------------------------
+  // "The artwork this player is currently trying to show failed to load."
+  // Every failure path below deliberately still commits its slot through
+  // `loadedSource` (abandoning the incoming claim wedges the visual-settings
+  // latch — see handleMediaError), so the commit point cannot tell success
+  // from failure; the outcome is recorded at the error and success sites
+  // instead. AppContext lifts the flag so two consumers can act on it: the
+  // reconnect-recovery refresh, and the setup background, which puts the
+  // bundled offline artwork on screen instead of a black frame.
+  //
+  // A ref holds the failing URL and only genuine transitions reach context,
+  // so repeated failures on the same artwork cost no re-render.
+  const { setPlaybackDegraded } = context;
+  const degradedURLRef = useRef<string | null>(null);
+  const notePlaybackOutcome = useCallback(
+    (url: string, failed: boolean) => {
+      // Staleness is checked in two halves, and callers must satisfy both.
+      // This is the argument-based half: `url` is the URL the reporting
+      // layer was actually rendering, so a load that settles after the
+      // playlist moved on says nothing about what is on the wall now and is
+      // dropped. `loadedSource` owns the slot-based half — whether this slot
+      // is the one whose commit the transition pipeline accepted — which is
+      // why nearly every call site below sits inside its gate.
+      if (url !== previewURLRef.current) {
+        return;
+      }
+      const nextDegradedURL = failed ? url : null;
+      if (degradedURLRef.current === nextDegradedURL) {
+        return;
+      }
+      degradedURLRef.current = nextDegradedURL;
+      setPlaybackDegraded?.(failed);
+    },
+    [setPlaybackDegraded]
+  );
+
+  /**
+   * The URL a slot is actually rendering. Handlers that only receive a
+   * slotIndex report through this rather than `previewURLRef.current`, which
+   * would make notePlaybackOutcome's guard compare a value against itself.
+   */
+  const slotPreviewURL = (slotIndex: SlotIndex) =>
+    slotsRef.current[slotIndex]?.previewURL ?? '';
+
+  // Moving to a different artwork (or unmounting) invalidates the flag: the
+  // previous item's failure must not hold the offline backdrop over an
+  // artwork that is loading fine. A same-URL remount — which is exactly what
+  // the reconnect recovery triggers — intentionally does NOT clear it, so a
+  // retry that fails again stays degraded and only a real success clears it.
+  useEffect(() => {
+    return () => {
+      if (degradedURLRef.current === null) {
+        return;
+      }
+      degradedURLRef.current = null;
+      setPlaybackDegraded?.(false);
+    };
+  }, [previewURL, setPlaybackDegraded]);
+
   // ---- Latched visual settings -------------------------------------------
   // `displaySettings` flips to the NEXT item's preferences the moment the
   // playlist advances, but the incoming artwork only becomes visible after
@@ -653,7 +712,14 @@ const ArtworkPlayer = ({
   const handleIframeLoad = (slotIndex: SlotIndex) => {
     if (isWebGLAvailable()) {
       setShowMessageModal(false);
-      loadedSource(slotIndex);
+      if (loadedSource(slotIndex)) {
+        // Known limitation: a cross-origin iframe fires `load` even when the
+        // browser rendered its own network-error page, so an offline iframe
+        // artwork reads as a success here and never raises the degraded
+        // flag. Nothing in-page can inspect that document; `onError` (below)
+        // stays the only signal we can trust for this preview type.
+        notePlaybackOutcome(slotPreviewURL(slotIndex), false);
+      }
     } else {
       handleWebGLLost();
     }
@@ -661,6 +727,7 @@ const ArtworkPlayer = ({
 
   const handleModelLoad = (slotIndex: SlotIndex) => {
     if (loadedSource(slotIndex)) {
+      notePlaybackOutcome(slotPreviewURL(slotIndex), false);
       setShowMessageModal(false);
     }
   };
@@ -684,6 +751,7 @@ const ArtworkPlayer = ({
       return;
     }
 
+    notePlaybackOutcome(slotPreviewURL(slotIndex), true);
     clearLoadingIndicators();
     setMessageModalTitle(
       'The artwork cannot be displayed correctly on this device.'
@@ -882,7 +950,12 @@ const ArtworkPlayer = ({
           // every later settings update reads as "transition pending", and
           // the artwork on screen stops receiving settings until the next
           // artwork request. loadedSource's URL guard drops stale failures.
-          loadedSource(slotIndex);
+          if (loadedSource(slotIndex)) {
+            // Only a failure loadedSource actually accepted describes what
+            // the device is trying to show; a rejected one belongs to a
+            // superseded slot and must not mark playback degraded.
+            notePlaybackOutcome(layer.previewURL, true);
+          }
       };
 
       const loadMedia = async () => {
@@ -911,8 +984,11 @@ const ArtworkPlayer = ({
             void decoded
               .catch(() => undefined)
               .finally(() => {
-                if (!isCancelled) {
-                  loadedSource(slotIndex);
+                if (!isCancelled && loadedSource(slotIndex)) {
+                  // Genuine success site: `onload` fired, so the bytes
+                  // arrived. `loadedSource` alone cannot serve as the
+                  // success signal — the failure paths call it too.
+                  notePlaybackOutcome(layer.previewURL, false);
                 }
               });
           };
@@ -942,6 +1018,21 @@ const ArtworkPlayer = ({
         ) {
           const el = videoRefs[slotIndex].current;
           const handleNonStreamingVideoReady = () => {
+            // `loadeddata` is the unambiguous success moment for progressive
+            // video. playVideoForSlot's own loadedSource call is not usable
+            // as one: it fires from play()'s `finally`, i.e. on a rejected
+            // play just as much as a resolved one.
+            //
+            // Guarded like loadedSource's competing-claim check, but without
+            // its side effects (claiming the slot here would start the
+            // crossfade before play() is even called). Adjacent playlist
+            // items may share a previewURL, so the URL guard inside
+            // notePlaybackOutcome alone would let a late `loadeddata` from
+            // the PREVIOUS item clear a failure raised by the current one.
+            const claimed = incomingSlotRef.current;
+            if (claimed === null || claimed === slotIndex) {
+              notePlaybackOutcome(layer.previewURL, false);
+            }
             playVideoForSlot(slotIndex, layer, el);
           };
           el.addEventListener('loadeddata', handleNonStreamingVideoReady);
@@ -969,7 +1060,9 @@ const ArtworkPlayer = ({
           const el = audioRefs[slotIndex].current;
           // createMediaLoader().loadMedia sets src only; it never invokes onLoad (see mediaLoader.ts).
           const handleAudioReady = () => {
-            loadedSource(slotIndex);
+            if (loadedSource(slotIndex)) {
+              notePlaybackOutcome(layer.previewURL, false);
+            }
           };
           el.addEventListener('loadeddata', handleAudioReady);
           el.onerror = () => {
@@ -1002,7 +1095,7 @@ const ArtworkPlayer = ({
         mediaLoaders.current[slotIndex].cleanup();
       };
     },
-    [loadedSource, playVideoForSlot]
+    [loadedSource, notePlaybackOutcome, playVideoForSlot]
   );
 
   useEffect(() => {
@@ -1127,6 +1220,7 @@ const ArtworkPlayer = ({
     if (!loadedSource(slotIndex)) {
       return;
     }
+    notePlaybackOutcome(slotPreviewURL(slotIndex), true);
     clearLoadingIndicators();
     updateSlot(slotIndex, { loading: false });
     setMessageModalTitle(

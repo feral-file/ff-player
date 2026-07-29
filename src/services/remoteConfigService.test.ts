@@ -71,6 +71,95 @@ describe('RemoteConfigService defaults', () => {
   });
 });
 
+describe('RemoteConfigService caching', () => {
+  afterEach(resetRemoteConfigTestEnv);
+
+  it('caches a config that came from the remote fetch', async () => {
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    axiosGet.mockResolvedValueOnce({
+      data: {
+        duration: 1000,
+        defaultPlaylistURL: 'https://example.com/published',
+      },
+    });
+
+    const service = new RemoteConfigService();
+
+    await expect(service.getAppRemoteConfig()).resolves.toMatchObject({
+      defaultPlaylistURL: 'https://example.com/published',
+    });
+    await expect(service.getAppRemoteConfig()).resolves.toMatchObject({
+      defaultPlaylistURL: 'https://example.com/published',
+    });
+    expect(axiosGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cache the fallback, so a later call reaches the network', async () => {
+    // Offline-boot regression: fetchConfig never rejects (it answers with
+    // local defaults), so caching its result pinned the whole page lifetime
+    // to those defaults and the published display.json was never read again
+    // even after Wi-Fi came up.
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    axiosGet.mockRejectedValueOnce(new Error('network down'));
+    axiosGet.mockResolvedValueOnce({
+      data: {
+        duration: 1000,
+        defaultPlaylistURL: 'https://example.com/published',
+      },
+    });
+
+    const service = new RemoteConfigService();
+
+    await expect(service.getAppRemoteConfig()).resolves.toEqual({
+      duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,
+      defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
+    });
+    expect(axiosGet).toHaveBeenCalledTimes(1);
+
+    await expect(service.getAppRemoteConfig()).resolves.toEqual({
+      duration: 1000,
+      defaultPlaylistURL: 'https://example.com/published',
+    });
+    expect(axiosGet).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not let a late fallback clobber a config that already landed', async () => {
+    // AppContext re-reads this on every online notification, so a request
+    // left hanging on a dying link can still be in flight when a later one
+    // succeeds. If the slow failure handed its LOCAL fallback back, the
+    // caller would commit it, revert defaultPlaylistURL to the built-in
+    // default, and re-arm the very fallback-playlist bug this caching rule
+    // exists to prevent.
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    const published = {
+      duration: 1000,
+      defaultPlaylistURL: 'https://example.com/published',
+    };
+    let failSlowRead: ((error: Error) => void) | undefined;
+    axiosGet.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          failSlowRead = reject;
+        })
+    );
+    axiosGet.mockResolvedValueOnce({ data: published });
+
+    const service = new RemoteConfigService();
+
+    // The slow read is still in flight when the second one succeeds and
+    // caches the published config.
+    const slowRead = service.getAppRemoteConfig();
+    await expect(service.getAppRemoteConfig()).resolves.toEqual(published);
+
+    failSlowRead?.(new Error('link died mid-request'));
+
+    await expect(slowRead).resolves.toEqual(published);
+    // And the cache itself survived: no third request, still published.
+    await expect(service.getAppRemoteConfig()).resolves.toEqual(published);
+    expect(axiosGet).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('RemoteConfigService duration normalization', () => {
   afterEach(resetRemoteConfigTestEnv);
 

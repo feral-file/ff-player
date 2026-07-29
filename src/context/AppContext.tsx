@@ -51,6 +51,23 @@ interface AppConfigContext {
   castInfo: CastInfo | null;
   displaySettings: DisplaySettings | null;
   cursorPositions: CursorPosition[] | null;
+  /**
+   * True while the artwork the player is currently trying to show failed to
+   * load. Owned by ArtworkPlayer (only it can tell a genuine load from a
+   * failure) and lifted here because two unrelated consumers need it: the
+   * reconnect-recovery effect below, and SetupArtworkBackground, which shows
+   * the bundled offline artwork instead of a black screen.
+   */
+  playbackDegraded: boolean;
+  /**
+   * Reports the load outcome of the current artwork. AppProvider always
+   * supplies it. It is optional so ArtworkPlayer can call it defensively:
+   * the player is mounted in several suites against a hand-built context
+   * value cast with `as never`, where the setter is absent at runtime no
+   * matter what this type says, and a required signature would only hide
+   * that behind a `TypeError`.
+   */
+  setPlaybackDegraded?: (degraded: boolean) => void;
 }
 
 /**
@@ -110,6 +127,9 @@ export const AppProvider = ({ children }: AppContextProps) => {
   // even a repeated `true` restarts the loop (harmless when idle: the
   // effect early-returns unless a request is active).
   const [onlineSignal, setOnlineSignal] = useState(0);
+
+  // "The artwork on screen failed to load", reported by ArtworkPlayer.
+  const [playbackDegraded, setPlaybackDegraded] = useState(false);
 
   const { castInfo, setCastInfo } = useCastInfo();
   const { displaySettings, setDisplaySettings } = useDeviceSettings();
@@ -265,13 +285,27 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
 
   useEffect(() => {
+    // Generation guard. The old mount-once effect could not overlap; re-keying
+    // it on `onlineSignal` means a slow read can still be in flight when the
+    // next notification starts a fresh one, and the loser resolving last
+    // would otherwise commit its (older, possibly fallback) config over the
+    // winner's. The service refuses to hand back a fallback once a published
+    // config is cached; this is the same protection one layer up, covering
+    // the local-defaults branch below too.
+    let cancelled = false;
     const fetchConfig = async () => {
       try {
         const appRemoteConfig =
           await remoteConfigService.current.getAppRemoteConfig();
+        if (cancelled) {
+          return;
+        }
         setAppConfig(appRemoteConfig);
       } catch (error) {
         console.log('[API] Failed to load config:', error);
+        if (cancelled) {
+          return;
+        }
         setAppConfig({
           duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,
           defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
@@ -282,7 +316,18 @@ export const AppProvider = ({ children }: AppContextProps) => {
     fetchConfig().catch((error: unknown) => {
       console.log('[API] Failed to load config:', error);
     });
-  }, []);
+    // Re-keyed on every online notification, which is what makes
+    // RemoteConfigService's "don't cache a fallback" rule load-bearing: an
+    // offline boot resolves to the LOCAL defaults, and without a second
+    // caller the published display.json would never be read for the rest of
+    // the page lifetime — the device would keep playing the built-in default
+    // playlist even after Wi-Fi came up. Repeats are free once a real fetch
+    // succeeds: the service caches that result and answers without a
+    // request.
+    return () => {
+      cancelled = true;
+    };
+  }, [onlineSignal]);
 
   useEffect(() => {
     const cdpRequestHandler = CDPRequestHandler.getInstance();
@@ -395,6 +440,46 @@ export const AppProvider = ({ children }: AppContextProps) => {
     };
   }, []);
 
+  // Reconnect recovery for an artwork that failed to load.
+  //
+  // On an offline boot the persisted castInfo playlist restores from
+  // IndexedDB, but every remote asset fetch behind it is single-attempt: a
+  // failure commits the empty slot through the crossfade (black screen) or
+  // leaves an iframe on Chromium's error page, and nothing ever retried once
+  // connectivity returned. This is that retry.
+  //
+  // Two edges trigger it, and between them they cover both orderings of the
+  // race between "Wi-Fi came back" and "the fetch finally gave up":
+  //   - `onlineSignal`, for a load that had already failed when connectivity
+  //     returned. It counts online NOTIFICATIONS rather than reading the
+  //     isOnline boolean for the same reason the fallback loop above does
+  //     (see its declaration comment): useNetworkManger starts at `true`, so
+  //     the first real ConnectivityChange after provisioning is a true→true
+  //     no-op that would never re-key an isOnline-keyed effect.
+  //   - `playbackDegraded` itself, for a load still in flight when that
+  //     notification arrived and only erroring seconds later — on a
+  //     single-item playlist there is no playlist advance to retry it, so
+  //     without this edge the wall stays black indefinitely.
+  //
+  // This cannot become a retry loop, which is why it needs no attempt cap:
+  // the refresh re-mounts the SAME previewURL, so a repeat failure finds the
+  // flag already set, ArtworkPlayer writes no new context state, and neither
+  // dependency changes. Recovery is bounded to one nudge per genuine
+  // transition rather than a timer hammering a URL connectivity cannot fix.
+  //
+  // Firing regardless of `isOnline` is DELIBERATE: that boolean is only as
+  // good as the daemon's edge-triggered pushes (see DEVICE_LOCAL_PLAYER.md),
+  // so gating on it would make recovery exactly as unreliable as the
+  // best-effort backdrop. The cost of not gating is one bounded extra reload
+  // per item visit for a genuinely broken artwork.
+  useEffect(() => {
+    if (!playbackDegraded) {
+      return;
+    }
+    console.log('[AppContext] Degraded playback, refreshing artwork');
+    canvasService.requestArtworkRefresh();
+  }, [onlineSignal, playbackDegraded]);
+
   // Explicit (non-fallback) cast committed → cancel any active fallback
   // request so a pending retry or in-flight attempt can never overwrite the
   // controller's content with the default playlist. Ordering with a
@@ -481,6 +566,8 @@ export const AppProvider = ({ children }: AppContextProps) => {
           castInfo,
           displaySettings,
           cursorPositions,
+          playbackDegraded,
+          setPlaybackDegraded,
         },
       }}>
       {children}
