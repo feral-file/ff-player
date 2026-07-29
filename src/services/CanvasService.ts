@@ -148,8 +148,13 @@ function resolveRenderStatusForCastInfo(
     previousIndex !== undefined &&
     nextIndex !== undefined
   ) {
-    const previousItem = previousItems.at(previousIndex);
-    const nextItem = nextItems.at(nextIndex);
+    const previousItem = previousItems.at(
+      ((previousIndex % previousItems.length) + previousItems.length) %
+        previousItems.length
+    );
+    const nextItem = nextItems.at(
+      ((nextIndex % nextItems.length) + nextItems.length) % nextItems.length
+    );
     if (!isSameSelectedArtworkIdentity(previousItem, nextItem)) {
       return RenderStatus.pending;
     }
@@ -742,6 +747,10 @@ class CanvasService {
       return { ok: false };
     }
     this.pendingRefreshArtwork = false;
+    // The playlist route applies the reload on a later React turn. Publish
+    // pending before acknowledging the command so an immediate status poll
+    // cannot report the prior artwork lifecycle.
+    this.setRenderStatus(RenderStatus.pending);
     return { ok: true };
   }
 

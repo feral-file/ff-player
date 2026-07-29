@@ -1504,6 +1504,7 @@ const ArtworkPlayer = ({
               onError={() => {
                 handleModelLoadError(slotIndex, slot);
               }}
+              showLoadingOverlay={showRenderLoadingOverlay}
             />
           </div>
         )}

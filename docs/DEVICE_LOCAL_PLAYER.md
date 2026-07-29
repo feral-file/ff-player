@@ -44,6 +44,12 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 - `CanvasService` forces `pending` when the selected artwork identity changes (`id` + `source`), including same-id source refresh.
 - `showRenderLoadingOverlay` only gates the visible loading overlay; it does not change the codes reported on status polls.
 
+## Setup overlay background artwork
+
+- Every `setupDisplay` state renders the bundled artwork beneath its panel and dark scrim; the setup artwork is packaged locally so factory-fresh setup needs no network access.
+- It is a render-only `SetupOverlay` layer, not a `CanvasService` cast: persisting it as a cast would replace fallback-playlist recovery.
+- The background appears only while no cast is active. An updating/pairing overlay raised over live playback leaves the playing artwork visible beneath the scrim.
+
 ## Playlist artwork source compatibility
 
 `CanvasService` validates artwork sources before accepting `now_display`,

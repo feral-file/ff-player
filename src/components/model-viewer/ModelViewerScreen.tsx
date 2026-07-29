@@ -65,6 +65,7 @@ interface ModelViewerScreenProps {
   src?: string | null;
   onLoad?: () => void;
   onError?: () => void;
+  showLoadingOverlay?: boolean;
 }
 
 /**
@@ -77,6 +78,7 @@ export default function ModelViewerScreen({
   src,
   onLoad,
   onError,
+  showLoadingOverlay = true,
 }: ModelViewerScreenProps) {
   const viewerRef = useRef<HTMLElement | null>(null);
   const resolvedSrc = src ?? '';
@@ -90,7 +92,7 @@ export default function ModelViewerScreen({
     resolvedSrc,
     viewerRef,
   });
-  const showLoadingOverlay =
+  const shouldShowLoadingOverlay =
     hasSource && !isLoaded && !hasError && !hasBootstrapError;
 
   useModelViewerCursorLock(
@@ -121,7 +123,7 @@ export default function ModelViewerScreen({
           src={resolvedSrc}
         />
       )}
-      {showLoadingOverlay && (
+      {showLoadingOverlay && shouldShowLoadingOverlay && (
         <div style={overlayStyle}>
           <div style={spinnerStyle} />
           <div>
