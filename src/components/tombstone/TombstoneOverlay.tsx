@@ -2,6 +2,7 @@
 
 import { TombstoneMode } from '@/models/display_settings.model';
 import { CSSProperties, useEffect, useRef, useState } from 'react';
+import { designPx } from './designPx';
 
 /**
  * Auto-dismiss window for `TombstoneMode.Timed` (feral-file#3452 default).
@@ -16,12 +17,8 @@ export const TOMBSTONE_AUTO_DISMISS_SECONDS = 30;
 // The timer bar is a 1px #E3E3E3 track across the label's top whose #A0A0A0
 // fill depletes over the auto-dismiss window — the visible countdown.
 //
-// The design canvas is 1280×720, so every px value in the frame is relative
-// to a 720-tall viewport — absolute CSS pixels would render the label at
-// two-thirds size on a 1080p wall and a quarter size at 4K. `designPx`
-// converts frame px to vh so the label holds the designed proportion at any
-// output resolution.
-const designPx = (px: number): string => `${((px / 720) * 100).toFixed(4)}vh`;
+// Frame px are converted to vh by `designPx` (see ./designPx) so the label
+// holds its designed proportion at any output resolution.
 
 const containerStyle: CSSProperties = {
   position: 'absolute',
@@ -89,7 +86,9 @@ function TimerBar({ seconds, runKey }: { seconds: number; runKey: string }) {
     setDepleting(false);
     let inner: number | undefined;
     const outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => { setDepleting(true); });
+      inner = requestAnimationFrame(() => {
+        setDepleting(true);
+      });
     });
     return () => {
       cancelAnimationFrame(outer);
@@ -155,12 +154,13 @@ export default function TombstoneOverlay({
     }
     setVisible(true);
     if (mode === TombstoneMode.Timed) {
-      hideTimeoutRef.current = setTimeout(
-        () => { setVisible(false); },
-        TOMBSTONE_AUTO_DISMISS_SECONDS * 1000
-      );
+      hideTimeoutRef.current = setTimeout(() => {
+        setVisible(false);
+      }, TOMBSTONE_AUTO_DISMISS_SECONDS * 1000);
     }
-    return () => { clearTimeout(hideTimeoutRef.current); };
+    return () => {
+      clearTimeout(hideTimeoutRef.current);
+    };
   }, [mode, runKey, hasTitle]);
 
   if (mode === TombstoneMode.Off || !title) {
@@ -171,8 +171,7 @@ export default function TombstoneOverlay({
     <div
       data-testid="tombstone-overlay"
       aria-hidden={!visible}
-      style={{ ...containerStyle, opacity: visible ? 1 : 0 }}
-    >
+      style={{ ...containerStyle, opacity: visible ? 1 : 0 }}>
       {mode === TombstoneMode.Timed && visible && (
         <TimerBar seconds={TOMBSTONE_AUTO_DISMISS_SECONDS} runKey={runKey} />
       )}
