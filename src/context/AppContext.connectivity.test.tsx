@@ -38,6 +38,7 @@ const { axiosGet, canvasServiceMocks, deviceManager } = vi.hoisted(() => {
       getCastInfo: vi.fn(() => null),
       setCastInfo: vi.fn(),
       requestArtworkRefresh: vi.fn(() => true),
+      wasHaltedDuringBootHydration: vi.fn(() => false),
     },
     deviceManager,
   };
@@ -97,6 +98,7 @@ vi.mock('@/services/CanvasService', () => ({
     getCastInfo: canvasServiceMocks.getCastInfo,
     setCastInfo: canvasServiceMocks.setCastInfo,
     requestArtworkRefresh: canvasServiceMocks.requestArtworkRefresh,
+    wasHaltedDuringBootHydration: canvasServiceMocks.wasHaltedDuringBootHydration,
   },
 }));
 
@@ -128,6 +130,9 @@ beforeEach(() => {
   );
   canvasServiceMocks.getCastInfo.mockImplementation(() => null);
   canvasServiceMocks.requestArtworkRefresh.mockImplementation(() => true);
+  canvasServiceMocks.wasHaltedDuringBootHydration.mockImplementation(
+    () => false
+  );
 });
 
 const PUBLISHED_URL = 'https://example.com/published';
@@ -255,6 +260,49 @@ describe('AppContext fallback supersede on config change', () => {
       window.dispatchEvent(
         new CustomEvent(CustomEventName.ExplicitPlaylistCast)
       );
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    queuePublishedConfig();
+    await notifyOnline();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(castCalls()).toHaveLength(1);
+  });
+});
+
+describe('AppContext fallback stand-down on controller stop', () => {
+  it('a controller stop disarms the supersede', async () => {
+    // disconnect / setSleepMode(true) dispatch PlaybackHalted. A published
+    // config landing after the stop must not re-arm the fallback: its cast
+    // navigates to '/' and would relight the cleared wall or wake the
+    // sleeping device.
+    await bootWithConfigHostDown(true);
+    expect(castCalls()).toHaveLength(1);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(CustomEventName.PlaybackHalted));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    queuePublishedConfig();
+    await notifyOnline();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(castCalls()).toHaveLength(1);
+  });
+
+  it('a controller stop cancels an armed retry loop', async () => {
+    // Same family, other half: a fallback still retrying toward its next
+    // attempt must stand down too, or reconnect would cast the default
+    // playlist onto the wall the controller just stopped.
+    await bootWithConfigHostDown(false);
+    expect(castCalls()).toHaveLength(1);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(CustomEventName.PlaybackHalted));
       await vi.advanceTimersByTimeAsync(0);
     });
 

@@ -85,3 +85,46 @@ describe('CanvasService explicit-cast signalling', () => {
     expect(canvasService.getCastInfo()).toBeNull();
   });
 });
+
+// A controller stop must announce itself the same way an explicit cast does,
+// or the fallback machinery outlives it: an armed retry or the config-change
+// supersede would later cast the default playlist and relight a disconnected
+// wall — or navigate a sleeping device back to '/'.
+describe('CanvasService playback-halt signalling', () => {
+  afterEach(() => {
+    canvasService.setCastInfo(null, false);
+    vi.restoreAllMocks();
+  });
+
+  it('disconnect dispatches PlaybackHalted', () => {
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    expect(canvasService.disconnect()).toEqual({ ok: true });
+
+    expect(dispatchedEvents(spy)).toContain(CustomEventName.PlaybackHalted);
+  });
+
+  it('entering sleep dispatches PlaybackHalted', () => {
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    expect(canvasService.setSleepMode({ sleepMode: true })).toEqual({
+      ok: true,
+    });
+
+    expect(dispatchedEvents(spy)).toContain(CustomEventName.PlaybackHalted);
+  });
+
+  it('waking from sleep does not dispatch PlaybackHalted', () => {
+    // Wake resumes playback; announcing a halt here would cancel a
+    // displayDefaultPlaylist request racing the wake.
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    expect(canvasService.setSleepMode({ sleepMode: false })).toEqual({
+      ok: true,
+    });
+
+    expect(dispatchedEvents(spy)).not.toContain(
+      CustomEventName.PlaybackHalted
+    );
+  });
+});

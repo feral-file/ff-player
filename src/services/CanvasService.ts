@@ -91,6 +91,15 @@ class CanvasService {
   // restore is about to overwrite.
   private bootCastHydrationPending = true;
   private deferredConditionalDefaultRequest = false;
+  // A disconnect landed while hydration was still pending. initCastInfo's
+  // "live cast committed during hydration" bail-out reads castInfo, but a
+  // disconnect CLEARS castInfo — indistinguishable from "nothing happened"
+  // at the decision point. Same ambiguity bootCastHydrationPending exists
+  // for (null means "unknown", not "empty screen"), from the other
+  // direction: here null must mean "deliberately cleared", so boot must not
+  // restore persisted state or arm the fallback over it. Sticky for the
+  // page lifetime — it is only consulted at the one boot decision.
+  private haltedDuringBootHydration = false;
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
   /**
    * Playlist route registers a cache-bust reload for the active artwork.
@@ -543,7 +552,34 @@ class CanvasService {
   public disconnect(): DisconnectReplyV2 {
     console.log('[CanvasService] Disconnect');
     this.setCastInfo(null);
+    if (this.bootCastHydrationPending) {
+      // Mid-hydration disconnect: initCastInfo has not made its boot
+      // decision yet and will read the cleared castInfo as "nothing
+      // happened" — see the field comment.
+      this.haltedDuringBootHydration = true;
+    }
+    // The controller stopped playback: AppContext must stand its fallback
+    // machinery down. Without this, an armed boot-fallback retry or the
+    // config-change supersede could later cast the default playlist and
+    // relight a wall the controller just cleared. Window guard: SSR safety,
+    // matching this file's other dispatches.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent(CustomEventName.PlaybackHalted as string)
+      );
+    }
     return { ok: true };
+  }
+
+  /**
+   * True when a disconnect cleared castInfo before boot hydration finished.
+   * InitCastInfo consults this alongside getCastInfo(): either signal means
+   * a live command already took authority over the wall, so the stale
+   * persisted state must not be restored and the fallback must not be
+   * armed over it.
+   */
+  public wasHaltedDuringBootHydration(): boolean {
+    return this.haltedDuringBootHydration;
   }
 
   public setSleepMode(request: SetSleepModeRequest): SetSleepModeReply {
@@ -556,6 +592,14 @@ class CanvasService {
           ...this.castInfo,
           castCommand: CastCommand.displayPlaylist,
         });
+      } else {
+        // Sleep hides playback without clearing castInfo, but the fallback
+        // machinery must stand down the same as for disconnect: a published
+        // config landing after sleep would otherwise re-arm the fallback,
+        // whose successful cast navigates to '/' and wakes the device.
+        window.dispatchEvent(
+          new CustomEvent(CustomEventName.PlaybackHalted as string)
+        );
       }
       window.dispatchEvent(
         new CustomEvent<NavigateEventDetail>(

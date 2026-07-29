@@ -18,6 +18,16 @@ export enum CustomEventName {
   // job. The fallback's own cast intentionally does NOT dispatch this — its
   // settling is handled by the loop's nonce-guarded clear.
   ExplicitPlaylistCast = 'explicitPlaylistCast',
+  // CanvasService/ErrorNavigation → AppContext: something deliberately took
+  // the wall off playback (disconnect, setSleepMode(true), navigation to the
+  // error page). AppContext stands the fallback machinery down exactly as
+  // for ExplicitPlaylistCast — aborts an in-flight attempt, cancels an
+  // active retry, and clears the config-change supersede marker — so no
+  // fallback path can later cast the default playlist and relight (or wake)
+  // a wall that was just stopped. A LATER explicit cast or
+  // displayDefaultPlaylist push still wins: these are synchronous window
+  // events and last command wins, so the halt is a stand-down, not a latch.
+  PlaybackHalted = 'playbackHalted',
   MintPairingDisplay = 'mintPairingDisplay',
   Navigate = 'navigate',
   SetupDisplay = 'setupDisplay',

@@ -118,3 +118,38 @@ describe('CanvasService boot cast hydration gate', () => {
     ).toHaveLength(1);
   });
 });
+
+// A disconnect clears castInfo, so initCastInfo's live-cast bail-out cannot
+// see it: at the boot decision, null would read as "nothing happened" and the
+// stale persisted state would be restored (or the fallback armed) onto the
+// wall the controller just cleared. The flag records the halt for that one
+// decision.
+describe('CanvasService mid-hydration disconnect flag', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('a disconnect while hydration is pending latches the halt flag', async () => {
+    const service = await freshCanvasService();
+    expect(service.wasHaltedDuringBootHydration()).toBe(false);
+
+    expect(service.disconnect()).toEqual({ ok: true });
+
+    expect(service.wasHaltedDuringBootHydration()).toBe(true);
+  });
+
+  it('a disconnect after hydration settles does not latch the flag', async () => {
+    // Post-hydration the boot decision has already been made; latching here
+    // would be inert but misdescribe history.
+    const service = await freshCanvasService();
+    service.completeBootCastHydration();
+
+    expect(service.disconnect()).toEqual({ ok: true });
+
+    expect(service.wasHaltedDuringBootHydration()).toBe(false);
+  });
+});

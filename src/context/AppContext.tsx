@@ -128,7 +128,8 @@ export const AppProvider = ({ children }: AppContextProps) => {
   // effect early-returns unless a request is active).
   const [onlineSignal, setOnlineSignal] = useState(0);
   // URL of the last SUCCESSFUL fallback cast, null once an explicit cast
-  // replaces that content. This is what lets a config change supersede a
+  // replaces that content or the controller stops playback (disconnect /
+  // sleep). This is what lets a config change supersede a
   // stale fallback: the retry loop and the display.json refetch both re-key
   // on the same online notification, so a still-armed request can cast the
   // stale (typically built-in default) URL, succeed, and clear itself before
@@ -234,22 +235,31 @@ export const AppProvider = ({ children }: AppContextProps) => {
       ? await DeviceManager.getItem(LocalStorageItem.criticalTemp)
       : null;
 
-    // A live cast command can commit while the storage reads above are in
+    // A live command can take authority while the storage reads above are in
     // flight: the CDP entry point is up before hydration finishes, so a
-    // forced displayDefaultPlaylist (OOM-recovery reload) or an explicit
-    // cast can already be on screen by now. Everything read from storage is
-    // by definition staler than a live command, so acting on it — restoring
-    // castInfo over a just-cast forced default, or arming the fallback from
-    // a stale castDaily/critical-temp marker — would overwrite content the
-    // controller just chose. Boot's job (ensure something is playing) is
-    // already done; bail out. One-shot markers need no cleanup here: any
-    // live displayPlaylist/displayDefaultPlaylist command already cleared
-    // criticalTemp in CanvasService's commandHandler. Everything below this
-    // check is synchronous, so no further command can interleave before the
-    // boot decision applies.
-    if (canvasService.getCastInfo()) {
+    // forced displayDefaultPlaylist (OOM-recovery reload), an explicit
+    // cast — or a disconnect — can already have decided the wall by now.
+    // Everything read from storage is by definition staler than a live
+    // command, so acting on it — restoring castInfo over a just-cast forced
+    // default, or arming the fallback from a stale castDaily/critical-temp
+    // marker — would overwrite what the controller just chose. A committed
+    // cast shows in getCastInfo(); a disconnect CLEARS castInfo and is
+    // visible only through the hydration-halt flag (null here must mean
+    // "deliberately cleared", not "nothing happened"). Either way boot's
+    // job is settled; bail out. One-shot markers need no cleanup on the
+    // cast branch: any live displayPlaylist/displayDefaultPlaylist command
+    // already cleared criticalTemp in CanvasService's commandHandler. A
+    // mid-hydration disconnect leaves the marker set, benignly — the next
+    // boot's criticalTemp branch is gated on persisted castInfo, which the
+    // disconnect cleared, and if it ever does fire it self-clears via the
+    // ordinary removeItem. Everything below this check is synchronous, so
+    // no further command can interleave before the boot decision applies.
+    if (
+      canvasService.getCastInfo() ||
+      canvasService.wasHaltedDuringBootHydration()
+    ) {
       console.log(
-        '[AppContext] Live cast committed during hydration, skipping boot cast state'
+        '[AppContext] Live command decided the wall during hydration, skipping boot cast state'
       );
       return;
     }
@@ -475,8 +485,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
   // plays the built-in default for the page lifetime. Re-arming only when
   // the wall currently shows a fallback cast of a DIFFERENT URL keeps this
   // bounded: the page-lifetime config cache means the URL can change at most
-  // once (local default → published), and an explicit cast clears the ref
-  // (listener below), so the controller's content is never replaced.
+  // once (local default → published), and an explicit cast or a controller
+  // stop (disconnect / sleep) clears the ref (stand-down listener below), so
+  // the controller's content is never replaced and a stopped wall is never
+  // relit.
   useEffect(() => {
     const lastFallbackCastURL = lastFallbackCastURLRef.current;
     if (
@@ -550,21 +562,26 @@ export const AppProvider = ({ children }: AppContextProps) => {
     canvasService.requestArtworkRefresh();
   }, [onlineSignal, playbackDegraded]);
 
-  // Explicit (non-fallback) cast committed → cancel any active fallback
-  // request so a pending retry or in-flight attempt can never overwrite the
-  // controller's content with the default playlist. Ordering with a
-  // concurrent displayDefaultPlaylist request is inherent: both signals are
-  // synchronous window events, so whichever command arrived last wins —
-  // explicit-then-default stays active (forced default retained),
-  // default-then-explicit ends up cancelled (explicit cast wins).
+  // Explicit (non-fallback) cast committed, or the controller stopped
+  // playback (disconnect / sleep) → the fallback's "guarantee something is
+  // playing" job is over. Cancel any active request so a pending retry or
+  // in-flight attempt can never cast the default playlist over the
+  // controller's content — or onto a wall the controller just stopped.
+  // Ordering with a concurrent displayDefaultPlaylist request is inherent:
+  // all of these signals are synchronous window events, so whichever
+  // command arrived last wins — explicit-then-default stays active (forced
+  // default retained), default-then-explicit ends up cancelled (explicit
+  // cast wins).
   useEffect(() => {
-    const handleExplicitCast = () => {
+    const handleFallbackStandDown = () => {
       // Ref first: it must be visible to an in-flight attempt's shouldAbort
       // in this same task; the state update below only stops FUTURE effect
       // runs and clears the armed retry timer once React flushes.
       explicitCastSinceRequestRef.current = true;
       // The wall no longer shows a fallback cast, so a config change landing
-      // later must NOT supersede the controller's content.
+      // later must NOT supersede — it would re-cast the default playlist
+      // over the controller's content, or relight (and navigate awake) a
+      // disconnected or sleeping wall.
       lastFallbackCastURLRef.current = null;
       setFallbackRequest(prev =>
         prev.active ? { ...prev, active: false } : prev
@@ -572,12 +589,20 @@ export const AppProvider = ({ children }: AppContextProps) => {
     };
     window.addEventListener(
       CustomEventName.ExplicitPlaylistCast,
-      handleExplicitCast
+      handleFallbackStandDown
+    );
+    window.addEventListener(
+      CustomEventName.PlaybackHalted,
+      handleFallbackStandDown
     );
     return () => {
       window.removeEventListener(
         CustomEventName.ExplicitPlaylistCast,
-        handleExplicitCast
+        handleFallbackStandDown
+      );
+      window.removeEventListener(
+        CustomEventName.PlaybackHalted,
+        handleFallbackStandDown
       );
     };
   }, []);

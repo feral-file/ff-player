@@ -30,6 +30,7 @@ const { axiosGet, canvasServiceMocks, deviceManager } =
         getCastInfo: vi.fn<() => CastInfo | null>(() => null),
         setCastInfo: vi.fn(),
         requestArtworkRefresh: vi.fn<() => boolean>(() => true),
+        wasHaltedDuringBootHydration: vi.fn<() => boolean>(() => false),
       },
       deviceManager,
     };
@@ -89,6 +90,7 @@ vi.mock('@/services/CanvasService', () => ({
     getCastInfo: canvasServiceMocks.getCastInfo,
     setCastInfo: canvasServiceMocks.setCastInfo,
     requestArtworkRefresh: canvasServiceMocks.requestArtworkRefresh,
+    wasHaltedDuringBootHydration: canvasServiceMocks.wasHaltedDuringBootHydration,
   },
 }));
 
@@ -120,6 +122,9 @@ beforeEach(() => {
   );
   canvasServiceMocks.getCastInfo.mockImplementation(() => null);
   canvasServiceMocks.requestArtworkRefresh.mockImplementation(() => true);
+  canvasServiceMocks.wasHaltedDuringBootHydration.mockImplementation(
+    () => false
+  );
 });
 
 /**
@@ -465,40 +470,43 @@ describe('AppContext reconnect recovery', () => {
   });
 });
 
+// Shared boot for the hydration-vs-live-command tests: config resolves, the
+// boot-playlist read is short-circuited (versionUpdateReload), and the
+// persisted-castInfo read hangs until the returned resolver fires, holding
+// hydration open so a live command can land mid-window. criticalTemp must NOT
+// read as set or the restore path under test is never reached.
+const bootWithDelayedHydration = () => {
+  vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+  axiosGet.mockResolvedValueOnce({
+    data: {
+      duration: 1000,
+      defaultPlaylistURL: 'https://example.com/default-playlist',
+    },
+  });
+  deviceManager.getItem.mockImplementation((key: LocalStorageItem) =>
+    Promise.resolve(
+      key === LocalStorageItem.versionUpdateReload ? 'true' : null
+    )
+  );
+  let resolveHydration: ((castInfo: CastInfo | null) => void) | undefined;
+  deviceManager.getCastInfo.mockImplementation(
+    () =>
+      new Promise<CastInfo | null>(resolve => {
+        resolveHydration = resolve;
+      })
+  );
+  render(
+    <AppProvider>
+      <div data-testid="app-ready" />
+    </AppProvider>
+  );
+  return () => resolveHydration;
+};
+
+const persistedCastInfo = () =>
+  ({ castCommand: CastCommand.displayPlaylist }) as CastInfo;
+
 describe('AppContext boot hydration vs live casts', () => {
-  const bootWithDelayedHydration = () => {
-    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
-    axiosGet.mockResolvedValueOnce({
-      data: {
-        duration: 1000,
-        defaultPlaylistURL: 'https://example.com/default-playlist',
-      },
-    });
-    // versionUpdateReload short-circuits the boot-playlist read; criticalTemp
-    // must NOT read as set or the restore path under test is never reached.
-    deviceManager.getItem.mockImplementation((key: LocalStorageItem) =>
-      Promise.resolve(
-        key === LocalStorageItem.versionUpdateReload ? 'true' : null
-      )
-    );
-    let resolveHydration: ((castInfo: CastInfo | null) => void) | undefined;
-    deviceManager.getCastInfo.mockImplementation(
-      () =>
-        new Promise<CastInfo | null>(resolve => {
-          resolveHydration = resolve;
-        })
-    );
-    render(
-      <AppProvider>
-        <div data-testid="app-ready" />
-      </AppProvider>
-    );
-    return () => resolveHydration;
-  };
-
-  const persistedCastInfo = () =>
-    ({ castCommand: CastCommand.displayPlaylist }) as CastInfo;
-
   it('does not restore persisted cast state over a cast committed during hydration', async () => {
     // Forced-push race: the CDP entry point is live before hydration
     // finishes, so a forced displayDefaultPlaylist can fetch AND commit the
@@ -525,6 +533,29 @@ describe('AppContext boot hydration vs live casts', () => {
       expect(canvasServiceMocks.completeBootCastHydration).toHaveBeenCalled();
     });
     expect(canvasServiceMocks.setCastInfo).not.toHaveBeenCalled();
+  });
+
+  it('does not restore persisted cast state after a mid-hydration disconnect', async () => {
+    // A disconnect in the hydration window CLEARS castInfo, so the live-cast
+    // check alone reads null as "nothing happened" and boot would restore
+    // stale state onto the wall the controller just cleared. The
+    // hydration-halt flag disambiguates.
+    const hydration = bootWithDelayedHydration();
+    await waitFor(() => {
+      expect(deviceManager.getCastInfo).toHaveBeenCalled();
+    });
+    canvasServiceMocks.wasHaltedDuringBootHydration.mockImplementation(
+      () => true
+    );
+    await act(async () => {
+      hydration()?.(persistedCastInfo());
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(canvasServiceMocks.completeBootCastHydration).toHaveBeenCalled();
+    });
+    expect(canvasServiceMocks.setCastInfo).not.toHaveBeenCalled();
+    expect(canvasServiceMocks.castPlaylistByURL).not.toHaveBeenCalled();
   });
 
   it('still restores persisted cast state when nothing committed during hydration', async () => {
