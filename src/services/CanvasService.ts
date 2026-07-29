@@ -103,6 +103,13 @@ class CanvasService {
   // persisted state or arm the fallback over it. Sticky for the page
   // lifetime — it is only consulted at the one boot decision.
   private haltedDuringBootHydration = false;
+  // True between setSleepMode(true) and the wake that ends it. The wake
+  // re-arm below must fire only for a wake that ends a REAL sleep: a wake
+  // sent to a disconnected wall (castInfo cleared, never slept) must not
+  // cast the default playlist over a deliberate clear. disconnect() resets
+  // it for the same reason — a wall cleared DURING sleep stays dark on
+  // wake.
+  private sleepModeEntered = false;
 
   private constructor() {
     // Latch any deliberate-stop notification that lands before boot
@@ -118,6 +125,14 @@ class CanvasService {
       window.addEventListener(CustomEventName.PlaybackHalted, () => {
         if (this.bootCastHydrationPending) {
           this.haltedDuringBootHydration = true;
+          // A deferred conditional default push predates this stop: cancel
+          // it here, the same way the halt cancels AppContext's active
+          // request. Cancelling at the halt rather than gating the settle
+          // replay keeps last-command-wins in BOTH directions — a push
+          // arriving AFTER the halt is deferred anew and still honored at
+          // settle ("make sure something is playing" is then the newer
+          // intent).
+          this.deferredConditionalDefaultRequest = false;
         }
       });
     }
@@ -574,6 +589,10 @@ class CanvasService {
   public disconnect(): DisconnectReplyV2 {
     console.log('[CanvasService] Disconnect');
     this.setCastInfo(null);
+    // A disconnect during sleep clears the wall; the wake that eventually
+    // ends that sleep must find the marker down or it would re-arm the
+    // fallback over the deliberate clear.
+    this.sleepModeEntered = false;
     // The controller stopped playback: AppContext must stand its fallback
     // machinery down (and, mid-hydration, the constructor's listener
     // latches the halt for the boot decision). Without this, an armed
@@ -607,23 +626,32 @@ class CanvasService {
 
     if (typeof window !== 'undefined') {
       if (!request.sleepMode) {
-        this.setCastInfo({
-          ...this.castInfo,
-          castCommand: CastCommand.displayPlaylist,
-        });
-        if (!this.castInfo?.playlist?.items?.length) {
-          // Wake with nothing playable: entering sleep stood the fallback
-          // machinery down (PlaybackHalted), so a device that slept during
-          // its first-boot/offline fallback would otherwise wake to an
-          // empty player until the next controller command. Re-enter the
-          // fallback flow through the same event a forced
-          // displayDefaultPlaylist uses; AppContext's nonce guard makes a
-          // redundant re-arm harmless.
+        const endsRealSleep = this.sleepModeEntered;
+        this.sleepModeEntered = false;
+        if (this.castInfo?.playlist?.items?.length) {
+          this.setCastInfo({
+            ...this.castInfo,
+            castCommand: CastCommand.displayPlaylist,
+          });
+        } else if (endsRealSleep) {
+          // Wake ending a real sleep with nothing playable: entering sleep
+          // stood the fallback machinery down (PlaybackHalted), so a device
+          // that slept during its first-boot/offline fallback would
+          // otherwise wake to an empty player until the next controller
+          // command. Re-enter the fallback flow through the same event a
+          // forced displayDefaultPlaylist uses; AppContext's nonce guard
+          // makes a redundant re-arm harmless. Deliberately NO setCastInfo
+          // on this path: committing a playlist-less castInfo would persist
+          // through useCastInfo, and the next boot's restore branch would
+          // take it as real content and never arm the fallback — a reboot
+          // would trade this in-session recovery for a permanent black
+          // wall.
           window.dispatchEvent(
             new CustomEvent(CustomEventName.DisplayDefaultPlaylist as string)
           );
         }
       } else {
+        this.sleepModeEntered = true;
         // Sleep hides playback without clearing castInfo, but the fallback
         // machinery must stand down the same as for disconnect: a published
         // config landing after sleep would otherwise re-arm the fallback,
@@ -1154,6 +1182,11 @@ class CanvasService {
    * event. That is intentional redundancy, not a bug: both requests resolve
    * to the same default playlist and AppContext's nonce guard makes the
    * extra re-arm harmless.
+   *
+   * A deferred request that PREDATES a mid-hydration halt never reaches
+   * this replay — the halt listener in the constructor cancels it, the same
+   * way the halt cancels AppContext's active request. One deferred after
+   * the halt is honored here: it is the newer intent.
    */
   public completeBootCastHydration() {
     if (!this.bootCastHydrationPending) {

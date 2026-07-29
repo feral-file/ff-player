@@ -172,3 +172,63 @@ describe('CanvasService mid-hydration halt flag', () => {
     expect(service.wasHaltedDuringBootHydration()).toBe(true);
   });
 });
+
+// The latch must gate BOTH boot paths that can arm the fallback: initCastInfo
+// covers the restore decision, and this covers the deferred onlyIfNoPlaylist
+// replay — a conditional push deferred before the halt is older intent than
+// the stop, and replaying it would re-arm the fallback the halt just stood
+// down (AppContext's DisplayDefaultPlaylist listener re-arms unconditionally)
+// and relight the stopped wall.
+describe('CanvasService deferred default replay vs mid-hydration halt', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('a mid-hydration halt drops the deferred conditional default push', async () => {
+    const service = await freshCanvasService();
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    // Claim-time conditional push lands mid-hydration: accepted, deferred.
+    expect(
+      service.processMessage({
+        command: CastCommand.displayDefaultPlaylist,
+        request: { onlyIfNoPlaylist: true },
+      })
+    ).toEqual({ ok: true });
+
+    // The controller stops playback before hydration settles.
+    window.dispatchEvent(new CustomEvent(CustomEventName.PlaybackHalted));
+
+    // Settling hydration must NOT replay the stale conditional push.
+    service.completeBootCastHydration();
+    expect(dispatchedEvents(spy)).not.toContain(
+      CustomEventName.DisplayDefaultPlaylist
+    );
+  });
+
+  it('a conditional push arriving AFTER the halt is still honored at settle', async () => {
+    // Last command wins in both directions: cancellation happens at the
+    // halt (not by gating the settle replay on the sticky latch), so a
+    // "make sure something is playing" push that FOLLOWS the stop is the
+    // newer intent and must survive to the replay.
+    const service = await freshCanvasService();
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    window.dispatchEvent(new CustomEvent(CustomEventName.PlaybackHalted));
+    expect(
+      service.processMessage({
+        command: CastCommand.displayDefaultPlaylist,
+        request: { onlyIfNoPlaylist: true },
+      })
+    ).toEqual({ ok: true });
+
+    service.completeBootCastHydration();
+    expect(dispatchedEvents(spy)).toContain(
+      CustomEventName.DisplayDefaultPlaylist
+    );
+  });
+});

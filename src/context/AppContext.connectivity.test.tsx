@@ -319,10 +319,13 @@ describe('AppContext sleep through the boot fallback, wake after reconnect', () 
   it('the wake re-arm casts the published playlist a sleeping device missed', async () => {
     // Offline first boot: the fallback is retrying with nothing playable.
     // Sleep stands it down; Wi-Fi and the published config arrive DURING
-    // sleep (correctly casting nothing); wake re-enters the fallback flow
-    // via the same DisplayDefaultPlaylist event CanvasService dispatches
-    // when there is no resumable playlist — the device wakes to the
-    // published playlist instead of an empty player.
+    // sleep (correctly casting nothing); wake re-enters the fallback flow —
+    // the device wakes to the published playlist instead of an empty
+    // player. CanvasService is mocked in this suite, so the wake's
+    // DisplayDefaultPlaylist event is hand-dispatched here: this pins the
+    // AppContext half of the seam (a stood-down fallback, re-armed, casts
+    // the PUBLISHED URL, not the stale one); the dispatch half is pinned in
+    // CanvasService.explicitCast.test.ts.
     await bootWithConfigHostDown(false);
     expect(castCalls()).toHaveLength(1);
 
