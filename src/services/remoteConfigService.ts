@@ -93,6 +93,19 @@ class RemoteConfigService {
   }
 
   /**
+   * The immutable page-lifetime cache, or null before any remote read has
+   * landed. Exposed so AppContext can tell a resolution that carries the
+   * cached (remote-sourced) config apart from one carrying transient local
+   * defaults: the former is safe to commit even from a superseded effect
+   * run — every later call resolves to the SAME object (by reference; do
+   * not defensively copy, the identity check depends on it) — the latter
+   * is not.
+   */
+  public getCachedConfig(): AppRemoteConfig | null {
+    return this.appRemoteConfig;
+  }
+
+  /**
    * Reads `display.json`, reporting via `fromRemote` whether the returned
    * config actually came from the network or is the local fallback, which is
    * what `getAppRemoteConfig` uses to decide whether the result is cacheable.

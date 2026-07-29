@@ -23,6 +23,7 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 - `duration` controls the browser version-polling interval for web/Pages deployments, and `defaultPlaylistURL` controls fallback playback. Other keys in the published JSON are ignored.
 - A failed fetch resolves with the local defaults but is **not** cached, so the next caller retries the network. Only a config that actually came back from the remote read is cached for the page lifetime. Without this, a device that boots offline pins itself to the local defaults forever and never reads the published `display.json`, even after Wi-Fi comes up.
 - Overlapping reads settle first-landed-wins: the first successful remote read populates the cache, and a slower concurrent read — whether it fails or succeeds with what is by then an older response — converges on that cached config instead of overwriting it. Once populated, the page-lifetime cache never changes.
+- A superseded `AppContext` read that lands the remote config still publishes it to the player: the effect's cancel guard only drops results that are NOT the immutable cache. Without the carve-out, an older read succeeding after a newer one already failed over to local defaults (flapping link) would strand the published config in the cache — with no further online notification due, the wall would stay on the built-in default.
 
 ## Player updates
 

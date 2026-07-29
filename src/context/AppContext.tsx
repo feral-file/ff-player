@@ -306,13 +306,30 @@ export const AppProvider = ({ children }: AppContextProps) => {
     // would otherwise commit its (older, possibly fallback) config over the
     // winner's. The service refuses to hand back a fallback once a published
     // config is cached; this is the same protection one layer up, covering
-    // the local-defaults branch below too.
+    // the local-defaults branch below too. The guard deliberately does NOT
+    // drop a superseded run whose result is the service's immutable cache —
+    // see the carve-out below.
     let cancelled = false;
     const fetchConfig = async () => {
       try {
         const appRemoteConfig =
           await remoteConfigService.current.getAppRemoteConfig();
-        if (cancelled) {
+        // A cancelled run still commits when its result IS the immutable
+        // cache (`cancelled` also flips on unmount, where the late setState
+        // is a React no-op). The cancel guard exists so an older run cannot
+        // overwrite a newer commit with staler data — but once a remote
+        // read has landed, every run resolves to the same page-lifetime
+        // object, so there is nothing staler to hand over. Dropping those
+        // commits loses a real
+        // recovery: on a flapping link an older read can succeed AFTER the
+        // newer generation already failed over to local defaults, and with
+        // no further online notification due, nothing else would ever
+        // publish the cached result — the wall would stay on the built-in
+        // default with the published config stranded in the cache.
+        if (
+          cancelled &&
+          appRemoteConfig !== remoteConfigService.current.getCachedConfig()
+        ) {
           return;
         }
         setAppConfig(appRemoteConfig);

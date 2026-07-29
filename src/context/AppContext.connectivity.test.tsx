@@ -266,3 +266,52 @@ describe('AppContext fallback supersede on config change', () => {
     expect(castCalls()).toHaveLength(1);
   });
 });
+
+describe('AppContext config commit across cancelled generations', () => {
+  it('publishes a config landed by a superseded read after the newer read failed over', async () => {
+    // Flapping-link ordering: the boot read hangs, a later notification's
+    // own read fails fast and commits local defaults, then the OLD read
+    // finally succeeds. Its effect run is cancelled, but the config it
+    // landed is the immutable page-lifetime cache — dropping that commit
+    // would leave the wall on the built-in default with the published
+    // config stranded in the cache and no further notification due to
+    // publish it.
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    let resolveBootRead: ((response: { data: unknown }) => void) | undefined;
+    axiosGet.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          resolveBootRead = resolve;
+        })
+    );
+    axiosGet.mockRejectedValueOnce(new Error('link flapped'));
+    vi.useFakeTimers();
+    render(
+      <AppProvider>
+        <div data-testid="app-ready" />
+      </AppProvider>
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    // Boot read still in flight: no config committed, no cast attempted.
+    expect(castCalls()).toHaveLength(0);
+
+    // The notification's read fails fast → local defaults commit and the
+    // boot-armed request casts the built-in default.
+    await notifyOnline();
+    expect(castCalls()).toHaveLength(1);
+    expect(castCalls()[0][0]).toBe(AppSettings.DEFAULT_PLAYLIST_URL);
+
+    // The superseded boot read lands the published config → it must still
+    // commit, and the supersede effect re-casts the published URL.
+    await act(async () => {
+      resolveBootRead?.({
+        data: { duration: 1000, defaultPlaylistURL: PUBLISHED_URL },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(castCalls()).toHaveLength(2);
+    expect(castCalls()[1][0]).toBe(PUBLISHED_URL);
+  });
+});

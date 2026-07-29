@@ -127,6 +127,34 @@ describe('RemoteConfigService caching', () => {
 describe('RemoteConfigService concurrent reads', () => {
   afterEach(resetRemoteConfigTestEnv);
 
+  it('exposes the cache by reference for the superseded-run carve-out', async () => {
+    // AppContext commits from a cancelled effect run only when the resolved
+    // config IS the cache (identity comparison), so getCachedConfig must
+    // return null until a remote read lands and then the very object
+    // getAppRemoteConfig resolves with. A defensive copy anywhere on that
+    // path would silently disable the flapping-link recovery — pinned here,
+    // at the layer that owns the invariant.
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    axiosGet.mockRejectedValueOnce(new Error('offline'));
+    axiosGet.mockResolvedValueOnce({
+      data: {
+        duration: 1000,
+        defaultPlaylistURL: 'https://example.com/published',
+      },
+    });
+
+    const service = new RemoteConfigService();
+    expect(service.getCachedConfig()).toBeNull();
+
+    // A failed read resolves with local defaults and caches nothing.
+    await service.getAppRemoteConfig();
+    expect(service.getCachedConfig()).toBeNull();
+
+    // A remote success resolves with the cache object itself.
+    const published = await service.getAppRemoteConfig();
+    expect(service.getCachedConfig()).toBe(published);
+  });
+
   it('does not let a late fallback clobber a config that already landed', async () => {
     // AppContext re-reads this on every online notification, so a request
     // left hanging on a dying link can still be in flight when a later one
