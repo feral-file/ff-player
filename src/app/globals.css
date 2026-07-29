@@ -6,6 +6,20 @@
   font-weight: 400;
 }
 
+/* Artwork titles are bold italic (see TombstoneOverlay). Without the real
+   face the browser synthesizes both the weight and the slant, which is
+   visibly wrong at wall sizes. Weight and style match ff-app's mapping of
+   PPMori-BoldItalic.ttf in pubspec.yaml, so a title renders as the same face
+   on the wall and in the app. */
+@font-face {
+  font-family: 'PP Mori';
+  src:
+    url(/fonts/PP_Mori/PPMori-BoldItalic.woff2) format('woff2'),
+    url(/fonts/PP_Mori/PPMori-BoldItalic.woff) format('woff');
+  font-weight: 700;
+  font-style: italic;
+}
+
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
