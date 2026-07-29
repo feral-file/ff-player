@@ -529,9 +529,6 @@ const ArtworkPlayer = ({
 
   const handleArtworkRenderFailure = useCallback(
     (slotIndex?: SlotIndex, expectedLayer?: SlotLayer) => {
-      if (renderStatusRef.current === RenderStatus.failed) {
-        return;
-      }
       if (
         slotIndex !== undefined &&
         !isCurrentArtworkSlot(slotIndex, expectedLayer)
@@ -539,7 +536,13 @@ const ArtworkPlayer = ({
         return;
       }
       if (slotIndex !== undefined) {
+        // Treat a current failure as terminal readiness for transition
+        // purposes, so the failed incoming slot replaces the outgoing one.
+        loadedSource(slotIndex, expectedLayer);
         updateSlot(slotIndex, { loading: false });
+      }
+      if (renderStatusRef.current === RenderStatus.failed) {
+        return;
       }
       markArtworkFailed();
       setMessageModalText(null);
@@ -548,7 +551,7 @@ const ArtworkPlayer = ({
       );
       setShowMessageModal(true);
     },
-    [isCurrentArtworkSlot, markArtworkFailed, updateSlot]
+    [isCurrentArtworkSlot, loadedSource, markArtworkFailed, updateSlot]
   );
 
   const playVideoForSlot = useCallback(
@@ -1262,6 +1265,12 @@ const ArtworkPlayer = ({
   ]);
 
   const handleLoadIframeError = (slotIndex: SlotIndex, layer: SlotLayer) => {
+    // Failure still consumes the current incoming slot. Without this, an
+    // iframe/object error leaves the transition claim active and permanently
+    // holds visual settings on the outgoing artwork.
+    if (!loadedSource(slotIndex, layer)) {
+      return;
+    }
     handleArtworkRenderFailure(slotIndex, layer);
   };
 
@@ -1479,7 +1488,7 @@ const ArtworkPlayer = ({
               loadedSource(slotIndex, slot);
             }}
             onError={() => {
-              handleArtworkRenderFailure(slotIndex, slot);
+              handleLoadIframeError(slotIndex, slot);
             }}>
             Not supported
           </object>
