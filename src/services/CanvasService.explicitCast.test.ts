@@ -127,4 +127,40 @@ describe('CanvasService playback-halt signalling', () => {
       CustomEventName.PlaybackHalted
     );
   });
+
+  it('waking with nothing playable re-enters the fallback flow', () => {
+    // Entering sleep stood the fallback down, so a device that slept during
+    // its first-boot/offline fallback has no playlist to resume. Wake must
+    // re-arm via DisplayDefaultPlaylist or the wall stays empty until the
+    // next controller command.
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    expect(canvasService.setSleepMode({ sleepMode: false })).toEqual({
+      ok: true,
+    });
+
+    expect(dispatchedEvents(spy)).toContain(
+      CustomEventName.DisplayDefaultPlaylist
+    );
+  });
+
+  it('waking with a resumable playlist does not touch the fallback', () => {
+    canvasService.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: playlist('resumable'),
+        index: 0,
+      } as never,
+      false
+    );
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    expect(canvasService.setSleepMode({ sleepMode: false })).toEqual({
+      ok: true,
+    });
+
+    expect(dispatchedEvents(spy)).not.toContain(
+      CustomEventName.DisplayDefaultPlaylist
+    );
+  });
 });

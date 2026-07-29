@@ -119,12 +119,13 @@ describe('CanvasService boot cast hydration gate', () => {
   });
 });
 
-// A disconnect clears castInfo, so initCastInfo's live-cast bail-out cannot
-// see it: at the boot decision, null would read as "nothing happened" and the
-// stale persisted state would be restored (or the fallback armed) onto the
-// wall the controller just cleared. The flag records the halt for that one
-// decision.
-describe('CanvasService mid-hydration disconnect flag', () => {
+// A deliberate stop leaves no castInfo for initCastInfo's live-cast bail-out
+// to see (disconnect clears it; sleep and error navigation never set it), so
+// at the boot decision null would read as "nothing happened" and the stale
+// persisted state would be restored (or the fallback armed) onto a wall a
+// stop already decided. The flag latches from the PlaybackHalted event — the
+// one contract every stop source honors — for that one decision.
+describe('CanvasService mid-hydration halt flag', () => {
   beforeEach(() => {
     vi.resetModules();
   });
@@ -133,23 +134,41 @@ describe('CanvasService mid-hydration disconnect flag', () => {
     vi.restoreAllMocks();
   });
 
-  it('a disconnect while hydration is pending latches the halt flag', async () => {
+  it('any PlaybackHalted while hydration is pending latches the halt flag', async () => {
+    // Event-level contract: error-page navigation lives in utils and only
+    // dispatches; the latch must not depend on the source calling in.
     const service = await freshCanvasService();
     expect(service.wasHaltedDuringBootHydration()).toBe(false);
+
+    window.dispatchEvent(new CustomEvent(CustomEventName.PlaybackHalted));
+
+    expect(service.wasHaltedDuringBootHydration()).toBe(true);
+  });
+
+  it('a PlaybackHalted after hydration settles does not latch the flag', async () => {
+    // Post-hydration the boot decision has already been made; latching here
+    // would be inert but misdescribe history.
+    const service = await freshCanvasService();
+    service.completeBootCastHydration();
+
+    window.dispatchEvent(new CustomEvent(CustomEventName.PlaybackHalted));
+
+    expect(service.wasHaltedDuringBootHydration()).toBe(false);
+  });
+
+  it('a mid-hydration disconnect latches through its own dispatch', async () => {
+    const service = await freshCanvasService();
 
     expect(service.disconnect()).toEqual({ ok: true });
 
     expect(service.wasHaltedDuringBootHydration()).toBe(true);
   });
 
-  it('a disconnect after hydration settles does not latch the flag', async () => {
-    // Post-hydration the boot decision has already been made; latching here
-    // would be inert but misdescribe history.
+  it('a mid-hydration sleep latches through its own dispatch', async () => {
     const service = await freshCanvasService();
-    service.completeBootCastHydration();
 
-    expect(service.disconnect()).toEqual({ ok: true });
+    expect(service.setSleepMode({ sleepMode: true })).toEqual({ ok: true });
 
-    expect(service.wasHaltedDuringBootHydration()).toBe(false);
+    expect(service.wasHaltedDuringBootHydration()).toBe(true);
   });
 });

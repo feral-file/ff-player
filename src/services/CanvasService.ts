@@ -91,15 +91,37 @@ class CanvasService {
   // restore is about to overwrite.
   private bootCastHydrationPending = true;
   private deferredConditionalDefaultRequest = false;
-  // A disconnect landed while hydration was still pending. initCastInfo's
-  // "live cast committed during hydration" bail-out reads castInfo, but a
-  // disconnect CLEARS castInfo — indistinguishable from "nothing happened"
-  // at the decision point. Same ambiguity bootCastHydrationPending exists
-  // for (null means "unknown", not "empty screen"), from the other
-  // direction: here null must mean "deliberately cleared", so boot must not
-  // restore persisted state or arm the fallback over it. Sticky for the
-  // page lifetime — it is only consulted at the one boot decision.
+  // A deliberate stop (disconnect, setSleepMode(true), error-page
+  // navigation) landed while hydration was still pending — latched from the
+  // PlaybackHalted event in the constructor. initCastInfo's live-command
+  // bail-out reads castInfo, but none of these stops leave one to see:
+  // disconnect CLEARS castInfo and sleep/error never set it, so at the
+  // decision point they are indistinguishable from "nothing happened".
+  // Same ambiguity bootCastHydrationPending exists for (null means
+  // "unknown", not "empty screen"), from the other direction: here null
+  // must mean "a stop already decided the wall", so boot must not restore
+  // persisted state or arm the fallback over it. Sticky for the page
+  // lifetime — it is only consulted at the one boot decision.
   private haltedDuringBootHydration = false;
+
+  private constructor() {
+    // Latch any deliberate-stop notification that lands before boot
+    // hydration settles. The PlaybackHalted event is the one contract every
+    // halt source already honors (disconnect and sleep in this class, error
+    // navigation in utils — which must not import this service back), so
+    // the latch subscribes to the bus instead of each source calling in: a
+    // future halt source is covered by construction. dispatchEvent runs
+    // listeners synchronously, so the latch is visible in the same task as
+    // the halt itself. Never removed — the singleton lives for the page.
+    // The window guard covers module import during prerender.
+    if (typeof window !== 'undefined') {
+      window.addEventListener(CustomEventName.PlaybackHalted, () => {
+        if (this.bootCastHydrationPending) {
+          this.haltedDuringBootHydration = true;
+        }
+      });
+    }
+  }
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
   /**
    * Playlist route registers a cache-bust reload for the active artwork.
@@ -552,17 +574,12 @@ class CanvasService {
   public disconnect(): DisconnectReplyV2 {
     console.log('[CanvasService] Disconnect');
     this.setCastInfo(null);
-    if (this.bootCastHydrationPending) {
-      // Mid-hydration disconnect: initCastInfo has not made its boot
-      // decision yet and will read the cleared castInfo as "nothing
-      // happened" — see the field comment.
-      this.haltedDuringBootHydration = true;
-    }
     // The controller stopped playback: AppContext must stand its fallback
-    // machinery down. Without this, an armed boot-fallback retry or the
-    // config-change supersede could later cast the default playlist and
-    // relight a wall the controller just cleared. Window guard: SSR safety,
-    // matching this file's other dispatches.
+    // machinery down (and, mid-hydration, the constructor's listener
+    // latches the halt for the boot decision). Without this, an armed
+    // boot-fallback retry or the config-change supersede could later cast
+    // the default playlist and relight a wall the controller just cleared.
+    // Window guard: SSR safety, matching this file's other dispatches.
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
         new CustomEvent(CustomEventName.PlaybackHalted as string)
@@ -572,7 +589,9 @@ class CanvasService {
   }
 
   /**
-   * True when a disconnect cleared castInfo before boot hydration finished.
+   * True when a deliberate stop (disconnect, sleep, error navigation)
+   * landed before boot hydration finished — latched from the PlaybackHalted
+   * event in the constructor.
    * InitCastInfo consults this alongside getCastInfo(): either signal means
    * a live command already took authority over the wall, so the stale
    * persisted state must not be restored and the fallback must not be
@@ -592,6 +611,18 @@ class CanvasService {
           ...this.castInfo,
           castCommand: CastCommand.displayPlaylist,
         });
+        if (!this.castInfo?.playlist?.items?.length) {
+          // Wake with nothing playable: entering sleep stood the fallback
+          // machinery down (PlaybackHalted), so a device that slept during
+          // its first-boot/offline fallback would otherwise wake to an
+          // empty player until the next controller command. Re-enter the
+          // fallback flow through the same event a forced
+          // displayDefaultPlaylist uses; AppContext's nonce guard makes a
+          // redundant re-arm harmless.
+          window.dispatchEvent(
+            new CustomEvent(CustomEventName.DisplayDefaultPlaylist as string)
+          );
+        }
       } else {
         // Sleep hides playback without clearing castInfo, but the fallback
         // machinery must stand down the same as for disconnect: a published

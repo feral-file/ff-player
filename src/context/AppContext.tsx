@@ -243,9 +243,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
     // command, so acting on it — restoring castInfo over a just-cast forced
     // default, or arming the fallback from a stale castDaily/critical-temp
     // marker — would overwrite what the controller just chose. A committed
-    // cast shows in getCastInfo(); a disconnect CLEARS castInfo and is
-    // visible only through the hydration-halt flag (null here must mean
-    // "deliberately cleared", not "nothing happened"). Either way boot's
+    // cast shows in getCastInfo(); a deliberate stop (disconnect, sleep,
+    // error navigation) leaves castInfo null and is visible only through
+    // the hydration-halt flag (null alone cannot distinguish "stopped" from
+    // "nothing happened"). Either way boot's
     // job is settled; bail out. One-shot markers need no cleanup on the
     // cast branch: any live displayPlaylist/displayDefaultPlaylist command
     // already cleared criticalTemp in CanvasService's commandHandler. A

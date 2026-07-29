@@ -24,9 +24,12 @@ export enum CustomEventName {
   // for ExplicitPlaylistCast — aborts an in-flight attempt, cancels an
   // active retry, and clears the config-change supersede marker — so no
   // fallback path can later cast the default playlist and relight (or wake)
-  // a wall that was just stopped. A LATER explicit cast or
-  // displayDefaultPlaylist push still wins: these are synchronous window
-  // events and last command wins, so the halt is a stand-down, not a latch.
+  // a wall that was just stopped. CanvasService also listens: a halt that
+  // lands while boot hydration is still pending latches
+  // wasHaltedDuringBootHydration so the boot restore decision sees it. A
+  // LATER explicit cast or displayDefaultPlaylist push still wins: these
+  // are synchronous window events and last command wins, so the halt is a
+  // stand-down, not a latch on future commands.
   PlaybackHalted = 'playbackHalted',
   MintPairingDisplay = 'mintPairingDisplay',
   Navigate = 'navigate',

@@ -315,6 +315,39 @@ describe('AppContext fallback stand-down on controller stop', () => {
   });
 });
 
+describe('AppContext sleep through the boot fallback, wake after reconnect', () => {
+  it('the wake re-arm casts the published playlist a sleeping device missed', async () => {
+    // Offline first boot: the fallback is retrying with nothing playable.
+    // Sleep stands it down; Wi-Fi and the published config arrive DURING
+    // sleep (correctly casting nothing); wake re-enters the fallback flow
+    // via the same DisplayDefaultPlaylist event CanvasService dispatches
+    // when there is no resumable playlist — the device wakes to the
+    // published playlist instead of an empty player.
+    await bootWithConfigHostDown(false);
+    expect(castCalls()).toHaveLength(1);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(CustomEventName.PlaybackHalted));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // Reconnect while asleep: config lands, wall must stay dark.
+    queuePublishedConfig();
+    await notifyOnline();
+    expect(castCalls()).toHaveLength(1);
+
+    // Wake with nothing playable → CanvasService dispatches this event.
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(CustomEventName.DisplayDefaultPlaylist)
+      );
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(castCalls()).toHaveLength(2);
+    expect(castCalls()[1][0]).toBe(PUBLISHED_URL);
+  });
+});
+
 describe('AppContext config commit across cancelled generations', () => {
   it('publishes a config landed by a superseded read after the newer read failed over', async () => {
     // Flapping-link ordering: the boot read hangs, a later notification's
