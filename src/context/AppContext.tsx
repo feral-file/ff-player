@@ -127,6 +127,21 @@ export const AppProvider = ({ children }: AppContextProps) => {
   // even a repeated `true` restarts the loop (harmless when idle: the
   // effect early-returns unless a request is active).
   const [onlineSignal, setOnlineSignal] = useState(0);
+  // URL of the last SUCCESSFUL fallback cast, null once an explicit cast
+  // replaces that content. This is what lets a config change supersede a
+  // stale fallback: the retry loop and the display.json refetch both re-key
+  // on the same online notification, so a still-armed request can cast the
+  // stale (typically built-in default) URL, succeed, and clear itself before
+  // the published defaultPlaylistURL lands — and a successful cast can also
+  // outrun the refetch entirely when the playlist host is reachable while
+  // the config host is not. Either way the device would play the built-in
+  // default for the rest of the page lifetime, which is exactly the
+  // offline-boot bug the refetch exists to fix. The supersede effect below
+  // re-arms the request when the config lands with a different URL, so the
+  // wrong cast is a bounded transient instead of permanent. A ref, not
+  // state: it changes inside async cast completions and event handlers, and
+  // only the config-change effect ever needs to read it.
+  const lastFallbackCastURLRef = useRef<string | null>(null);
 
   // "The artwork on screen failed to load", reported by ArtworkPlayer.
   const [playbackDegraded, setPlaybackDegraded] = useState(false);
@@ -363,6 +378,14 @@ export const AppProvider = ({ children }: AppContextProps) => {
   // DisplayDefaultPlaylist instead of fetching remote config itself, so the
   // pushed playlist and the player's own pull can never disagree on the URL.
   // The request nonce restarts the loop so those requests fire immediately.
+  //
+  // This loop deliberately races the display.json refetch keyed on the same
+  // online notification rather than waiting for it: holding casts hostage to
+  // a config read (10s timeout, re-cancelled by every further notification)
+  // could leave the wall showing nothing at all, and something stale beats
+  // nothing on a wall display. A cast that wins with a stale URL is instead
+  // superseded by the config-change effect below once the published config
+  // lands.
   useEffect(() => {
     if (!(appRemoteConfig.defaultPlaylistURL && fallbackRequest.active)) {
       return;
@@ -387,6 +410,11 @@ export const AppProvider = ({ children }: AppContextProps) => {
         return;
       }
       if (casted) {
+        // Record what the wall is now showing regardless of the nonce guard
+        // below: even when a newer request supersedes this run's clear, the
+        // cast itself committed, and the supersede effect compares against
+        // the content actually on screen.
+        lastFallbackCastURLRef.current = appRemoteConfig.defaultPlaylistURL;
         // Only settle the request THIS run was started for. A new request can
         // land while the cast is in flight, and React may batch its
         // {active:true, nonce+1} update into the same commit as this
@@ -418,6 +446,31 @@ export const AppProvider = ({ children }: AppContextProps) => {
       }
     };
   }, [appRemoteConfig.defaultPlaylistURL, fallbackRequest, onlineSignal, router]);
+
+  // Supersede a stale fallback cast when the published config lands.
+  //
+  // The retry loop above and the display.json refetch re-key on the same
+  // online notification, so a still-armed request can cast the stale
+  // (built-in default) URL first, succeed, and clear itself — and a cast can
+  // also outrun the refetch across notifications entirely (the playlist host
+  // reachable, the config host not). Without this, the published
+  // defaultPlaylistURL landing later finds no active request and the device
+  // plays the built-in default for the page lifetime. Re-arming only when
+  // the wall currently shows a fallback cast of a DIFFERENT URL keeps this
+  // bounded: the page-lifetime config cache means the URL can change at most
+  // once (local default → published), and an explicit cast clears the ref
+  // (listener below), so the controller's content is never replaced.
+  useEffect(() => {
+    const lastFallbackCastURL = lastFallbackCastURLRef.current;
+    if (
+      lastFallbackCastURL !== null &&
+      appRemoteConfig.defaultPlaylistURL &&
+      appRemoteConfig.defaultPlaylistURL !== lastFallbackCastURL
+    ) {
+      console.log('[AppContext] Config changed, superseding fallback cast');
+      requestFallbackPlaylist();
+    }
+  }, [appRemoteConfig.defaultPlaylistURL, requestFallbackPlaylist]);
 
   // Feed `onlineSignal` from the raw ConnectivityChange event stream (see the
   // declaration comment for why the isOnline boolean is not enough).
@@ -493,6 +546,9 @@ export const AppProvider = ({ children }: AppContextProps) => {
       // in this same task; the state update below only stops FUTURE effect
       // runs and clears the armed retry timer once React flushes.
       explicitCastSinceRequestRef.current = true;
+      // The wall no longer shows a fallback cast, so a config change landing
+      // later must NOT supersede the controller's content.
+      lastFallbackCastURLRef.current = null;
       setFallbackRequest(prev =>
         prev.active ? { ...prev, active: false } : prev
       );

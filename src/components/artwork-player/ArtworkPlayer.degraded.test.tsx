@@ -30,7 +30,9 @@ const IMAGE_B = 'https://feralfile.com/test/degraded-b.jpg';
 
 function playerNode(
   previewURL: string,
-  setPlaybackDegraded: (degraded: boolean) => void
+  setPlaybackDegraded: (degraded: boolean) => void,
+  itemIdentity: string = previewURL,
+  onRegisterArtworkReload?: (reload: (() => void) | null) => void
 ): React.ReactElement {
   return (
     <AppContext.Provider
@@ -52,7 +54,8 @@ function playerNode(
         previewURL={previewURL}
         artworkPreviewMIMEType="image/jpeg"
         displayPreferences={defaultDP1DisplayPreference}
-        itemIdentity={previewURL}
+        itemIdentity={itemIdentity}
+        onRegisterArtworkReload={onRegisterArtworkReload}
       />
     </AppContext.Provider>
   );
@@ -129,6 +132,56 @@ describe('ArtworkPlayer — degraded playback signal', () => {
 
     await act(async () => {
       rerender(playerNode(IMAGE_B, setPlaybackDegraded));
+      await Promise.resolve();
+    });
+
+    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(false);
+  });
+
+  it('keeps the flag across a same-item reload, so a retry that fails again stays degraded', async () => {
+    // The reconnect-recovery refresh re-mounts the SAME item (reload tick
+    // changes, identity and URL do not). Clearing on that remount would turn
+    // the one-nudge recovery into an unbounded refresh loop: every clear
+    // re-creates the degraded edge AppContext listens for. Only a real
+    // success or a different item may clear.
+    const setPlaybackDegraded = vi.fn();
+    let reload: (() => void) | null = null;
+    const { container } = render(
+      playerNode(IMAGE_A, setPlaybackDegraded, IMAGE_A, cb => {
+        reload = cb;
+      })
+    );
+
+    await fireMedia(await findImage(container), 'error');
+    expect(setPlaybackDegraded).toHaveBeenCalledTimes(1);
+    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(true);
+
+    await act(async () => {
+      reload?.();
+      await Promise.resolve();
+    });
+
+    // The remount reported nothing: no clear, and the repeat failure below
+    // finds the flag already set, so no new context write either.
+    await fireMedia(await findImage(container), 'error');
+    expect(setPlaybackDegraded).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the flag when the playlist advances to a same-URL item under a new identity', async () => {
+    // Adjacent playlist items may share a URL; the slot pipeline treats the
+    // identity change as a real transition, so the previous item's failure
+    // must not leak into the next item — it would hold the backdrop up and
+    // swallow the fresh degraded edge reconnect recovery listens for.
+    const setPlaybackDegraded = vi.fn();
+    const { container, rerender } = render(
+      playerNode(IMAGE_A, setPlaybackDegraded, 'item-1')
+    );
+
+    await fireMedia(await findImage(container), 'error');
+    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(true);
+
+    await act(async () => {
+      rerender(playerNode(IMAGE_A, setPlaybackDegraded, 'item-2'));
       await Promise.resolve();
     });
 

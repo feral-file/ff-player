@@ -78,8 +78,15 @@ class RemoteConfigService {
 
     const { config, fromRemote } = await this.fetchConfig();
     if (fromRemote) {
-      this.appRemoteConfig = config;
-      return config;
+      // Same overlap, inverse outcome: two successful reads can interleave
+      // too. First landed wins — a concurrent caller may already have
+      // committed the landed config, so overwriting it would leave future
+      // callers disagreeing with what is on screen. The point is not which
+      // response is fresher (both read the same document seconds apart) but
+      // that the page-lifetime cache is immutable once populated: every
+      // caller converges on one result.
+      this.appRemoteConfig ??= config;
+      return this.appRemoteConfig;
     }
 
     return this.appRemoteConfig ?? config;

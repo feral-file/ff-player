@@ -364,35 +364,10 @@ describe('AppContext explicit-cast cancellation', () => {
   });
 });
 
-describe('AppContext connectivity re-key', () => {
-  it('an online notification retries immediately instead of waiting out the backoff', async () => {
-    // useNetworkManger boots at `true`, so on an offline SoftAP boot the
-    // first ConnectivityChange({isOnline: true}) is a true→true no-op that
-    // never re-keyed the old isOnline-based effect — a failed boot attempt
-    // sat out the full 5–60s backoff. The loop must re-key on the
-    // notification itself.
-    canvasServiceMocks.castPlaylistByURL.mockResolvedValueOnce(false);
-    bootWithDefaultPlaylist();
-
-    // Offline boot: first attempt fails, retry armed on the 5s backoff.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(1);
-
-    // Provisioning lands well before the backoff expires: the online
-    // notification must fire a fresh attempt immediately.
-    await act(async () => {
-      window.dispatchEvent(
-        new CustomEvent(CustomEventName.ConnectivityChange, {
-          detail: { isOnline: true },
-        })
-      );
-      await vi.advanceTimersByTimeAsync(0);
-    });
-    expect(canvasServiceMocks.castPlaylistByURL).toHaveBeenCalledTimes(2);
-  });
-});
+// The connectivity re-key behavior of the fallback loop (immediate retry on
+// an online notification, and its sequencing behind the display.json
+// refetch) is covered in AppContext.connectivity.test.tsx to keep this file
+// inside the max-lines gate.
 
 // An offline boot restores the persisted playlist but every remote asset
 // fetch behind it is single-attempt, so the wall goes black and nothing ever

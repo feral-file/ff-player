@@ -252,9 +252,14 @@ const ArtworkPlayer = ({
 
   // Moving to a different artwork (or unmounting) invalidates the flag: the
   // previous item's failure must not hold the offline backdrop over an
-  // artwork that is loading fine. A same-URL remount — which is exactly what
-  // the reconnect recovery triggers — intentionally does NOT clear it, so a
-  // retry that fails again stays degraded and only a real success clears it.
+  // artwork that is loading fine. "Different artwork" is previewURL OR
+  // itemIdentity — adjacent playlist items may share a URL, and the slot
+  // pipeline treats an identity change as a real transition, so the flag
+  // must reset with it or the stale failure suppresses the fresh degraded
+  // edge reconnect recovery listens for. A same-item remount — which is
+  // exactly what the reconnect recovery triggers (artworkReloadTick changes,
+  // identity does not) — intentionally does NOT clear it, so a retry that
+  // fails again stays degraded and only a real success clears it.
   useEffect(() => {
     return () => {
       if (degradedURLRef.current === null) {
@@ -263,7 +268,7 @@ const ArtworkPlayer = ({
       degradedURLRef.current = null;
       setPlaybackDegraded?.(false);
     };
-  }, [previewURL, setPlaybackDegraded]);
+  }, [previewURL, itemIdentity, setPlaybackDegraded]);
 
   // ---- Latched visual settings -------------------------------------------
   // `displaySettings` flips to the NEXT item's preferences the moment the

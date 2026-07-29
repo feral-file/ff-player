@@ -122,6 +122,10 @@ describe('RemoteConfigService caching', () => {
     });
     expect(axiosGet).toHaveBeenCalledTimes(2);
   });
+});
+
+describe('RemoteConfigService concurrent reads', () => {
+  afterEach(resetRemoteConfigTestEnv);
 
   it('does not let a late fallback clobber a config that already landed', async () => {
     // AppContext re-reads this on every online notification, so a request
@@ -156,6 +160,45 @@ describe('RemoteConfigService caching', () => {
     await expect(slowRead).resolves.toEqual(published);
     // And the cache itself survived: no third request, still published.
     await expect(service.getAppRemoteConfig()).resolves.toEqual(published);
+    expect(axiosGet).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not let a slow older success overwrite a config that already landed', async () => {
+    // Inverse of the late-fallback case: both overlapping reads SUCCEED, and
+    // the one settling last is the OLDER request. If it overwrote the cache,
+    // a config a concurrent caller already committed would be replaced with
+    // stale data for the rest of the page lifetime. First landed must win.
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    const stale = {
+      duration: 1000,
+      defaultPlaylistURL: 'https://example.com/stale',
+    };
+    const landed = {
+      duration: 2000,
+      defaultPlaylistURL: 'https://example.com/landed',
+    };
+    let resolveSlowRead: ((response: { data: unknown }) => void) | undefined;
+    axiosGet.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          resolveSlowRead = resolve;
+        })
+    );
+    axiosGet.mockResolvedValueOnce({ data: landed });
+
+    const service = new RemoteConfigService();
+
+    // The slow read is still in flight when the second one succeeds and
+    // caches its config.
+    const slowRead = service.getAppRemoteConfig();
+    await expect(service.getAppRemoteConfig()).resolves.toEqual(landed);
+
+    resolveSlowRead?.({ data: stale });
+
+    // The slow older read converges on the already-landed config...
+    await expect(slowRead).resolves.toEqual(landed);
+    // ...and the cache kept it: no third request, still the landed config.
+    await expect(service.getAppRemoteConfig()).resolves.toEqual(landed);
     expect(axiosGet).toHaveBeenCalledTimes(2);
   });
 });
