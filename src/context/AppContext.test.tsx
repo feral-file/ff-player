@@ -105,7 +105,7 @@ function resetAppContextMocks() {
   deviceManager.setDeviceDisplaySettings.mockResolvedValue(undefined);
   deviceManager.setDeviceInfo.mockResolvedValue(undefined);
   canvasServiceMocks.castPlaylistByURL.mockImplementation(() =>
-    Promise.resolve(undefined)
+    Promise.resolve(true)
   );
 }
 

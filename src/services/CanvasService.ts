@@ -895,7 +895,12 @@ class CanvasService {
     // window guard keeps node-environment unit tests (no DOM) from turning a
     // successful display into an ok:false reply — the event is a
     // browser-only signal.
-    if (!this.castingFallbackPlaylist && typeof window !== 'undefined') {
+    if (
+      !this.castingFallbackPlaylist &&
+      typeof window !== 'undefined' &&
+      typeof window.dispatchEvent === 'function' &&
+      typeof CustomEvent !== 'undefined'
+    ) {
       window.dispatchEvent(
         new CustomEvent(CustomEventName.ExplicitPlaylistCast as string)
       );

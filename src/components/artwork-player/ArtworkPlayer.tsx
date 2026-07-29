@@ -214,6 +214,27 @@ const ArtworkPlayer = ({
 
   const cursorRef = useRef<CursorLayerHandle>(null);
 
+  // Latch visual settings until the incoming artwork is actually committed,
+  // so an outgoing slot never redraws using the next item's appearance.
+  const [committedVisualSettings, setCommittedVisualSettings] =
+    useState(displaySettings);
+  const displaySettingsRef = useRef(displaySettings);
+  useLayoutEffect(() => {
+    displaySettingsRef.current = displaySettings;
+  }, [displaySettings]);
+  const commitVisualSettings = useCallback(() => {
+    setCommittedVisualSettings(displaySettingsRef.current);
+  }, []);
+  useEffect(() => {
+    const activeLayer = slotsRef.current[activeSlotRef.current];
+    const transitionPending =
+      incomingSlotRef.current !== null ||
+      (activeLayer !== null && activeLayer.previewURL !== previewURLRef.current);
+    if (!transitionPending) {
+      setCommittedVisualSettings(displaySettings);
+    }
+  }, [displaySettings]);
+
   const clearLoadingDelay = useCallback(() => {
     if (!loadingDelayRef.current) {
       return;
@@ -675,6 +696,7 @@ const ArtworkPlayer = ({
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
       markArtworkReady();
+      onItemCommitted?.(incomingLayer.itemIdentity);
       return;
     }
 
@@ -727,6 +749,7 @@ const ArtworkPlayer = ({
         incomingSlotRef.current = null;
         setTopSlotIndex(null);
         markArtworkReady();
+        onItemCommitted?.(incomingLayer.itemIdentity);
       }, FADE_IN_OUT_DURATION_MS);
       return;
     }
@@ -757,7 +780,13 @@ const ArtworkPlayer = ({
       setTopSlotIndex(null);
       markArtworkReady();
     }, FADE_IN_OUT_DURATION_MS);
-  }, [markArtworkReady, pauseAndTeardownSlot, slots]);
+  }, [
+    commitVisualSettings,
+    markArtworkReady,
+    onItemCommitted,
+    pauseAndTeardownSlot,
+    slots,
+  ]);
 
   const handleIframeLoad = (slotIndex: SlotIndex, layer: SlotLayer) => {
     if (isWebGLAvailable()) {
@@ -990,6 +1019,9 @@ const ArtworkPlayer = ({
             return;
           }
           console.error(`[ArtworkPlayer] ${mediaType} load failed:`, error);
+          // A failed incoming layer must still resolve its transition claim;
+          // otherwise visual settings remain latched to the outgoing artwork.
+          loadedSource(slotIndex, layer);
           handleArtworkRenderFailure(slotIndex, layer);
           Sentry.captureMessage(`[ArtworkPlayer] ${mediaType} load failed`, {
             level: 'error',
@@ -1004,8 +1036,19 @@ const ArtworkPlayer = ({
           imageRefs[slotIndex].current
         ) {
           const el = imageRefs[slotIndex].current;
-          el.onload = () => {
-            loadedSource(slotIndex, layer);
+          const markImageReady = () => {
+            let decoded: Promise<unknown>;
+            try {
+              decoded =
+                typeof el.decode === 'function' ? el.decode() : Promise.resolve();
+            } catch {
+              decoded = Promise.resolve();
+            }
+            void decoded.catch(() => undefined).finally(() => {
+              if (!isCancelled) {
+                loadedSource(slotIndex, layer);
+              }
+            });
           };
           el.onload = markImageReady;
           el.onerror = () => {
@@ -1019,9 +1062,7 @@ const ArtworkPlayer = ({
             url: layer.displayPreviewURL,
             mediaType: 'image',
             element: el,
-            onLoad: () => {
-              loadedSource(slotIndex, layer);
-            },
+            onLoad: markImageReady,
             onError: handleMediaError('image'),
             signal: abortController.signal,
           });
@@ -1200,7 +1241,7 @@ const ArtworkPlayer = ({
               ? displaySettings
               : (committedVisualSettings ?? displaySettings);
           const displayMode =
-            displaySettings.scaling === Scaling.Fill ? 'crop' : 'fit';
+            slotSettings.scaling === Scaling.Fill ? 'crop' : 'fit';
           const u = new URL(slot.displayPreviewURL, window.location.href);
           u.search += `&display_mode=${displayMode}`;
           softwareURL = u.toString();
