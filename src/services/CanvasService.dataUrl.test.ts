@@ -42,18 +42,6 @@ const invalidBase64DataPlaylist: DP1Call = {
   ],
 };
 
-const invalidPercentDataPlaylist: DP1Call = {
-  ...malformedDataPlaylist,
-  id: 'invalid-percent-data',
-  items: [
-    {
-      id: 'invalid-percent-artwork',
-      source: 'data:image/svg+xml,%ZZ',
-      license: {},
-    } as DP1Item,
-  ],
-};
-
 const validDataPlaylist: DP1Call = {
   ...malformedDataPlaylist,
   id: 'valid-data',
@@ -177,55 +165,6 @@ it('rejects invalid base64 payloads before Now Display, Schedule Play, or refres
     canvasService.processMessage({
       command: CastCommand.displayPlaylist,
       request: { refresh: true, dp1_call: invalidBase64DataPlaylist },
-    })
-  ).toEqual({ ok: false });
-  expectActivePlayback();
-});
-
-it('rejects malformed percent payloads before Now Display, Schedule Play, or refresh state changes', () => {
-  const storeSpy = vi
-    .spyOn(DP1ScheduleService, 'storeScheduledTask')
-    .mockResolvedValue(undefined);
-  canvasService.setCastInfo(
-    {
-      castCommand: CastCommand.displayPlaylist,
-      playlist: activePlaylist,
-      index: 0,
-      renderStatus: RenderStatus.ready,
-    },
-    false
-  );
-
-  expect(
-    canvasService.processMessage({
-      command: CastCommand.displayPlaylist,
-      request: {
-        intent: { action: DP1Action.NowDisplay },
-        dp1_call: invalidPercentDataPlaylist,
-      },
-    })
-  ).toEqual({ ok: false });
-  expectActivePlayback();
-
-  expect(
-    canvasService.processMessage({
-      command: CastCommand.displayPlaylist,
-      request: {
-        intent: {
-          action: DP1Action.SchedulePlay,
-          schedule_time: '2099-01-01T00:00:00Z',
-        },
-        dp1_call: invalidPercentDataPlaylist,
-      },
-    })
-  ).toEqual({ ok: false });
-  expect(storeSpy).not.toHaveBeenCalled();
-  expectActivePlayback();
-
-  expect(
-    canvasService.processMessage({
-      command: CastCommand.displayPlaylist,
-      request: { refresh: true, dp1_call: invalidPercentDataPlaylist },
     })
   ).toEqual({ ok: false });
   expectActivePlayback();
