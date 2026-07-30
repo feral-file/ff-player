@@ -182,6 +182,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
     if (!isVersionUpdateReload) {
       const bootPlaylist = await DeviceManager.getBootPlaylist();
       if (bootPlaylist?.items?.length) {
+        // Persisted playlists are recovery snapshots, not incoming cast
+        // commands: keep legacy state playable across upgrades and avoid
+        // revalidating snapshots already accepted by newer versions. Source
+        // validation belongs exclusively at CanvasService's live cast boundary.
         console.log('[AppContext] Boot playlist found, casting boot playlist');
         castInfo = {
           castCommand: CastCommand.displayPlaylist,
@@ -193,6 +197,9 @@ export const AppProvider = ({ children }: AppContextProps) => {
       }
     }
 
+    // CastInfo follows the same recovery contract as bootPlaylist above. A
+    // stored snapshot must retain its original playback semantics; validating
+    // again here would make an upgrade reject content that was already active.
     castInfo ??= await DeviceManager.getCastInfo();
 
     const criticalTempValue = castInfo

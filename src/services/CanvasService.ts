@@ -66,8 +66,10 @@ const ARTWORK_SOURCE_RESOLVE_BASE = 'https://ff-player.local/';
 
 /**
  * Validate opaque data URLs before they become persisted playback state.
- * The URL constructor accepts arbitrary data payloads, so malformed escapes
- * and base64 need explicit rejection while raw SVG literal percentages remain.
+ * The URL constructor accepts arbitrary data payloads. Non-base64 data payloads
+ * are intentionally left opaque: data URLs permit literal percent characters,
+ * including text that is not a percent escape. Explicit base64 payloads need
+ * validation because their alphabet and padding have a defined grammar.
  */
 function isValidDataUrl(url: URL): boolean {
   const separatorIndex = url.pathname.indexOf(',');
@@ -78,7 +80,7 @@ function isValidDataUrl(url: URL): boolean {
   const metadata = url.pathname.slice(0, separatorIndex);
   const payload = url.pathname.slice(separatorIndex + 1);
   if (!metadata.toLowerCase().endsWith(';base64')) {
-    return !/%(?![0-9A-Fa-f]{2})(?=[A-Za-z0-9])/.test(payload);
+    return true;
   }
 
   try {
@@ -365,7 +367,10 @@ class CanvasService {
 
   public executeScheduledDP1Task(dp1CallData: DP1Call): void {
     console.log('[CanvasService] Executing scheduled DP1 task with data');
-    this.nowDisplayPlaylist({ dp1CallData });
+    // Scheduled tasks are persisted recovery snapshots. Their source passed
+    // validation when initially accepted (or predates this guard), so do not
+    // reinterpret it as a new live cast when its timer fires after an upgrade.
+    this.nowDisplayPlaylist({ dp1CallData }, false);
   }
 
   /**
@@ -780,12 +785,15 @@ class CanvasService {
     return reply;
   }
 
-  private nowDisplayPlaylist(request: NowDisplayRequest): NowDisplayReply {
+  private nowDisplayPlaylist(
+    request: NowDisplayRequest,
+    validateSources = true
+  ): NowDisplayReply {
     if (!request.dp1CallData.items?.length) {
       console.error('[CanvasService] No items to display');
       return { ok: false };
     }
-    if (findInvalidArtworkSource(request.dp1CallData.items)) {
+    if (validateSources && findInvalidArtworkSource(request.dp1CallData.items)) {
       console.error('[CanvasService] Invalid artwork source');
       return { ok: false };
     }

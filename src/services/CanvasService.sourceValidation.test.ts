@@ -40,23 +40,14 @@ describe('CanvasService source validation', () => {
   });
 });
 
-describe('CanvasService malformed source rejection', () => {
+describe('CanvasService data URL validation', () => {
   afterEach(() => {
     canvasService.setCastInfo(null, false);
   });
 
-  it.each(['%ZZ', '%A', '%2'])(
-    'rejects malformed data escape %s without replacing active playback',
-    malformedEscape => {
-      canvasService.setCastInfo(
-        {
-          castCommand: CastCommand.displayPlaylist,
-          playlist: playlist('active', ['A'].map(item)),
-          index: 0,
-        },
-        false
-      );
-
+  it.each(['100%foo', '100%?', '%ZZ', '%A', '%2'])(
+    'accepts a raw non-base64 payload containing %s',
+    payload => {
       const reply = canvasService.processMessage({
         command: CastCommand.displayPlaylist,
         request: {
@@ -64,7 +55,52 @@ describe('CanvasService malformed source rejection', () => {
           dp1_call: playlist('invalid', [
             {
               id: 'invalid-data',
-              source: `data:image/svg+xml,${malformedEscape}`,
+              source: `data:image/svg+xml,${payload}`,
+              license: {},
+            } as DP1Item,
+          ]),
+        },
+      });
+
+      expect(reply).toEqual({ ok: true });
+      expect(canvasService.getCastInfo()?.playlist?.items?.[0]?.source).toBe(
+        `data:image/svg+xml,${payload}`
+      );
+    }
+  );
+
+  it.each(['TQ==', 'TWE', 'TQ%3D%3D'])(
+    'accepts valid base64 payload %s',
+    payload => {
+      const reply = canvasService.processMessage({
+        command: CastCommand.displayPlaylist,
+        request: {
+          intent: { action: DP1Action.NowDisplay },
+          dp1_call: playlist('base64-valid', [
+            {
+              id: 'base64-valid',
+              source: `data:text/plain;base64,${payload}`,
+              license: {},
+            } as DP1Item,
+          ]),
+        },
+      });
+
+      expect(reply).toEqual({ ok: true });
+    }
+  );
+
+  it.each(['TQ===', 'T=Q=', 'TQ$=', '%ZZ'])(
+    'rejects malformed base64 payload %s',
+    payload => {
+      const reply = canvasService.processMessage({
+        command: CastCommand.displayPlaylist,
+        request: {
+          intent: { action: DP1Action.NowDisplay },
+          dp1_call: playlist('base64-invalid', [
+            {
+              id: 'base64-invalid',
+              source: `data:text/plain;base64,${payload}`,
               license: {},
             } as DP1Item,
           ]),
@@ -72,7 +108,6 @@ describe('CanvasService malformed source rejection', () => {
       });
 
       expect(reply).toEqual({ ok: false });
-      expect(canvasService.getCastInfo()?.playlist?.id).toBe('active');
     }
   );
 });
@@ -103,6 +138,18 @@ describe('CanvasService rejected source state preservation', () => {
     expect(reply).toEqual({ ok: false });
     expect(storeTask).not.toHaveBeenCalled();
     storeTask.mockRestore();
+  });
+
+  it('executes a persisted scheduled playlist without revalidating its source', () => {
+    canvasService.executeScheduledDP1Task(
+      playlist('legacy-scheduled', [
+        { id: 'legacy-artwork', source: 'about:blank', license: {} } as DP1Item,
+      ])
+    );
+
+    expect(canvasService.getCastInfo()?.playlist?.items?.[0]?.source).toBe(
+      'about:blank'
+    );
   });
 
   it('does not replace an active or deferred playlist after rejected refresh', () => {

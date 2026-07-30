@@ -49,15 +49,22 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 
 ## Playlist artwork source compatibility
 
-`CanvasService` validates artwork sources before accepting `now_display`,
-`schedule_play`, or a playlist refresh. Absolute `http:`, `https:`, and
-payload-bearing `data:` sources are accepted, as are relative and
-protocol-relative sources; the latter are resolved by the player against its
-current web origin. Empty, malformed, and non-web schemes (such as `about:`,
-`tezos:`, or `invalid:`) are rejected with `{ ok: false }` before they can
-replace cast or schedule state.
+`CanvasService` validates artwork sources before accepting a new
+`now_display`, `schedule_play`, or playlist refresh command. Absolute `http:`,
+`https:`, and payload-bearing `data:` sources are accepted, as are relative
+and protocol-relative sources; the latter are resolved by the player against
+its current web origin. Empty and non-web schemes (such as `about:`, `tezos:`,
+or `invalid:`) are rejected with `{ ok: false }` before they can replace cast
+or schedule state. Non-base64 `data:` payloads remain opaque, including raw
+literal percent characters; explicit `;base64` payloads must use valid base64.
 
 This guard rejects inputs the player already knows it cannot render while
 preserving relative DP1 sources used by device-local deployments. Acceptance
 does not promise a successful fetch: an accepted source that later cannot load
 is represented by a renderer failure, rather than being rejected at cast time.
+
+Boot playlist, cast-info, and scheduled-task records are recovery snapshots
+rather than new cast commands. They are intentionally restored or executed
+without source validation so an upgrade does not interrupt a previously
+persisted playlist; records written by the current version have already passed
+the live-command validation boundary.
