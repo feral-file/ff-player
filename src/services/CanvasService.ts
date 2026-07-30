@@ -897,18 +897,20 @@ class CanvasService {
       console.error('[CanvasService] No items to display');
       return { ok: false };
     }
-    if (validateSources && findInvalidArtworkSource(request.dp1CallData.items)) {
-      console.error('[CanvasService] Invalid artwork source');
-      return { ok: false };
-    }
-
-    const invalidSourceItem = findInvalidArtworkSource(request.dp1CallData.items);
-    if (invalidSourceItem) {
-      console.error('[CanvasService] Invalid artwork source:', {
-        itemId: invalidSourceItem.id,
-        source: invalidSourceItem.source,
-      });
-      return { ok: false };
+    // Live casts validate; persisted scheduled/boot recovery may skip so an
+    // upgrade does not strand a previously accepted playlist (see
+    // executeScheduledDP1Task). Do not add a second unconditional check here.
+    if (validateSources) {
+      const invalidSourceItem = findInvalidArtworkSource(
+        request.dp1CallData.items
+      );
+      if (invalidSourceItem) {
+        console.error('[CanvasService] Invalid artwork source:', {
+          itemId: invalidSourceItem.id,
+          source: invalidSourceItem.source,
+        });
+        return { ok: false };
+      }
     }
 
     // Clear any stored original playlist from a previous shuffle session and any

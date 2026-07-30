@@ -142,6 +142,8 @@ describe('ArtworkPlayer — HLS error handling', () => {
   afterEach(() => {
     playSpy.mockRestore();
     pauseSpy.mockRestore();
+    hlsTest.instances.length = 0;
+    hlsTest.errorHandlers.length = 0;
     canvasService.setCastInfo(null, false);
     canvasService.setRenderStatus(undefined);
     cleanup();
@@ -202,46 +204,55 @@ describe('ArtworkPlayer — HLS error handling', () => {
   });
 });
 
+/** Clears shared HLS mock state between describes so length assertions stay stable. */
+function clearHlsTestState() {
+  hlsTest.instances.length = 0;
+  hlsTest.errorHandlers.length = 0;
+}
+
+function renderFatalErrorPlayer(
+  onRegisterArtworkReload?: (reload: (() => void) | null) => void
+) {
+  return render(
+    <AppContext.Provider
+      value={
+        {
+          context: {
+            isInitialized: true,
+            isOnline: true,
+            appRemoteConfig: {},
+            displaySettings: null,
+            cursorPositions: null,
+            castInfo: null,
+          },
+        } as never
+      }
+    >
+      <ArtworkPlayer
+        previewURL="https://example.com/artwork.m3u8"
+        artworkPreviewMIMEType="application/vnd.apple.mpegurl"
+        displayPreferences={defaultDP1DisplayPreference}
+        onRegisterArtworkReload={reload => onRegisterArtworkReload?.(reload)}
+      />
+    </AppContext.Provider>
+  );
+}
+
 describe('ArtworkPlayer — HLS fatal errors', () => {
+  beforeEach(() => {
+    clearHlsTestState();
+  });
+
   afterEach(() => {
     vi.useRealTimers();
-    hlsTest.instances.length = 0;
-    hlsTest.errorHandlers.length = 0;
+    clearHlsTestState();
     canvasService.setCastInfo(null, false);
     canvasService.setRenderStatus(undefined);
     cleanup();
   });
 
-  function renderPlayer(
-    onRegisterArtworkReload?: (reload: (() => void) | null) => void
-  ) {
-    return render(
-      <AppContext.Provider
-        value={
-          {
-            context: {
-              isInitialized: true,
-              isOnline: true,
-              appRemoteConfig: {},
-              displaySettings: null,
-              cursorPositions: null,
-              castInfo: null,
-            },
-          } as never
-        }
-      >
-        <ArtworkPlayer
-          previewURL="https://example.com/artwork.m3u8"
-          artworkPreviewMIMEType="application/vnd.apple.mpegurl"
-          displayPreferences={defaultDP1DisplayPreference}
-          onRegisterArtworkReload={reload => onRegisterArtworkReload?.(reload)}
-        />
-      </AppContext.Provider>
-    );
-  }
-
   it('destroys the HLS instance that emitted a fatal error', async () => {
-    renderPlayer();
+    renderFatalErrorPlayer();
 
     await waitFor(() => {
       expect(hlsTest.errorHandlers).toHaveLength(1);
@@ -253,7 +264,7 @@ describe('ArtworkPlayer — HLS fatal errors', () => {
 
   it('keeps a replacement registered when the previous instance errors late', async () => {
     let reload: (() => void) | null = null;
-    renderPlayer(nextReload => {
+    renderFatalErrorPlayer(nextReload => {
       reload = nextReload;
     });
 

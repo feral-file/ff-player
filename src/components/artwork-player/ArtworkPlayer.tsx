@@ -637,14 +637,11 @@ const ArtworkPlayer = ({
           }
           playVideoForSlot(slotIndex, layer, videoElement);
         });
+        // Typed handling must run before any blanket fatal teardown:
+        // BUFFER_NUDGE_ON_STALL is reported as fatal but is recoverable via
+        // recoverMediaError. An early destroy/return would skip that path and
+        // strand playback as failed for a transient stall.
         hlsInstance.on(Hls.Events.ERROR, function (_event, data) {
-          if (data.fatal) {
-            hlsInstance?.destroy();
-            if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
-              hlsInstancesRef.current[slotIndex] = null;
-            }
-            return;
-          }
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               if (data.fatal) {
