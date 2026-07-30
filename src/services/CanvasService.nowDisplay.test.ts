@@ -113,7 +113,7 @@ it('returns ok:false when a playlist item source uses an unsupported URL', () =>
   expect(canvasService.getStatus().renderStatus).toBeUndefined();
 });
 
-it('accepts a relative playlist item source at cast time', () => {
+it('returns ok:false when a playlist item source is a relative path', () => {
   canvasService.setCastInfo(
     {
       castCommand: CastCommand.displayPlaylist,
@@ -130,7 +130,7 @@ it('accepts a relative playlist item source at cast time', () => {
       intent: { action: DP1Action.NowDisplay },
       dp1_call: playlist('new', [
         {
-          id: 'rel-1',
+          id: 'bad-2',
           title: 'Relative Source',
           source: 'artwork.jpg',
           license: {},
@@ -139,15 +139,14 @@ it('accepts a relative playlist item source at cast time', () => {
     },
   });
 
-  // Relative paths stay cast-acceptable; mediaLoader / renderStatus own load failure.
-  expect(reply).toEqual({ ok: true });
+  expect(reply).toEqual({ ok: false });
   expect(
     canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)
-  ).toEqual(['rel-1']);
-  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+  ).toEqual(['A']);
+  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
 });
 
-it('accepts a protocol-relative playlist item source at cast time', () => {
+it('returns ok:false when a playlist item source is protocol-relative', () => {
   canvasService.setCastInfo(
     {
       castCommand: CastCommand.displayPlaylist,
@@ -164,42 +163,9 @@ it('accepts a protocol-relative playlist item source at cast time', () => {
       intent: { action: DP1Action.NowDisplay },
       dp1_call: playlist('new', [
         {
-          id: 'cdn-1',
+          id: 'bad-3',
           title: 'Protocol Relative Source',
           source: '//cdn.example.com/artwork.jpg',
-          license: {},
-        } as DP1Item,
-      ]),
-    },
-  });
-
-  expect(reply).toEqual({ ok: true });
-  expect(
-    canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)
-  ).toEqual(['cdn-1']);
-  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
-});
-
-it('returns ok:false when a playlist item source uses a non-web scheme', () => {
-  canvasService.setCastInfo(
-    {
-      castCommand: CastCommand.displayPlaylist,
-      playlist: playlist('old', ['A'].map(item)),
-      index: 0,
-      renderStatus: RenderStatus.ready,
-    },
-    false
-  );
-
-  const reply = canvasService.processMessage({
-    command: CastCommand.displayPlaylist,
-    request: {
-      intent: { action: DP1Action.NowDisplay },
-      dp1_call: playlist('new', [
-        {
-          id: 'about-1',
-          title: 'About Blank Source',
-          source: 'about:blank',
           license: {},
         } as DP1Item,
       ]),

@@ -68,19 +68,9 @@ import { DP1Service } from './DP1Service';
 const PLAYLIST_SOURCE_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
 
 /**
- * Base used only to resolve relative and protocol-relative sources at cast time.
- * MediaLoader resolves against `window.location.href` the same way; we must not
- * reject those forms here just because they are not absolute http(s)/data URLs.
- * Schemes that stay non-web after resolve (about:, tezos:, invalid:, …) fail.
- */
-const ARTWORK_SOURCE_RESOLVE_BASE = 'https://ff-player.local/';
-
-/**
- * Reject non-renderable artwork sources before we commit cast state.
- * Empty, whitespace-only, and non-web schemes return false so now_display /
- * refreshPlaylist can answer `ok: false` instead of accepting dead media.
- * Relative and protocol-relative sources remain allowed; load failure is reported
- * later via renderStatus rather than cast acceptance.
+ * Reject obviously unsupported artwork sources before we commit cast state.
+ * This keeps invalid media from returning `ok: true` and leaving the old frame
+ * on screen with no explicit failure signal.
  */
 function isSupportedArtworkSource(source: string): boolean {
   try {
@@ -92,7 +82,7 @@ function isSupportedArtworkSource(source: string): boolean {
       return true;
     }
 
-    const url = new URL(normalizedSource, ARTWORK_SOURCE_RESOLVE_BASE);
+    const url = new URL(normalizedSource);
     return PLAYLIST_SOURCE_PROTOCOLS.has(url.protocol);
   } catch {
     return false;
