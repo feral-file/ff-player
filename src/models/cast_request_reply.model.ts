@@ -14,7 +14,12 @@ export interface CursorOffset {
 export type Request = object;
 export interface Reply {
   ok: boolean;
-  error?: ErrorType;
+  // ErrorType for the navigation-error replies; a free-form reason string for
+  // command refusals. The daemon surfaces this verbatim when a command is
+  // refused (feral-controld reads `message.error` to tell an expected
+  // escalation — "No active artwork to refresh" during boot recovery — from
+  // an unexpected refusal when reading logs after a bad boot).
+  error?: ErrorType | string;
 }
 
 export type ConnectReplyV2 = Reply;

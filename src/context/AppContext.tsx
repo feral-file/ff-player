@@ -245,19 +245,33 @@ export const AppProvider = ({ children }: AppContextProps) => {
     // marker — would overwrite what the controller just chose. A committed
     // cast shows in getCastInfo(); a deliberate stop (disconnect, sleep,
     // error navigation) leaves castInfo null and is visible only through
-    // the hydration-halt flag (null alone cannot distinguish "stopped" from
-    // "nothing happened"). Either way boot's
-    // job is settled; bail out. One-shot markers need no cleanup on the
-    // cast branch: any live displayPlaylist/displayDefaultPlaylist command
-    // already cleared criticalTemp in CanvasService's commandHandler. A
-    // mid-hydration disconnect leaves the marker set, benignly — the next
-    // boot's criticalTemp branch is gated on persisted castInfo, which the
-    // disconnect cleared, and if it ever does fire it self-clears via the
-    // ordinary removeItem. Everything below this check is synchronous, so
-    // no further command can interleave before the boot decision applies.
+    // the hydration-halt flags (null alone cannot distinguish "stopped"
+    // from "nothing happened").
+    //
+    // The halts are NOT all alike, though. Only a cast-CLEARING halt
+    // (disconnect) may skip the restore entirely: the persisted playlist is
+    // exactly the state the controller cleared. A preserving halt (sleep,
+    // error navigation) leaves the persisted playlist valid — it is what a
+    // later wake must find — so boot still restores it below and suppresses
+    // only the pieces that would fight the halt: navigation (the wall is
+    // deliberately on /sleep or /error) and every fallback-arming branch (a
+    // successful fallback cast navigates to '/' and would relight the
+    // stopped wall; a wake with nothing playable re-arms via CanvasService's
+    // own DisplayDefaultPlaylist re-entry instead). Without the restore, a
+    // sleep landing mid-hydration would make the wake path find no playlist
+    // and cast — and persist — the default over the user's content.
+    //
+    // One-shot markers need no cleanup on the cast branch: any live
+    // displayPlaylist/displayDefaultPlaylist command already cleared
+    // criticalTemp in CanvasService's commandHandler. A mid-hydration halt
+    // leaves the marker set, benignly — the next boot re-evaluates it and
+    // the ordinary removeItem self-clears when it fires. Everything below
+    // this check is synchronous, so no further command can interleave
+    // before the boot decision applies.
+    const halted = canvasService.wasHaltedDuringBootHydration();
     if (
       canvasService.getCastInfo() ||
-      canvasService.wasHaltedDuringBootHydration()
+      (halted && canvasService.didHydrationHaltClearCast())
     ) {
       console.log(
         '[AppContext] Live command decided the wall during hydration, skipping boot cast state'
@@ -267,6 +281,11 @@ export const AppProvider = ({ children }: AppContextProps) => {
 
     if (castInfo) {
       if (criticalTempValue === 'true') {
+        if (halted) {
+          // Marker left in place: it is gated on persisted castInfo and
+          // self-clears when it eventually fires.
+          return;
+        }
         // Fetch and cast default playlist after critical temp reset.
         requestFallbackPlaylist();
         // Fire-and-forget (same idiom as CanvasService's commandHandler):
@@ -281,6 +300,11 @@ export const AppProvider = ({ children }: AppContextProps) => {
       }
 
       if (castInfo.castCommand?.toString() === 'castDaily') {
+        if (halted) {
+          // Nothing restorable behind the marker; a wake with nothing
+          // playable re-enters the fallback via DisplayDefaultPlaylist.
+          return;
+        }
         requestFallbackPlaylist();
         return;
       }
@@ -301,8 +325,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
       const cleanCastInfo = stripLegacyCastPlaybackTimeline(castInfo);
       setCastInfo(cleanCastInfo);
       canvasService.setCastInfo(cleanCastInfo, false);
-      navigateToHomePage();
-    } else {
+      if (!halted) {
+        navigateToHomePage();
+      }
+    } else if (!halted) {
       // Cast default playlist
       console.log('[AppContext] No castInfo found, fetching default playlist');
       requestFallbackPlaylist();
@@ -434,15 +460,19 @@ export const AppProvider = ({ children }: AppContextProps) => {
         appRemoteConfig.defaultPlaylistURL,
         () => cancelled || explicitCastSinceRequestRef.current
       );
+      if (casted) {
+        // Record what the wall is now showing BEFORE the cancelled check
+        // and regardless of the nonce guard below: even when a newer effect
+        // run or request supersedes this one, the cast itself committed,
+        // and the supersede effect compares against the content actually on
+        // screen. (A superseding run that casts again overwrites this with
+        // its own URL.)
+        lastFallbackCastURLRef.current = appRemoteConfig.defaultPlaylistURL;
+      }
       if (cancelled) {
         return;
       }
       if (casted) {
-        // Record what the wall is now showing regardless of the nonce guard
-        // below: even when a newer request supersedes this run's clear, the
-        // cast itself committed, and the supersede effect compares against
-        // the content actually on screen.
-        lastFallbackCastURLRef.current = appRemoteConfig.defaultPlaylistURL;
         // Only settle the request THIS run was started for. A new request can
         // land while the cast is in flight, and React may batch its
         // {active:true, nonce+1} update into the same commit as this

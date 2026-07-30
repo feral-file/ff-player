@@ -11,7 +11,7 @@
  */
 import { AppContext } from '@/context/AppContext';
 import { CastCommand, type CastInfo } from '@/models';
-import { cleanup, render } from '@testing-library/react';
+import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import SetupArtworkBackground from './SetupArtworkBackground';
 
@@ -104,6 +104,44 @@ describe('SetupArtworkBackground show condition', () => {
       playbackDegraded: false,
     });
 
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+});
+
+describe('SetupArtworkBackground browser-level offline evidence', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('raises the backdrop on the window offline event while isOnline is stuck true', () => {
+    // Reload-while-offline: the daemon's edge-triggered push was spent
+    // before the reload, so `isOnline` sits at its optimistic seed and the
+    // daemon half of the gate is blind. The browser's own level-triggered
+    // interface signal (window online/offline) must cover it.
+    const container = renderBackground({
+      panelVisible: false,
+      hasCast: true,
+      isOnline: true,
+      playbackDegraded: true,
+    });
+    expect(container.querySelector('iframe')).toBeNull();
+
+    act(() => {
+      window.dispatchEvent(new Event('offline'));
+    });
+    expect(container.querySelector('iframe')).not.toBeNull();
+  });
+
+  it('does not raise the backdrop for a healthy artwork when the browser goes offline', () => {
+    const container = renderBackground({
+      panelVisible: false,
+      hasCast: true,
+      isOnline: true,
+      playbackDegraded: false,
+    });
+    act(() => {
+      window.dispatchEvent(new Event('offline'));
+    });
     expect(container.querySelector('iframe')).toBeNull();
   });
 });

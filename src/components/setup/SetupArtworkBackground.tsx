@@ -62,7 +62,36 @@ export default function SetupArtworkBackground({
   const castInfo = appContext?.castInfo ?? null;
   const isOnline = appContext?.isOnline ?? true;
   const playbackDegraded = appContext?.playbackDegraded ?? false;
-  const offlineDegraded = !isOnline && playbackDegraded;
+  // Second, level-triggered source of offline evidence. `isOnline` is only
+  // as good as the daemon's edge-triggered pushes: after a reload while the
+  // device is ALREADY offline it sits at its optimistic `true` seed until
+  // the next real transition (see DEVICE_LOCAL_PLAYER.md), which is exactly
+  // when a claimed offline wall needs this backdrop. `navigator.onLine`
+  // reads the browser's own interface state — level, not edge — so it
+  // catches the link-down half of that case with no daemon involvement.
+  // It cannot see "associated but no internet", so it widens coverage
+  // rather than replacing the daemon signal; false positives are not a
+  // concern (interface down ⟹ genuinely offline). Scoped to this component
+  // on purpose: other `isOnline` consumers (streaming pause) keep their
+  // existing daemon-driven semantics.
+  const [browserOnline, setBrowserOnline] = useState(() =>
+    typeof navigator === 'undefined' ? true : navigator.onLine
+  );
+  useEffect(() => {
+    const handleOnline = () => {
+      setBrowserOnline(true);
+    };
+    const handleOffline = () => {
+      setBrowserOnline(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+  const offlineDegraded = (!isOnline || !browserOnline) && playbackDegraded;
   // Both factors are gated on `offlineDegraded`, not the bare degraded flag.
   // An artwork that fails while the device is ONLINE is a different problem
   // — a broken asset or an unsupported format, which ArtworkPlayer already
@@ -96,11 +125,16 @@ export default function SetupArtworkBackground({
   // Latched to the last on-screen value so the chip fades out WITH the
   // artwork it labels instead of hard-cutting. The usual exit is exactly the
   // case that would break: connectivity returns, so `offlineDegraded` goes
-  // false in the same render that starts the 650ms fade.
+  // false in the same render that starts the 650ms fade. Latched in an
+  // effect, not the render body, so render stays pure; on the exit render
+  // the effect has not yet overwritten the ref, which is precisely the
+  // last-shown value the fade needs.
   const lastChipRef = useRef(showOfflineChip);
-  if (show) {
-    lastChipRef.current = showOfflineChip;
-  }
+  useEffect(() => {
+    if (show) {
+      lastChipRef.current = showOfflineChip;
+    }
+  }, [show, showOfflineChip]);
   const renderChip = show ? showOfflineChip : lastChipRef.current;
 
   if (!mounted) {

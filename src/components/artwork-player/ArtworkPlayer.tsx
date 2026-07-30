@@ -723,7 +723,20 @@ const ArtworkPlayer = ({
         // artwork reads as a success here and never raises the degraded
         // flag. Nothing in-page can inspect that document; `onError` (below)
         // stays the only signal we can trust for this preview type.
-        notePlaybackOutcome(slotPreviewURL(slotIndex), false);
+        //
+        // Worse, the iframe is also where type detection FAILURES land:
+        // offline, `getContentTypeFromURL`'s HEAD dies and an extensionless
+        // source pins here as a guess (detectPreviewType's catch, marked by
+        // `mimeType: null`). That `load` says nothing about the artwork —
+        // scoring it as success would CLEAR a degraded flag raised by the
+        // real preview type on exactly the offline boot the reconnect
+        // recovery exists for, so only a confidently-typed iframe reports.
+        // The guessed typing is not sticky: the recovery's remount re-runs
+        // detection once the network is back, and the artwork's real type
+        // takes over the signals.
+        if (slotsRef.current[slotIndex]?.mimeType !== null) {
+          notePlaybackOutcome(slotPreviewURL(slotIndex), false);
+        }
       }
     } else {
       handleWebGLLost();

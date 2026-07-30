@@ -39,6 +39,7 @@ const { axiosGet, canvasServiceMocks, deviceManager } = vi.hoisted(() => {
       setCastInfo: vi.fn(),
       requestArtworkRefresh: vi.fn(() => true),
       wasHaltedDuringBootHydration: vi.fn(() => false),
+      didHydrationHaltClearCast: vi.fn(() => false),
     },
     deviceManager,
   };
@@ -99,6 +100,7 @@ vi.mock('@/services/CanvasService', () => ({
     setCastInfo: canvasServiceMocks.setCastInfo,
     requestArtworkRefresh: canvasServiceMocks.requestArtworkRefresh,
     wasHaltedDuringBootHydration: canvasServiceMocks.wasHaltedDuringBootHydration,
+    didHydrationHaltClearCast: canvasServiceMocks.didHydrationHaltClearCast,
   },
 }));
 
@@ -133,6 +135,7 @@ beforeEach(() => {
   canvasServiceMocks.wasHaltedDuringBootHydration.mockImplementation(
     () => false
   );
+  canvasServiceMocks.didHydrationHaltClearCast.mockImplementation(() => false);
 });
 
 const PUBLISHED_URL = 'https://example.com/published';

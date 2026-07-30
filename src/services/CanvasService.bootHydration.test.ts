@@ -162,6 +162,9 @@ describe('CanvasService mid-hydration halt flag', () => {
     expect(service.disconnect()).toEqual({ ok: true });
 
     expect(service.wasHaltedDuringBootHydration()).toBe(true);
+    // Disconnect is the cast-CLEARING flavor: boot must skip the persisted
+    // restore entirely — the persisted playlist is what it just cleared.
+    expect(service.didHydrationHaltClearCast()).toBe(true);
   });
 
   it('a mid-hydration sleep latches through its own dispatch', async () => {
@@ -170,6 +173,19 @@ describe('CanvasService mid-hydration halt flag', () => {
     expect(service.setSleepMode({ sleepMode: true })).toEqual({ ok: true });
 
     expect(service.wasHaltedDuringBootHydration()).toBe(true);
+    // Sleep PRESERVES cast state: boot must still restore the persisted
+    // playlist (without navigating) so a later wake finds it — a clearing
+    // verdict here would trade the user's playlist for the default at wake.
+    expect(service.didHydrationHaltClearCast()).toBe(false);
+  });
+
+  it('a bare PlaybackHalted (error navigation) is not cast-clearing', async () => {
+    const service = await freshCanvasService();
+
+    window.dispatchEvent(new CustomEvent(CustomEventName.PlaybackHalted));
+
+    expect(service.wasHaltedDuringBootHydration()).toBe(true);
+    expect(service.didHydrationHaltClearCast()).toBe(false);
   });
 });
 

@@ -37,7 +37,11 @@ import {
 import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
 import { LoopMode } from '@/models/cast_info.model';
 import { DP1Item } from '@/models/dp1.model';
-import { CustomEventName, NavigateEventDetail } from '@/models/custom_event';
+import {
+  CustomEventName,
+  NavigateEventDetail,
+  PlaybackHaltedDetail,
+} from '@/models/custom_event';
 import DeviceManager from '@/utils/DeviceManager';
 import {
   CursorPositionListener,
@@ -103,6 +107,15 @@ class CanvasService {
   // persisted state or arm the fallback over it. Sticky for the page
   // lifetime — it is only consulted at the one boot decision.
   private haltedDuringBootHydration = false;
+  // The mid-hydration halt CLEARED cast state (disconnect's
+  // PlaybackHaltedDetail.clearedCast). Only this flavor makes boot skip the
+  // persisted-playlist restore: the persisted state is exactly what the
+  // controller cleared. A preserving halt (sleep, error navigation) leaves
+  // this false, and boot still restores the playlist — suppressing only
+  // navigation and fallback arming — so a wake after a mid-hydration sleep
+  // finds the user's playlist instead of casting (and persisting) the
+  // default over it.
+  private haltClearedCastDuringBootHydration = false;
   // True between setSleepMode(true) and the wake that ends it. The wake
   // re-arm below must fire only for a wake that ends a REAL sleep: a wake
   // sent to a disconnected wall (castInfo cleared, never slept) must not
@@ -122,9 +135,17 @@ class CanvasService {
     // the halt itself. Never removed — the singleton lives for the page.
     // The window guard covers module import during prerender.
     if (typeof window !== 'undefined') {
-      window.addEventListener(CustomEventName.PlaybackHalted, () => {
+      window.addEventListener(CustomEventName.PlaybackHalted, event => {
         if (this.bootCastHydrationPending) {
           this.haltedDuringBootHydration = true;
+          // detail is null at runtime for a bare CustomEvent (error
+          // navigation dispatches without one), whatever the generic claims.
+          const detail = (
+            event as CustomEvent<PlaybackHaltedDetail | undefined>
+          ).detail;
+          if (detail?.clearedCast) {
+            this.haltClearedCastDuringBootHydration = true;
+          }
           // A deferred conditional default push predates this stop: cancel
           // it here, the same way the halt cancels AppContext's active
           // request. Cancelling at the halt rather than gating the settle
@@ -601,7 +622,12 @@ class CanvasService {
     // Window guard: SSR safety, matching this file's other dispatches.
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
-        new CustomEvent(CustomEventName.PlaybackHalted as string)
+        new CustomEvent<PlaybackHaltedDetail>(
+          CustomEventName.PlaybackHalted as string,
+          // The one cast-CLEARING halt: boot must not restore the persisted
+          // playlist this disconnect just cleared (see PlaybackHaltedDetail).
+          { detail: { clearedCast: true } }
+        )
       );
     }
     return { ok: true };
@@ -611,13 +637,24 @@ class CanvasService {
    * True when a deliberate stop (disconnect, sleep, error navigation)
    * landed before boot hydration finished — latched from the PlaybackHalted
    * event in the constructor.
-   * InitCastInfo consults this alongside getCastInfo(): either signal means
-   * a live command already took authority over the wall, so the stale
-   * persisted state must not be restored and the fallback must not be
-   * armed over it.
+   * InitCastInfo consults this alongside getCastInfo(): a live command
+   * already took authority over the wall, so boot must not navigate or arm
+   * the fallback over it. Whether the persisted playlist may still be
+   * RESTORED is a separate question — see didHydrationHaltClearCast.
    */
   public wasHaltedDuringBootHydration(): boolean {
     return this.haltedDuringBootHydration;
+  }
+
+  /**
+   * True when the mid-hydration halt was cast-CLEARING (disconnect): the
+   * persisted playlist is exactly the state the controller cleared, so boot
+   * must skip the restore entirely. Preserving halts (sleep, error
+   * navigation) return false and boot restores the playlist without
+   * navigating, so a later wake finds the user's content.
+   */
+  public didHydrationHaltClearCast(): boolean {
+    return this.haltClearedCastDuringBootHydration;
   }
 
   public setSleepMode(request: SetSleepModeRequest): SetSleepModeReply {
@@ -706,9 +743,13 @@ class CanvasService {
 
   private refreshArtwork(): Reply {
     const activeCastInfo = this.castInfo;
+    // Refusals carry their reason in the reply, not only the console: the
+    // daemon's boot recovery escalates a refused refresh to a Page.reload
+    // and logs `message.error` to distinguish the expected "no active
+    // artwork" escalation from a genuinely broken page.
     if (!activeCastInfo?.playlist?.items?.length) {
       console.error('[CanvasService] No active artwork to refresh');
-      return { ok: false };
+      return { ok: false, error: 'No active artwork to refresh' };
     }
 
     if (!this._onRefreshArtwork) {
@@ -716,14 +757,14 @@ class CanvasService {
       console.warn(
         '[CanvasService] refreshArtwork: no playlist handler registered'
       );
-      return { ok: false };
+      return { ok: false, error: 'No playlist handler registered yet' };
     }
     const applied = this._onRefreshArtwork();
     if (!applied) {
       console.warn(
         '[CanvasService] refreshArtwork: handler could not update preview URL'
       );
-      return { ok: false };
+      return { ok: false, error: 'Playlist handler could not update preview URL' };
     }
     this.pendingRefreshArtwork = false;
     return { ok: true };

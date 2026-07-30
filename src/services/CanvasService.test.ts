@@ -117,7 +117,10 @@ describe('CanvasService refreshArtwork', () => {
       command: CastCommand.refreshArtwork,
       request: {},
     });
-    expect(reply).toEqual({ ok: false });
+    expect(reply).toEqual({
+      ok: false,
+      error: 'No playlist handler registered yet',
+    });
   });
 
   it('returns ok:false when the handler cannot apply a preview URL', () => {
@@ -137,7 +140,10 @@ describe('CanvasService refreshArtwork', () => {
       command: CastCommand.refreshArtwork,
       request: {},
     });
-    expect(reply).toEqual({ ok: false });
+    expect(reply).toEqual({
+      ok: false,
+      error: 'Playlist handler could not update preview URL',
+    });
     expect(refreshSpy).toHaveBeenCalledTimes(1);
   });
 });
@@ -162,7 +168,10 @@ describe('CanvasService refreshArtwork replay', () => {
       command: CastCommand.refreshArtwork,
       request: {},
     });
-    expect(reply).toEqual({ ok: false });
+    expect(reply).toEqual({
+      ok: false,
+      error: 'No playlist handler registered yet',
+    });
 
     const refreshSpy = vi.fn(() => true);
     service.onRefreshArtwork = refreshSpy;

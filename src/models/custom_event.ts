@@ -30,11 +30,25 @@ export enum CustomEventName {
   // LATER explicit cast or displayDefaultPlaylist push still wins: these
   // are synchronous window events and last command wins, so the halt is a
   // stand-down, not a latch on future commands.
+  // Carries PlaybackHaltedDetail: only a CAST-CLEARING halt (disconnect) may
+  // make boot skip the persisted-playlist restore entirely — a preserving
+  // halt (sleep, error navigation) suppresses navigation and fallback arming
+  // but still restores, or a mid-hydration sleep would silently trade the
+  // user's persisted playlist for the default at wake.
   PlaybackHalted = 'playbackHalted',
   MintPairingDisplay = 'mintPairingDisplay',
   Navigate = 'navigate',
   SetupDisplay = 'setupDisplay',
   WatchdogEvent = 'watchdogEvent',
+}
+
+export interface PlaybackHaltedDetail {
+  // True when the halt cleared cast state (disconnect). Boot hydration must
+  // then not restore the stale persisted playlist — it is exactly the state
+  // the controller just cleared. Absent/false for state-preserving halts
+  // (sleep, error navigation), where boot still restores the playlist so a
+  // later wake finds it, and suppresses only navigation and fallback arming.
+  clearedCast?: boolean;
 }
 
 export interface ConnectivityEventDetail {

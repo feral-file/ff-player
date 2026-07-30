@@ -1,3 +1,8 @@
+/* eslint-disable max-lines --
+ * One provider harness serves the boot, fallback, reconnect, and halt
+ * suites; splitting the file would duplicate it. Prefer a new sibling file
+ * (like AppContext.connectivity.test.tsx) for the next suite instead.
+ */
 import { AppProvider, useAppContext } from '@/context/AppContext';
 import { LocalStorageItem } from '@/constants';
 import { CastCommand, type CastInfo } from '@/models';
@@ -31,6 +36,7 @@ const { axiosGet, canvasServiceMocks, deviceManager } =
         setCastInfo: vi.fn(),
         requestArtworkRefresh: vi.fn<() => boolean>(() => true),
         wasHaltedDuringBootHydration: vi.fn<() => boolean>(() => false),
+        didHydrationHaltClearCast: vi.fn<() => boolean>(() => false),
       },
       deviceManager,
     };
@@ -91,6 +97,7 @@ vi.mock('@/services/CanvasService', () => ({
     setCastInfo: canvasServiceMocks.setCastInfo,
     requestArtworkRefresh: canvasServiceMocks.requestArtworkRefresh,
     wasHaltedDuringBootHydration: canvasServiceMocks.wasHaltedDuringBootHydration,
+    didHydrationHaltClearCast: canvasServiceMocks.didHydrationHaltClearCast,
   },
 }));
 
@@ -125,6 +132,7 @@ beforeEach(() => {
   canvasServiceMocks.wasHaltedDuringBootHydration.mockImplementation(
     () => false
   );
+  canvasServiceMocks.didHydrationHaltClearCast.mockImplementation(() => false);
 });
 
 /**
@@ -539,7 +547,8 @@ describe('AppContext boot hydration vs live casts', () => {
     // A disconnect in the hydration window CLEARS castInfo, so the live-cast
     // check alone reads null as "nothing happened" and boot would restore
     // stale state onto the wall the controller just cleared. The
-    // hydration-halt flag disambiguates.
+    // cast-CLEARING halt flavor (didHydrationHaltClearCast) disambiguates —
+    // only it skips the restore entirely.
     const hydration = bootWithDelayedHydration();
     await waitFor(() => {
       expect(deviceManager.getCastInfo).toHaveBeenCalled();
@@ -547,6 +556,7 @@ describe('AppContext boot hydration vs live casts', () => {
     canvasServiceMocks.wasHaltedDuringBootHydration.mockImplementation(
       () => true
     );
+    canvasServiceMocks.didHydrationHaltClearCast.mockImplementation(() => true);
     await act(async () => {
       hydration()?.(persistedCastInfo());
       await Promise.resolve();
@@ -557,7 +567,66 @@ describe('AppContext boot hydration vs live casts', () => {
     expect(canvasServiceMocks.setCastInfo).not.toHaveBeenCalled();
     expect(canvasServiceMocks.castPlaylistByURL).not.toHaveBeenCalled();
   });
+});
 
+// Split from the suite above only for lint's function-length budget: these
+// cases share the same delayed-hydration harness.
+describe('AppContext boot hydration vs mid-hydration halts', () => {
+  it('restores the playlist without navigating or arming the fallback after a mid-hydration sleep', async () => {
+    // A PRESERVING halt (sleep, error navigation) does not clear the
+    // persisted playlist — it is exactly what a later wake must find. Boot
+    // must still restore it, and suppress only navigation and fallback
+    // arming; skipping the restore would make the wake path find no
+    // playlist and cast (and persist) the default over the user's content.
+    const hydration = bootWithDelayedHydration();
+    await waitFor(() => {
+      expect(deviceManager.getCastInfo).toHaveBeenCalled();
+    });
+    canvasServiceMocks.wasHaltedDuringBootHydration.mockImplementation(
+      () => true
+    );
+    // didHydrationHaltClearCast stays false: sleep preserves cast state.
+    await act(async () => {
+      hydration()?.(persistedCastInfo());
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(canvasServiceMocks.setCastInfo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          castCommand: CastCommand.displayPlaylist,
+        }),
+        false
+      );
+    });
+    expect(canvasServiceMocks.castPlaylistByURL).not.toHaveBeenCalled();
+  });
+
+  it('arms nothing when a preserving halt lands with no persisted playlist', async () => {
+    // Sleep landing mid-hydration on a device with nothing persisted: the
+    // wall was deliberately stopped, so boot must not arm the fallback (a
+    // successful fallback cast navigates to '/' and would relight it). A
+    // wake with nothing playable re-enters the fallback via CanvasService's
+    // own DisplayDefaultPlaylist re-entry instead.
+    const hydration = bootWithDelayedHydration();
+    await waitFor(() => {
+      expect(deviceManager.getCastInfo).toHaveBeenCalled();
+    });
+    canvasServiceMocks.wasHaltedDuringBootHydration.mockImplementation(
+      () => true
+    );
+    await act(async () => {
+      hydration()?.(null);
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(canvasServiceMocks.completeBootCastHydration).toHaveBeenCalled();
+    });
+    expect(canvasServiceMocks.setCastInfo).not.toHaveBeenCalled();
+    expect(canvasServiceMocks.castPlaylistByURL).not.toHaveBeenCalled();
+  });
+});
+
+describe('AppContext boot hydration with nothing committed', () => {
   it('still restores persisted cast state when nothing committed during hydration', async () => {
     const hydration = bootWithDelayedHydration();
     await waitFor(() => {
