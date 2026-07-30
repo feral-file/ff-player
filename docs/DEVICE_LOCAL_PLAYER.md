@@ -45,10 +45,19 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 
 ## Compatibility note
 
+- Persisted storage keys for cast, display settings, and boot recovery are unchanged by this document. Do not rename persisted keys without a migration plan.
+
 ## Playlist artwork source compatibility
 
-`now_display`, `schedule_play`, and playlist refresh reject empty, malformed,
-or non-web artwork sources before persisting playback state. HTTP(S), data URLs
-with a payload, and relative or protocol-relative sources remain supported.
+`CanvasService` validates artwork sources before accepting `now_display`,
+`schedule_play`, or a playlist refresh. Absolute `http:`, `https:`, and
+payload-bearing `data:` sources are accepted, as are relative and
+protocol-relative sources; the latter are resolved by the player against its
+current web origin. Empty, malformed, and non-web schemes (such as `about:`,
+`tezos:`, or `invalid:`) are rejected with `{ ok: false }` before they can
+replace cast or schedule state.
 
-- Persisted storage keys for cast, display settings, and boot recovery are unchanged by this document. Do not rename persisted keys without a migration plan.
+This guard rejects inputs the player already knows it cannot render while
+preserving relative DP1 sources used by device-local deployments. Acceptance
+does not promise a successful fetch: an accepted source that later cannot load
+is represented by a renderer failure, rather than being rejected at cast time.

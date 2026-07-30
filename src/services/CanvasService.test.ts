@@ -88,6 +88,7 @@ describe('CanvasService Now Display defaults', () => {
     expect(reply).toEqual({ ok: false });
     expect(persistSpy).not.toHaveBeenCalled();
   });
+
 });
 
 describe('CanvasService refreshArtwork', () => {

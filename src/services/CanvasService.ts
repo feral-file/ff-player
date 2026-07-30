@@ -65,6 +65,40 @@ const PLAYLIST_SOURCE_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
 const ARTWORK_SOURCE_RESOLVE_BASE = 'https://ff-player.local/';
 
 /**
+ * Validate opaque data URLs before they become persisted playback state.
+ * The URL constructor accepts arbitrary data payloads, so malformed escapes
+ * and base64 need explicit rejection while raw SVG literal percentages remain.
+ */
+function isValidDataUrl(url: URL): boolean {
+  const separatorIndex = url.pathname.indexOf(',');
+  if (separatorIndex === -1 || separatorIndex === url.pathname.length - 1) {
+    return false;
+  }
+
+  const metadata = url.pathname.slice(0, separatorIndex);
+  const payload = url.pathname.slice(separatorIndex + 1);
+  if (!metadata.toLowerCase().endsWith(';base64')) {
+    return !/%(?![0-9A-Fa-f]{2})(?=[A-Za-z0-9])/.test(payload);
+  }
+
+  try {
+    const base64Payload = decodeURIComponent(payload).replace(/[\t\n\f\r ]/g, '');
+    const paddingLength = (/=+$/.exec(base64Payload))?.[0].length ?? 0;
+    const unpaddedLength = base64Payload.length - paddingLength;
+    return (
+      /^[A-Za-z0-9+/]*={0,2}$/.test(base64Payload) &&
+      unpaddedLength > 0 &&
+      paddingLength <= 2 &&
+      (paddingLength === 0
+        ? unpaddedLength % 4 !== 1
+        : base64Payload.length % 4 === 0)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Keeps unsupported artwork URLs out of persisted cast and schedule state.
  * Relative URLs remain valid because the browser resolves them from the player
  * origin; validation only rejects empty, malformed, and non-web schemes.
@@ -76,11 +110,9 @@ function isSupportedArtworkSource(source: string): boolean {
       return false;
     }
     const url = new URL(normalizedSource, ARTWORK_SOURCE_RESOLVE_BASE);
-    if (url.protocol !== 'data:') {
-      return PLAYLIST_SOURCE_PROTOCOLS.has(url.protocol);
-    }
-    const separator = url.pathname.indexOf(',');
-    return separator !== -1 && separator < url.pathname.length - 1;
+    return url.protocol === 'data:'
+      ? isValidDataUrl(url)
+      : PLAYLIST_SOURCE_PROTOCOLS.has(url.protocol);
   } catch {
     return false;
   }
