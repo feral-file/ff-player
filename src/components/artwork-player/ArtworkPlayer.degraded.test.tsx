@@ -91,7 +91,7 @@ describe('ArtworkPlayer — degraded playback signal', () => {
 
     await fireMedia(await findImage(container), 'error');
 
-    expect(setPlaybackDegraded).toHaveBeenCalledWith(true);
+    expect(setPlaybackDegraded).toHaveBeenCalledWith(true, IMAGE_A);
   });
 
   it('clears the flag when the same artwork later loads', async () => {
@@ -102,11 +102,11 @@ describe('ArtworkPlayer — degraded playback signal', () => {
 
     const img = await findImage(container);
     await fireMedia(img, 'error');
-    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(true);
+    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(true, IMAGE_A);
 
     await fireMedia(img, 'load');
 
-    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(false);
+    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(false, IMAGE_A);
   });
 
   it('does not report anything for an artwork that simply loads', async () => {
@@ -128,7 +128,7 @@ describe('ArtworkPlayer — degraded playback signal', () => {
     );
 
     await fireMedia(await findImage(container), 'error');
-    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(true);
+    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(true, IMAGE_A);
 
     await act(async () => {
       rerender(playerNode(IMAGE_B, setPlaybackDegraded));
@@ -154,7 +154,7 @@ describe('ArtworkPlayer — degraded playback signal', () => {
 
     await fireMedia(await findImage(container), 'error');
     expect(setPlaybackDegraded).toHaveBeenCalledTimes(1);
-    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(true);
+    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(true, IMAGE_A);
 
     await act(async () => {
       reload?.();
@@ -178,7 +178,7 @@ describe('ArtworkPlayer — degraded playback signal', () => {
     );
 
     await fireMedia(await findImage(container), 'error');
-    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(true);
+    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(true, IMAGE_A);
 
     await act(async () => {
       rerender(playerNode(IMAGE_A, setPlaybackDegraded, 'item-2'));
@@ -197,7 +197,7 @@ describe('ArtworkPlayer — degraded playback signal', () => {
     );
 
     await fireMedia(await findImage(container), 'error');
-    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(true);
+    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(true, IMAGE_A);
 
     act(() => {
       unmount();

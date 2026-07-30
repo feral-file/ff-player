@@ -16,6 +16,17 @@ export interface AppRemoteConfig {
 const REMOTE_CONFIG_TIMEOUT_MS = 10_000;
 
 /**
+ * Re-report window for Sentry sampling (see `reportFailureSampled`): how
+ * long a single event for a given error class stands in for every repeat
+ * before the class is allowed to report again. Bounds volume on a
+ * persistently offline device without keying by page lifetime alone, which
+ * cannot distinguish "still the same five-minute outage" from "this has now
+ * been failing for six hours" — the latter is new information worth a fresh
+ * event.
+ */
+const SENTRY_REPORT_WINDOW_MS = 6 * 60 * 60 * 1000;
+
+/**
  * Maps `display.json` `duration` for version polling: valid finite values ≥0
  * are kept; negatives clamp to `0`; absent or invalid values become `undefined`
  * (no polling). `AppWrapper` treats falsy duration as disabled.
@@ -49,6 +60,19 @@ class RemoteConfigService {
    * playing the built-in default playlist instead of the published one.
    */
   private appRemoteConfig: AppRemoteConfig | null = null;
+
+  /**
+   * Wall-clock moment each error class was last reported to Sentry (see
+   * `fetchConfig`'s catch). AppContext now re-runs `getAppRemoteConfig` on
+   * every online notification while no remote config has landed, so an
+   * unsampled `captureException` would emit one Sentry event per
+   * notification for the life of a persistently offline device. Keyed by
+   * class rather than page lifetime alone (§ SENTRY_REPORT_WINDOW_MS): a
+   * bare "reported once" latch would go permanently silent on an outage that
+   * outlives the first event, hiding exactly the information an operator
+   * needs — that the device is STILL down.
+   */
+  private reportedErrorClasses = new Map<string, number>();
 
   /**
    * Resolves the published runtime config, reading the network at most once
@@ -138,7 +162,7 @@ class RemoteConfigService {
       };
     } catch (error) {
       console.log('[API] Failed to load config:', error);
-      Sentry.captureException(error);
+      this.reportFailureSampled(error);
       // Return default value if failed to load config
       return {
         config: {
@@ -148,6 +172,30 @@ class RemoteConfigService {
         fromRemote: false,
       };
     }
+  }
+
+  /**
+   * Sampled Sentry reporting: at most one event per distinct error class (by
+   * constructor name — e.g. `AxiosError` vs a generic `Error`) per
+   * SENTRY_REPORT_WINDOW_MS, not one per failed read. A dead config host is
+   * already visible from the first event, so every repeat within the window
+   * adds volume without new information — but an outage that outlives the
+   * window is new information (still down), so the class becomes reportable
+   * again rather than staying latched silent for the rest of the page
+   * lifetime.
+   */
+  private reportFailureSampled(error: unknown): void {
+    const errorClass = error instanceof Error ? error.constructor.name : typeof error;
+    const now = Date.now();
+    const lastReportedAt = this.reportedErrorClasses.get(errorClass);
+    if (
+      lastReportedAt !== undefined &&
+      now - lastReportedAt < SENTRY_REPORT_WINDOW_MS
+    ) {
+      return;
+    }
+    this.reportedErrorClasses.set(errorClass, now);
+    Sentry.captureException(error);
   }
 }
 

@@ -47,6 +47,21 @@ export class CDPRequestHandler {
       this.handleConnectivityChange.bind(this);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleWatchdogEvent = this.handleWatchdogEvent.bind(this);
+    // Structured status probe (cross-repo recovery design §4.1): reports the
+    // preconditions controld's boot recovery actually needs — route,
+    // handler/artwork readiness, boot-hydration outcome — instead of a
+    // synthetic "hydrated" boolean. Values are read live from CanvasService
+    // on every call, never cached here, so a single global function stays
+    // correct across route changes and hydration settling.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).__ffosPlayerStatus = () =>
+      JSON.stringify({
+        protocol: 1,
+        route: window.location.pathname,
+        handlerRegistered: canvasService.onRefreshArtwork !== null,
+        hasArtwork: canvasService.hasActiveArtwork(),
+        bootHydration: canvasService.bootHydrationState(),
+      });
   }
 
   public cleanup() {
@@ -56,6 +71,8 @@ export class CDPRequestHandler {
     (window as any).handleConnectivityChange = null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
     (window as any).handleWatchdogEvent = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+    (window as any).__ffosPlayerStatus = null;
     this.isInitialized = false;
   }
 

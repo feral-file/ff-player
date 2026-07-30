@@ -141,6 +141,7 @@ describe('CanvasService refreshArtwork', () => {
     expect(reply).toEqual({
       ok: false,
       error: 'No playlist handler registered yet',
+      code: 'handler_pending',
     });
   });
 
@@ -164,6 +165,7 @@ describe('CanvasService refreshArtwork', () => {
     expect(reply).toEqual({
       ok: false,
       error: 'Playlist handler could not update preview URL',
+      code: 'preview_update_failed',
     });
     expect(refreshSpy).toHaveBeenCalledTimes(1);
   });
@@ -192,6 +194,7 @@ describe('CanvasService refreshArtwork replay', () => {
     expect(reply).toEqual({
       ok: false,
       error: 'No playlist handler registered yet',
+      code: 'handler_pending',
     });
 
     const refreshSpy = vi.fn(() => true);

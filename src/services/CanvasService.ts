@@ -189,6 +189,13 @@ class CanvasService {
   // it for the same reason — a wall cleared DURING sleep stays dark on
   // wake.
   private sleepModeEntered = false;
+  // Set only when initCastInfo itself threw (completeBootCastHydration's
+  // `outcome` argument), never for an initialDisplaySettings failure that
+  // shares the same try block in AppContext — see bootHydrationState(). Once
+  // hydration is no longer pending, this is what turns a caught exception
+  // into the CDP status probe's 'failed' outcome, which is the only
+  // bootHydration value that drives boot recovery's navigate-away row.
+  private bootHydrationFailed = false;
 
   private constructor() {
     // Latch any deliberate-stop notification that lands before boot
@@ -211,6 +218,23 @@ class CanvasService {
           ).detail;
           if (detail?.clearedCast) {
             this.haltClearedCastDuringBootHydration = true;
+            // This early, useCastInfo's React state is still at its
+            // useState(null) initial value: this.setCastInfo(null) inside
+            // disconnect() is a same-value bail-out, so React never
+            // re-renders and the persistence effect (DeviceManager
+            // .setDeviceInfo) that would normally clear the stored record
+            // never runs. Without this direct write, the STALE persisted
+            // castInfo survives to the next boot and initCastInfo resurrects
+            // exactly the playlist this disconnect just cleared. Clear it
+            // here at the service layer instead of depending on a React
+            // re-render. Fire-and-forget, matching this class's other
+            // storage writes off the event path.
+            DeviceManager.setDeviceInfo(null).catch((error: unknown) => {
+              console.error(
+                '[CanvasService] Error clearing persisted castInfo after a mid-hydration disconnect:',
+                error
+              );
+            });
           }
           // A deferred conditional default push predates this stop: cancel
           // it here, the same way the halt cancels AppContext's active
@@ -322,11 +346,55 @@ class CanvasService {
     return this.castInfo;
   }
 
+  /**
+   * Whether `next` is the same playlist content as `prev`, for
+   * setCastInfo's pendingRefreshArtwork guard below. Mirrors the identity
+   * checks refreshPlaylist already uses elsewhere in this file (DP1Call.id,
+   * then a content compare via `deepEqual`) rather than inventing a new
+   * comparison: cheapest first — an assigned `playlist.id` or `playlistUrl`
+   * settles it in O(1) — falling back to a full item compare only when
+   * neither playlist carries a stable identity (ad-hoc/boot-restored casts).
+   */
+  private isSamePlaylistContent(
+    prev: CastInfo | null,
+    next: CastInfo
+  ): boolean {
+    const prevPlaylist = prev?.playlist;
+    const nextPlaylist = next.playlist;
+    if (prevPlaylist === nextPlaylist) {
+      return true;
+    }
+    if (!prevPlaylist || !nextPlaylist) {
+      return false;
+    }
+    if (prevPlaylist.id !== undefined || nextPlaylist.id !== undefined) {
+      return prevPlaylist.id === nextPlaylist.id;
+    }
+    if (prev.playlistUrl !== undefined || next.playlistUrl !== undefined) {
+      return prev.playlistUrl === next.playlistUrl;
+    }
+    return deepEqual(prevPlaylist.items ?? [], nextPlaylist.items ?? []);
+  }
+
   public setCastInfo(castInfo: CastInfo | null, notify = true) {
     console.log('[CanvasService] Setting castInfo:', notify);
     if (castInfo === null) {
       this.queuedPlaylistPending = false;
       this.setDeferredRefreshPlaylist(null);
+      this.pendingRefreshArtwork = false;
+    } else if (!this.isSamePlaylistContent(this.castInfo, castInfo)) {
+      // A REAL cast-content change supersedes any refresh parked against
+      // the PREVIOUS artwork (refreshArtwork's handler_pending /
+      // preview_update_failed refusals — see refreshArtwork below):
+      // replaying it later would refresh whatever is now on screen, not the
+      // artwork the refusal was actually about. The no-artwork refusal has
+      // nothing to supersede — it never sets the flag in the first place.
+      //
+      // Narrower than "every non-null setCastInfo" on purpose: a bare
+      // `connect`, a loop-mode/duration setter, a wake, or a slot advance
+      // (moveToArtwork) all pass through here too, but none of them replace
+      // the playlist the parked refresh is about — clearing on those drops
+      // the player's own reconnect refresh for no reason.
       this.pendingRefreshArtwork = false;
     }
     this.castInfo =
@@ -639,6 +707,18 @@ class CanvasService {
         items: activeCastInfo?.playlist?.items,
         index: activeCastInfo?.index,
 
+        // Generation stamp echo (cross-repo recovery design §2.1, source 3):
+        // rides this existing round-trip so controld can detect a
+        // document-stamp mismatch without a second evaluate. The key is
+        // ALWAYS present from THIS player — '' when the session has not
+        // stamped the document yet (a fresh mount, or a foreign/unstamped
+        // document), the stamp string otherwise — so controld can tell a new
+        // player's unstamped document apart from an OLD player, which omits
+        // the key entirely (pre-stamp code never sent it).
+        stamp:
+          (window as unknown as { __ffosDocStamp?: string }).__ffosDocStamp ??
+          '',
+
         deviceSettings: {
           scaling:
             DeviceManager.getCachedDeviceDisplaySettings()?.scaling ??
@@ -724,6 +804,42 @@ class CanvasService {
    */
   public didHydrationHaltClearCast(): boolean {
     return this.haltClearedCastDuringBootHydration;
+  }
+
+  /**
+   * Mirrors refreshArtwork's exact "anything to refresh" check below, so the
+   * CDP status probe and the live refusal path can never disagree about
+   * whether the current cast has active artwork.
+   */
+  public hasActiveArtwork(): boolean {
+    return Boolean(this.castInfo?.playlist?.items?.length);
+  }
+
+  /**
+   * Boot-hydration precondition for the CDP status probe
+   * (`window.__ffosPlayerStatus`, cross-repo recovery design §4.1). Order
+   * matters: hydration still in progress always reports 'pending' —
+   * whatever a mid-hydration halt or failure latched only becomes
+   * meaningful once completeBootCastHydration has actually run.
+   */
+  public bootHydrationState():
+    | 'pending'
+    | 'ok'
+    | 'halted_cleared'
+    | 'halted_preserving'
+    | 'failed' {
+    if (this.bootCastHydrationPending) {
+      return 'pending';
+    }
+    if (this.bootHydrationFailed) {
+      return 'failed';
+    }
+    if (this.haltedDuringBootHydration) {
+      return this.haltClearedCastDuringBootHydration
+        ? 'halted_cleared'
+        : 'halted_preserving';
+    }
+    return 'ok';
   }
 
   public setSleepMode(request: SetSleepModeRequest): SetSleepModeReply {
@@ -815,10 +931,16 @@ class CanvasService {
     // Refusals carry their reason in the reply, not only the console: the
     // daemon's boot recovery escalates a refused refresh to a Page.reload
     // and logs `message.error` to distinguish the expected "no active
-    // artwork" escalation from a genuinely broken page.
+    // artwork" escalation from a genuinely broken page. `code` is the same
+    // classification as a stable machine-readable value — `error` stays
+    // byte-for-byte unchanged for existing log readers.
     if (!activeCastInfo?.playlist?.items?.length) {
       console.error('[CanvasService] No active artwork to refresh');
-      return { ok: false, error: 'No active artwork to refresh' };
+      return {
+        ok: false,
+        error: 'No active artwork to refresh',
+        code: 'no_artwork',
+      };
     }
 
     if (!this._onRefreshArtwork) {
@@ -826,14 +948,30 @@ class CanvasService {
       console.warn(
         '[CanvasService] refreshArtwork: no playlist handler registered'
       );
-      return { ok: false, error: 'No playlist handler registered yet' };
+      return {
+        ok: false,
+        error: 'No playlist handler registered yet',
+        code: 'handler_pending',
+      };
     }
     const applied = this._onRefreshArtwork();
     if (!applied) {
+      // Third refusal flavor: a live page whose refresh path is broken
+      // (registered handler, but it could not update the preview URL).
+      // Parked the same way as the "no handler yet" branch above — playing
+      // the artwork on a healthy re-registration is exactly the recovery
+      // this refusal was refused for. flushPendingRefreshArtwork() replays
+      // it on the next handler registration (including the second flush
+      // trigger at the playlist route's reload registration).
+      this.pendingRefreshArtwork = true;
       console.warn(
         '[CanvasService] refreshArtwork: handler could not update preview URL'
       );
-      return { ok: false, error: 'Playlist handler could not update preview URL' };
+      return {
+        ok: false,
+        error: 'Playlist handler could not update preview URL',
+        code: 'preview_update_failed',
+      };
     }
     this.pendingRefreshArtwork = false;
     return { ok: true };
@@ -1317,10 +1455,20 @@ class CanvasService {
    * this replay — the halt listener in the constructor cancels it, the same
    * way the halt cancels AppContext's active request. One deferred after
    * the halt is honored here: it is the newer intent.
+   *
+   * `outcome` feeds bootHydrationState()'s 'failed' value. It must be
+   * SCOPED to an initCastInfo failure only — AppContext's boot catch also
+   * covers initialDisplaySettings, whose failure is not fatal to playback
+   * and must report 'ok' (the caller is responsible for that scoping; this
+   * method just records whatever it is told). Absent/'ok' leaves the failed
+   * flag clear.
    */
-  public completeBootCastHydration() {
+  public completeBootCastHydration(outcome?: 'ok' | 'failed') {
     if (!this.bootCastHydrationPending) {
       return;
+    }
+    if (outcome === 'failed') {
+      this.bootHydrationFailed = true;
     }
     this.bootCastHydrationPending = false;
     if (this.deferredConditionalDefaultRequest) {

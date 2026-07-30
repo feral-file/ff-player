@@ -187,6 +187,73 @@ describe('CanvasService mid-hydration halt flag', () => {
     expect(service.wasHaltedDuringBootHydration()).toBe(true);
     expect(service.didHydrationHaltClearCast()).toBe(false);
   });
+
+  it('a mid-hydration disconnect clears the persisted castInfo directly, without a React re-render', async () => {
+    // useCastInfo's React state starts at useState(null): disconnect()'s
+    // setCastInfo(null) is a same-value bail-out this early, so the
+    // persistence effect that would normally call DeviceManager.setDeviceInfo
+    // never fires. The service must clear the persisted record itself, or a
+    // stale playlist survives to resurrect on the next boot.
+    const service = await freshCanvasService();
+    const { default: DeviceManager } = await import('@/utils/DeviceManager');
+    const persistSpy = vi
+      .spyOn(DeviceManager, 'setDeviceInfo')
+      .mockResolvedValue(undefined);
+
+    expect(service.disconnect()).toEqual({ ok: true });
+
+    expect(persistSpy).toHaveBeenCalledWith(null);
+  });
+
+  it('a mid-hydration disconnect leaves nothing for a later read to restore', async () => {
+    // End-to-end version of the test above, against DeviceManager's real
+    // in-memory cache instead of a spy: seed the record as an earlier boot
+    // would have left it, disconnect mid-hydration, then read it back the
+    // way initCastInfo does on the next boot.
+    const service = await freshCanvasService();
+    const { default: DeviceManager } = await import('@/utils/DeviceManager');
+    await DeviceManager.setDeviceInfo({
+      castCommand: CastCommand.displayPlaylist,
+      playlist: playlist('stale'),
+      index: 0,
+    });
+
+    expect(service.disconnect()).toEqual({ ok: true });
+
+    await expect(DeviceManager.getCastInfo()).resolves.toBeNull();
+  });
+
+  it('a mid-hydration sleep does NOT clear the persisted castInfo', async () => {
+    // Sleep is a PRESERVING halt: the persisted playlist must survive for the
+    // eventual wake to restore, so it must not be cleared the way a
+    // cast-clearing disconnect is.
+    const service = await freshCanvasService();
+    const { default: DeviceManager } = await import('@/utils/DeviceManager');
+    const persistSpy = vi
+      .spyOn(DeviceManager, 'setDeviceInfo')
+      .mockResolvedValue(undefined);
+
+    expect(service.setSleepMode({ sleepMode: true })).toEqual({ ok: true });
+
+    expect(persistSpy).not.toHaveBeenCalled();
+  });
+
+  it('a post-hydration disconnect still relies on the normal React persistence path (no direct clear)', async () => {
+    // Once hydration has settled, disconnect's setCastInfo(null) is a real
+    // React state transition (assuming prior non-null state), so the
+    // service-layer clear added for the mid-hydration gap is unnecessary
+    // here and must not double-fire.
+    const service = await freshCanvasService();
+    service.completeBootCastHydration();
+    const { default: DeviceManager } = await import('@/utils/DeviceManager');
+    const persistSpy = vi
+      .spyOn(DeviceManager, 'setDeviceInfo')
+      .mockResolvedValue(undefined);
+
+    expect(service.disconnect()).toEqual({ ok: true });
+
+    expect(persistSpy).not.toHaveBeenCalled();
+  });
 });
 
 // The latch must gate BOTH boot paths that can arm the fallback: initCastInfo

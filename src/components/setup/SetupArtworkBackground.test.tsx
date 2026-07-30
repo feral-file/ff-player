@@ -12,7 +12,7 @@
 import { AppContext } from '@/context/AppContext';
 import { CastCommand, type CastInfo } from '@/models';
 import { act, cleanup, render } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import SetupArtworkBackground from './SetupArtworkBackground';
 
 const activeCast = { castCommand: CastCommand.displayPlaylist } as CastInfo;
@@ -142,6 +142,47 @@ describe('SetupArtworkBackground browser-level offline evidence', () => {
     act(() => {
       window.dispatchEvent(new Event('offline'));
     });
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+});
+
+describe('SetupArtworkBackground navigator.onLine initial read', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('raises the backdrop from the initial navigator.onLine read, with no offline event needed', () => {
+    // Reload-while-offline, the harder half of the browser-level-evidence
+    // contract: the FIRST render must already see browser-offline via the
+    // `browserOnline` state's useState initializer reading navigator.onLine,
+    // not only the window 'offline' event a later transition would fire.
+    // Every other test in this file drives the browser-offline case via a
+    // dispatched event; hardcoding that initializer to `true` (dropping the
+    // read) would leave all of them green, so this is the only test that
+    // actually exercises the initial read — it must fail against that
+    // mutation.
+    vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
+
+    const container = renderBackground({
+      panelVisible: false,
+      hasCast: true,
+      isOnline: true,
+      playbackDegraded: true,
+    });
+
+    expect(container.querySelector('iframe')).not.toBeNull();
+  });
+
+  it('does not raise the backdrop from the initial read when navigator.onLine is true', () => {
+    vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(true);
+
+    const container = renderBackground({
+      panelVisible: false,
+      hasCast: true,
+      isOnline: true,
+      playbackDegraded: true,
+    });
+
     expect(container.querySelector('iframe')).toBeNull();
   });
 });

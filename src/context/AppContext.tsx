@@ -66,8 +66,13 @@ interface AppConfigContext {
    * value cast with `as never`, where the setter is absent at runtime no
    * matter what this type says, and a required signature would only hide
    * that behind a `TypeError`.
+   *
+   * `url` is the artwork ArtworkPlayer was actually reporting on (present
+   * whenever `degraded` is true; omitted or ignored on a clear). AppContext
+   * keys the M7 per-URL refresh budget off it — see the reconnect-recovery
+   * effect below.
    */
-  setPlaybackDegraded?: (degraded: boolean) => void;
+  setPlaybackDegraded?: (degraded: boolean, url?: string) => void;
 }
 
 /**
@@ -78,6 +83,20 @@ interface AppConfigContext {
  */
 const FALLBACK_PLAYLIST_RETRY_INITIAL_MS = 5_000;
 const FALLBACK_PLAYLIST_RETRY_MAX_MS = 60_000;
+
+/**
+ * M7 damping, Layer 2 (cross-repo recovery design §4.4): bounds how many
+ * reconnect-recovery refreshes a single degraded URL can consume. Layer 1
+ * (ArtworkPlayer) stops a flapping video/audio mount from self-clearing
+ * after a failure; this layer bounds the sibling loop path — a URL that
+ * stays continuously degraded while every online notification re-triggers
+ * the effect below (`playbackDegraded` itself only toggles once per genuine
+ * transition, so a sustained failure cannot re-arm the effect on its own).
+ */
+const REFRESH_BUDGET_MAX_ATTEMPTS = 3;
+const REFRESH_BUDGET_BACKOFF_MS = [15_000, 60_000, 240_000];
+const REFRESH_BUDGET_SETTLE_MS = 60_000;
+const REFRESH_BUDGET_MAX_AGE_MS = 10 * 60_000;
 
 export const AppContext = createContext<AppContextValue | undefined>(undefined);
 
@@ -145,7 +164,21 @@ export const AppProvider = ({ children }: AppContextProps) => {
   const lastFallbackCastURLRef = useRef<string | null>(null);
 
   // "The artwork on screen failed to load", reported by ArtworkPlayer.
-  const [playbackDegraded, setPlaybackDegraded] = useState(false);
+  const [playbackDegraded, setPlaybackDegradedState] = useState(false);
+  // URL the current `playbackDegraded=true` report is about; null while
+  // healthy. Read (never written) by the M7 refresh-budget effect below to
+  // key and reset its per-URL attempt budget — ArtworkPlayer is the only
+  // source of truth for "which artwork is failing," so the setter's second
+  // argument carries it through rather than re-deriving it from castInfo
+  // (playlist position, not the resolved previewURL the player requested).
+  const degradedArtworkURLRef = useRef<string | null>(null);
+  const setPlaybackDegraded = useCallback(
+    (degraded: boolean, url?: string) => {
+      degradedArtworkURLRef.current = degraded ? (url ?? null) : null;
+      setPlaybackDegradedState(degraded);
+    },
+    []
+  );
 
   const { castInfo, setCastInfo } = useCastInfo();
   const { displaySettings, setDisplaySettings } = useDeviceSettings();
@@ -166,10 +199,32 @@ export const AppProvider = ({ children }: AppContextProps) => {
   };
 
   const initDeviceConfigService = async () => {
+    // Tracks which of the two awaited calls threw, so the CDP status
+    // probe's bootHydration can distinguish them: only an initCastInfo
+    // failure means the page is genuinely wedged (§4.1 of the cross-repo
+    // recovery design — that value feeds boot recovery's only destructive
+    // row). An initialDisplaySettings failure is not fatal to playback and
+    // must still report 'ok'.
+    let bootHydrationOutcome: 'ok' | 'failed' = 'ok';
     try {
       console.log('[AppContext] initDeviceConfigService');
-      await initialDisplaySettings();
-      await initCastInfo();
+      // Isolated in its own try/catch: a settings-read failure must not
+      // short-circuit initCastInfo below. Letting it propagate into the
+      // outer try would skip the cast restore entirely while still
+      // reporting bootHydrationOutcome 'ok' (only the inner catch below
+      // sets 'failed') — controld would then classify a wall that never
+      // restored its cast as a succeeded boot.
+      try {
+        await initialDisplaySettings();
+      } catch (error) {
+        console.log('Error init display settings', error);
+      }
+      try {
+        await initCastInfo();
+      } catch (error) {
+        bootHydrationOutcome = 'failed';
+        throw error;
+      }
     } catch (error) {
       console.log('Error init device manager', error);
     } finally {
@@ -178,7 +233,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
       // onlyIfNoPlaylist push re-evaluates now that castInfo is
       // authoritative. A stuck-open gate would silently drop claim-time
       // pushes forever, so this must not depend on initCastInfo succeeding.
-      canvasService.completeBootCastHydration();
+      canvasService.completeBootCastHydration(bootHydrationOutcome);
     }
   };
 
@@ -487,11 +542,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
         return;
       }
       if (casted) {
-        // Only settle the request THIS run was started for. A new request can
-        // land while the cast is in flight, and React may batch its
-        // {active:true, nonce+1} update into the same commit as this
-        // clear — an unguarded clear would swallow that request before its
-        // effect run ever fires.
         setFallbackRequest(prev =>
           prev.nonce === fallbackRequest.nonce
             ? { ...prev, active: false }
@@ -534,9 +584,20 @@ export const AppProvider = ({ children }: AppContextProps) => {
   // stop (disconnect / sleep) clears the ref (stand-down listener below), so
   // the controller's content is never replaced and a stopped wall is never
   // relit.
+  //
+  // Gated on `!fallbackRequest.active`: the retry-loop effect above already
+  // has `appRemoteConfig.defaultPlaylistURL` in its own deps, so a request
+  // that is still active (armed or in flight) picks up the same URL change
+  // on its own re-key. Without this gate, a config change landing while a
+  // request is still active fires BOTH effects in the same commit — the
+  // re-keyed retry AND this one's fresh `requestFallbackPlaylist()` (a new
+  // nonce) — and both end up casting the identical published URL back to
+  // back. This effect's job is only to RE-ARM a request that already
+  // settled on a stale URL, not to race one that is still in flight.
   useEffect(() => {
     const lastFallbackCastURL = lastFallbackCastURLRef.current;
     if (
+      !fallbackRequest.active &&
       lastFallbackCastURL !== null &&
       appRemoteConfig.defaultPlaylistURL &&
       appRemoteConfig.defaultPlaylistURL !== lastFallbackCastURL
@@ -544,7 +605,11 @@ export const AppProvider = ({ children }: AppContextProps) => {
       console.log('[AppContext] Config changed, superseding fallback cast');
       requestFallbackPlaylist();
     }
-  }, [appRemoteConfig.defaultPlaylistURL, requestFallbackPlaylist]);
+  }, [
+    appRemoteConfig.defaultPlaylistURL,
+    fallbackRequest.active,
+    requestFallbackPlaylist,
+  ]);
 
   // Feed `onlineSignal` from the raw ConnectivityChange event stream (see the
   // declaration comment for why the isOnline boolean is not enough).
@@ -588,24 +653,141 @@ export const AppProvider = ({ children }: AppContextProps) => {
   //     single-item playlist there is no playlist advance to retry it, so
   //     without this edge the wall stays black indefinitely.
   //
-  // This cannot become a retry loop, which is why it needs no attempt cap:
-  // the refresh re-mounts the SAME previewURL, so a repeat failure finds the
-  // flag already set, ArtworkPlayer writes no new context state, and neither
-  // dependency changes. Recovery is bounded to one nudge per genuine
-  // transition rather than a timer hammering a URL connectivity cannot fix.
-  //
   // Firing regardless of `isOnline` is DELIBERATE: that boolean is only as
   // good as the daemon's edge-triggered pushes (see DEVICE_LOCAL_PLAYER.md),
   // so gating on it would make recovery exactly as unreliable as the
-  // best-effort backdrop. The cost of not gating is one bounded extra reload
-  // per item visit for a genuinely broken artwork.
+  // best-effort backdrop.
+  //
+  // M7 damping (§4.4 of the cross-repo recovery design): a single failing
+  // URL cannot loop through `playbackDegraded` itself — Layer 1 in
+  // ArtworkPlayer keeps a repeat failure on the SAME mount from re-clearing
+  // and re-raising the flag, and the refresh re-mounts the SAME previewURL,
+  // so a repeat failure there finds the flag already set and writes no new
+  // context state. But `onlineSignal` alone can still re-trigger THIS effect
+  // indefinitely while degraded stays continuously true (a flapping link
+  // pushing repeated online notifications), which the old "cannot loop"
+  // reasoning did not account for. Layer 2 bounds that path: at most
+  // REFRESH_BUDGET_MAX_ATTEMPTS refreshes per degraded URL, gated by an
+  // escalating backoff between attempts. The budget resets — granting a
+  // fresh set of attempts — on any of: a different URL becoming degraded,
+  // a genuine online edge (`isOnline` false→true, not a repeated
+  // notification — onlineSignal's repeats are exactly what this budget
+  // exists to bound), a 60s clear settle after a refresh (the artwork
+  // recovered and stayed up), or REFRESH_BUDGET_MAX_AGE_MS of continuous
+  // elapsed time (a safety valve so a URL that never settles is not capped
+  // forever).
+  //
+  // Backoff is the PRIMARY re-entry trigger, not a passive gate (§1
+  // principle 3): the effect's own deps (onlineSignal/playbackDegraded/
+  // isOnline) are not guaranteed to change again once an attempt has fired —
+  // a single-item playlist has no playlist advance, a flapping link can stop
+  // flapping, and critically, a repeat failure of the SAME URL after a
+  // refresh's remount never reaches context at all: notePlaybackOutcome's
+  // own dedupe (`degradedURLRef.current === nextDegradedURL`) drops it
+  // before `setPlaybackDegraded` is even called, so no React state change —
+  // and no effect rerun — follows a refresh that quietly failed again. Every
+  // run that exits while STILL degraded — whether it just refreshed or found
+  // nothing to do — therefore arms a timer for the earliest of the next
+  // allowed attempt or the age valve, so recovery never depends on another
+  // edge arriving. The effect's own cleanup (and the top of every run)
+  // clears any previously armed timer first, so dependency changes and
+  // healthy transitions never leave a stale one behind.
+  const wasOnlineRef = useRef(isOnline);
+  const refreshBudgetRef = useRef<{
+    url: string;
+    attempts: number;
+    startedAt: number;
+  } | null>(null);
+  // Wall-clock moment `playbackDegraded` most recently went false, latched
+  // once per clear stretch so a later true can tell a genuine 60s settle
+  // apart from a brief flicker.
+  const degradedClearedAtRef = useRef<number | null>(null);
+  const nextRefreshAttemptAtRef = useRef(0);
+  const recoveryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!playbackDegraded) {
-      return;
-    }
-    console.log('[AppContext] Degraded playback, refreshing artwork');
-    canvasService.requestArtworkRefresh();
-  }, [onlineSignal, playbackDegraded]);
+    const clearRecoveryTimer = () => {
+      if (recoveryTimerRef.current !== null) {
+        clearTimeout(recoveryTimerRef.current);
+        recoveryTimerRef.current = null;
+      }
+    };
+
+    const runRecoveryCheck = (trueOnlineEdge: boolean) => {
+      const now = Date.now();
+
+      if (!playbackDegraded) {
+        degradedClearedAtRef.current ??= now;
+        return;
+      }
+
+      const url = degradedArtworkURLRef.current;
+      const clearedAt = degradedClearedAtRef.current;
+      degradedClearedAtRef.current = null;
+      const settled =
+        clearedAt !== null && now - clearedAt >= REFRESH_BUDGET_SETTLE_MS;
+
+      let activeBudget = refreshBudgetRef.current;
+      const urlChanged = url !== null && activeBudget?.url !== url;
+      const aged =
+        activeBudget !== null &&
+        now - activeBudget.startedAt >= REFRESH_BUDGET_MAX_AGE_MS;
+
+      if (!activeBudget || urlChanged || trueOnlineEdge || settled || aged) {
+        activeBudget = {
+          url: url ?? activeBudget?.url ?? '',
+          attempts: 0,
+          startedAt: now,
+        };
+        refreshBudgetRef.current = activeBudget;
+        // A fresh budget gets a fresh attempt — a stale backoff computed
+        // against the PREVIOUS episode must not gate the first attempt of a
+        // new one (a different URL, a genuine online edge, a settled clear,
+        // or the age valve all warrant an immediate try).
+        nextRefreshAttemptAtRef.current = 0;
+      }
+
+      const budgetExhausted =
+        activeBudget.attempts >= REFRESH_BUDGET_MAX_ATTEMPTS;
+      const backoffGated = now < nextRefreshAttemptAtRef.current;
+
+      if (!budgetExhausted && !backoffGated) {
+        console.log('[AppContext] Degraded playback, refreshing artwork');
+        canvasService.requestArtworkRefresh();
+        activeBudget.attempts += 1;
+        const backoffIndex = Math.min(
+          activeBudget.attempts - 1,
+          REFRESH_BUDGET_BACKOFF_MS.length - 1
+        );
+        nextRefreshAttemptAtRef.current =
+          now + REFRESH_BUDGET_BACKOFF_MS[backoffIndex];
+      }
+
+      // Still degraded on exit — whether this run just refreshed or found
+      // nothing to do — so arm the primary re-entry timer (see the comment
+      // above the effect) for the earliest of the next allowed attempt or
+      // the age valve. Re-read `attempts` fresh: the refresh above may just
+      // have pushed the budget to exhausted.
+      const stillBudgetExhausted =
+        activeBudget.attempts >= REFRESH_BUDGET_MAX_ATTEMPTS;
+      const ageDeadline = activeBudget.startedAt + REFRESH_BUDGET_MAX_AGE_MS;
+      const nextDeadline = stillBudgetExhausted
+        ? ageDeadline
+        : Math.min(nextRefreshAttemptAtRef.current, ageDeadline);
+      const delay = Math.max(0, nextDeadline - now);
+      recoveryTimerRef.current = setTimeout(() => {
+        recoveryTimerRef.current = null;
+        runRecoveryCheck(false);
+      }, delay);
+    };
+
+    const trueOnlineEdge = isOnline && !wasOnlineRef.current;
+    wasOnlineRef.current = isOnline;
+
+    clearRecoveryTimer();
+    runRecoveryCheck(trueOnlineEdge);
+
+    return clearRecoveryTimer;
+  }, [onlineSignal, playbackDegraded, isOnline]);
 
   // Explicit (non-fallback) cast committed, or the controller stopped
   // playback (disconnect / sleep) → the fallback's "guarantee something is

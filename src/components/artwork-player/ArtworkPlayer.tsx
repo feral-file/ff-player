@@ -238,10 +238,27 @@ const ArtworkPlayer = ({
         return;
       }
       degradedURLRef.current = nextDegradedURL;
-      setPlaybackDegraded?.(failed);
+      setPlaybackDegraded?.(failed, url);
     },
     [setPlaybackDegraded]
   );
+
+  // ---- M7 damping, Layer 1 (cross-repo recovery design §4.4) ------------
+  // Per-slot, per-mount latch: once a video/audio mount has reported a
+  // FAILURE, a later `loadeddata` on that SAME mount must not clear the
+  // degraded flag. Without this, a video/audio element that errors and then
+  // fires a stray `loadeddata` (browsers do this — a partially-buffered
+  // element can still reach `loadeddata` after `error`) flips the flag
+  // false and immediately true again on the next real error, turning one
+  // genuine failure into a rapid clear/re-raise cycle that re-triggers
+  // AppContext's reconnect-recovery refresh on every flap. One-shot in the
+  // success→clear direction only: a failure can still supersede an earlier
+  // success within the same mount (handleMediaError always reports). Reset
+  // at slot creation (a NEW mount — fresh iframeKey — deserves a fresh
+  // chance), not on every media-setup effect re-run. Image/iframe/object
+  // success paths are unaffected; their failure signals do not exhibit this
+  // flap (see DEVICE_LOCAL_PLAYER.md's per-type known-gaps list).
+  const mountFailedRef = useRef<[boolean, boolean]>([false, false]);
 
   /**
    * The URL a slot is actually rendering. Handlers that only receive a
@@ -822,20 +839,29 @@ const ArtworkPlayer = ({
     }, 2000);
 
     const identity = itemIdentityRef.current;
+    // Derived from activeSlotRef/slotsRef, not from the setSlots updater's
+    // `prev` — the updater must stay a pure function of its argument, and
+    // `incomingSlotRef`/`mountFailedRef` are refs, not state, so writing
+    // them from inside it is a render-phase side effect React may invoke
+    // more than once for the same commit.
+    const hasAny = slotsRef.current[currentActive] !== null;
+    const targetSlot: SlotIndex = hasAny
+      ? ((currentActive === 0 ? 1 : 0) as SlotIndex)
+      : currentActive;
+    incomingSlotRef.current = targetSlot;
+    // Fresh mount: give it a clean one-shot latch (see the Layer-1 damping
+    // comment above).
+    mountFailedRef.current[targetSlot] = false;
     setSlots(prev => {
-      const hasAny = prev[currentActive] !== null;
       if (!hasAny) {
         const k = ++iframeKeyCounterRef.current;
-        incomingSlotRef.current = currentActive;
         const next: [SlotLayer | null, SlotLayer | null] = [null, null];
-        next[currentActive] = createSlotLayer(url, k, identity);
+        next[targetSlot] = createSlotLayer(url, k, identity);
         return next;
       }
-      const incoming = (currentActive === 0 ? 1 : 0) as SlotIndex;
-      incomingSlotRef.current = incoming;
       const k = ++iframeKeyCounterRef.current;
       const next = [...prev] as [SlotLayer | null, SlotLayer | null];
-      next[incoming] = createSlotLayer(url, k, identity);
+      next[targetSlot] = createSlotLayer(url, k, identity);
       return next;
     });
 
@@ -982,6 +1008,12 @@ const ArtworkPlayer = ({
             // Only a failure loadedSource actually accepted describes what
             // the device is trying to show; a rejected one belongs to a
             // superseded slot and must not mark playback degraded.
+            if (mediaType === 'video' || mediaType === 'audio') {
+              // Layer-1 latch: this mount is now barred from clearing the
+              // flag via a later loadeddata success (image is unaffected —
+              // see the damping comment above).
+              mountFailedRef.current[slotIndex] = true;
+            }
             notePlaybackOutcome(layer.previewURL, true);
           }
       };
@@ -1058,7 +1090,10 @@ const ArtworkPlayer = ({
             // notePlaybackOutcome alone would let a late `loadeddata` from
             // the PREVIOUS item clear a failure raised by the current one.
             const claimed = incomingSlotRef.current;
-            if (claimed === null || claimed === slotIndex) {
+            if (
+              (claimed === null || claimed === slotIndex) &&
+              !mountFailedRef.current[slotIndex]
+            ) {
               notePlaybackOutcome(layer.previewURL, false);
             }
             playVideoForSlot(slotIndex, layer, el);
@@ -1088,7 +1123,8 @@ const ArtworkPlayer = ({
           const el = audioRefs[slotIndex].current;
           // createMediaLoader().loadMedia sets src only; it never invokes onLoad (see mediaLoader.ts).
           const handleAudioReady = () => {
-            if (loadedSource(slotIndex)) {
+            const claimed = loadedSource(slotIndex);
+            if (claimed && !mountFailedRef.current[slotIndex]) {
               notePlaybackOutcome(layer.previewURL, false);
             }
           };

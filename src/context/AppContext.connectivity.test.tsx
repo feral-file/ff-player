@@ -275,6 +275,87 @@ describe('AppContext fallback supersede on config change', () => {
   });
 });
 
+// Split from the describe block above (max-lines-per-function): the retry
+// loop and the supersede effect share the `appRemoteConfig.defaultPlaylistURL`
+// dependency, and both used to fire in the same commit whenever a config
+// change landed while a request was still active/in-flight — the retry
+// loop's own re-key AND the supersede's fresh, separately-nonced
+// requestFallbackPlaylist() — casting the identical published URL twice back
+// to back.
+describe('AppContext fallback supersede does not double-fire against an active request', () => {
+  it('does not double-cast the published URL when a config change lands while a re-armed request is still in flight', async () => {
+    // Reproduced without needing anything to resolve late: the boot config
+    // read hangs (nothing armed yet); a DisplayDefaultPlaylist push then
+    // re-arms the loop against the still-local URL and is left in flight;
+    // the superseded boot read finally lands the published config on its
+    // own (no further online notification — see the "config commit across
+    // cancelled generations" describe block below for why a cancelled read
+    // still commits), directly re-keying the retry loop while that
+    // re-armed request is still active.
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    let resolveBootRead: ((response: { data: unknown }) => void) | undefined;
+    axiosGet.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          resolveBootRead = resolve;
+        })
+    );
+    vi.useFakeTimers();
+    render(
+      <AppProvider>
+        <div data-testid="app-ready" />
+      </AppProvider>
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(castCalls()).toHaveLength(0);
+
+    // The notification's own read fails fast → local defaults commit and
+    // arm the fallback loop, casting once.
+    axiosGet.mockRejectedValueOnce(new Error('link flapped'));
+    await notifyOnline();
+    expect(castCalls()).toHaveLength(1);
+    expect(castCalls()[0][0]).toBe(AppSettings.DEFAULT_PLAYLIST_URL);
+
+    // A claim-time push re-arms the loop (new nonce, still the local URL)
+    // and is left in flight.
+    canvasServiceMocks.castPlaylistByURL.mockImplementationOnce(
+      () => new Promise<boolean>(() => undefined)
+    );
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(CustomEventName.DisplayDefaultPlaylist)
+      );
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(castCalls()).toHaveLength(2);
+    expect(castCalls()[1][0]).toBe(AppSettings.DEFAULT_PLAYLIST_URL);
+
+    // The superseded boot read lands the published config on its own, one
+    // direct re-key, while the re-armed request above is still active.
+    await act(async () => {
+      resolveBootRead?.({
+        data: { duration: 1000, defaultPlaylistURL: PUBLISHED_URL },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // Exactly one commit of the published URL: the still-active request's
+    // own re-key handles it, and the supersede effect must not ALSO fire.
+    expect(
+      castCalls().filter(call => call[0] === PUBLISHED_URL)
+    ).toHaveLength(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(
+      castCalls().filter(call => call[0] === PUBLISHED_URL)
+    ).toHaveLength(1);
+  });
+});
+
 describe('AppContext fallback stand-down on controller stop', () => {
   it('a controller stop disarms the supersede', async () => {
     // disconnect / setSleepMode(true) dispatch PlaybackHalted. A published

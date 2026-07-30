@@ -1,5 +1,6 @@
 import { AppSettings } from '@/constants';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as Sentry from '@sentry/nextjs';
 import RemoteConfigService from './remoteConfigService';
 
 const { axiosGet } = vi.hoisted(() => ({
@@ -291,5 +292,60 @@ describe('RemoteConfigService duration normalization', () => {
       duration: undefined,
       defaultPlaylistURL: 'https://example.com/c',
     });
+  });
+});
+
+describe('RemoteConfigService Sentry sampling', () => {
+  afterEach(() => {
+    resetRemoteConfigTestEnv();
+    vi.useRealTimers();
+  });
+
+  it('reports a failing class once, not per repeated fetchConfig call', async () => {
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    axiosGet.mockRejectedValue(new Error('network down'));
+
+    // fetchConfig is never cached on failure, so AppContext's online-notification
+    // re-reads reach the network — and this sampling — every time.
+    const service = new RemoteConfigService();
+    await service.getAppRemoteConfig();
+    await service.getAppRemoteConfig();
+    await service.getAppRemoteConfig();
+
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+  });
+
+  it('samples distinct error classes independently', async () => {
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    /** Distinct error class from the plain `Error` used elsewhere in this suite. */
+    class CustomFetchError extends Error {}
+    axiosGet.mockRejectedValueOnce(new Error('network down'));
+    axiosGet.mockRejectedValueOnce(new CustomFetchError('different class'));
+
+    const service = new RemoteConfigService();
+    await service.getAppRemoteConfig();
+    await service.getAppRemoteConfig();
+
+    expect(Sentry.captureException).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-reports the same class once the sampling window elapses', async () => {
+    vi.useFakeTimers();
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    axiosGet.mockRejectedValue(new Error('network down'));
+
+    const service = new RemoteConfigService();
+    await service.getAppRemoteConfig();
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+
+    // Still inside the 6h window: no second event for the still-ongoing outage.
+    await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1000 - 1);
+    await service.getAppRemoteConfig();
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+
+    // Window elapsed: the outage is still new information worth a fresh event.
+    await vi.advanceTimersByTimeAsync(1);
+    await service.getAppRemoteConfig();
+    expect(Sentry.captureException).toHaveBeenCalledTimes(2);
   });
 });

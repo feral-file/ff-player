@@ -111,7 +111,7 @@ describe('ArtworkPlayer — fallback-typed iframe reports no outcome', () => {
     });
     await fireMedia(img, 'error');
     expect(setPlaybackDegraded).toHaveBeenCalledTimes(1);
-    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(true);
+    expect(setPlaybackDegraded).toHaveBeenLastCalledWith(true, EXTENSIONLESS);
 
     // Reconnect recovery re-mounts the same item; detection now fails and
     // the slot pins to the fallback iframe.

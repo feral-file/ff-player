@@ -54,6 +54,17 @@ const useVersionUpdateReload = (duration: number | undefined) => {
           );
         }
 
+        // [N-H] Reload-in-place is safe here ONLY because `shouldCheckForUpdates`
+        // gates this whole hook off at build time via
+        // NEXT_PUBLIC_DISABLE_VERSION_CHECK — device builds set that flag to
+        // 'true' so this branch never runs on FF1. The static export serves
+        // flat .html files only (playlist.html, sleep.html, error.html,
+        // daily.html; see the cross-repo recovery design's navigate-to-entry
+        // rationale), so a device build that shipped WITHOUT the flag would
+        // re-arm this reload on a client route and 404 — and the
+        // versionUpdateReload marker this sets (read by AppContext's
+        // initCastInfo) would then persist across a boot that lands on
+        // 404.html instead of the app's entry point.
         window.location.reload();
       }
     };
