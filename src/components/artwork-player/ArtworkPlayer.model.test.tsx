@@ -1,5 +1,5 @@
 import { AppContext } from '@/context/AppContext';
-import { defaultDP1DisplayPreference } from '@/models/dp1.model';
+import { defaultDP1DisplayPreference, Scaling } from '@/models/dp1.model';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -43,6 +43,26 @@ function renderWithContext(ui: React.ReactElement): ReturnType<typeof render> {
       isOnline: true,
       appRemoteConfig: {},
       displaySettings: null,
+      cursorPositions: null,
+      castInfo: null,
+    },
+  };
+  return render(
+    <AppContext.Provider value={value as never}>{ui}</AppContext.Provider>
+  );
+}
+
+/** Renders the player in the display-settings path that rewrites iframe URLs. */
+function renderWithDisplaySettings(
+  ui: React.ReactElement
+): ReturnType<typeof render> {
+  const value = {
+    context: {
+      isInitialized: true,
+      isOnline: true,
+      appRemoteConfig: {},
+      displaySettings: { scaling: Scaling.Fill },
+      deviceRotation: { viewMode: 'landscape' },
       cursorPositions: null,
       castInfo: null,
     },
@@ -146,6 +166,30 @@ describe('ArtworkPlayer — GLB / model mime routing', () => {
     });
 
     expect(container.querySelector('model-viewer')).toBeNull();
+  });
+});
+
+describe('ArtworkPlayer — relative iframe display settings', () => {
+  it('resolves a relative iframe source before applying display mode', async () => {
+    helperMocks.getContentTypeFromURL.mockResolvedValue('application/octet-stream');
+
+    const { container } = renderWithDisplaySettings(
+      <ArtworkPlayer
+        previewURL="artwork.html"
+        displayPreferences={defaultDP1DisplayPreference}
+      />
+    );
+
+    const iframe = await waitFor(() => {
+      const node = container.querySelector('iframe');
+      if (!node) {
+        throw new Error('iframe element was not rendered');
+      }
+      return node;
+    });
+
+    expect(iframe.getAttribute('src')).toContain('/artwork.html');
+    expect(iframe.getAttribute('src')).toContain('display_mode=crop');
   });
 });
 

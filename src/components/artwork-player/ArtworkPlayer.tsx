@@ -503,6 +503,13 @@ const ArtworkPlayer = ({
           playVideoForSlot(slotIndex, layer, videoElement);
         });
         hlsInstance.on(Hls.Events.ERROR, function (_event, data) {
+          if (data.fatal) {
+            hlsInstance?.destroy();
+            if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
+              hlsInstancesRef.current[slotIndex] = null;
+            }
+            return;
+          }
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               break;
@@ -513,7 +520,9 @@ const ArtworkPlayer = ({
               break;
             default:
               hlsInstance?.destroy();
-              hlsInstancesRef.current[slotIndex] = null;
+              if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
+                hlsInstancesRef.current[slotIndex] = null;
+              }
               break;
           }
         });
@@ -1098,7 +1107,10 @@ const ArtworkPlayer = ({
               : (committedVisualSettings ?? displaySettings);
           const displayMode =
             slotSettings.scaling === Scaling.Fill ? 'crop' : 'fit';
-          const u = new URL(slot.displayPreviewURL);
+          // DP1 permits player-relative artwork URLs. Resolve only for the
+          // iframe software URL so playback state keeps the original value
+          // while display-mode rewriting can safely operate on a URL object.
+          const u = new URL(slot.displayPreviewURL, window.location.href);
           u.search += `&display_mode=${displayMode}`;
           softwareURL = u.toString();
         }

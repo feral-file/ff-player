@@ -17,7 +17,9 @@ import { Scaling } from '@/models/dp1.model';
 export async function getContentTypeFromURL(
   previewURL: string
 ): Promise<string> {
-  const url = new URL(previewURL);
+  const base =
+    typeof window === 'undefined' ? 'https://ff-player.local/' : window.location.href;
+  const url = new URL(previewURL, base);
   // The second request could be failed, Chrome uses the cached response from the first request, which has no "Access-Control-Allow-Origin" response header.
   // Workaround: Use a dummy "?x-some-key=some-value" query string parameter will convince the browser that the request is different.
   // Ref: https://serverfault.com/questions/856904/chrome-s3-cloudfront-no-access-control-allow-origin-header-on-initial-xhr-req/856948#856948
