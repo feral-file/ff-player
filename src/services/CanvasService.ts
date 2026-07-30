@@ -72,7 +72,9 @@ const ARTWORK_SOURCE_RESOLVE_BASE = 'https://ff-player.local/';
 function isSupportedArtworkSource(source: string): boolean {
   try {
     const normalizedSource = source.trim();
-    if (!normalizedSource) return false;
+    if (!normalizedSource) {
+      return false;
+    }
     const url = new URL(normalizedSource, ARTWORK_SOURCE_RESOLVE_BASE);
     if (url.protocol !== 'data:') {
       return PLAYLIST_SOURCE_PROTOCOLS.has(url.protocol);
@@ -84,7 +86,10 @@ function isSupportedArtworkSource(source: string): boolean {
   }
 }
 
-function findInvalidArtworkSource(items: DP1Item[] | undefined): DP1Item | undefined {
+/** Finds the first playlist item whose source is unsupported by the player. */
+function findInvalidArtworkSource(
+  items: DP1Item[] | undefined
+): DP1Item | undefined {
   return items?.find(item => !isSupportedArtworkSource(item.source));
 }
 
