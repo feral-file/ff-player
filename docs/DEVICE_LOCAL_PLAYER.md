@@ -45,4 +45,10 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 
 ## Compatibility note
 
+## Playlist artwork source compatibility
+
+`now_display`, `schedule_play`, and playlist refresh reject empty, malformed,
+or non-web artwork sources before persisting playback state. HTTP(S), data URLs
+with a payload, and relative or protocol-relative sources remain supported.
+
 - Persisted storage keys for cast, display settings, and boot recovery are unchanged by this document. Do not rename persisted keys without a migration plan.

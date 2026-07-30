@@ -61,6 +61,33 @@ import { coerceTombstoneMode } from '@/utils/tombstoneMode';
 import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
 
+const PLAYLIST_SOURCE_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
+const ARTWORK_SOURCE_RESOLVE_BASE = 'https://ff-player.local/';
+
+/**
+ * Keeps unsupported artwork URLs out of persisted cast and schedule state.
+ * Relative URLs remain valid because the browser resolves them from the player
+ * origin; validation only rejects empty, malformed, and non-web schemes.
+ */
+function isSupportedArtworkSource(source: string): boolean {
+  try {
+    const normalizedSource = source.trim();
+    if (!normalizedSource) return false;
+    const url = new URL(normalizedSource, ARTWORK_SOURCE_RESOLVE_BASE);
+    if (url.protocol !== 'data:') {
+      return PLAYLIST_SOURCE_PROTOCOLS.has(url.protocol);
+    }
+    const separator = url.pathname.indexOf(',');
+    return separator !== -1 && separator < url.pathname.length - 1;
+  } catch {
+    return false;
+  }
+}
+
+function findInvalidArtworkSource(items: DP1Item[] | undefined): DP1Item | undefined {
+  return items?.find(item => !isSupportedArtworkSource(item.source));
+}
+
 /**
  * Owns the in-browser FF1 playback session state that cast commands and route
  * components share, including playlist order, loop/shuffle modes, and deferred
@@ -716,6 +743,10 @@ class CanvasService {
       console.error('[CanvasService] No items to display');
       return { ok: false };
     }
+    if (findInvalidArtworkSource(request.dp1CallData.items)) {
+      console.error('[CanvasService] Invalid artwork source');
+      return { ok: false };
+    }
 
     // Clear any stored original playlist from a previous shuffle session and any
     // deferred refresh waiting to be applied — a fresh display supersedes both.
@@ -766,6 +797,10 @@ class CanvasService {
 
     if (!request.scheduleTime) {
       console.error('[CanvasService] No schedule time found');
+      return { ok: false };
+    }
+    if (findInvalidArtworkSource(request.dp1CallData.items)) {
+      console.error('[CanvasService] Invalid artwork source');
       return { ok: false };
     }
 
@@ -894,6 +929,10 @@ class CanvasService {
   private refreshPlaylist(newItems: DP1Item[] | undefined): Reply {
     const currentPlaylist = this.castInfo?.playlist;
     const prior = this.castInfo;
+    if (findInvalidArtworkSource(newItems)) {
+      console.error('[CanvasService] Invalid artwork source');
+      return { ok: false };
+    }
     if (!currentPlaylist?.items?.length) {
       console.error(
         '[CanvasService] Cannot refresh playlist before an active playlist exists'
