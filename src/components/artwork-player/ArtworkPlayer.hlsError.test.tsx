@@ -6,7 +6,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
 
 const hlsTest = vi.hoisted(() => ({
-  instances: [] as { destroy: ReturnType<typeof vi.fn> }[],
+  instances: [] as {
+    destroy: ReturnType<typeof vi.fn>;
+    stopLoad: ReturnType<typeof vi.fn>;
+    mediaAttachedHandler?: (
+      event: string,
+      data: { fatal?: boolean }
+    ) => void;
+  }[],
   errorHandlers: [] as ((event: string, data: { fatal?: boolean }) => void)[],
 }));
 
@@ -18,11 +25,19 @@ vi.mock('hls.js', () => {
     static ErrorDetails = { BUFFER_NUDGE_ON_STALL: 'bufferNudgeOnStall' };
     static isSupported() {return true;}
     destroy = vi.fn();
+    stopLoad = vi.fn();
+    mediaAttachedHandler?: (
+      event: string,
+      data: { fatal?: boolean }
+    ) => void;
     attachMedia() {return undefined;}
     loadSource() {return undefined;}
     recoverMediaError() {return undefined;}
     constructor() {hlsTest.instances.push(this);}
     on(event: string, handler: (event: string, data: { fatal?: boolean }) => void) {
+      if (event === Events.MEDIA_ATTACHED) {
+        this.mediaAttachedHandler = handler;
+      }
       if (event === Events.ERROR) {hlsTest.errorHandlers.push(handler);}
     }
   }
@@ -36,6 +51,7 @@ vi.mock('@sentry/nextjs', () => ({
 }));
 
 afterEach(() => {
+  vi.useRealTimers();
   hlsTest.instances.length = 0;
   hlsTest.errorHandlers.length = 0;
   cleanup();
@@ -86,9 +102,25 @@ describe('ArtworkPlayer — HLS fatal errors', () => {
     act(() => { staleHandler('error', { fatal: true }); });
     expect(replacement.destroy).not.toHaveBeenCalled();
 
-    act(() => { reload?.(); });
-    // A subsequent reload tears down the inactive slot through its ref. This
-    // proves the stale callback did not clear the replacement registration.
-    expect(replacement.destroy).toHaveBeenCalled();
+    // Complete the transition so slot 1 becomes active, then prepare a new
+    // incoming video in slot 0. Its crossfade must stop the active slot's
+    // replacement instance through hlsInstancesRef. This is distinguishable
+    // from effect cleanup, which only destroys an instance after the fade.
+    vi.useFakeTimers();
+    act(() => { replacement.mediaAttachedHandler?.('mediaAttached', {}); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(650);
+    });
+
+    await act(async () => {
+      reload?.();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(hlsTest.instances).toHaveLength(4);
+    act(() => {
+      hlsTest.instances[3].mediaAttachedHandler?.('mediaAttached', {});
+    });
+
+    expect(replacement.stopLoad).toHaveBeenCalledTimes(1);
   });
 });
