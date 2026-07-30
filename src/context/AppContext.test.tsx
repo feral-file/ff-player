@@ -10,7 +10,7 @@ import { CustomEventName } from '@/models/custom_event';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { axiosGet, canvasServiceMocks, deviceManager } =
+const { axiosGet, canvasServiceMocks, deviceManager, reactSetCastInfo } =
   vi.hoisted(() => {
     const deviceManager = {
       getDeviceDisplaySettings: vi.fn().mockResolvedValue(null),
@@ -24,6 +24,10 @@ const { axiosGet, canvasServiceMocks, deviceManager } =
     };
     return {
       axiosGet: vi.fn(),
+      // Stable spy for useCastInfo's React-state setter, so halt tests can
+      // assert boot never fed React state (the service copy is what a wake
+      // reads; React state is what drives AppWrapper's navigation effect).
+      reactSetCastInfo: vi.fn(),
       canvasServiceMocks: {
         // Resolves the new boolean contract: true = playlist fetched AND cast.
         // Typed with the real two-arg signature so tests can read the
@@ -61,7 +65,7 @@ vi.mock('@/services/custom-hooks/useDeviceRotation', () => ({
 }));
 
 vi.mock('@/services/custom-hooks/useCastInfo', () => ({
-  default: vi.fn(() => ({ castInfo: null, setCastInfo: vi.fn() })),
+  default: vi.fn(() => ({ castInfo: null, setCastInfo: reactSetCastInfo })),
 }));
 
 vi.mock('@/services/custom-hooks/useDeviceSettings', () => ({
@@ -572,12 +576,19 @@ describe('AppContext boot hydration vs live casts', () => {
 // Split from the suite above only for lint's function-length budget: these
 // cases share the same delayed-hydration harness.
 describe('AppContext boot hydration vs mid-hydration halts', () => {
-  it('restores the playlist without navigating or arming the fallback after a mid-hydration sleep', async () => {
+  it('restores the playlist into the service only, without feeding React state, after a mid-hydration sleep', async () => {
     // A PRESERVING halt (sleep, error navigation) does not clear the
     // persisted playlist — it is exactly what a later wake must find. Boot
-    // must still restore it, and suppress only navigation and fallback
-    // arming; skipping the restore would make the wake path find no
-    // playlist and cast (and persist) the default over the user's content.
+    // must still restore it, but ONLY into CanvasService (the copy
+    // setSleepMode(false) reads on wake): the halt's Navigate event was
+    // dispatched while isInitialized was still false, where no listener
+    // exists (the only one mounts inside InitializedAppWrapper), so the
+    // route is still '/' — a restored REACT castInfo would drive
+    // AppWrapper's cast effect to push('/playlist') the moment
+    // isInitialized flips and relight the wall the halt deliberately
+    // stopped. Skipping the restore entirely would instead make the wake
+    // path find no playlist and cast (and persist) the default over the
+    // user's content.
     const hydration = bootWithDelayedHydration();
     await waitFor(() => {
       expect(deviceManager.getCastInfo).toHaveBeenCalled();
@@ -598,6 +609,10 @@ describe('AppContext boot hydration vs mid-hydration halts', () => {
         false
       );
     });
+    await waitFor(() => {
+      expect(canvasServiceMocks.completeBootCastHydration).toHaveBeenCalled();
+    });
+    expect(reactSetCastInfo).not.toHaveBeenCalled();
     expect(canvasServiceMocks.castPlaylistByURL).not.toHaveBeenCalled();
   });
 
@@ -647,6 +662,12 @@ describe('AppContext boot hydration with nothing committed', () => {
         false
       );
     });
+    // No halt: the restore must also feed React state, which is what drives
+    // AppWrapper's navigation to the playlist (contrast the preserving-halt
+    // case, which restores into the service only).
+    expect(reactSetCastInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ castCommand: CastCommand.displayPlaylist })
+    );
   });
 });
 

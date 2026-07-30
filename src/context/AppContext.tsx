@@ -252,14 +252,21 @@ export const AppProvider = ({ children }: AppContextProps) => {
     // (disconnect) may skip the restore entirely: the persisted playlist is
     // exactly the state the controller cleared. A preserving halt (sleep,
     // error navigation) leaves the persisted playlist valid — it is what a
-    // later wake must find — so boot still restores it below and suppresses
-    // only the pieces that would fight the halt: navigation (the wall is
-    // deliberately on /sleep or /error) and every fallback-arming branch (a
-    // successful fallback cast navigates to '/' and would relight the
-    // stopped wall; a wake with nothing playable re-arms via CanvasService's
-    // own DisplayDefaultPlaylist re-entry instead). Without the restore, a
-    // sleep landing mid-hydration would make the wake path find no playlist
-    // and cast — and persist — the default over the user's content.
+    // later wake must find — so boot still restores it below, but ONLY into
+    // CanvasService (the copy setSleepMode(false) reads on wake), never into
+    // React state, and suppresses every fallback-arming branch (a successful
+    // fallback cast navigates to '/' and would relight the stopped wall; a
+    // wake with nothing playable re-arms via CanvasService's own
+    // DisplayDefaultPlaylist re-entry instead). React state must stay
+    // untouched because the halt's Navigate('/sleep' | '/error') was
+    // dispatched while isInitialized was still false — the only Navigate
+    // listener mounts inside InitializedAppWrapper, so the event was DROPPED
+    // and the route is still '/'; a restored React castInfo would then drive
+    // AppWrapper's cast effect to push('/playlist') the moment
+    // isInitialized flips, relighting the wall the halt deliberately
+    // stopped. Without the service-side restore, a sleep landing
+    // mid-hydration would make the wake path find no playlist and cast —
+    // and persist — the default over the user's content.
     //
     // One-shot markers need no cleanup on the cast branch: any live
     // displayPlaylist/displayDefaultPlaylist command already cleared
@@ -323,9 +330,9 @@ export const AppProvider = ({ children }: AppContextProps) => {
       }
 
       const cleanCastInfo = stripLegacyCastPlaybackTimeline(castInfo);
-      setCastInfo(cleanCastInfo);
       canvasService.setCastInfo(cleanCastInfo, false);
       if (!halted) {
+        setCastInfo(cleanCastInfo);
         navigateToHomePage();
       }
     } else if (!halted) {
