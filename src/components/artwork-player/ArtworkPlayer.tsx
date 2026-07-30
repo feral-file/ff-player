@@ -40,6 +40,7 @@ import {
   convertScalingToObjectFit,
   getDP1Margin,
   resolveArtworkSourceURL,
+  ContentTypeDetectionError,
 } from '@/utils/helper';
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
 import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
@@ -914,6 +915,37 @@ const ArtworkPlayer = ({
       .catch((error: unknown) => {
         if (cancelled || previewURLRef.current !== url) {return;}
         Sentry.captureException(error);
+        // Detection failure is a first-class outcome, not just a typing
+        // guess: getContentTypeFromURL's HEAD dies offline (or on any other
+        // network-level failure) exactly as often as it dies on a merely
+        // unhelpful response (4xx/5xx, or 2xx with no Content-Type header —
+        // server reachable, type just unknown). The fallback iframe below
+        // covers BOTH cases identically (something still renders), but only
+        // the network case is evidence the artwork itself is currently
+        // unreachable — a reached-but-untyped source is a healthy artwork
+        // this device simply can't classify, and must NOT be marked
+        // degraded on that basis alone.
+        //
+        // A false positive here is cheap to correct even so: the M7 Layer-2
+        // budget (AppContext) bounds any refresh consequences, and the
+        // offline backdrop only shows when offline signals corroborate
+        // (`(!isOnline || !browserOnline) && playbackDegraded` in
+        // SetupArtworkBackground) — a stray degraded report on a genuinely
+        // healthy, online wall cannot black it out on its own.
+        //
+        // Loop closure: raising the flag here does not strand it guessed.
+        // The reconnect-recovery refresh bumps `artworkReloadTick`, which is
+        // in this effect's deps, so detection re-runs on the SAME url; a
+        // now-successful HEAD takes the confidently-typed `.then` branch
+        // above (real `mimeType`, not null), and handleIframeLoad's own
+        // `mimeType !== null` gate (see its comment) is exactly what lets
+        // THAT mount's success reporting clear the flag.
+        if (
+          error instanceof ContentTypeDetectionError &&
+          error.isNetworkFailure
+        ) {
+          notePlaybackOutcome(url, true);
+        }
         setSlots(prev => {
           const incoming = incomingSlotRef.current;
           if (incoming === null) {return prev;}

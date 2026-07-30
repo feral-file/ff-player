@@ -22,6 +22,27 @@ function contentTypeFromDataURL(url: URL): string {
 }
 
 /**
+ * Thrown by `getContentTypeFromURL` when detection ultimately fails
+ * (extension inference also came up empty). Carries `isNetworkFailure`: true
+ * when `fetch` never got a response at all (offline, DNS failure, connection
+ * refused — the request never reached a server); false when a response DID
+ * come back but was unhelpful (4xx/5xx, or 2xx with no `Content-Type`
+ * header) — the server is reachable there, and the type is simply unknown,
+ * unrelated to connectivity. Callers that need to tell "offline" apart from
+ * "reachable but untyped" (ArtworkPlayer's fallback-iframe path, for the
+ * offline degraded signal) read this instead of parsing the message string.
+ */
+export class ContentTypeDetectionError extends Error {
+  constructor(
+    message: string,
+    public readonly isNetworkFailure: boolean
+  ) {
+    super(message);
+    this.name = 'ContentTypeDetectionError';
+  }
+}
+
+/**
  * Resolve a media URL's `Content-Type` so playback can choose the correct
  * renderer for extensionless assets. Declared `data:` MIME types are returned
  * directly; other sources use a cache-busting `HEAD` request. When the browser
@@ -45,10 +66,17 @@ export async function getContentTypeFromURL(
     ? `${resolvedPreviewURL}&v=${Date.now().toString()}&x-request=xhr`
     : `${resolvedPreviewURL}?v=${Date.now().toString()}&x-request=xhr`;
 
+  // Flips true the moment `fetch` resolves with ANY response — even a
+  // non-ok one. `fetch` only REJECTS for a network-level failure (offline,
+  // DNS, connection refused); every throw below this point happens with a
+  // response already in hand, so `reachedServer` is exactly the network-vs-
+  // reachable distinction ContentTypeDetectionError exposes.
+  let reachedServer = false;
   try {
     const response = await fetch(extendPreviewURL, {
       method: 'HEAD',
     });
+    reachedServer = true;
 
     // Treat non-2xx as failure, even if Content-Type is present (e.g., 504 text/plain pages)
     if (!response.ok) {
@@ -76,7 +104,10 @@ export async function getContentTypeFromURL(
       return inferredType;
     }
 
-    throw new Error(`Failed to determine content type: ${String(error)}`);
+    throw new ContentTypeDetectionError(
+      `Failed to determine content type: ${String(error)}`,
+      !reachedServer
+    );
   }
 }
 
