@@ -727,9 +727,14 @@ class CanvasService {
           playlistUrl,
         });
 
-        DeviceManager.setBootPlaylist(dp1CallData).catch((error: unknown) => {
-          console.error('[CanvasService] Error setting boot playlist:', error);
-        });
+        if (reply.ok) {
+          DeviceManager.setBootPlaylist(dp1CallData).catch((error: unknown) => {
+            console.error(
+              '[CanvasService] Error setting boot playlist:',
+              error
+            );
+          });
+        }
         break;
       }
 
