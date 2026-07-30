@@ -24,13 +24,18 @@ function contentTypeFromDataURL(url: URL): string {
 /**
  * Thrown by `getContentTypeFromURL` when detection ultimately fails
  * (extension inference also came up empty). Carries `isNetworkFailure`: true
- * when `fetch` never got a response at all (offline, DNS failure, connection
- * refused — the request never reached a server); false when a response DID
- * come back but was unhelpful (4xx/5xx, or 2xx with no `Content-Type`
- * header) — the server is reachable there, and the type is simply unknown,
- * unrelated to connectivity. Callers that need to tell "offline" apart from
- * "reachable but untyped" (ArtworkPlayer's fallback-iframe path, for the
- * offline degraded signal) read this instead of parsing the message string.
+ * only when BOTH `fetch` never got a response at all (offline, DNS failure,
+ * connection refused — the request never reached a server) AND
+ * `navigator.onLine` corroborates that the browser itself is offline; false
+ * otherwise — including a response that DID come back but was unhelpful
+ * (4xx/5xx, or 2xx with no `Content-Type` header), and a `fetch` rejection
+ * that `navigator.onLine` does not corroborate (the common CORS/CSP case: a
+ * reachable, unrelated-to-connectivity host that rejects with the same bare
+ * error a real network failure would). Either way the server is effectively
+ * reachable from the player's perspective, and the type is simply unknown.
+ * Callers that need to tell "offline" apart from "reachable but untyped"
+ * (ArtworkPlayer's fallback-iframe path, for the offline degraded signal)
+ * read this instead of parsing the message string.
  */
 export class ContentTypeDetectionError extends Error {
   constructor(
@@ -104,9 +109,24 @@ export async function getContentTypeFromURL(
       return inferredType;
     }
 
+    // `!reachedServer` alone is not enough: `fetch` rejects with the same
+    // bare TypeError for a genuine network failure AND for a CORS/CSP/
+    // extension block — a third-party host that is perfectly reachable but
+    // omits Access-Control-Allow-Origin on this exact cache-busted HEAD (see
+    // the comment above) rejects identically to an offline device. Without
+    // corroboration, an ONLINE device hitting that CORS wall would get
+    // `isNetworkFailure: true` and raise the degraded flag with nothing
+    // left to ever clear it — a healthy artwork stuck degraded forever.
+    // `navigator.onLine` is independent, browser-level evidence the link
+    // itself is actually down (not just this one cross-origin request), and
+    // the cold-offline-boot case this classification exists for always has
+    // it false, so requiring it corroborates the reading without weakening
+    // the genuinely-offline case this exists to catch.
+    const browserOffline =
+      typeof navigator !== 'undefined' && !navigator.onLine;
     throw new ContentTypeDetectionError(
       `Failed to determine content type: ${String(error)}`,
-      !reachedServer
+      !reachedServer && browserOffline
     );
   }
 }
