@@ -503,6 +503,13 @@ const ArtworkPlayer = ({
           playVideoForSlot(slotIndex, layer, videoElement);
         });
         hlsInstance.on(Hls.Events.ERROR, function (_event, data) {
+          if (data.fatal) {
+            hlsInstance?.destroy();
+            if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
+              hlsInstancesRef.current[slotIndex] = null;
+            }
+            return;
+          }
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               break;
@@ -513,7 +520,9 @@ const ArtworkPlayer = ({
               break;
             default:
               hlsInstance?.destroy();
-              hlsInstancesRef.current[slotIndex] = null;
+              if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
+                hlsInstancesRef.current[slotIndex] = null;
+              }
               break;
           }
         });
