@@ -54,21 +54,34 @@ describe('getContentTypeFromURL', () => {
     ).resolves.toBe('model/gltf-binary');
   });
 
-  it('uses the server fallback base to infer MIME type for a relative URL', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(null, {
-        headers: { 'Content-Type': 'model/gltf-binary' },
-        status: 200,
-      })
-    );
+  it.each([
+    ['relative', 'artwork/model.glb', 'http://localhost/artwork/model.glb'],
+    ['protocol-relative', '//cdn.example.com/model.glb', 'http://cdn.example.com/model.glb'],
+  ])('resolves a %s source before looking up its content type', async (_kind, source, expectedURL) => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('blocked'));
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
 
-    await expect(getContentTypeFromURL('artwork/model.glb')).resolves.toBe(
-      'model/gltf-binary'
-    );
+    await expect(getContentTypeFromURL(source)).resolves.toBe('model/gltf-binary');
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/^artwork\/model\.glb\?v=\d+&x-request=xhr$/),
-      { method: 'HEAD' }
+    const [requestURL, requestInit] = vi.mocked(globalThis.fetch).mock.calls[0];
+    expect(requestURL).toMatch(
+      new RegExp(`^${expectedURL}\\?v=\\d+&x-request=xhr$`)
     );
+    expect(requestInit).toEqual({ method: 'HEAD' });
   });
+
+  it.each([
+    ['image/png', 'data:image/png;base64,iVBORw0KGgo='],
+    ['video/mp4', 'data:video/mp4;base64,AAAA'],
+    ['audio/mpeg', 'data:audio/mpeg;base64,SUQz'],
+    ['text/plain', 'data:,hello'],
+  ])(
+    'returns the declared %s type from a data URL without probing the network',
+    async (expectedType, source) => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+      await expect(getContentTypeFromURL(source)).resolves.toBe(expectedType);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    }
+  );
 });

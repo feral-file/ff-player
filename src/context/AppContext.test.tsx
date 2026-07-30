@@ -28,7 +28,7 @@ const { axiosGet, canvasServiceMocks, deviceManager } =
         >(() => Promise.resolve(true)),
         completeBootCastHydration: vi.fn(),
         getCastInfo: vi.fn<() => CastInfo | null>(() => null),
-        setCastInfo: vi.fn(),
+        setCastInfo: vi.fn<(castInfo: CastInfo | null, notify?: boolean) => void>(),
       },
       deviceManager,
     };
@@ -117,6 +117,61 @@ beforeEach(() => {
     Promise.resolve(true)
   );
   canvasServiceMocks.getCastInfo.mockImplementation(() => null);
+});
+
+const expectRestoredSource = (source: string) => {
+  const [restoredCastInfo] = canvasServiceMocks.setCastInfo.mock.calls.at(-1) ?? [];
+  expect(restoredCastInfo?.playlist?.items?.[0]?.source).toBe(source);
+};
+
+describe('AppContext persisted source compatibility', () => {
+  it('restores a legacy boot playlist without revalidating its source', async () => {
+    deviceManager.getItem.mockResolvedValue(null);
+    deviceManager.getBootPlaylist.mockResolvedValue({
+      dpVersion: '1',
+      id: 'legacy-boot',
+      title: 'Legacy boot',
+      items: [{ id: 'legacy-artwork', source: 'about:blank', license: {} }],
+    });
+
+    render(
+      <AppProvider>
+        <div data-testid="app-ready" />
+      </AppProvider>
+    );
+
+    await waitFor(() => {
+      expect(canvasServiceMocks.setCastInfo).toHaveBeenCalled();
+    });
+    expectRestoredSource('about:blank');
+  });
+
+  it('restores a legacy cast snapshot without revalidating its source', async () => {
+    deviceManager.getItem.mockImplementation(key =>
+      Promise.resolve(key === LocalStorageItem.versionUpdateReload ? 'true' : null)
+    );
+    deviceManager.getCastInfo.mockResolvedValue({
+      castCommand: CastCommand.displayPlaylist,
+      playlist: {
+        dpVersion: '1',
+        id: 'legacy-cast',
+        title: 'Legacy cast',
+        items: [{ id: 'legacy-artwork', source: 'about:blank', license: {} }],
+      },
+      index: 0,
+    });
+
+    render(
+      <AppProvider>
+        <div data-testid="app-ready" />
+      </AppProvider>
+    );
+
+    await waitFor(() => {
+      expect(canvasServiceMocks.setCastInfo).toHaveBeenCalled();
+    });
+    expectRestoredSource('about:blank');
+  });
 });
 
 describe('AppContext boot recovery', () => {

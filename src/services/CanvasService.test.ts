@@ -5,6 +5,7 @@ import { LoopMode } from '@/models/cast_info.model';
 import { DP1Action, type DP1Call, type DP1Item } from '@/models/dp1.model';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
+import DeviceManager from '@/utils/DeviceManager';
 
 const item = (id: string): DP1Item =>
   ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
@@ -68,6 +69,26 @@ describe('CanvasService Now Display defaults', () => {
     expect(next?.loopMode).toBe(LoopMode.playlist);
     expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['B', 'C']);
   });
+
+  it('does not persist a rejected Display At Boot playlist', () => {
+    const persistSpy = vi
+      .spyOn(DeviceManager, 'setBootPlaylist')
+      .mockResolvedValue(undefined);
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.displayPlaylist,
+      request: {
+        intent: { action: DP1Action.DisplayAtBoot },
+        dp1_call: playlist('invalid', [
+          { id: 'bad', source: 'about:blank', license: {} } as DP1Item,
+        ]),
+      },
+    });
+
+    expect(reply).toEqual({ ok: false });
+    expect(persistSpy).not.toHaveBeenCalled();
+  });
+
 });
 
 describe('CanvasService refreshArtwork', () => {

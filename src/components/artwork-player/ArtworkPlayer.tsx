@@ -39,6 +39,7 @@ import {
   getContentTypeFromURL,
   convertScalingToObjectFit,
   getDP1Margin,
+  resolveArtworkSourceURL,
 } from '@/utils/helper';
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
 import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
@@ -1090,8 +1091,7 @@ const ArtworkPlayer = ({
         let softwareURL = slot.displayPreviewURL;
         if (
           slot.previewType === PreviewHTMLTag.iframe &&
-          !isModelMimeType(slot.mimeType ?? '') &&
-          !slot.displayPreviewURL.includes('base64')
+          !isModelMimeType(slot.mimeType ?? '')
         ) {
           // Per-slot settings: only the slot claimed as the incoming
           // transition target takes the live (next item's) scaling; any
@@ -1107,12 +1107,15 @@ const ArtworkPlayer = ({
               : (committedVisualSettings ?? displaySettings);
           const displayMode =
             slotSettings.scaling === Scaling.Fill ? 'crop' : 'fit';
-          // DP1 permits player-relative artwork URLs. Resolve only for the
-          // iframe software URL so playback state keeps the original value
-          // while display-mode rewriting can safely operate on a URL object.
-          const u = new URL(slot.displayPreviewURL, window.location.href);
-          u.search += `&display_mode=${displayMode}`;
-          softwareURL = u.toString();
+          const resolvedURL = resolveArtworkSourceURL(slot.displayPreviewURL);
+          // A data URL's query-like text is content, not URL search params;
+          // mutating it corrupts raw HTML/SVG payloads accepted at the cast
+          // boundary. Relative web URLs are resolved only for this iframe
+          // setting, leaving the persisted/display source unchanged.
+          if (resolvedURL.protocol !== 'data:') {
+            resolvedURL.search += `&display_mode=${displayMode}`;
+            softwareURL = resolvedURL.toString();
+          }
         }
         if (softwareURL !== slot.displaySoftwareURL) {
           next[i] = { ...slot, displaySoftwareURL: softwareURL };
