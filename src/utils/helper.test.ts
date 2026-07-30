@@ -69,4 +69,19 @@ describe('getContentTypeFromURL', () => {
     );
     expect(requestInit).toEqual({ method: 'HEAD' });
   });
+
+  it.each([
+    ['image/png', 'data:image/png;base64,iVBORw0KGgo='],
+    ['video/mp4', 'data:video/mp4;base64,AAAA'],
+    ['audio/mpeg', 'data:audio/mpeg;base64,SUQz'],
+    ['text/plain', 'data:,hello'],
+  ])(
+    'returns the declared %s type from a data URL without probing the network',
+    async (expectedType, source) => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+      await expect(getContentTypeFromURL(source)).resolves.toBe(expectedType);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    }
+  );
 });

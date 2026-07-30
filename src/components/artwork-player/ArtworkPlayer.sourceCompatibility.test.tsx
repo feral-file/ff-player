@@ -21,7 +21,18 @@ const relativeSources = [
   ['protocol-relative', '//cdn.example.com/artwork.html', 'http://cdn.example.com/artwork.html'],
 ] as const;
 
-function renderArtwork(source: string) {
+/** Tiny valid payloads so MIME discovery selects the media renderer without network. */
+const base64MediaSources = [
+  [
+    'image',
+    'img',
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  ],
+  ['video', 'video', 'data:video/mp4;base64,AAAA'],
+  ['audio', 'audio', 'data:audio/mpeg;base64,SUQz'],
+] as const;
+
+function renderArtwork(source: string, artworkPreviewMIMEType?: string) {
   const value = {
     context: {
       isInitialized: true,
@@ -37,7 +48,7 @@ function renderArtwork(source: string) {
     <AppContext.Provider value={value as never}>
       <ArtworkPlayer
         previewURL={source}
-        artworkPreviewMIMEType="text/html"
+        artworkPreviewMIMEType={artworkPreviewMIMEType}
         displayPreferences={defaultDP1DisplayPreference}
       />
     </AppContext.Provider>
@@ -50,7 +61,7 @@ describe('ArtworkPlayer — accepted artwork source compatibility', () => {
   it.each(relativeSources)(
     'renders %s iframe sources with display settings',
     async (_kind, source, expectedURL) => {
-      const { container } = renderArtwork(source);
+      const { container } = renderArtwork(source, 'text/html');
 
       await waitFor(() => {
         const iframe = container.querySelector('iframe');
@@ -62,7 +73,7 @@ describe('ArtworkPlayer — accepted artwork source compatibility', () => {
 
   it('does not append display settings to a raw data payload', async () => {
     const source = 'data:text/html,<h1>100% artwork</h1>';
-    const { container } = renderArtwork(source);
+    const { container } = renderArtwork(source, 'text/html');
 
     await waitFor(() => {
       const iframe = container.querySelector('iframe');
@@ -70,4 +81,34 @@ describe('ArtworkPlayer — accepted artwork source compatibility', () => {
       expect(iframe?.getAttribute('src')).toBe(source);
     });
   });
+
+  it.each(base64MediaSources)(
+    'selects the %s renderer from a playlist data URL without an injected MIME type',
+    async (_kind, selector, source) => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      const { container } = renderArtwork(source);
+
+      await waitFor(() => {
+        expect(container.querySelector(selector)).toBeTruthy();
+      });
+
+      expect(container.querySelector('iframe')).toBeNull();
+      // Media loaders may fetch data: bytes for blob conversion, but MIME
+      // discovery must not probe with a cache-busting HEAD that corrupts them.
+      expect(
+        fetchSpy.mock.calls.some(([requestURL, init]) => {
+          const method =
+            init && typeof init === 'object' && 'method' in init && init.method
+              ? init.method.toUpperCase()
+              : 'GET';
+          return (
+            method === 'HEAD' ||
+            (typeof requestURL === 'string' &&
+              requestURL.includes('x-request=xhr'))
+          );
+        })
+      ).toBe(false);
+      fetchSpy.mockRestore();
+    }
+  );
 });

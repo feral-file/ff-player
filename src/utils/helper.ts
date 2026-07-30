@@ -8,16 +8,35 @@ import {
 import { Scaling } from '@/models/dp1.model';
 
 /**
- * Resolve a media URL's `Content-Type` with a cache-busting `HEAD` request so
- * playback can choose the correct renderer for extensionless assets. When the
- * browser network stack fails before a response arrives, serialize the error
- * into stable text because Chromium's remote console turns raw `Error` objects
- * into `{}` in the device log.
+ * Read the declared media type from a `data:` URL without probing the network.
+ * Cache-busting query suffixes are part of the payload for data URLs, so a
+ * `HEAD` probe would corrupt the bytes and fail MIME detection.
+ */
+function contentTypeFromDataURL(url: URL): string {
+  const separatorIndex = url.pathname.indexOf(',');
+  const metadata =
+    separatorIndex === -1 ? url.pathname : url.pathname.slice(0, separatorIndex);
+  const mediaType = metadata.split(';')[0]?.trim();
+  // RFC 2397 defaults an omitted media type to text/plain.
+  return mediaType && mediaType.length > 0 ? mediaType : 'text/plain';
+}
+
+/**
+ * Resolve a media URL's `Content-Type` so playback can choose the correct
+ * renderer for extensionless assets. Declared `data:` MIME types are returned
+ * directly; other sources use a cache-busting `HEAD` request. When the browser
+ * network stack fails before a response arrives, serialize the error into
+ * stable text because Chromium's remote console turns raw `Error` objects into
+ * `{}` in the device log.
  */
 export async function getContentTypeFromURL(
   previewURL: string
 ): Promise<string> {
   const url = resolveArtworkSourceURL(previewURL);
+  if (url.protocol === 'data:') {
+    return contentTypeFromDataURL(url);
+  }
+
   // The second request could be failed, Chrome uses the cached response from the first request, which has no "Access-Control-Allow-Origin" response header.
   // Workaround: Use a dummy "?x-some-key=some-value" query string parameter will convince the browser that the request is different.
   // Ref: https://serverfault.com/questions/856904/chrome-s3-cloudfront-no-access-control-allow-origin-header-on-initial-xhr-req/856948#856948
