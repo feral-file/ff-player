@@ -54,6 +54,7 @@ function renderWithContext(ui: React.ReactElement): ReturnType<typeof render> {
   );
 }
 
+/** Renders the player in the display-settings path that rewrites iframe URLs. */
 function renderWithDisplaySettings(
   ui: React.ReactElement
 ): ReturnType<typeof render> {
@@ -62,12 +63,8 @@ function renderWithDisplaySettings(
       isInitialized: true,
       isOnline: true,
       appRemoteConfig: {},
-      displaySettings: {
-        scaling: Scaling.Fill,
-      },
-      deviceRotation: {
-        viewMode: 'landscape',
-      },
+      displaySettings: { scaling: Scaling.Fill },
+      deviceRotation: { viewMode: 'landscape' },
       cursorPositions: null,
       castInfo: null,
     },
@@ -177,7 +174,7 @@ describe('ArtworkPlayer — GLB / model mime routing', () => {
 });
 
 describe('ArtworkPlayer — relative iframe display settings', () => {
-  it('resolves relative iframe sources before applying display mode', async () => {
+  it('resolves a relative iframe source before applying display mode', async () => {
     helperMocks.getContentTypeFromURL.mockResolvedValue('application/octet-stream');
 
     const { container } = renderWithDisplaySettings(

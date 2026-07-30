@@ -40,6 +40,7 @@ import {
   getContentTypeFromURL,
   convertScalingToObjectFit,
   getDP1Margin,
+  resolveArtworkSourceURL,
 } from '@/utils/helper';
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
 import {
@@ -637,6 +638,13 @@ const ArtworkPlayer = ({
           playVideoForSlot(slotIndex, layer, videoElement);
         });
         hlsInstance.on(Hls.Events.ERROR, function (_event, data) {
+          if (data.fatal) {
+            hlsInstance?.destroy();
+            if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
+              hlsInstancesRef.current[slotIndex] = null;
+            }
+            return;
+          }
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               if (data.fatal) {
@@ -1250,8 +1258,7 @@ const ArtworkPlayer = ({
         let softwareURL = slot.displayPreviewURL;
         if (
           slot.previewType === PreviewHTMLTag.iframe &&
-          !isModelMimeType(slot.mimeType ?? '') &&
-          !slot.displayPreviewURL.includes('base64')
+          !isModelMimeType(slot.mimeType ?? '')
         ) {
           // Per-slot settings: only the slot claimed as the incoming
           // transition target takes the live (next item's) scaling; any
@@ -1267,9 +1274,15 @@ const ArtworkPlayer = ({
               : (committedVisualSettings ?? displaySettings);
           const displayMode =
             slotSettings.scaling === Scaling.Fill ? 'crop' : 'fit';
-          const u = new URL(slot.displayPreviewURL, window.location.href);
-          u.search += `&display_mode=${displayMode}`;
-          softwareURL = u.toString();
+          const resolvedURL = resolveArtworkSourceURL(slot.displayPreviewURL);
+          // A data URL's query-like text is content, not URL search params;
+          // mutating it corrupts raw HTML/SVG payloads accepted at the cast
+          // boundary. Relative web URLs are resolved only for this iframe
+          // setting, leaving the persisted/display source unchanged.
+          if (resolvedURL.protocol !== 'data:') {
+            resolvedURL.search += `&display_mode=${displayMode}`;
+            softwareURL = resolvedURL.toString();
+          }
         }
         if (softwareURL !== slot.displaySoftwareURL) {
           next[i] = { ...slot, displaySoftwareURL: softwareURL };

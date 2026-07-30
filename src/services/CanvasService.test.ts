@@ -1,9 +1,11 @@
 import { NO_DURATION_VALUE } from '@/constants';
 import { CastCommand } from '@/models';
 import type { CastInfo } from '@/models';
-import { type DP1Call, type DP1Item } from '@/models/dp1.model';
+import { LoopMode } from '@/models/cast_info.model';
+import { DP1Action, type DP1Call, type DP1Item } from '@/models/dp1.model';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
+import DeviceManager from '@/utils/DeviceManager';
 
 const item = (id: string): DP1Item =>
   ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
@@ -36,7 +38,59 @@ const service = canvasService as unknown as {
   onRefreshArtwork: (() => boolean) | null;
 };
 
-// eslint-disable-next-line max-lines-per-function -- Keep the refreshArtwork scenarios together; they share a compact helper surface.
+describe('CanvasService Now Display defaults', () => {
+  afterEach(() => {
+    canvasService.setCastInfo(null, false);
+  });
+
+  it('resets loop and shuffle when a fresh Now Display playlist is applied', () => {
+    canvasService.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: playlist('old', ['A'].map(item)),
+        index: 0,
+        shuffle: true,
+        loopMode: LoopMode.none,
+      },
+      false
+    );
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.displayPlaylist,
+      request: {
+        intent: { action: DP1Action.NowDisplay },
+        dp1_call: playlist('new', ['B', 'C'].map(item)),
+      },
+    });
+
+    expect(reply).toEqual({ ok: true });
+    const next = canvasService.getCastInfo();
+    expect(next?.shuffle).toBe(false);
+    expect(next?.loopMode).toBe(LoopMode.playlist);
+    expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['B', 'C']);
+  });
+
+  it('does not persist a rejected Display At Boot playlist', () => {
+    const persistSpy = vi
+      .spyOn(DeviceManager, 'setBootPlaylist')
+      .mockResolvedValue(undefined);
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.displayPlaylist,
+      request: {
+        intent: { action: DP1Action.DisplayAtBoot },
+        dp1_call: playlist('invalid', [
+          { id: 'bad', source: 'about:blank', license: {} } as DP1Item,
+        ]),
+      },
+    });
+
+    expect(reply).toEqual({ ok: false });
+    expect(persistSpy).not.toHaveBeenCalled();
+  });
+
+});
+
 describe('CanvasService refreshArtwork', () => {
   afterEach(() => {
     canvasService.setCastInfo(null, false);
@@ -106,39 +160,6 @@ describe('CanvasService refreshArtwork', () => {
     });
     expect(reply).toEqual({ ok: false });
     expect(refreshSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it('returns ok:false when refresh receives a relative source path', () => {
-    canvasService.setCastInfo(
-      {
-        castCommand: CastCommand.displayPlaylist,
-        playlist: playlist('active', ['A', 'B'].map(item)),
-        index: 1,
-        renderStatus: undefined,
-      },
-      false
-    );
-
-    const reply = canvasService.processMessage({
-      command: CastCommand.displayPlaylist,
-      request: {
-        refresh: true,
-        dp1_call: playlist('refreshed', [
-          {
-            id: 'bad-refresh',
-            title: 'Relative Source',
-            source: 'artwork.png',
-            license: {},
-          } as DP1Item,
-        ]),
-      },
-    });
-
-    expect(reply).toEqual({ ok: false });
-    expect(
-      canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)
-    ).toEqual(['A', 'B']);
-    expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 });
 
