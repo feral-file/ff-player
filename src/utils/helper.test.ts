@@ -53,4 +53,20 @@ describe('getContentTypeFromURL', () => {
       getContentTypeFromURL('https://example.com/artwork/model.glb')
     ).resolves.toBe('model/gltf-binary');
   });
+
+  it.each([
+    ['relative', 'artwork/model.glb', 'http://localhost/artwork/model.glb'],
+    ['protocol-relative', '//cdn.example.com/model.glb', 'http://cdn.example.com/model.glb'],
+  ])('resolves a %s source before looking up its content type', async (_kind, source, expectedURL) => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('blocked'));
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    await expect(getContentTypeFromURL(source)).resolves.toBe('model/gltf-binary');
+
+    const [requestURL, requestInit] = vi.mocked(globalThis.fetch).mock.calls[0];
+    expect(requestURL).toMatch(
+      new RegExp(`^${expectedURL}\\?v=\\d+&x-request=xhr$`)
+    );
+    expect(requestInit).toEqual({ method: 'HEAD' });
+  });
 });

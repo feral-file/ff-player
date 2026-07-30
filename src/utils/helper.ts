@@ -17,13 +17,14 @@ import { Scaling } from '@/models/dp1.model';
 export async function getContentTypeFromURL(
   previewURL: string
 ): Promise<string> {
-  const url = new URL(previewURL);
+  const url = resolveArtworkSourceURL(previewURL);
   // The second request could be failed, Chrome uses the cached response from the first request, which has no "Access-Control-Allow-Origin" response header.
   // Workaround: Use a dummy "?x-some-key=some-value" query string parameter will convince the browser that the request is different.
   // Ref: https://serverfault.com/questions/856904/chrome-s3-cloudfront-no-access-control-allow-origin-header-on-initial-xhr-req/856948#856948
+  const resolvedPreviewURL = url.toString();
   const extendPreviewURL = url.search
-    ? `${previewURL}&v=${Date.now().toString()}&x-request=xhr`
-    : `${previewURL}?v=${Date.now().toString()}&x-request=xhr`;
+    ? `${resolvedPreviewURL}&v=${Date.now().toString()}&x-request=xhr`
+    : `${resolvedPreviewURL}?v=${Date.now().toString()}&x-request=xhr`;
 
   try {
     const response = await fetch(extendPreviewURL, {
@@ -58,6 +59,20 @@ export async function getContentTypeFromURL(
 
     throw new Error(`Failed to determine content type: ${String(error)}`);
   }
+}
+
+/**
+ * Resolve a validated artwork source against the browser origin before a
+ * renderer needs URL semantics. DP1 allows relative and protocol-relative
+ * sources for device-local playback, while stored/cast payloads must retain
+ * their original source strings for compatibility.
+ */
+export function resolveArtworkSourceURL(source: string): URL {
+  const base =
+    typeof window === 'undefined'
+      ? 'http://localhost'
+      : window.location.origin;
+  return new URL(source, base);
 }
 
 /**
