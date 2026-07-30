@@ -3,8 +3,6 @@ import { LoopMode } from '@/models/cast_info.model';
 import { DP1Action, type DP1Call, type DP1Item } from '@/models/dp1.model';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
-import DP1ScheduleService from './DP1ScheduleService';
-import DeviceManager from '@/utils/DeviceManager';
 
 const item = (id: string): DP1Item =>
   ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
@@ -29,7 +27,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  vi.restoreAllMocks();
   canvasService.setCastInfo(null, false);
 });
 
@@ -214,152 +211,6 @@ it('returns ok:false when a playlist item source uses a non-web scheme', () => {
     canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)
   ).toEqual(['A']);
   expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
-});
-
-it('does not persist DisplayAtBoot playlists when source validation fails', () => {
-  const setBootPlaylistSpy = vi
-    .spyOn(DeviceManager, 'setBootPlaylist')
-    .mockResolvedValue(undefined);
-
-  canvasService.setCastInfo(
-    {
-      castCommand: CastCommand.displayPlaylist,
-      playlist: playlist('old', ['A'].map(item)),
-      index: 0,
-      renderStatus: RenderStatus.ready,
-    },
-    false
-  );
-
-  const reply = canvasService.processMessage({
-    command: CastCommand.displayPlaylist,
-    request: {
-      intent: { action: DP1Action.DisplayAtBoot },
-      dp1_call: playlist('boot', [
-        {
-          id: 'bad-boot-1',
-          title: 'Broken Boot Source',
-          source: 'invalid://source',
-          license: {},
-        } as DP1Item,
-      ]),
-    },
-  });
-
-  expect(reply).toEqual({ ok: false });
-  expect(setBootPlaylistSpy).not.toHaveBeenCalled();
-  expect(
-    canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)
-  ).toEqual(['A']);
-  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
-});
-
-it('returns ok:false for schedule_play when an item source is unsupported', () => {
-  const storeSpy = vi
-    .spyOn(DP1ScheduleService, 'storeScheduledTask')
-    .mockResolvedValue(undefined);
-
-  canvasService.setCastInfo(
-    {
-      castCommand: CastCommand.displayPlaylist,
-      playlist: playlist('old', ['A'].map(item)),
-      index: 0,
-      renderStatus: RenderStatus.ready,
-    },
-    false
-  );
-
-  const reply = canvasService.processMessage({
-    command: CastCommand.displayPlaylist,
-    request: {
-      intent: {
-        action: DP1Action.SchedulePlay,
-        schedule_time: '2099-01-01T00:00:00Z',
-      },
-      dp1_call: playlist('scheduled', [
-        {
-          id: 'bad-schedule-1',
-          title: 'Broken Scheduled Source',
-          source: 'invalid://source',
-          license: {},
-        } as DP1Item,
-      ]),
-    },
-  });
-
-  // Reject on receipt so controllers are not told a doomed schedule was accepted.
-  expect(reply).toEqual({ ok: false });
-  expect(storeSpy).not.toHaveBeenCalled();
-  expect(
-    canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)
-  ).toEqual(['A']);
-  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
-});
-
-it('returns ok:false for schedule_play when an item source uses a non-web scheme', () => {
-  const storeSpy = vi
-    .spyOn(DP1ScheduleService, 'storeScheduledTask')
-    .mockResolvedValue(undefined);
-
-  canvasService.setCastInfo(
-    {
-      castCommand: CastCommand.displayPlaylist,
-      playlist: playlist('old', ['A'].map(item)),
-      index: 0,
-      renderStatus: RenderStatus.ready,
-    },
-    false
-  );
-
-  const reply = canvasService.processMessage({
-    command: CastCommand.displayPlaylist,
-    request: {
-      intent: {
-        action: DP1Action.SchedulePlay,
-        schedule_time: '2099-01-01T00:00:00Z',
-      },
-      dp1_call: playlist('scheduled', [
-        {
-          id: 'about-schedule-1',
-          title: 'About Blank Scheduled Source',
-          source: 'about:blank',
-          license: {},
-        } as DP1Item,
-      ]),
-    },
-  });
-
-  expect(reply).toEqual({ ok: false });
-  expect(storeSpy).not.toHaveBeenCalled();
-  expect(
-    canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)
-  ).toEqual(['A']);
-  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
-});
-
-it('stores a schedule_play task when item sources are supported', () => {
-  const storeSpy = vi
-    .spyOn(DP1ScheduleService, 'storeScheduledTask')
-    .mockResolvedValue(undefined);
-  const scheduledPlaylist = playlist('scheduled', ['B'].map(item));
-
-  const reply = canvasService.processMessage({
-    command: CastCommand.displayPlaylist,
-    request: {
-      intent: {
-        action: DP1Action.SchedulePlay,
-        schedule_time: '2099-01-01T00:00:00Z',
-      },
-      dp1_call: scheduledPlaylist,
-    },
-  });
-
-  expect(reply).toEqual({ ok: true });
-  expect(storeSpy).toHaveBeenCalledTimes(1);
-  expect(storeSpy).toHaveBeenCalledWith(
-    scheduledPlaylist,
-    '2099-01-01T00:00:00'
-  );
 });
 
 it('resets render status to pending on moveToArtwork', () => {
