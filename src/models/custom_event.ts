@@ -18,10 +18,37 @@ export enum CustomEventName {
   // job. The fallback's own cast intentionally does NOT dispatch this — its
   // settling is handled by the loop's nonce-guarded clear.
   ExplicitPlaylistCast = 'explicitPlaylistCast',
+  // CanvasService/ErrorNavigation → AppContext: something deliberately took
+  // the wall off playback (disconnect, setSleepMode(true), navigation to the
+  // error page). AppContext stands the fallback machinery down exactly as
+  // for ExplicitPlaylistCast — aborts an in-flight attempt, cancels an
+  // active retry, and clears the config-change supersede marker — so no
+  // fallback path can later cast the default playlist and relight (or wake)
+  // a wall that was just stopped. CanvasService also listens: a halt that
+  // lands while boot hydration is still pending latches
+  // wasHaltedDuringBootHydration so the boot restore decision sees it. A
+  // LATER explicit cast or displayDefaultPlaylist push still wins: these
+  // are synchronous window events and last command wins, so the halt is a
+  // stand-down, not a latch on future commands.
+  // Carries PlaybackHaltedDetail: only a CAST-CLEARING halt (disconnect) may
+  // make boot skip the persisted-playlist restore entirely — a preserving
+  // halt (sleep, error navigation) suppresses navigation and fallback arming
+  // but still restores, or a mid-hydration sleep would silently trade the
+  // user's persisted playlist for the default at wake.
+  PlaybackHalted = 'playbackHalted',
   MintPairingDisplay = 'mintPairingDisplay',
   Navigate = 'navigate',
   SetupDisplay = 'setupDisplay',
   WatchdogEvent = 'watchdogEvent',
+}
+
+export interface PlaybackHaltedDetail {
+  // True when the halt cleared cast state (disconnect). Boot hydration must
+  // then not restore the stale persisted playlist — it is exactly the state
+  // the controller just cleared. Absent/false for state-preserving halts
+  // (sleep, error navigation), where boot still restores the playlist so a
+  // later wake finds it, and suppresses only navigation and fallback arming.
+  clearedCast?: boolean;
 }
 
 export interface ConnectivityEventDetail {

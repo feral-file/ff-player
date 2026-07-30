@@ -85,3 +85,139 @@ describe('CanvasService explicit-cast signalling', () => {
     expect(canvasService.getCastInfo()).toBeNull();
   });
 });
+
+// A controller stop must announce itself the same way an explicit cast does,
+// or the fallback machinery outlives it: an armed retry or the config-change
+// supersede would later cast the default playlist and relight a disconnected
+// wall — or navigate a sleeping device back to '/'.
+describe('CanvasService playback-halt signalling', () => {
+  afterEach(() => {
+    canvasService.setCastInfo(null, false);
+    vi.restoreAllMocks();
+  });
+
+  it('disconnect dispatches PlaybackHalted', () => {
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    expect(canvasService.disconnect()).toEqual({ ok: true });
+
+    expect(dispatchedEvents(spy)).toContain(CustomEventName.PlaybackHalted);
+  });
+
+  it('entering sleep dispatches PlaybackHalted', () => {
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    expect(canvasService.setSleepMode({ sleepMode: true })).toEqual({
+      ok: true,
+    });
+
+    expect(dispatchedEvents(spy)).toContain(CustomEventName.PlaybackHalted);
+  });
+
+  it('waking from sleep does not dispatch PlaybackHalted', () => {
+    // Wake resumes playback; announcing a halt here would cancel a
+    // displayDefaultPlaylist request racing the wake.
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    expect(canvasService.setSleepMode({ sleepMode: false })).toEqual({
+      ok: true,
+    });
+
+    expect(dispatchedEvents(spy)).not.toContain(
+      CustomEventName.PlaybackHalted
+    );
+  });
+
+});
+
+// Wake re-arm boundaries: only a wake that ends a REAL sleep with nothing
+// playable re-enters the fallback flow, and no wake path may persist a
+// playlist-less castInfo (the next boot's restore branch would treat it as
+// real content and never arm the fallback).
+describe('CanvasService wake re-arm', () => {
+  afterEach(() => {
+    canvasService.setCastInfo(null, false);
+    vi.restoreAllMocks();
+  });
+
+  it('waking from a real sleep with nothing playable re-enters the fallback flow', () => {
+    // Entering sleep stood the fallback down, so a device that slept during
+    // its first-boot/offline fallback has no playlist to resume. Wake must
+    // re-arm via DisplayDefaultPlaylist or the wall stays empty until the
+    // next controller command — and must NOT commit a playlist-less
+    // castInfo, which would persist and eat the next boot's fallback
+    // arming.
+    expect(canvasService.setSleepMode({ sleepMode: true })).toEqual({
+      ok: true,
+    });
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    expect(canvasService.setSleepMode({ sleepMode: false })).toEqual({
+      ok: true,
+    });
+
+    expect(dispatchedEvents(spy)).toContain(
+      CustomEventName.DisplayDefaultPlaylist
+    );
+    expect(canvasService.getCastInfo()).toBeNull();
+  });
+
+  it('waking with a resumable playlist does not touch the fallback', () => {
+    canvasService.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: playlist('resumable'),
+        index: 0,
+      } as never,
+      false
+    );
+    canvasService.setSleepMode({ sleepMode: true });
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    expect(canvasService.setSleepMode({ sleepMode: false })).toEqual({
+      ok: true,
+    });
+
+    expect(dispatchedEvents(spy)).not.toContain(
+      CustomEventName.DisplayDefaultPlaylist
+    );
+  });
+
+  it('a wake that ends no real sleep never casts the default', () => {
+    // A disconnected wall (cleared, never slept) must stay dark on a stray
+    // wake command: the controller asked to wake, not to cast the default
+    // playlist over its own deliberate clear.
+    expect(canvasService.disconnect()).toEqual({ ok: true });
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    expect(canvasService.setSleepMode({ sleepMode: false })).toEqual({
+      ok: true,
+    });
+
+    expect(dispatchedEvents(spy)).not.toContain(
+      CustomEventName.DisplayDefaultPlaylist
+    );
+    expect(canvasService.getCastInfo()).toBeNull();
+  });
+
+  it('a disconnect during sleep keeps the eventual wake dark', () => {
+    // The disconnect must reset the sleep-entered marker, not just clear
+    // castInfo: this wake DOES end a real sleep, so without the reset the
+    // re-arm gate alone would let it cast the default playlist over the
+    // controller's deliberate clear.
+    expect(canvasService.setSleepMode({ sleepMode: true })).toEqual({
+      ok: true,
+    });
+    expect(canvasService.disconnect()).toEqual({ ok: true });
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    expect(canvasService.setSleepMode({ sleepMode: false })).toEqual({
+      ok: true,
+    });
+
+    expect(dispatchedEvents(spy)).not.toContain(
+      CustomEventName.DisplayDefaultPlaylist
+    );
+    expect(canvasService.getCastInfo()).toBeNull();
+  });
+});

@@ -1,6 +1,6 @@
 'use client';
 
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { AppContext } from '@/context/AppContext';
 import styles from './SetupArtworkBackground.module.scss';
 
@@ -31,23 +31,78 @@ export const FADE_OUT_MS = 650;
  * playlist on the next boot, which is compatibility-sensitive boot-recovery
  * behavior this layer must not touch.
  *
- * Shows while a panel is visible and no cast is active: when castInfo exists
- * the player is already showing the user's artwork behind the overlay scrim
- * (e.g. an OTA `updating` state over live playback), and this layer must not
- * cover it. On exit (overlay hides or a cast starts) it fades out over the
- * player's standard cast-fade duration instead of vanishing in a hard cut,
- * then unmounts.
+ * Two situations put it on screen, and one invariant keeps it off.
+ *
+ * 1. A setup panel is visible and nothing is cast — the original case.
+ * 2. `offlineDegraded`: the device has no connectivity AND the artwork the
+ *    player is trying to show failed to load. A claimed device that boots
+ *    offline restores its playlist but cannot fetch any asset, so without
+ *    this the wall is simply black. The bundled artwork is the only thing
+ *    guaranteed to render with zero connectivity, which is exactly why it
+ *    is same-origin and offline-complete.
+ *
+ * The invariant: a device that is playing artwork normally must NEVER get
+ * this layer over it. That is what the `!castInfo || offlineDegraded` factor
+ * enforces — an OTA `updating` panel raised over live playback still shows
+ * the user's artwork through the panel scrim, unchanged.
+ *
+ * On exit it fades out over the player's standard cast-fade duration instead
+ * of vanishing in a hard cut, then unmounts.
  *
  * The context read is optional (not `useAppContext`) so the overlay still
- * works when mounted without an AppProvider, as its tests do.
+ * works when mounted without an AppProvider, as its tests do; the defaults
+ * read as "online and playing fine", which leaves setup behavior unchanged.
  */
 export default function SetupArtworkBackground({
   panelVisible,
 }: {
   panelVisible: boolean;
 }) {
-  const castInfo = useContext(AppContext)?.context.castInfo ?? null;
-  const show = panelVisible && !castInfo;
+  const appContext = useContext(AppContext)?.context;
+  const castInfo = appContext?.castInfo ?? null;
+  const isOnline = appContext?.isOnline ?? true;
+  const playbackDegraded = appContext?.playbackDegraded ?? false;
+  // Second, level-triggered source of offline evidence. `isOnline` is only
+  // as good as the daemon's edge-triggered pushes: after a reload while the
+  // device is ALREADY offline it sits at its optimistic `true` seed until
+  // the next real transition (see DEVICE_LOCAL_PLAYER.md), which is exactly
+  // when a claimed offline wall needs this backdrop. `navigator.onLine`
+  // reads the browser's own interface state — level, not edge — so it
+  // catches the link-down half of that case with no daemon involvement.
+  // It cannot see "associated but no internet", so it widens coverage
+  // rather than replacing the daemon signal; false positives are not a
+  // concern (interface down ⟹ genuinely offline). Scoped to this component
+  // on purpose: other `isOnline` consumers (streaming pause) keep their
+  // existing daemon-driven semantics.
+  const [browserOnline, setBrowserOnline] = useState(() =>
+    typeof navigator === 'undefined' ? true : navigator.onLine
+  );
+  useEffect(() => {
+    const handleOnline = () => {
+      setBrowserOnline(true);
+    };
+    const handleOffline = () => {
+      setBrowserOnline(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+  const offlineDegraded = (!isOnline || !browserOnline) && playbackDegraded;
+  // Both factors are gated on `offlineDegraded`, not the bare degraded flag.
+  // An artwork that fails while the device is ONLINE is a different problem
+  // — a broken asset or an unsupported format, which ArtworkPlayer already
+  // reports through its own error modal — and covering that modal with this
+  // z-index 999 layer would replace the diagnostic with a p5 sketch.
+  const show =
+    (panelVisible || offlineDegraded) && (!castInfo || offlineDegraded);
+  // The panel owns the messaging whenever one is up (a re-provision QR over
+  // a long-offline device already explains the situation), so the chip only
+  // speaks for the bare backdrop.
+  const showOfflineChip = offlineDegraded && !panelVisible;
 
   // Mounted lags `show` by FADE_OUT_MS on the way out so the fade can play;
   // re-showing during the fade cancels the pending unmount and the same
@@ -67,25 +122,48 @@ export default function SetupArtworkBackground({
     };
   }, [show]);
 
+  // Latched to the last on-screen value so the chip fades out WITH the
+  // artwork it labels instead of hard-cutting. The usual exit is exactly the
+  // case that would break: connectivity returns, so `offlineDegraded` goes
+  // false in the same render that starts the 650ms fade. Latched in an
+  // effect, not the render body, so render stays pure; on the exit render
+  // the effect has not yet overwritten the ref, which is precisely the
+  // last-shown value the fade needs.
+  const lastChipRef = useRef(showOfflineChip);
+  useEffect(() => {
+    if (show) {
+      lastChipRef.current = showOfflineChip;
+    }
+  }, [show, showOfflineChip]);
+  const renderChip = show ? showOfflineChip : lastChipRef.current;
+
   if (!mounted) {
     return null;
   }
 
+  // The chip lives inside this layer rather than in a new overlay surface so
+  // it inherits the same mount lifetime and the same exit fade as the
+  // artwork it labels — the opacity transition is on the wrapper.
   return (
-    <iframe
-      className={
-        show ? styles.background : `${styles.background} ${styles.fading}`
-      }
-      src={setupArtworkUrl}
-      // allow-scripts ONLY. The artwork is an inline p5 sketch plus a
-      // classic sibling <script src="./p5.min.js"> — neither needs a
-      // same-origin browsing context (classic script loads work from an
-      // opaque origin; the sketch touches no storage, no fetch, no parent).
-      // Granting allow-same-origin alongside allow-scripts would let this
-      // same-origin document reach the parent and strip its own sandbox
-      // attribute, defeating the boundary entirely.
-      sandbox="allow-scripts"
-      title="Setup background artwork"
-    />
+    <div className={show ? styles.layer : `${styles.layer} ${styles.fading}`}>
+      <iframe
+        className={styles.background}
+        src={setupArtworkUrl}
+        // allow-scripts ONLY. The artwork is an inline p5 sketch plus a
+        // classic sibling <script src="./p5.min.js"> — neither needs a
+        // same-origin browsing context (classic script loads work from an
+        // opaque origin; the sketch touches no storage, no fetch, no parent).
+        // Granting allow-same-origin alongside allow-scripts would let this
+        // same-origin document reach the parent and strip its own sandbox
+        // attribute, defeating the boundary entirely.
+        sandbox="allow-scripts"
+        title="Setup background artwork"
+      />
+      {renderChip ? (
+        <p className={styles.statusChip} aria-live="polite">
+          No internet connection
+        </p>
+      ) : null}
+    </div>
   );
 }

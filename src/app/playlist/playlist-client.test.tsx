@@ -358,6 +358,78 @@ describe('PlaylistClient — refresh artwork', () => {
 });
 
 
+describe('PlaylistClient — second flush trigger (registerArtworkReload)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    canvasService.onRefreshArtwork = null;
+    teardownPlaylistWiringTest();
+  });
+
+  it('replays a refusal parked before ArtworkPlayer registers its reload', async () => {
+    // Registration-ordering gap (§4.2 of the cross-repo recovery design):
+    // PlaylistClient's own effect assigns onRefreshArtwork unconditionally
+    // on mount, but ArtworkPlayer only renders once currentItemDisplayPreference
+    // resolves — so a refusal parked before that first assignment finds the
+    // reload ref still null and stays parked. Without the re-assignment in
+    // registerArtworkReload's non-null branch, nothing ever replays it once
+    // the ref is finally populated.
+    canvasService.onRefreshArtwork = null;
+    const items = [item('a', 1)];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+
+    const parkReply = canvasService.processMessage({
+      command: CastCommand.refreshArtwork,
+      request: {},
+    });
+    expect(parkReply).toEqual({
+      ok: false,
+      error: 'No playlist handler registered yet',
+      code: 'handler_pending',
+    });
+
+    render(<PlaylistHarness castInfo={initial} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      (globalThis as { __artworkReloadInvocations?: number })
+        .__artworkReloadInvocations
+    ).toBe(1);
+  });
+
+  it('does not flush onRefreshArtwork on registration teardown (reload === null)', async () => {
+    // "Teardown (reload === null) must NOT flush — there is nothing to
+    // refresh into a torn-down handler" (registerArtworkReload's own
+    // comment). Pinned by spying on the setter directly: teardown must not
+    // touch it at all, not even to reassign the same handler.
+    const items = [item('a', 1)];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+
+    render(<PlaylistHarness castInfo={initial} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const props = (
+      globalThis as { __artworkPlayerProps?: Record<string, unknown> }
+    ).__artworkPlayerProps;
+    const registerArtworkReload = props?.onRegisterArtworkReload as
+      | ((reload: (() => void) | null) => void)
+      | undefined;
+    expect(registerArtworkReload).toBeDefined();
+
+    const setterSpy = vi.spyOn(canvasService, 'onRefreshArtwork', 'set');
+    registerArtworkReload?.(null);
+    expect(setterSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe('PlaylistClient — refresh artwork (cast leads React)', () => {
   beforeEach(() => {
     vi.useFakeTimers();

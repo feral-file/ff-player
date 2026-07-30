@@ -12,9 +12,28 @@ export interface CursorOffset {
 }
 
 export type Request = object;
+
+/**
+ * Stable, machine-readable classification for a refused command, alongside
+ * the free-form `error` string (kept byte-for-byte unchanged for existing
+ * consumers reading logs). Currently emitted only by refreshArtwork's three
+ * refusal paths; controld's boot-recovery classifier keys off this instead
+ * of parsing `error` text, which is not a stable contract across builds.
+ */
+export type ReplyRefusalCode =
+  | 'handler_pending'
+  | 'no_artwork'
+  | 'preview_update_failed';
+
 export interface Reply {
   ok: boolean;
-  error?: ErrorType;
+  // ErrorType for the navigation-error replies; a free-form reason string for
+  // command refusals. The daemon surfaces this verbatim when a command is
+  // refused (feral-controld reads `message.error` to tell an expected
+  // escalation — "No active artwork to refresh" during boot recovery — from
+  // an unexpected refusal when reading logs after a bad boot).
+  error?: ErrorType | string;
+  code?: ReplyRefusalCode;
 }
 
 export type ConnectReplyV2 = Reply;
@@ -43,6 +62,17 @@ export interface CheckDeviceStatusReply extends Reply {
   items?: DP1Item[];
   index?: number;
   isPaused?: boolean;
+
+  // Generation carrier for controld's page-generation tracking (cross-repo
+  // recovery design §2.1, source 3): echoes `window.__ffosDocStamp` so a
+  // document-stamp mismatch can be detected over this existing 5s
+  // checkStatus round-trip instead of a second evaluate. A current player
+  // ALWAYS includes this key — '' when the session has not stamped the
+  // document yet (a fresh mount, or a foreign/unstamped document), the
+  // stamp string once it has. Optional here only because an OLD player
+  // (pre-stamp code) omits the key entirely; controld treats absence as
+  // "source 3 unavailable" for that player, never as a mismatch.
+  stamp?: string;
 
   deviceSettings?: {
     scaling?: Scaling;
