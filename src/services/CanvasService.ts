@@ -76,48 +76,6 @@ const PLAYLIST_SOURCE_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
 const ARTWORK_SOURCE_RESOLVE_BASE = 'https://ff-player.local/';
 
 /**
- * Checks the data-URL payload before accepting it as renderable artwork input.
- * The URL constructor accepts opaque `data:` strings without decoding their
- * contents, so the cast boundary must separately reject broken percent escapes
- * and base64 payloads before they can become persisted playback state.
- */
-function isValidDataUrl(url: URL): boolean {
-  const separatorIndex = url.pathname.indexOf(',');
-  if (separatorIndex === -1 || separatorIndex === url.pathname.length - 1) {
-    return false;
-  }
-
-  const metadata = url.pathname.slice(0, separatorIndex);
-  const payload = url.pathname.slice(separatorIndex + 1);
-
-  if (!metadata.toLowerCase().endsWith(';base64')) {
-    return true;
-  }
-
-  let decodedPayload: string;
-  try {
-    decodedPayload = decodeURIComponent(payload);
-  } catch {
-    return false;
-  }
-
-  // `atob` permits ASCII whitespace in base64 input, including encoded line
-  // wrapping used by some generators. Normalize only that compatible syntax;
-  // all non-base64 characters remain rejected below.
-  const base64Payload = decodedPayload.replace(/[\t\n\f\r ]/g, '');
-  const paddingLength = (/=+$/.exec(base64Payload))?.[0].length ?? 0;
-  const unpaddedLength = base64Payload.length - paddingLength;
-  return (
-    /^[A-Za-z0-9+/]*={0,2}$/.test(base64Payload) &&
-    unpaddedLength > 0 &&
-    paddingLength <= 2 &&
-    (paddingLength === 0
-      ? unpaddedLength % 4 !== 1
-      : base64Payload.length % 4 === 0)
-  );
-}
-
-/**
  * Reject non-renderable artwork sources before we commit cast or schedule state.
  * Empty, whitespace-only, and non-web schemes return false so now_display,
  * schedule_play, and refreshPlaylist can answer `ok: false` instead of accepting
@@ -131,11 +89,11 @@ function isSupportedArtworkSource(source: string): boolean {
     if (!normalizedSource) {
       return false;
     }
+    if (normalizedSource.startsWith('data:')) {
+      return true;
+    }
 
     const url = new URL(normalizedSource, ARTWORK_SOURCE_RESOLVE_BASE);
-    if (url.protocol === 'data:') {
-      return isValidDataUrl(url);
-    }
     return PLAYLIST_SOURCE_PROTOCOLS.has(url.protocol);
   } catch {
     return false;

@@ -55,12 +55,10 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 
 `CanvasService` validates artwork sources before accepting `now_display`,
 `schedule_play`, or a playlist refresh. Absolute `http:`, `https:`, and
-`data:` sources with a valid, non-empty payload are accepted, as are relative
-and protocol-relative sources; the latter are resolved by the player against
-its current web origin. Empty, malformed (including invalid `data:` percent or
-base64 payloads), and non-web schemes (such as `about:`, `tezos:`, or
-`invalid:`) are rejected with `{ ok: false }` before they can replace cast or
-schedule state.
+`data:` sources are accepted, as are relative and protocol-relative sources;
+the latter are resolved by the player against its current web origin. Empty,
+malformed, and non-web schemes (such as `about:`, `tezos:`, or `invalid:`) are
+rejected with `{ ok: false }` before they can replace cast or schedule state.
 
 This guard rejects inputs the player already knows it cannot render while
 preserving relative DP1 sources used by device-local deployments. Acceptance

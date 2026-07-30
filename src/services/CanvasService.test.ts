@@ -175,7 +175,41 @@ describe('CanvasService refreshArtwork', () => {
     ).toEqual(['A', 'B']);
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
+});
 
+describe('CanvasService refreshArtwork replay', () => {
+  afterEach(() => {
+    canvasService.setCastInfo(null, false);
+    service.onRefreshArtwork = null;
+  });
+
+  it('replays a pending refresh when the handler registers later', () => {
+    canvasService.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: playlist('active', ['A', 'B'].map(item)),
+        index: 1,
+      },
+      false
+    );
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.refreshArtwork,
+      request: {},
+    });
+    expect(reply).toEqual({ ok: false });
+
+    const refreshSpy = vi.fn(() => true);
+    service.onRefreshArtwork = refreshSpy;
+
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    expect(
+      canvasService.processMessage({
+        command: CastCommand.refreshArtwork,
+        request: {},
+      })
+    ).toEqual({ ok: true });
+  });
 });
 
 // eslint-disable-next-line max-lines-per-function -- Deferred refresh cases share helpers; split later if this file grows further.
