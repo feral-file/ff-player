@@ -53,4 +53,22 @@ describe('getContentTypeFromURL', () => {
       getContentTypeFromURL('https://example.com/artwork/model.glb')
     ).resolves.toBe('model/gltf-binary');
   });
+
+  it('uses the server fallback base to infer MIME type for a relative URL', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, {
+        headers: { 'Content-Type': 'model/gltf-binary' },
+        status: 200,
+      })
+    );
+
+    await expect(getContentTypeFromURL('artwork/model.glb')).resolves.toBe(
+      'model/gltf-binary'
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^artwork\/model\.glb\?v=\d+&x-request=xhr$/),
+      { method: 'HEAD' }
+    );
+  });
 });

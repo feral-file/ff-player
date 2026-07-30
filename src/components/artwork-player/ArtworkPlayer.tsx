@@ -1107,7 +1107,10 @@ const ArtworkPlayer = ({
               : (committedVisualSettings ?? displaySettings);
           const displayMode =
             slotSettings.scaling === Scaling.Fill ? 'crop' : 'fit';
-          const u = new URL(slot.displayPreviewURL);
+          // DP1 permits player-relative artwork URLs. Resolve only for the
+          // iframe software URL so playback state keeps the original value
+          // while display-mode rewriting can safely operate on a URL object.
+          const u = new URL(slot.displayPreviewURL, window.location.href);
           u.search += `&display_mode=${displayMode}`;
           softwareURL = u.toString();
         }
