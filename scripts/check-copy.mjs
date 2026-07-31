@@ -12,13 +12,11 @@
  * logger calls, route/config keys — legitimately contain these tokens and
  * are never shown to a person, so they are skipped, as are comments.
  */
-'use strict';
+import fs from 'fs';
+import path from 'path';
+import ts from 'typescript';
 
-const fs = require('fs');
-const path = require('path');
-const ts = require('typescript');
-
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(import.meta.dirname, '..');
 const SRC = path.join(ROOT, 'src');
 
 // Boundaries exclude identifiers (frameName, qrFrame, connectedWifi) and the

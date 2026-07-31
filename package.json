@@ -9,8 +9,8 @@
     "lint": "bash ./scripts/lint-changed.sh",
     "lint:all": "eslint .",
     "post-implement-check": "bash ./scripts/lint-changed.sh --fix",
-    "test": "node scripts/check-copy.js && vitest run",
-    "check:copy": "node scripts/check-copy.js",
+    "test": "node scripts/check-copy.mjs && vitest run",
+    "check:copy": "node scripts/check-copy.mjs",
     "typecheck": "tsc --noEmit",
     "verify": "bash ./scripts/verify.sh"
   },
