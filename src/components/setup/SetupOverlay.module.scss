@@ -1,13 +1,14 @@
-// Resolution-independence invariant: the kiosk renders this overlay at
-// whatever mode the attached display negotiates (1080p and 4K today), so
-// every size that matters is led by a vmin term — px values in clamp() are
-// only floors for tiny debug windows, and the maxima are ~2x the 1080p size
-// purely as an 8K sanity bound. When adding sizes, derive the vmin term as
-// (intended 1080p px) / 10.8 so 1080p keeps rendering pixel-identically and
-// larger modes scale proportionally instead of pinning to px caps, and
-// portrait mounts (a normal orientation for an art display) key off the
-// short edge instead of blowing up with viewport height (the bug
-// this system replaced: a 4K screen showed a half-size panel).
+// Sizing model: every size is led by a vmin term so the overlay stays
+// proportional across display modes and portrait mounts (a normal
+// orientation for an art display) keys off the short edge — the bug this
+// replaced was a 4K screen showing a half-size panel. The px floors cover
+// tiny debug windows. The px maxima are NOT a formality: they bound large
+// modes to the same scale MintPairingOverlay caps at (title 92px, subtitle
+// 62px), because uncapped vmin rendered the setup title at 151px on the
+// shipping 4K mode — 1.6x the pairing overlay on the same screen. At 1080p
+// the vmin term still governs (7vmin = 76px < 92px cap), so 1080p renders
+// identically to the uncapped system. Derive new sizes as (intended 1080p
+// px) / 10.8 for the vmin term, capped in proportion to the values below.
 
 .overlay {
   position: fixed;
@@ -19,6 +20,10 @@
   height: 100vh;
   padding: 6vh 6vw;
   pointer-events: none;
+  // The kiosk's body font is Inter (layout.tsx); PP Mori arrives on setup
+  // copy only via the globals.css `p` reset, which any non-<p> child would
+  // silently miss. Pin the brand face here so the whole overlay inherits it.
+  font-family: 'PP Mori', sans-serif;
   color: #ffffff;
   background: rgba(0, 0, 0, 0.82);
 }
@@ -35,7 +40,7 @@
 
 .stepLabel {
   margin-top: 3vh;
-  font-size: clamp(24px, 3.2vmin, 88px);
+  font-size: clamp(24px, 3.2vmin, 44px);
   line-height: 1.14;
   letter-spacing: 0;
 }
@@ -49,22 +54,23 @@
 
   // qrcode.react emits a fixed-px svg (its `size` prop only sets the
   // viewBox/attributes); rendered size is owned here so the code scales
-  // with the display. 29.6vmin ≈ the old 320px at 1080p.
+  // with the display. 29.6vmin ≈ 320px at 1080p; the cap keeps the code in
+  // proportion to the capped text on 4K.
   svg {
-    width: 29.6vmin;
-    height: 29.6vmin;
+    width: min(29.6vmin, 400px);
+    height: min(29.6vmin, 400px);
   }
 }
 
 .title {
-  font-size: clamp(42px, 7vmin, 184px);
+  font-size: clamp(42px, 7vmin, 92px);
   line-height: 1.08;
   letter-spacing: 0;
 }
 
 .credential {
   margin-top: 3vh;
-  font-size: clamp(28px, 4vmin, 112px);
+  font-size: clamp(28px, 4vmin, 56px);
   line-height: 1.14;
   letter-spacing: 0;
 }
@@ -73,7 +79,7 @@
   // 89vmin ≈ the old 960px cap at 1080p.
   max-width: min(86vw, 89vmin);
   margin-top: 4vh;
-  font-size: clamp(30px, 4.5vmin, 124px);
+  font-size: clamp(30px, 4.5vmin, 62px);
   line-height: 1.14;
   letter-spacing: 0;
 }
@@ -87,5 +93,5 @@
   // 111vmin ≈ the old 1200px cap at 1080p.
   max-width: min(86vw, 111vmin);
   margin-top: 3vh;
-  font-size: clamp(22px, 3vmin, 80px);
+  font-size: clamp(22px, 3vmin, 42px);
 }

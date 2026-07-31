@@ -72,7 +72,7 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Connect to Set Up This Device</p>
+        <p className={styles.title}>Set up your Art Computer</p>
         <p className={styles.stepLabel}>Scan to join the setup network</p>
         <div className={styles.qrFrame}>
           <QRCodeSVG
@@ -105,9 +105,9 @@ function ScanningPanel() {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Looking for Wi-Fi Networks&hellip;</p>
+        <p className={styles.title}>Looking for Wi-Fi networks</p>
         <p className={styles.subtitle}>
-          The setup screen will appear here in a moment.
+          The setup screen will appear in a moment.
         </p>
       </div>
     </section>
@@ -118,7 +118,7 @@ function JoiningPanel() {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Connecting to Wi-Fi&hellip;</p>
+        <p className={styles.title}>Connecting to Wi-Fi</p>
       </div>
     </section>
   );
@@ -134,9 +134,9 @@ function FinalizingPanel() {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Wi-Fi Connected</p>
+        <p className={styles.title}>Wi-Fi connected</p>
         <p className={styles.subtitle}>
-          Getting this frame ready&hellip; This can take a minute.
+          Getting your Art Computer ready. This can take a minute.
         </p>
       </div>
     </section>
@@ -147,12 +147,12 @@ function JoinFailedPanel({ display }: { display: SetupDisplayDetail }) {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Couldn&apos;t Connect to Wi-Fi</p>
+        <p className={styles.title}>Couldn&apos;t connect to Wi-Fi</p>
         {display.reason ? (
           <p className={styles.subtitle}>{display.reason}</p>
         ) : null}
         <p className={styles.subtitle}>
-          Reconnect to the device&apos;s setup hotspot and try again.
+          Rejoin the setup network on your phone and try again.
         </p>
       </div>
     </section>
@@ -173,7 +173,7 @@ function UpdatingPanel({ display }: { display: SetupDisplayDetail }) {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Updating Device Software&hellip;</p>
+        <p className={styles.title}>Updating software</p>
         {percent !== null ? (
           <p className={styles.subtitle}>{percent}%</p>
         ) : null}
@@ -186,8 +186,8 @@ function FactoryResetPanel() {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Resetting to Factory Settings&hellip;</p>
-        <p className={styles.subtitle}>Do not power off this device.</p>
+        <p className={styles.title}>Resetting to factory settings</p>
+        <p className={styles.subtitle}>Keep the power on.</p>
       </div>
     </section>
   );
@@ -212,21 +212,21 @@ function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Pair with the Feral File App</p>
+        <p className={styles.title}>Pair with the Feral File app</p>
         <p className={styles.subtitle}>
           Open the Feral File app on a phone connected to the same Wi-Fi
           network. If pairing doesn&apos;t start automatically, add{' '}
           {frameName ? (
             <strong>{frameName}</strong>
           ) : (
-            'this frame'
+            'this Art Computer'
           )}{' '}
           in the app.
         </p>
         {display.url ? (
           <>
             <p className={styles.stepLabel}>
-              Frame not showing up in the app? Scan this code instead.
+              Not seeing it in the app? Scan this code instead.
             </p>
             <div className={styles.qrFrame}>
               <QRCodeSVG value={display.url} size={qrSize} marginSize={2} />

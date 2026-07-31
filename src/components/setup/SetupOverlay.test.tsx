@@ -44,7 +44,7 @@ describe('SetupOverlay known states (connectivity)', () => {
       password: 'correct-horse',
     });
 
-    expect(await screen.findByText('Connect to Set Up This Device')).toBeTruthy();
+    expect(await screen.findByText('Set up your Art Computer')).toBeTruthy();
     expect(screen.getByText('Network: FF1-Setup-ABCD')).toBeTruthy();
     expect(screen.getByText('Password: correct-horse')).toBeTruthy();
     expect(screen.getByText('Scan to join the setup network')).toBeTruthy();
@@ -63,7 +63,7 @@ describe('SetupOverlay known states (connectivity)', () => {
       password: 'correct-horse',
     });
 
-    await screen.findByText('Connect to Set Up This Device');
+    await screen.findByText('Set up your Art Computer');
     // The address must match the DNS/NAT captive design (ff1.config →
     // 192.0.2.1) — a change here has to move in lockstep with captive.conf
     // in the ffos image.
@@ -87,7 +87,7 @@ describe('SetupOverlay known states (connectivity)', () => {
 
     displaySetup({ state: SetupDisplayState.Joining });
 
-    expect(await screen.findByText('Connecting to Wi-Fi…')).toBeTruthy();
+    expect(await screen.findByText('Connecting to Wi-Fi')).toBeTruthy();
   });
 
   it('renders join_failed with the provided reason', async () => {
@@ -98,10 +98,10 @@ describe('SetupOverlay known states (connectivity)', () => {
       reason: 'Incorrect password.',
     });
 
-    expect(await screen.findByText("Couldn't Connect to Wi-Fi")).toBeTruthy();
+    expect(await screen.findByText("Couldn't connect to Wi-Fi")).toBeTruthy();
     expect(screen.getByText('Incorrect password.')).toBeTruthy();
     expect(
-      screen.getByText("Reconnect to the device's setup hotspot and try again.")
+      screen.getByText("Rejoin the setup network on your phone and try again.")
     ).toBeTruthy();
   });
 
@@ -110,7 +110,7 @@ describe('SetupOverlay known states (connectivity)', () => {
 
     displaySetup({ state: SetupDisplayState.JoinFailed });
 
-    expect(await screen.findByText("Couldn't Connect to Wi-Fi")).toBeTruthy();
+    expect(await screen.findByText("Couldn't connect to Wi-Fi")).toBeTruthy();
   });
 });
 
@@ -128,7 +128,7 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       password: 'correct-horse',
     });
 
-    await screen.findByText('Connect to Set Up This Device');
+    await screen.findByText('Set up your Art Computer');
     expect(qrValue(container)).toBe('WIFI:T:WPA;S:FF1-Setup-ABCD;P:correct-horse;;');
   });
 
@@ -166,7 +166,7 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       password: 'pa,ss"w\\ord;1',
     });
 
-    await screen.findByText('Connect to Set Up This Device');
+    await screen.findByText('Set up your Art Computer');
     expect(qrValue(container)).toBe(
       'WIFI:T:WPA;S:FF1\\;Setup\\:ABCD;P:pa\\,ss\\"w\\\\ord\\;1;;'
     );
@@ -183,7 +183,7 @@ describe('SetupOverlay known states (updating progress)', () => {
 
     displaySetup({ state: SetupDisplayState.Updating, progress: 42.6 });
 
-    expect(await screen.findByText('Updating Device Software…')).toBeTruthy();
+    expect(await screen.findByText('Updating software')).toBeTruthy();
     expect(screen.getByText('43%')).toBeTruthy();
   });
 
@@ -192,7 +192,7 @@ describe('SetupOverlay known states (updating progress)', () => {
 
     displaySetup({ state: SetupDisplayState.Updating });
 
-    expect(await screen.findByText('Updating Device Software…')).toBeTruthy();
+    expect(await screen.findByText('Updating software')).toBeTruthy();
     expect(screen.queryByText(/%$/)).toBeNull();
   });
 
@@ -203,7 +203,7 @@ describe('SetupOverlay known states (updating progress)', () => {
 
       displaySetup({ state: SetupDisplayState.Updating, progress });
 
-      expect(await screen.findByText('Updating Device Software…')).toBeTruthy();
+      expect(await screen.findByText('Updating software')).toBeTruthy();
       expect(screen.queryByText(/%$/)).toBeNull();
     }
   );
@@ -218,7 +218,7 @@ describe('SetupOverlay known states (updating progress)', () => {
 
       displaySetup({ state: SetupDisplayState.Updating, progress });
 
-      expect(await screen.findByText('Updating Device Software…')).toBeTruthy();
+      expect(await screen.findByText('Updating software')).toBeTruthy();
       expect(screen.getByText(expected)).toBeTruthy();
     }
   );
@@ -242,7 +242,7 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
       device_name: 'FF1-8EVTK3RE',
     });
 
-    expect(await screen.findByText('Pair with the Feral File App')).toBeTruthy();
+    expect(await screen.findByText('Pair with the Feral File app')).toBeTruthy();
     // Primary path: open the app on the same Wi-Fi; the manual-add line
     // covers already-claimed frames, where the app won't auto-prompt.
     expect(screen.getByText('FF1-8EVTK3RE')).toBeTruthy();
@@ -251,7 +251,7 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
     ).toBeTruthy();
     // Backup path: the QR, explicitly framed as the fallback.
     expect(
-      screen.getByText(/Frame not showing up in the app\? Scan this code/)
+      screen.getByText(/Not seeing it in the app\? Scan this code/)
     ).toBeTruthy();
     expect(container.querySelector('svg')).not.toBeNull();
   });
@@ -264,8 +264,8 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
       url: 'https://feralfile.com/device_connect?token=abc',
     });
 
-    expect(await screen.findByText('Pair with the Feral File App')).toBeTruthy();
-    expect(screen.getByText(/add\s+this frame\s+in the app/)).toBeTruthy();
+    expect(await screen.findByText('Pair with the Feral File app')).toBeTruthy();
+    expect(screen.getByText(/add\s+this Art Computer\s+in the app/)).toBeTruthy();
     expect(container.querySelector('svg')).not.toBeNull();
   });
 
@@ -274,9 +274,9 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
 
     displaySetup({ state: SetupDisplayState.Scanning });
 
-    expect(await screen.findByText('Looking for Wi-Fi Networks…')).toBeTruthy();
+    expect(await screen.findByText('Looking for Wi-Fi networks')).toBeTruthy();
     expect(
-      screen.getByText('The setup screen will appear here in a moment.')
+      screen.getByText('The setup screen will appear in a moment.')
     ).toBeTruthy();
   });
 
@@ -285,9 +285,9 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
 
     displaySetup({ state: SetupDisplayState.Finalizing });
 
-    expect(await screen.findByText('Wi-Fi Connected')).toBeTruthy();
+    expect(await screen.findByText('Wi-Fi connected')).toBeTruthy();
     expect(
-      screen.getByText(/Getting this frame ready… This can take a minute\./)
+      screen.getByText(/Getting your Art Computer ready\. This can take a minute\./)
     ).toBeTruthy();
   });
 
@@ -297,9 +297,9 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
     displaySetup({ state: SetupDisplayState.FactoryReset });
 
     expect(
-      await screen.findByText('Resetting to Factory Settings…')
+      await screen.findByText('Resetting to factory settings')
     ).toBeTruthy();
-    expect(screen.getByText('Do not power off this device.')).toBeTruthy();
+    expect(screen.getByText('Keep the power on.')).toBeTruthy();
   });
 });
 
@@ -312,19 +312,19 @@ describe('SetupOverlay hide and unknown-state behavior', () => {
     render(<SetupOverlay />);
 
     displaySetup({ state: SetupDisplayState.Joining });
-    expect(await screen.findByText('Connecting to Wi-Fi…')).toBeTruthy();
+    expect(await screen.findByText('Connecting to Wi-Fi')).toBeTruthy();
 
     displaySetup({ state: SetupDisplayState.Ready });
     await waitFor(() => {
-      expect(screen.queryByText('Connecting to Wi-Fi…')).toBeNull();
+      expect(screen.queryByText('Connecting to Wi-Fi')).toBeNull();
     });
 
     displaySetup({ state: SetupDisplayState.Joining });
-    expect(await screen.findByText('Connecting to Wi-Fi…')).toBeTruthy();
+    expect(await screen.findByText('Connecting to Wi-Fi')).toBeTruthy();
 
     displaySetup({ state: SetupDisplayState.Hidden });
     await waitFor(() => {
-      expect(screen.queryByText('Connecting to Wi-Fi…')).toBeNull();
+      expect(screen.queryByText('Connecting to Wi-Fi')).toBeNull();
     });
   });
 
@@ -333,25 +333,25 @@ describe('SetupOverlay hide and unknown-state behavior', () => {
 
     displaySetup({ state: SetupDisplayState.FactoryReset });
     expect(
-      await screen.findByText('Resetting to Factory Settings…')
+      await screen.findByText('Resetting to factory settings')
     ).toBeTruthy();
 
     displaySetup({ state: SetupDisplayState.Ready });
     await waitFor(() => {
       expect(
-        screen.queryByText('Resetting to Factory Settings…')
+        screen.queryByText('Resetting to factory settings')
       ).toBeNull();
     });
 
     displaySetup({ state: SetupDisplayState.FactoryReset });
     expect(
-      await screen.findByText('Resetting to Factory Settings…')
+      await screen.findByText('Resetting to factory settings')
     ).toBeTruthy();
 
     displaySetup({ state: SetupDisplayState.Hidden });
     await waitFor(() => {
       expect(
-        screen.queryByText('Resetting to Factory Settings…')
+        screen.queryByText('Resetting to factory settings')
       ).toBeNull();
     });
   });
@@ -366,7 +366,7 @@ describe('SetupOverlay hide and unknown-state behavior', () => {
     displaySetup({
       state: SetupDisplayState.Joining,
     });
-    expect(await screen.findByText('Connecting to Wi-Fi…')).toBeTruthy();
+    expect(await screen.findByText('Connecting to Wi-Fi')).toBeTruthy();
 
     displaySetup({
       state: 'lan_pairing_approval',
@@ -378,7 +378,7 @@ describe('SetupOverlay hide and unknown-state behavior', () => {
     await waitFor(() => {
       expect(container.querySelector('section')).toBeNull();
     });
-    expect(screen.queryByText('Connecting to Wi-Fi…')).toBeNull();
+    expect(screen.queryByText('Connecting to Wi-Fi')).toBeNull();
     await waitFor(
       () => {
         expect(container.firstChild).toBeNull();
@@ -423,7 +423,7 @@ describe('SetupOverlay bundled artwork background', () => {
     const { container } = render(overlayWithCastInfo(null));
 
     displaySetup({ state: SetupDisplayState.Scanning });
-    await screen.findByText('Looking for Wi-Fi Networks…');
+    await screen.findByText('Looking for Wi-Fi networks');
 
     const iframe = container.querySelector('iframe');
     expect(iframe?.getAttribute('src')).toBe('/setup-artwork/index.html');
@@ -440,7 +440,7 @@ describe('SetupOverlay bundled artwork background', () => {
     );
 
     displaySetup({ state: SetupDisplayState.Updating, progress: 10 });
-    await screen.findByText('Updating Device Software…');
+    await screen.findByText('Updating software');
 
     expect(container.querySelector('iframe')).toBeNull();
   });
@@ -449,7 +449,7 @@ describe('SetupOverlay bundled artwork background', () => {
     const { container } = render(<SetupOverlay />);
 
     displaySetup({ state: SetupDisplayState.FactoryReset });
-    await screen.findByText('Resetting to Factory Settings…');
+    await screen.findByText('Resetting to factory settings');
 
     expect(container.querySelector('iframe')).not.toBeNull();
   });
@@ -472,7 +472,7 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
     act(() => {
       displaySetup({ state: SetupDisplayState.Joining });
     });
-    expect(screen.getByText('Connecting to Wi-Fi…')).toBeTruthy();
+    expect(screen.getByText('Connecting to Wi-Fi')).toBeTruthy();
     expect(container.querySelector('iframe')).not.toBeNull();
 
     act(() => {
@@ -480,7 +480,7 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
     });
     // The panel is gone immediately, but the artwork stays mounted for its
     // exit fade (the player's standard cast-fade duration)...
-    expect(screen.queryByText('Connecting to Wi-Fi…')).toBeNull();
+    expect(screen.queryByText('Connecting to Wi-Fi')).toBeNull();
     expect(container.querySelector('iframe')).not.toBeNull();
 
     // ...and unmounts once the fade has played.
@@ -494,12 +494,12 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
     const { container } = render(<SetupOverlay />);
 
     displaySetup({ state: SetupDisplayState.Scanning });
-    await screen.findByText('Looking for Wi-Fi Networks…');
+    await screen.findByText('Looking for Wi-Fi networks');
     const iframe = container.querySelector('iframe');
     expect(iframe).not.toBeNull();
 
     displaySetup({ state: SetupDisplayState.Joining });
-    await screen.findByText('Connecting to Wi-Fi…');
+    await screen.findByText('Connecting to Wi-Fi');
 
     expect(container.querySelector('iframe')).toBe(iframe);
   });
@@ -511,7 +511,7 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
     act(() => {
       displaySetup({ state: SetupDisplayState.Finalizing });
     });
-    expect(screen.getByText('Wi-Fi Connected')).toBeTruthy();
+    expect(screen.getByText('Wi-Fi connected')).toBeTruthy();
     expect(container.querySelector('iframe')).not.toBeNull();
 
     rerender(
@@ -527,7 +527,7 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
     });
     expect(container.querySelector('iframe')).toBeNull();
     // The panel itself must survive the handoff — only the background yields.
-    expect(screen.getByText('Wi-Fi Connected')).toBeTruthy();
+    expect(screen.getByText('Wi-Fi connected')).toBeTruthy();
   });
 
   it('cancels a pending fade-out when a panel re-shows, keeping the same node', () => {
@@ -574,14 +574,14 @@ describe('SetupOverlay arbitration with mintPairingDisplay', () => {
     render(<SetupOverlay />);
 
     displaySetup({ state: SetupDisplayState.Scanning });
-    await screen.findByText('Looking for Wi-Fi Networks…');
+    await screen.findByText('Looking for Wi-Fi networks');
 
     displayMintPairing({
       state: MintPairingDisplayState.PairingCode,
       pairingCode: 'PAIR-123',
     });
     await waitFor(() => {
-      expect(screen.queryByText('Looking for Wi-Fi Networks…')).toBeNull();
+      expect(screen.queryByText('Looking for Wi-Fi networks')).toBeNull();
     });
   });
 
@@ -589,10 +589,10 @@ describe('SetupOverlay arbitration with mintPairingDisplay', () => {
     render(<SetupOverlay />);
 
     displaySetup({ state: SetupDisplayState.Scanning });
-    await screen.findByText('Looking for Wi-Fi Networks…');
+    await screen.findByText('Looking for Wi-Fi networks');
 
     displayMintPairing({ state: MintPairingDisplayState.Hidden });
-    expect(await screen.findByText('Looking for Wi-Fi Networks…')).toBeTruthy();
+    expect(await screen.findByText('Looking for Wi-Fi networks')).toBeTruthy();
   });
 
   it('isRenderableSetupDisplayState agrees with renderSetupPanel for every known state', () => {

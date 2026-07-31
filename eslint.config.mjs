@@ -100,7 +100,9 @@ export default tseslint.config(
     },
   },
   {
-    files: ['eslint.config.mjs', 'next.config.mjs'],
+    // Plain-Node config and tooling files: not part of the tsconfig project,
+    // so typed linting has nothing to type them against.
+    files: ['eslint.config.mjs', 'next.config.mjs', 'scripts/**/*.mjs'],
     ...tseslint.configs.disableTypeChecked,
   },
   {
