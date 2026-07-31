@@ -945,6 +945,19 @@ const ArtworkPlayer = ({
           error.isNetworkFailure
         ) {
           notePlaybackOutcome(url, true);
+          // Corroborated network failure: do NOT commit the fallback iframe.
+          // The device is provably offline, so an iframe pointed at the
+          // remote source cannot render the artwork — Chromium paints its
+          // own net-error page inside the frame, which becomes visible the
+          // moment the offline backdrop lifts on reconnect (field bug: the
+          // "dinosaur" flash after an offline boot). The slot stays pending
+          // (previewType null renders nothing; renderSlot bails on it), the
+          // degraded flag raised above drives the reconnect-recovery
+          // refresh, and that refresh bumps `artworkReloadTick` to re-run
+          // detection on the same URL once the network is back. The
+          // fallback below stays reserved for the reached-but-untyped case,
+          // where a render attempt can genuinely succeed.
+          return;
         }
         setSlots(prev => {
           const incoming = incomingSlotRef.current;

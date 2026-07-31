@@ -12,8 +12,13 @@
 import { AppContext } from '@/context/AppContext';
 import { CastCommand, type CastInfo } from '@/models';
 import { act, cleanup, render } from '@testing-library/react';
+import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import SetupArtworkBackground from './SetupArtworkBackground';
+import SetupArtworkBackground, {
+  CONNECTING_GRACE_MS,
+  FADE_OUT_MS,
+  RECOVERY_HANDOVER_MS,
+} from './SetupArtworkBackground';
 
 const activeCast = { castCommand: CastCommand.displayPlaylist } as CastInfo;
 
@@ -225,5 +230,204 @@ describe('SetupArtworkBackground offline status chip', () => {
 
     expect(container.querySelector('iframe')).not.toBeNull();
     expect(container.textContent).not.toContain('No internet connection');
+  });
+});
+
+function backgroundNode(opts: {
+  panelVisible: boolean;
+  hasCast: boolean;
+  isOnline: boolean;
+  playbackDegraded: boolean;
+}): React.ReactElement {
+  return (
+    <AppContext.Provider
+      value={{
+        context: {
+          isInitialized: true,
+          isOnline: opts.isOnline,
+          appRemoteConfig: { defaultPlaylistURL: '' },
+          castInfo: opts.hasCast ? activeCast : null,
+          displaySettings: null,
+          cursorPositions: null,
+          playbackDegraded: opts.playbackDegraded,
+        },
+      }}>
+      <SetupArtworkBackground panelVisible={opts.panelVisible} />
+    </AppContext.Provider>
+  );
+}
+
+describe('SetupArtworkBackground reconnect handover', () => {
+  // The field bug this latch exists for: dropping the backdrop on the
+  // connectivity edge revealed the still-broken slot underneath (blank, or
+  // Chromium's in-iframe net-error page) for the seconds the recovery
+  // remount needs. The exit signal is the artwork RECOVERING, not the
+  // network returning.
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('keeps the backdrop up when connectivity returns while the artwork is still degraded', () => {
+    vi.useFakeTimers();
+    const { container, rerender } = render(
+      backgroundNode({ panelVisible: false, hasCast: true, isOnline: false, playbackDegraded: true })
+    );
+    expect(container.querySelector('iframe')).not.toBeNull();
+
+    act(() => {
+      rerender(
+        backgroundNode({ panelVisible: false, hasCast: true, isOnline: true, playbackDegraded: true })
+      );
+    });
+
+    expect(container.querySelector('iframe')).not.toBeNull();
+    // Online again, so an offline claim would be false: the backdrop rides
+    // chipless and the chip's disappearance itself signals reconnection.
+    expect(container.textContent).not.toContain('No internet connection');
+  });
+
+  it('exits when the artwork actually recovers, via the normal fade', () => {
+    vi.useFakeTimers();
+    const { container, rerender } = render(
+      backgroundNode({ panelVisible: false, hasCast: true, isOnline: false, playbackDegraded: true })
+    );
+
+    act(() => {
+      rerender(
+        backgroundNode({ panelVisible: false, hasCast: true, isOnline: true, playbackDegraded: true })
+      );
+    });
+    expect(container.querySelector('iframe')).not.toBeNull();
+
+    act(() => {
+      rerender(
+        backgroundNode({ panelVisible: false, hasCast: true, isOnline: true, playbackDegraded: false })
+      );
+    });
+    act(() => {
+      vi.advanceTimersByTime(FADE_OUT_MS);
+    });
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+});
+
+describe('SetupArtworkBackground reconnect handover bounds', () => {
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('yields after RECOVERY_HANDOVER_MS so a permanently-broken-but-online artwork falls through to the player error modal', () => {
+    vi.useFakeTimers();
+    const { container, rerender } = render(
+      backgroundNode({ panelVisible: false, hasCast: true, isOnline: false, playbackDegraded: true })
+    );
+
+    act(() => {
+      rerender(
+        backgroundNode({ panelVisible: false, hasCast: true, isOnline: true, playbackDegraded: true })
+      );
+    });
+    expect(container.querySelector('iframe')).not.toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(RECOVERY_HANDOVER_MS);
+    });
+    act(() => {
+      vi.advanceTimersByTime(FADE_OUT_MS);
+    });
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('re-arms cleanly: a second offline episode gets a fresh handover, not a spent latch', () => {
+    vi.useFakeTimers();
+    const { container, rerender } = render(
+      backgroundNode({ panelVisible: false, hasCast: true, isOnline: false, playbackDegraded: true })
+    );
+    // Episode 1 recovers fully.
+    act(() => {
+      rerender(
+        backgroundNode({ panelVisible: false, hasCast: true, isOnline: true, playbackDegraded: false })
+      );
+    });
+    act(() => {
+      vi.advanceTimersByTime(FADE_OUT_MS);
+    });
+    expect(container.querySelector('iframe')).toBeNull();
+
+    // Episode 2: offline degradation again, then reconnect while degraded.
+    act(() => {
+      rerender(
+        backgroundNode({ panelVisible: false, hasCast: true, isOnline: false, playbackDegraded: true })
+      );
+    });
+    act(() => {
+      rerender(
+        backgroundNode({ panelVisible: false, hasCast: true, isOnline: true, playbackDegraded: true })
+      );
+    });
+    expect(container.querySelector('iframe')).not.toBeNull();
+  });
+});
+
+describe('SetupArtworkBackground chip escalation', () => {
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('reads "Connecting to the internet…" on a boot that has never been online', () => {
+    // Cold offline boot: the page paints before Wi-Fi association finishes,
+    // so navigator.onLine is false from the very first render. That outage
+    // is (so far) a routine connect-in-progress, not a verdict.
+    vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
+    const container = renderBackground({
+      panelVisible: false,
+      hasCast: true,
+      isOnline: true,
+      playbackDegraded: true,
+    });
+
+    expect(container.textContent).toContain('Connecting to the internet…');
+    expect(container.textContent).not.toContain('No internet connection');
+  });
+
+  it('escalates to "No internet connection" once the boot-settle window elapses', () => {
+    vi.useFakeTimers();
+    vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
+    const container = renderBackground({
+      panelVisible: false,
+      hasCast: true,
+      isOnline: true,
+      playbackDegraded: true,
+    });
+    expect(container.textContent).toContain('Connecting to the internet…');
+
+    act(() => {
+      vi.advanceTimersByTime(CONNECTING_GRACE_MS);
+    });
+    expect(container.textContent).toContain('No internet connection');
+    expect(container.textContent).not.toContain('Connecting to the internet…');
+  });
+
+  it('shows "No internet connection" immediately when a previously-online device loses the link', () => {
+    // jsdom's navigator.onLine defaults to true, so the component mounts
+    // having SEEN the browser online — a later outage is real from its
+    // first frame and gets no soft-pedaling.
+    const container = renderBackground({
+      panelVisible: false,
+      hasCast: true,
+      isOnline: true,
+      playbackDegraded: true,
+    });
+    expect(container.querySelector('iframe')).toBeNull();
+
+    act(() => {
+      window.dispatchEvent(new Event('offline'));
+    });
+    expect(container.textContent).toContain('No internet connection');
+    expect(container.textContent).not.toContain('Connecting to the internet…');
   });
 });

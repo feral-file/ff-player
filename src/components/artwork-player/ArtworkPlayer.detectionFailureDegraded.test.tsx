@@ -8,13 +8,17 @@
  * a CORS/CSP/extension block (a `fetch` rejection indistinguishable from a
  * network failure by itself, but `navigator.onLine` corroborates it is
  * NOT one — see helper.test.ts's own classification suite for that guard).
- * All three land on the same fallback iframe (`mimeType: null`), but only
- * the corroborated network case is evidence the artwork is currently
- * unreachable. On a cold offline boot with an extensionless source, there is
- * no PRIOR degraded flag for the fallback-iframe's own `load` handler to
- * protect (see ArtworkPlayer.fallbackIframe.test.tsx) — without raising the
- * flag at the detection-catch site itself, this source shape got no offline
- * backdrop and no reconnect recovery at all.
+ * Only the corroborated network case is evidence the artwork is currently
+ * unreachable, and the two classes now diverge in what they render, too. The
+ * reached-but-unclassified cases land on the fallback iframe (`mimeType:
+ * null` — a render attempt can genuinely succeed against a reachable
+ * server). The corroborated-offline case commits NOTHING: an iframe pointed
+ * at a provably unreachable source can only render Chromium's in-frame
+ * net-error page, which the reconnect handover would put on the wall for the
+ * seconds the recovery remount needs (the field "dinosaur" flash). The slot
+ * stays pending, the degraded flag raised at the detection-catch site drives
+ * the offline backdrop and the reconnect recovery, and the recovery remount
+ * re-runs detection on the same URL.
  */
 import { AppContext } from '@/context/AppContext';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
@@ -117,11 +121,16 @@ describe('ArtworkPlayer — network-classified detection failure raises degraded
     await waitFor(() => {
       expect(setPlaybackDegraded).toHaveBeenCalledWith(true, EXTENSIONLESS);
     });
-    // The fallback iframe still mounts — something renders even though the
-    // flag is now up.
-    await waitFor(() => {
-      expect(container.querySelector('iframe')).toBeTruthy();
+    // No fallback iframe: offline is corroborated, so a remote iframe could
+    // only render Chromium's own net-error page — the "dinosaur" that
+    // becomes visible the moment the offline backdrop lifts on reconnect.
+    // The slot stays pending (renders nothing) until the recovery remount
+    // re-runs detection. The degraded call above proves the catch already
+    // ran, so this is a real assertion, not a not-yet race.
+    await act(async () => {
+      await Promise.resolve();
     });
+    expect(container.querySelector('iframe')).toBeNull();
   });
 });
 
@@ -199,9 +208,8 @@ describe('ArtworkPlayer — network-classified detection failure recovery loop',
     await waitFor(() => {
       expect(setPlaybackDegraded).toHaveBeenCalledWith(true, EXTENSIONLESS);
     });
-    await waitFor(() => {
-      expect(container.querySelector('iframe')).toBeTruthy();
-    });
+    // The offline mount committed nothing (see the cold-boot test above).
+    expect(container.querySelector('iframe')).toBeNull();
 
     // Reconnect recovery re-mounts the same item; detection now resolves.
     await act(async () => {
