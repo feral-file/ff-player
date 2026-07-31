@@ -25,11 +25,11 @@ describe('MintPairingOverlay', () => {
       pairingCode: 'PAIR-123',
     });
 
-    expect(await screen.findByText('External Device Pairing Mode')).toBeTruthy();
+    expect(await screen.findByText('Pairing code')).toBeTruthy();
     expect(await screen.findByText('PAIR-123')).toBeTruthy();
     expect(
       screen.getByText(
-        'Input the code on the website that is asking for a session.'
+        'Enter this code on the website that requested a session.'
       )
     ).toBeTruthy();
     expect(container.querySelector('canvas')).toBeNull();

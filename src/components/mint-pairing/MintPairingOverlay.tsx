@@ -78,10 +78,10 @@ export default function MintPairingOverlay() {
     return (
       <section className={styles.overlay} aria-live="polite">
         <div className={styles.codePanel}>
-          <p className={styles.title}>External Device Pairing Mode</p>
+          <p className={styles.title}>Pairing code</p>
           <p className={styles.code}>{display.pairingCode}</p>
           <p className={styles.subtitle}>
-            Input the code on the website that is asking for a session.
+            Enter this code on the website that requested a session.
           </p>
         </div>
       </section>
@@ -108,7 +108,7 @@ export default function MintPairingOverlay() {
           Received a minting request from {browserLabel(display.browserName)}.
         </p>
         <p className={styles.subtitle}>
-          Open the Feral File mobile app, go to Settings &gt; Art Computer, and
+          Open the Feral File app, go to Settings &gt; Art Computer, and
           approve the session.
         </p>
       </div>

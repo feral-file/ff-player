@@ -8,6 +8,10 @@
   height: 100vh;
   padding: 6vh 6vw;
   pointer-events: none;
+  // The kiosk's body font is Inter (layout.tsx); PP Mori arrives on this
+  // copy only via the globals.css `p` reset, which any non-<p> child would
+  // silently miss. Pin the brand face here so the whole overlay inherits it.
+  font-family: 'PP Mori', sans-serif;
   color: #ffffff;
   background: rgba(0, 0, 0, 0.82);
 }
