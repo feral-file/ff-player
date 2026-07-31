@@ -1,18 +1,19 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
 import { AppProvider } from '../context/AppContext';
 import AppWrapper from '@/components/AppWrapper';
 import { Suspense } from 'react';
 
-const inter = Inter({ subsets: ['latin'] });
-
 export const metadata: Metadata = {
   title: 'Feral File',
   description:
-    'Feral File (formerly Autonomy) is the world’s first and only digital art wallet. It gives you one easy-to-use app to securely collect, view and discover digital art you love. Feral File works with Ethereum and Tezos and is built to support all new chains as they emerge.',
+    'The Feral File player for the Art Computer. Plays digital art and DP-1 playlists in homes, studios, and galleries.',
 };
 
+// No font className on <body>: the globals.css reset puts PP Mori on
+// html/body, and adding a class here would out-rank it (class beats element
+// selector) — that is exactly how Inter used to override the brand face for
+// every element the reset list missed.
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -20,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body>
         <AppProvider>
           <Suspense>
             <AppWrapper>{children}</AppWrapper>
