@@ -20,6 +20,19 @@
   font-style: italic;
 }
 
+/* Upright bold, for <strong> in the setup overlay (the ff1.config fallback
+   address, the pairing frame name). Same reasoning as BoldItalic above: with
+   only the 400 face registered, upright 700 falls back to Regular plus a
+   synthesized weight, which is visibly wrong at wall sizes. Converted from
+   ff-app's PPMori-Bold.ttf (pubspec.yaml weight 700). */
+@font-face {
+  font-family: 'PP Mori';
+  src:
+    url(/fonts/PP_Mori/PPMori-Bold.woff2) format('woff2'),
+    url(/fonts/PP_Mori/PPMori-Bold.woff) format('woff');
+  font-weight: 700;
+}
+
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
