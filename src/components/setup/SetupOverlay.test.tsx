@@ -306,7 +306,7 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
     expect(
       await screen.findByText('Resetting to factory settings')
     ).toBeTruthy();
-    expect(screen.getByText('Keep the power on.')).toBeTruthy();
+    expect(screen.getByText("Don't unplug it.")).toBeTruthy();
   });
 });
 

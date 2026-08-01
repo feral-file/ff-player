@@ -207,7 +207,7 @@ function FactoryResetPanel() {
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
         <p className={styles.title}>Resetting to factory settings</p>
-        <p className={styles.subtitle}>Keep the power on.</p>
+        <p className={styles.subtitle}>Don&apos;t unplug it.</p>
       </div>
     </section>
   );
