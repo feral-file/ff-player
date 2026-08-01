@@ -196,6 +196,7 @@ describe('SetupOverlay known states (updating progress)', () => {
 
     expect(await screen.findByText('Updating software')).toBeTruthy();
     expect(screen.getByText('43%')).toBeTruthy();
+    expect(screen.getByText("Don't unplug it.")).toBeTruthy();
   });
 
   it('renders the updating state without a percentage when progress is absent', async () => {

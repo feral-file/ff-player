@@ -197,6 +197,11 @@ function UpdatingPanel({ display }: { display: SetupDisplayDetail }) {
         {percent !== null ? (
           <p className={styles.subtitle}>{percent}%</p>
         ) : null}
+        {/* Same warning as factory reset: the screen may sit on a percent
+            for a while and a watcher's worst move is pulling the plug
+            mid-write. If the OTA path is provably power-loss-safe end to
+            end, this line can go — flagged for controld review. */}
+        <p className={styles.subtitle}>Don&apos;t unplug it.</p>
       </div>
     </section>
   );
