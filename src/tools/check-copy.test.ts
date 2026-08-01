@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { spawnSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
@@ -21,8 +21,17 @@ function runChecker(fixtureDir: string) {
   return { status: result.status, out: result.stdout + result.stderr };
 }
 
+const fixtureDirs: string[] = [];
+
+afterAll(() => {
+  for (const dir of fixtureDirs) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 function withFixture(files: Record<string, string>) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-copy-'));
+  fixtureDirs.push(dir);
   for (const [name, content] of Object.entries(files)) {
     fs.writeFileSync(path.join(dir, name), content);
   }

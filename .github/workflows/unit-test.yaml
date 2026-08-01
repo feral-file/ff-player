@@ -28,6 +28,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The copy check pledges Node 18 compatibility (README's supported floor)
+  # while the main jobs run Node 20 — without this leg a Node-20-only API
+  # (like the import.meta.dirname this repo already shipped once) passes CI
+  # and breaks `npm run test` for Node 18 users.
+  check-copy-node18:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: ./package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run copy check on Node 18
+        run: node scripts/check-copy.mjs
+
   unit-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
