@@ -6,18 +6,24 @@
  * Approved terms and rationale live in Canon: reference/voice/product-copy.md
  * (mirrors ff-cli scripts/check-copy.js; extend both word lists together).
  *
- * Scope: a string is user-facing here only when JSX renders it, so the check
- * inspects JSX text nodes and string/template literals that sit inside JSX.
- * Plain literals elsewhere — the WIFI: QR payload, CDP contract states,
- * logger calls, route/config keys — legitimately contain these tokens and
- * are never shown to a person, so they are skipped, as are comments.
+ * Scope: a string is user-facing here when JSX renders it — JSX text nodes
+ * and string/template literals inside JSX — or when it is passed to a React
+ * state setter (setTitle, setMessage, …), the pattern the error page uses to
+ * assemble rendered copy outside JSX. Plain literals elsewhere — the WIFI:
+ * QR payload, CDP contract states, logger calls, route/config keys —
+ * legitimately contain these tokens and are never shown to a person, so
+ * they are skipped, as are comments.
  */
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import ts from 'typescript';
 
-const ROOT = path.resolve(import.meta.dirname, '..');
-const SRC = path.join(ROOT, 'src');
+// fileURLToPath rather than import.meta.dirname: the README supports Node 18,
+// where import.meta.dirname does not exist.
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// Optional target-dir argument so tests can point the checker at fixtures.
+const SRC = process.argv[2] ? path.resolve(process.argv[2]) : path.join(ROOT, 'src');
 
 // Boundaries exclude identifiers (frameName, qrFrame, connectedWifi) and the
 // correct forms (Wi-Fi, DP-1). FF1/FFP are case-sensitive so the ff1.config
@@ -64,6 +70,27 @@ function insideJsx(node) {
   return false;
 }
 
+// A literal fed to a React state setter (an identifier call matching
+// set[A-Z]…) is treated as rendered copy: that is how the error page builds
+// its messages. Covers direct arguments and pieces of a template/binary
+// concatenation inside the call.
+function insideStateSetterCall(node) {
+  for (let p = node.parent; p; p = p.parent) {
+    if (
+      ts.isCallExpression(p) &&
+      ts.isIdentifier(p.expression) &&
+      /^set[A-Z]/.test(p.expression.text)
+    ) {
+      return true;
+    }
+    // Stop climbing once we leave expression territory.
+    if (ts.isStatement(p) || ts.isSourceFile(p)) {
+      return false;
+    }
+  }
+  return false;
+}
+
 const files = [];
 if (fs.existsSync(SRC)) {
   walk(SRC, files);
@@ -102,7 +129,7 @@ for (const file of files) {
         ts.isTemplateHead(node) ||
         ts.isTemplateMiddle(node) ||
         ts.isTemplateTail(node)) &&
-      insideJsx(node)
+      (insideJsx(node) || insideStateSetterCall(node))
     ) {
       report(node, node.text);
     }
