@@ -68,13 +68,6 @@
   letter-spacing: 0;
 }
 
-.credential {
-  margin-top: 3vh;
-  font-size: clamp(28px, 4vmin, 56px);
-  line-height: 1.14;
-  letter-spacing: 0;
-}
-
 .subtitle {
   // 89vmin ≈ the old 960px cap at 1080p.
   max-width: min(86vw, 89vmin);
@@ -84,11 +77,10 @@
   letter-spacing: 0;
 }
 
-// The softap_qr panel stacks a label, QR, credentials AND a fallback line
-// into one viewport, so its fallback line steps down from the shared
-// .subtitle scale instead of shrinking every panel. This override shares
-// specificity with .subtitle and MUST stay below it in this file — source
-// order is what makes it win.
+// The softap_qr panel's two fallback lines (manual join, typed ff1.config)
+// step down from the shared .subtitle scale so the QR stays the subject.
+// This override shares specificity with .subtitle and MUST stay below it in
+// this file — source order is what makes it win.
 .softApSubtitle {
   // 111vmin ≈ the old 1200px cap at 1080p.
   max-width: min(86vw, 111vmin);

@@ -29,7 +29,7 @@ describe('MintPairingOverlay', () => {
     expect(await screen.findByText('PAIR-123')).toBeTruthy();
     expect(
       screen.getByText(
-        'Enter this code on the website that requested a session.'
+        'Enter it on the website that wants to play art on this Art Computer.'
       )
     ).toBeTruthy();
     expect(container.querySelector('canvas')).toBeNull();
@@ -44,11 +44,11 @@ describe('MintPairingOverlay', () => {
     });
 
     expect(
-      await screen.findByText('Received a minting request from Chrome.')
+      await screen.findByText('Chrome wants to play art on this Art Computer.')
     ).toBeTruthy();
     expect(
       screen.getByText(
-        'Open the Feral File app, go to Settings > Art Computer, and approve the session.'
+        'Open the Feral File app, go to Settings > Art Computer, and approve the request.'
       )
     ).toBeTruthy();
 
@@ -58,14 +58,14 @@ describe('MintPairingOverlay', () => {
     });
 
     expect(
-      await screen.findByText('Creating a new token and sending it to Chrome.')
+      await screen.findByText('Connecting Chrome to this Art Computer…')
     ).toBeTruthy();
 
     displayMintPairing({ state: MintPairingDisplayState.Hidden });
 
     await waitFor(() => {
       expect(
-        screen.queryByText('Creating a new token and sending it to Chrome.')
+        screen.queryByText('Connecting Chrome to this Art Computer…')
       ).toBeNull();
     });
   });
@@ -80,7 +80,7 @@ describe('MintPairingOverlay', () => {
 
     expect(
       await screen.findByText(
-        'Received a minting request from the browser.'
+        'The browser wants to play art on this Art Computer.'
       )
     ).toBeTruthy();
 
@@ -91,7 +91,7 @@ describe('MintPairingOverlay', () => {
 
     expect(
       await screen.findByText(
-        'Creating a new token and sending it to the browser.'
+        'Connecting the browser to this Art Computer…'
       )
     ).toBeTruthy();
   });
