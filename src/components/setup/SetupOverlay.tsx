@@ -160,20 +160,25 @@ function FinalizingPanel() {
 
 /*
  * Title + reason only — no "rejoin and try again" instruction. join_failed
- * is a transient frame: the provisioning machine re-raises the AP after any
- * failure and the narration re-renders softap_qr, so the QR screen that
- * follows IS the rejoin instruction. The reason string from controld
- * already carries the action ("Please check it and try again."), and the
- * phone gets the same reason as a banner on the portal picker.
+ * is a transient frame: the provisioning machine re-raises the AP after ANY
+ * join failure and the narration re-renders softap_qr, so the QR screen
+ * that follows IS the rejoin instruction (the cross-repo contract is
+ * ffos-user docs/setup-flow.md, "Join and the AP bounce": every failure
+ * class re-raises the AP; setupui narrates join_failed, then softap_qr on
+ * AP-up). The reason string from controld already carries the action
+ * ("Please check it and try again."), and the phone gets the same reason
+ * as a banner on the portal picker. A bare join_failed (no reason — valid
+ * per the CDP validator) still gets one actionable line so the panel is
+ * never a dead-end title while the re-raise is in flight.
  */
 function JoinFailedPanel({ display }: { display: SetupDisplayDetail }) {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
         <p className={styles.title}>Couldn&apos;t connect to Wi-Fi</p>
-        {display.reason ? (
-          <p className={styles.subtitle}>{display.reason}</p>
-        ) : null}
+        <p className={styles.subtitle}>
+          {display.reason ?? 'Please try again.'}
+        </p>
       </div>
     </section>
   );
@@ -244,7 +249,7 @@ function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
             conditional routed the second case explicitly; looking for the
             name routes both. */}
         <p className={styles.subtitle}>
-          Open the app on the same Wi-Fi and look for{' '}
+          Open the app on a phone on the same Wi-Fi and look for{' '}
           {frameName ? (
             <strong>{frameName}</strong>
           ) : (

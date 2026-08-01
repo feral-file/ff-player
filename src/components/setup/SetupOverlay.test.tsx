@@ -101,6 +101,17 @@ describe('SetupOverlay known states (connectivity)', () => {
     expect(await screen.findByText('Connecting to Wi-Fi')).toBeTruthy();
   });
 
+  it('renders a bare join_failed with a fallback action line', async () => {
+    // A reason-less join_failed is valid per the CDP validator; the panel
+    // must not be a dead-end title while controld re-raises the AP.
+    render(<SetupOverlay />);
+
+    displaySetup({ state: SetupDisplayState.JoinFailed });
+
+    expect(await screen.findByText("Couldn't connect to Wi-Fi")).toBeTruthy();
+    expect(screen.getByText('Please try again.')).toBeTruthy();
+  });
+
   it('renders join_failed with the provided reason', async () => {
     render(<SetupOverlay />);
 
@@ -258,7 +269,16 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
     // Primary path: open the app on the same Wi-Fi and look for the frame
     // by name — covers both the auto-prompt and manual-add cases.
     expect(screen.getByText('FF1-8EVTK3RE')).toBeTruthy();
-    expect(screen.getByText(/look for/)).toBeTruthy();
+    // The claim step is the ONE flow that requires a phone (the app), so
+    // the copy must name it — pinned as the full sentence.
+    expect(
+      screen.getByText(
+        (_, el) =>
+          el?.tagName === 'P' &&
+          el.textContent ===
+            'Open the app on a phone on the same Wi-Fi and look for FF1-8EVTK3RE.'
+      )
+    ).toBeTruthy();
     // Backup path: the QR, framed as the fallback.
     expect(screen.getByText('Or scan this code.')).toBeTruthy();
     expect(container.querySelector('svg')).not.toBeNull();
