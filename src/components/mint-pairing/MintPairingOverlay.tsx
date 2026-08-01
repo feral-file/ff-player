@@ -98,9 +98,15 @@ export default function MintPairingOverlay() {
     return (
       <section className={styles.overlay} aria-live="polite">
         <div className={styles.messagePanel}>
+          {/* The wire calls this step "creating a token", but the token is
+              an ephemeral browser-session credential (ephemeral-token-minter
+              via controld), not an artwork — on an art device that word
+              reads as "something was minted to my collection". What the
+              person experiences: they approved, and the website is being
+              connected. */}
           <p className={styles.title}>
-            Creating a new token and sending it to{' '}
-            {browserLabel(display.browserName)}.
+            Connecting {browserLabel(display.browserName)} to this Art
+            Computer&hellip;
           </p>
         </div>
       </section>

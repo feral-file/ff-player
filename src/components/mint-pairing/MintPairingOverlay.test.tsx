@@ -56,14 +56,14 @@ describe('MintPairingOverlay', () => {
     });
 
     expect(
-      await screen.findByText('Creating a new token and sending it to Chrome.')
+      await screen.findByText('Connecting Chrome to this Art Computer…')
     ).toBeTruthy();
 
     displayMintPairing({ state: MintPairingDisplayState.Hidden });
 
     await waitFor(() => {
       expect(
-        screen.queryByText('Creating a new token and sending it to Chrome.')
+        screen.queryByText('Connecting Chrome to this Art Computer…')
       ).toBeNull();
     });
   });
@@ -89,7 +89,7 @@ describe('MintPairingOverlay', () => {
 
     expect(
       await screen.findByText(
-        'Creating a new token and sending it to the browser.'
+        'Connecting the browser to this Art Computer…'
       )
     ).toBeTruthy();
   });
