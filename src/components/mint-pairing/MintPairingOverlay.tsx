@@ -22,6 +22,11 @@ function browserLabel(browserName: string | undefined): string {
   return 'the browser';
 }
 
+/** Capitalizes the fallback label when it opens a sentence. */
+function sentenceStart(label: string): string {
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 /**
  * MintPairingOverlay renders above playback without changing the active route
  * or unmounting artwork media. `feral-controld` owns lifecycle state and drives
@@ -81,7 +86,8 @@ export default function MintPairingOverlay() {
           <p className={styles.title}>Pairing code</p>
           <p className={styles.code}>{display.pairingCode}</p>
           <p className={styles.subtitle}>
-            Enter this code on the website that requested a session.
+            Enter it on the website that wants to play art on this Art
+            Computer.
           </p>
         </div>
       </section>
@@ -105,11 +111,12 @@ export default function MintPairingOverlay() {
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.messagePanel}>
         <p className={styles.title}>
-          Received a minting request from {browserLabel(display.browserName)}.
+          {sentenceStart(browserLabel(display.browserName))} wants to play art
+          on this Art Computer.
         </p>
         <p className={styles.subtitle}>
           Open the Feral File app, go to Settings &gt; Art Computer, and
-          approve the session.
+          approve the request.
         </p>
       </div>
     </section>
