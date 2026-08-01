@@ -158,6 +158,14 @@ function FinalizingPanel() {
   );
 }
 
+/*
+ * Title + reason only — no "rejoin and try again" instruction. join_failed
+ * is a transient frame: the provisioning machine re-raises the AP after any
+ * failure and the narration re-renders softap_qr, so the QR screen that
+ * follows IS the rejoin instruction. The reason string from controld
+ * already carries the action ("Please check it and try again."), and the
+ * phone gets the same reason as a banner on the portal picker.
+ */
 function JoinFailedPanel({ display }: { display: SetupDisplayDetail }) {
   return (
     <section className={styles.overlay} aria-live="polite">
@@ -166,9 +174,6 @@ function JoinFailedPanel({ display }: { display: SetupDisplayDetail }) {
         {display.reason ? (
           <p className={styles.subtitle}>{display.reason}</p>
         ) : null}
-        <p className={styles.subtitle}>
-          Rejoin the setup network and try again.
-        </p>
       </div>
     </section>
   );

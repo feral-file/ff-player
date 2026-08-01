@@ -111,9 +111,9 @@ describe('SetupOverlay known states (connectivity)', () => {
 
     expect(await screen.findByText("Couldn't connect to Wi-Fi")).toBeTruthy();
     expect(screen.getByText('Incorrect password.')).toBeTruthy();
-    expect(
-      screen.getByText("Rejoin the setup network and try again.")
-    ).toBeTruthy();
+    // No rejoin instruction: the AP re-raise re-renders softap_qr right
+    // after, and that screen is the rejoin instruction.
+    expect(screen.queryByText(/setup network/)).toBeNull();
   });
 
   it('renders join_failed without a reason line when none is provided', async () => {
