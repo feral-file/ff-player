@@ -67,13 +67,22 @@ function softApQrValue(ssid: string, password: string | undefined): string {
  * catch-all DNS, so telling the user to type it covers every phone that
  * doesn't auto-open the sheet.
  */
+/*
+ * Three elements only: a heading that is also the instruction, the QR, and
+ * two compact fallback lines. The SSID/password ride the fallback sentence
+ * rather than labeled Network:/Password: lines — the QR already encodes
+ * both, and the manual path only matters to whoever can't (or won't) scan.
+ * Deliberately no "phone": the portal is plain HTTP on the hotspot, so a
+ * laptop joining the network and browsing to ff1.config works identically.
+ * Only the claim step (the app) actually requires a phone, and only that
+ * panel says so.
+ */
 function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   const ssid = display.ssid ?? '';
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Set up your Art Computer</p>
-        <p className={styles.stepLabel}>Scan to join the setup network</p>
+        <p className={styles.title}>Scan to set up your Art Computer</p>
         <div className={styles.qrFrame}>
           <QRCodeSVG
             value={softApQrValue(ssid, display.password)}
@@ -81,13 +90,19 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
             marginSize={2}
           />
         </div>
-        <p className={styles.credential}>Network: {ssid}</p>
-        {display.password ? (
-          <p className={styles.credential}>Password: {display.password}</p>
-        ) : null}
         <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          The setup page opens once your phone connects. If it doesn&apos;t,
-          open <strong>{portalUrl}</strong> in your phone&apos;s browser.
+          Or join <strong>{ssid}</strong>
+          {display.password ? (
+            <>
+              {' '}
+              (password <strong>{display.password}</strong>)
+            </>
+          ) : null}{' '}
+          in your Wi-Fi settings.
+        </p>
+        <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
+          If the setup page doesn&apos;t open, go to{' '}
+          <strong>{portalUrl}</strong>.
         </p>
       </div>
     </section>
@@ -152,7 +167,7 @@ function JoinFailedPanel({ display }: { display: SetupDisplayDetail }) {
           <p className={styles.subtitle}>{display.reason}</p>
         ) : null}
         <p className={styles.subtitle}>
-          Rejoin the setup network on your phone and try again.
+          Rejoin the setup network and try again.
         </p>
       </div>
     </section>

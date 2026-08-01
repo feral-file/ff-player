@@ -44,10 +44,15 @@ describe('SetupOverlay known states (connectivity)', () => {
       password: 'correct-horse',
     });
 
-    expect(await screen.findByText('Set up your Art Computer')).toBeTruthy();
-    expect(screen.getByText('Network: FF1-Setup-ABCD')).toBeTruthy();
-    expect(screen.getByText('Password: correct-horse')).toBeTruthy();
-    expect(screen.getByText('Scan to join the setup network')).toBeTruthy();
+    expect(await screen.findByText('Scan to set up your Art Computer')).toBeTruthy();
+    expect(
+      screen.getByText(
+        (_, el) =>
+          el?.tagName === 'P' &&
+          el.textContent ===
+            'Or join FF1-Setup-ABCD (password correct-horse) in your Wi-Fi settings.'
+      )
+    ).toBeTruthy();
     // Exactly ONE code (the network join). The portal is reached via the
     // auto-opening captive sheet or by typing the spelled-out address — a
     // second "open the portal" QR proved confusing and was removed.
@@ -63,7 +68,7 @@ describe('SetupOverlay known states (connectivity)', () => {
       password: 'correct-horse',
     });
 
-    await screen.findByText('Set up your Art Computer');
+    await screen.findByText('Scan to set up your Art Computer');
     // The address must match the DNS/NAT captive design (ff1.config →
     // 192.0.2.1) — a change here has to move in lockstep with captive.conf
     // in the ffos image.
@@ -78,8 +83,14 @@ describe('SetupOverlay known states (connectivity)', () => {
       ssid: 'FF1-Setup-ABCD',
     });
 
-    expect(await screen.findByText('Network: FF1-Setup-ABCD')).toBeTruthy();
-    expect(screen.queryByText(/^Password:/)).toBeNull();
+    expect(
+      await screen.findByText(
+        (_, el) =>
+          el?.tagName === 'P' &&
+          el.textContent === 'Or join FF1-Setup-ABCD in your Wi-Fi settings.'
+      )
+    ).toBeTruthy();
+    expect(screen.queryByText(/\(password/)).toBeNull();
   });
 
   it('renders the joining state', async () => {
@@ -101,7 +112,7 @@ describe('SetupOverlay known states (connectivity)', () => {
     expect(await screen.findByText("Couldn't connect to Wi-Fi")).toBeTruthy();
     expect(screen.getByText('Incorrect password.')).toBeTruthy();
     expect(
-      screen.getByText("Rejoin the setup network on your phone and try again.")
+      screen.getByText("Rejoin the setup network and try again.")
     ).toBeTruthy();
   });
 
@@ -128,7 +139,7 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       password: 'correct-horse',
     });
 
-    await screen.findByText('Set up your Art Computer');
+    await screen.findByText('Scan to set up your Art Computer');
     expect(qrValue(container)).toBe('WIFI:T:WPA;S:FF1-Setup-ABCD;P:correct-horse;;');
   });
 
@@ -140,7 +151,7 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       ssid: 'FF1-Setup-ABCD',
     });
 
-    await screen.findByText('Network: FF1-Setup-ABCD');
+    await screen.findByText('Scan to set up your Art Computer');
     expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
   });
 
@@ -153,7 +164,7 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       password: '',
     });
 
-    await screen.findByText('Network: FF1-Setup-ABCD');
+    await screen.findByText('Scan to set up your Art Computer');
     expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
   });
 
@@ -166,7 +177,7 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       password: 'pa,ss"w\\ord;1',
     });
 
-    await screen.findByText('Set up your Art Computer');
+    await screen.findByText('Scan to set up your Art Computer');
     expect(qrValue(container)).toBe(
       'WIFI:T:WPA;S:FF1\\;Setup\\:ABCD;P:pa\\,ss\\"w\\\\ord\\;1;;'
     );
