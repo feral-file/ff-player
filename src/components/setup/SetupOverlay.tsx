@@ -221,11 +221,10 @@ function FactoryResetPanel() {
  * browses mDNS (`_ff1._tcp`) on the local network and finds this frame by
  * its advertised name. The app only auto-prompts to pair when the frame has
  * no pairing yet (first claim); once claimed, additional phones must add the
- * frame manually inside the app — the "If pairing doesn't start
- * automatically" line is what routes that second case without a separate
- * screen. The QR code is deliberately framed as the backup for when
- * discovery fails (cross-VLAN, multicast-filtering APs, or the phone on a
- * different network).
+ * frame manually inside the app — "look for <name>" is the one instruction
+ * that routes both cases without a separate screen. The QR code is
+ * deliberately framed as the backup for when discovery fails (cross-VLAN,
+ * multicast-filtering APs, or the phone on a different network).
  */
 function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
   const frameName = display.device_name?.trim();
@@ -233,21 +232,24 @@ function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
         <p className={styles.title}>Pair with the Feral File app</p>
+        {/* "Look for <name>" covers both discovery cases in two words: on a
+            first claim the app auto-prompts (the frame appears), and on an
+            already-claimed frame the user finds it via manual add. The old
+            "If pairing doesn't start automatically, add ... in the app"
+            conditional routed the second case explicitly; looking for the
+            name routes both. */}
         <p className={styles.subtitle}>
-          Open the Feral File app on a phone connected to the same Wi-Fi
-          network. If pairing doesn&apos;t start automatically, add{' '}
+          Open the app on the same Wi-Fi and look for{' '}
           {frameName ? (
             <strong>{frameName}</strong>
           ) : (
             'this Art Computer'
-          )}{' '}
-          in the app.
+          )}
+          .
         </p>
         {display.url ? (
           <>
-            <p className={styles.stepLabel}>
-              Not seeing it in the app? Scan this code instead.
-            </p>
+            <p className={styles.stepLabel}>Or scan this code.</p>
             <div className={styles.qrFrame}>
               <QRCodeSVG value={display.url} size={qrSize} marginSize={2} />
             </div>

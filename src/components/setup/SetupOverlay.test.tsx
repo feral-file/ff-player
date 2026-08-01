@@ -254,16 +254,12 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
     });
 
     expect(await screen.findByText('Pair with the Feral File app')).toBeTruthy();
-    // Primary path: open the app on the same Wi-Fi; the manual-add line
-    // covers already-claimed frames, where the app won't auto-prompt.
+    // Primary path: open the app on the same Wi-Fi and look for the frame
+    // by name — covers both the auto-prompt and manual-add cases.
     expect(screen.getByText('FF1-8EVTK3RE')).toBeTruthy();
-    expect(
-      screen.getByText(/If pairing doesn't start automatically, add/)
-    ).toBeTruthy();
-    // Backup path: the QR, explicitly framed as the fallback.
-    expect(
-      screen.getByText(/Not seeing it in the app\? Scan this code/)
-    ).toBeTruthy();
+    expect(screen.getByText(/look for/)).toBeTruthy();
+    // Backup path: the QR, framed as the fallback.
+    expect(screen.getByText('Or scan this code.')).toBeTruthy();
     expect(container.querySelector('svg')).not.toBeNull();
   });
 
@@ -276,7 +272,7 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
     });
 
     expect(await screen.findByText('Pair with the Feral File app')).toBeTruthy();
-    expect(screen.getByText(/add\s+this Art Computer\s+in the app/)).toBeTruthy();
+    expect(screen.getByText(/look for\s+this Art Computer/)).toBeTruthy();
     expect(container.querySelector('svg')).not.toBeNull();
   });
 
