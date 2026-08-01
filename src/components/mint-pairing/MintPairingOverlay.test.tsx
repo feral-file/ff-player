@@ -47,7 +47,9 @@ describe('MintPairingOverlay', () => {
       await screen.findByText('Received a minting request from Chrome.')
     ).toBeTruthy();
     expect(
-      screen.getByText(/go to Settings > Art Computer, and approve the session/)
+      screen.getByText(
+        'Open the Feral File app, go to Settings > Art Computer, and approve the session.'
+      )
     ).toBeTruthy();
 
     displayMintPairing({
