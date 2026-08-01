@@ -37,21 +37,21 @@ const ErrorPage = () => {
     switch (errorType) {
       case ErrorType.Overheating.toString(): {
         const playingArtworkTitle = getPlayingArtworkTitle();
-        setTitle('System Overheating Detected');
+        setTitle('System overheating detected');
         setMessage(
-          `The device temperature has exceeded safe operating levels` +
+          `The Art Computer's temperature has exceeded safe operating levels` +
             (playingArtworkTitle
               ? ` while viewing ${playingArtworkTitle}`
               : '') +
-            `. To prevent damage, playback has been paused. Please reboot the device to continue viewing the artwork.`
+            `. To prevent damage, playback has been paused. Restart the Art Computer to continue viewing the artwork.`
         );
         break;
       }
 
       case ErrorType.ServiceFailed.toString(): {
-        setTitle('Service Failed');
+        setTitle('Service failed');
         setMessage(
-          'The Art Computer encountered an unexpected issue and has stopped working. Please reboot the device. If the problem persists, contact support@feralfile.com for assistance.'
+          'The Art Computer encountered an unexpected issue and has stopped working. Restart it, and if the problem persists, contact support@feralfile.com.'
         );
         break;
       }

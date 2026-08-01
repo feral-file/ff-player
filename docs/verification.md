@@ -30,7 +30,7 @@ npm run build
 
 - `npm run lint` is the changed-files ESLint gate against `origin/main` by default.
 - `npm run typecheck` runs `tsc --noEmit`.
-- `npm run test` runs the Vitest unit test suite.
+- `npm run test` first runs the user-facing copy check (`scripts/check-copy.mjs`, banned-term rules from Canon `reference/voice/product-copy.md` — approved terms are also listed in the script header), then the Vitest unit test suite.
 - `npm run build` is the production Next.js build.
 
 By default, `npm run verify` lints changed files against `origin/main`. To verify against a different base, run either `VERIFY_BASE_REF=origin/develop npm run verify` or `npm run verify -- --base=origin/develop`.
