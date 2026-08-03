@@ -1111,6 +1111,18 @@ const ArtworkPlayer = ({
           error.isNetworkFailure
         ) {
           notePlaybackOutcome(url, true);
+          // Publish the lifecycle too: nothing will render for this mount, so
+          // leaving the slot on its way to `loading` would report an in-flight
+          // render that does not exist — the 2s delay below would fire and pin
+          // `loading` until recovery, or permanently once the M7 refresh budget
+          // is spent. markArtworkFailed rather than handleArtworkRenderFailure:
+          // the latter commits the slot through loadedSource (exactly what this
+          // branch avoids) and raises the "cannot be displayed on this device"
+          // modal, which misreads a transient offline state as a broken
+          // artwork. The offline backdrop owns the screen here; this only moves
+          // the reported status. The recovery remount republishes `pending`
+          // (artworkReloadTick is in this effect's deps).
+          markArtworkFailed();
           // Corroborated network failure: do NOT commit the fallback iframe.
           // The device is provably offline, so an iframe pointed at the
           // remote source cannot render the artwork — Chromium paints its

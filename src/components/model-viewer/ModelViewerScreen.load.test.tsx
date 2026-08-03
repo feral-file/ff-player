@@ -76,3 +76,25 @@ describe('ModelViewerScreen', () => {
     expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
   });
 });
+
+describe('ModelViewerScreen — loading overlay switch', () => {
+  it('shows its own loading overlay by default while the model is not loaded', () => {
+    render(<ModelViewerScreen src="https://example.com/model.glb" />);
+
+    expect(screen.queryByText('Loading 3D model')).toBeTruthy();
+  });
+
+  it('suppresses the loading overlay when showLoadingOverlay is false', () => {
+    // ArtworkPlayer passes the display.json showRenderLoadingOverlay switch
+    // straight through, so this prop is the model route's half of that kill
+    // switch — the global ArtworkPlayer spinner never covers model artworks.
+    render(
+      <ModelViewerScreen
+        src="https://example.com/model.glb"
+        showLoadingOverlay={false}
+      />
+    );
+
+    expect(screen.queryByText('Loading 3D model')).toBeNull();
+  });
+});

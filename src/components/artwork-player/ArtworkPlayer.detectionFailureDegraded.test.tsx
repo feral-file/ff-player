@@ -21,7 +21,9 @@
  * re-runs detection on the same URL.
  */
 import { AppContext } from '@/context/AppContext';
+import { RenderStatus } from '@/models';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
+import { canvasService } from '@/services/CanvasService';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -93,8 +95,11 @@ function stubWebGL() {
 
 afterEach(() => {
   cleanup();
+  canvasService.setCastInfo(null, false);
+  canvasService.setRenderStatus(undefined);
   vi.clearAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('ArtworkPlayer — network-classified detection failure raises degraded', () => {
@@ -229,5 +234,48 @@ describe('ArtworkPlayer — network-classified detection failure recovery loop',
 
     expect(setPlaybackDegraded).toHaveBeenCalledTimes(2);
     expect(setPlaybackDegraded).toHaveBeenLastCalledWith(false, EXTENSIONLESS);
+  });
+});
+
+describe('ArtworkPlayer — network-classified detection failure render status', () => {
+  it('reports failed instead of pinning loading when detection fails offline', async () => {
+    vi.useFakeTimers();
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    contentTypeMock.mockRejectedValue(
+      new ContentTypeDetectionError(
+        'Failed to determine content type: TypeError: Failed to fetch',
+        true
+      )
+    );
+
+    const setPlaybackDegraded = vi.fn();
+    let reload: (() => void) | null = null;
+    render(
+      playerNode(setPlaybackDegraded, cb => {
+        reload = cb;
+      })
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+
+    // The 2s delay must not resurrect `loading`: nothing is rendering for this
+    // mount, so a `loading` here would report an in-flight attempt that does
+    // not exist — indefinitely, once the recovery budget is spent.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+    });
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+
+    // The recovery remount owns the reset back to pending.
+    contentTypeMock.mockResolvedValueOnce('image/jpeg');
+    await act(async () => {
+      reload?.();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
   });
 });
