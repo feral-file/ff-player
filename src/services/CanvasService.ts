@@ -33,8 +33,12 @@ import {
   SetLoopRequest,
   DisplayDefaultPlaylistRequest,
   DisplayDefaultPlaylistReply,
+  RenderStatus,
 } from '@/models';
-import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
+import {
+  stripEphemeralCastInfoFields,
+  stripLegacyCastPlaybackTimeline,
+} from '@/utils/castInfo';
 import { LoopMode } from '@/models/cast_info.model';
 import { DP1Item } from '@/models/dp1.model';
 import {
@@ -132,12 +136,76 @@ function findInvalidArtworkSource(
 }
 
 /**
+ * Selected artwork identity for render-status continuity.
+ * Id alone is not enough: refreshPlaylist can keep the same id while replacing
+ * `source`, and status polls must not keep the prior ready/failed for the new URL.
+ * Shuffle remaps that keep the same id+source intentionally preserve status.
+ */
+function isSameSelectedArtworkIdentity(
+  previous: DP1Item | undefined,
+  next: DP1Item | undefined
+): boolean {
+  if (previous === undefined || next === undefined) {
+    return false;
+  }
+  return previous.id === next.id && previous.source === next.source;
+}
+
+/**
+ * Item a cast is currently pointing at, using the same wrap-around index
+ * normalization the playlist route applies. Returns undefined when there is no
+ * playlist to select from, so callers can tell "no selection" apart from a real
+ * item instead of guessing from an out-of-range index.
+ */
+function selectedPlaylistItem(
+  items: DP1Item[] | undefined,
+  index: number | undefined
+): DP1Item | undefined {
+  if (!items?.length || index === undefined) {
+    return undefined;
+  }
+  return items.at(((index % items.length) + items.length) % items.length);
+}
+
+/**
+ * Resolve the render status to publish with a cast-info update.
+ *
+ * Index-only transitions often spread the previous castInfo, which would keep
+ * the prior artwork's ready/failed across the gap before ArtworkPlayer marks
+ * pending. When the selected artwork identity (id + source) changes, force
+ * pending immediately so status polls never attribute the old lifecycle to the
+ * new artwork. Same-id source replacement on refresh is treated as a new load.
+ */
+function resolveRenderStatusForCastInfo(
+  previous: CastInfo | null,
+  next: CastInfo,
+  currentRenderStatus: RenderStatus | undefined
+): RenderStatus | undefined {
+  const previousItem = selectedPlaylistItem(
+    previous?.playlist?.items,
+    previous?.index
+  );
+  const nextItem = selectedPlaylistItem(next.playlist?.items, next.index);
+
+  if (
+    previousItem !== undefined &&
+    nextItem !== undefined &&
+    !isSameSelectedArtworkIdentity(previousItem, nextItem)
+  ) {
+    return RenderStatus.pending;
+  }
+
+  return next.renderStatus ?? currentRenderStatus ?? undefined;
+}
+
+/**
  * Owns the in-browser FF1 playback session state that cast commands and route
  * components share, including playlist order, loop/shuffle modes, and deferred
  * refresh transitions.
  */
 class CanvasService {
   private castInfo: CastInfo | null = null;
+  private renderStatus: RenderStatus | undefined;
   private static instance: CanvasService | null;
   private originalPlaylistItems: DP1Item[] | null = null;
   private queuedPlaylistPending = false;
@@ -382,26 +450,62 @@ class CanvasService {
       this.queuedPlaylistPending = false;
       this.setDeferredRefreshPlaylist(null);
       this.pendingRefreshArtwork = false;
-    } else if (!this.isSamePlaylistContent(this.castInfo, castInfo)) {
-      // A REAL cast-content change supersedes any refresh parked against
-      // the PREVIOUS artwork (refreshArtwork's handler_pending /
-      // preview_update_failed refusals — see refreshArtwork below):
-      // replaying it later would refresh whatever is now on screen, not the
-      // artwork the refusal was actually about. The no-artwork refusal has
-      // nothing to supersede — it never sets the flag in the first place.
-      //
-      // Narrower than "every non-null setCastInfo" on purpose: a bare
-      // `connect`, a loop-mode/duration setter, a wake, or a slot advance
-      // (moveToArtwork) all pass through here too, but none of them replace
-      // the playlist the parked refresh is about — clearing on those drops
-      // the player's own reconnect refresh for no reason.
-      this.pendingRefreshArtwork = false;
+      this.renderStatus = undefined;
+      this.castInfo = null;
+    } else {
+      if (!this.isSamePlaylistContent(this.castInfo, castInfo)) {
+        // A REAL cast-content change supersedes any refresh parked against
+        // the PREVIOUS artwork (refreshArtwork's handler_pending /
+        // preview_update_failed refusals — see refreshArtwork below):
+        // replaying it later would refresh whatever is now on screen, not the
+        // artwork the refusal was actually about. The no-artwork refusal has
+        // nothing to supersede — it never sets the flag in the first place.
+        //
+        // Narrower than "every non-null setCastInfo" on purpose: a bare
+        // `connect`, a loop-mode/duration setter, a wake, or a slot advance
+        // (moveToArtwork) all pass through here too, but none of them replace
+        // the playlist the parked refresh is about — clearing on those drops
+        // the player's own reconnect refresh for no reason.
+        this.pendingRefreshArtwork = false;
+      }
+      // Both reads above and below must happen before this.castInfo is
+      // reassigned: they compare the outgoing cast against the incoming one.
+      const nextRenderStatus = resolveRenderStatusForCastInfo(
+        this.castInfo,
+        castInfo,
+        this.renderStatus
+      );
+      this.castInfo = {
+        ...stripLegacyCastPlaybackTimeline(castInfo),
+        renderStatus: nextRenderStatus,
+      };
+      // Keep the private mirror in lockstep so getStatus never reads a stale
+      // castInfo.renderStatus left over from persistence or a prior item.
+      this.renderStatus = nextRenderStatus;
     }
-    this.castInfo =
-      castInfo === null ? null : stripLegacyCastPlaybackTimeline(castInfo);
     if (notify) {
       this.onCastInfoChange?.(this.castInfo);
     }
+  }
+
+  /**
+   * Publish the live artwork render lifecycle for status replies.
+   * This updates in-memory castInfo without emitting a cast command. The
+   * playlist route treats cast-info notifications as playback instructions,
+   * so re-emitting the prior command here would restart the active slot timer.
+   * Persistence strips renderStatus so boot recovery cannot resurrect a
+   * ready/failed from a previous page.
+   */
+  public setRenderStatus(renderStatus: RenderStatus | undefined) {
+    this.renderStatus = renderStatus;
+    if (!this.castInfo) {
+      return;
+    }
+
+    this.castInfo = {
+      ...this.castInfo,
+      renderStatus,
+    };
   }
 
   public hasQueuedPlaylistPending(): boolean {
@@ -686,8 +790,11 @@ class CanvasService {
 
       const storedCastInfo = DeviceManager.getCachedCastInfo();
       if (!this.castInfo && storedCastInfo) {
-        // Ensure in-memory state is available for future status calls
-        this.setCastInfo(storedCastInfo, false);
+        // Hydrate playlist/index only. renderStatus is live-only and must wait
+        // for ArtworkPlayer (or an explicit setRenderStatus) after recovery.
+        // Use the shared strip helper so future ephemeral fields stay aligned
+        // with AppContext boot and useCastInfo persistence.
+        this.setCastInfo(stripEphemeralCastInfoFields(storedCastInfo), false);
       }
 
       const activeCastInfo = this.castInfo ?? storedCastInfo ?? null;
@@ -706,6 +813,9 @@ class CanvasService {
 
         items: activeCastInfo?.playlist?.items,
         index: activeCastInfo?.index,
+        // Never fall back to a persisted castInfo.renderStatus — that value
+        // describes a previous page render, not the current mount lifecycle.
+        renderStatus: this.renderStatus,
 
         // Generation stamp echo (cross-repo recovery design §2.1, source 3):
         // rides this existing round-trip so controld can detect a
@@ -974,6 +1084,10 @@ class CanvasService {
       };
     }
     this.pendingRefreshArtwork = false;
+    // The playlist route applies the reload on a later React turn. Publish
+    // pending before acknowledging the command so an immediate status poll
+    // cannot report the prior artwork lifecycle.
+    this.setRenderStatus(RenderStatus.pending);
     return { ok: true };
   }
 
@@ -1091,9 +1205,20 @@ class CanvasService {
       console.error('[CanvasService] No items to display');
       return { ok: false };
     }
-    if (validateSources && findInvalidArtworkSource(request.dp1CallData.items)) {
-      console.error('[CanvasService] Invalid artwork source');
-      return { ok: false };
+    // Live casts validate; persisted scheduled/boot recovery may skip so an
+    // upgrade does not strand a previously accepted playlist (see
+    // executeScheduledDP1Task). Do not add a second unconditional check here.
+    if (validateSources) {
+      const invalidSourceItem = findInvalidArtworkSource(
+        request.dp1CallData.items
+      );
+      if (invalidSourceItem) {
+        console.error('[CanvasService] Invalid artwork source:', {
+          itemId: invalidSourceItem.id,
+          source: invalidSourceItem.source,
+        });
+        return { ok: false };
+      }
     }
 
     // Clear any stored original playlist from a previous shuffle session and any
@@ -1101,6 +1226,23 @@ class CanvasService {
     this.originalPlaylistItems = null;
     this.queuedPlaylistPending = false;
     this.setDeferredRefreshPlaylist(null);
+    // Re-casting the artwork already on screen must not reset the lifecycle.
+    // ArtworkPlayer only re-publishes when previewURL/itemIdentity change, so a
+    // forced pending here would never be answered and status polls would report
+    // pending for a visibly rendered artwork. Casts that do change the selected
+    // artwork still get their pending from resolveRenderStatusForCastInfo.
+    const currentSelectedItem = selectedPlaylistItem(
+      this.castInfo?.playlist?.items,
+      this.castInfo?.index
+    );
+    if (
+      !isSameSelectedArtworkIdentity(
+        currentSelectedItem,
+        request.dp1CallData.items[0]
+      )
+    ) {
+      this.setRenderStatus(RenderStatus.pending);
+    }
 
     console.log('[CanvasService] Display playlist');
     // Each Now Display starts a new cast session surface: do not inherit prior
@@ -1127,7 +1269,12 @@ class CanvasService {
     // window guard keeps node-environment unit tests (no DOM) from turning a
     // successful display into an ok:false reply — the event is a
     // browser-only signal.
-    if (!this.castingFallbackPlaylist && typeof window !== 'undefined') {
+    if (
+      !this.castingFallbackPlaylist &&
+      typeof window !== 'undefined' &&
+      typeof window.dispatchEvent === 'function' &&
+      typeof CustomEvent !== 'undefined'
+    ) {
       window.dispatchEvent(
         new CustomEvent(CustomEventName.ExplicitPlaylistCast as string)
       );

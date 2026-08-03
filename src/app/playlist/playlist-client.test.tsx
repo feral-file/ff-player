@@ -10,7 +10,7 @@
  */
 import { AppContext } from '@/context/AppContext';
 import { NO_DURATION_VALUE } from '@/constants';
-import { CastCommand } from '@/models';
+import { CastCommand, RenderStatus } from '@/models';
 import type { CastInfo } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
@@ -119,6 +119,24 @@ function PlaylistHarness(props: { castInfo: CastInfo | null }): React.ReactEleme
       <PlaylistClient />
     </AppContext.Provider>
   );
+}
+
+/** Mirrors AppProvider's CanvasService subscription for command replay tests. */
+function LivePlaylistHarness(): React.ReactElement {
+  const [castInfo, setCastInfo] = React.useState<CastInfo | null>(() =>
+    canvasService.getCastInfo()
+  );
+
+  React.useEffect(() => {
+    canvasService.onCastInfoChange = nextCastInfo => {
+      setCastInfo(nextCastInfo);
+    };
+    return () => {
+      canvasService.onCastInfoChange = null;
+    };
+  }, []);
+
+  return <PlaylistHarness castInfo={castInfo} />;
 }
 
 async function advanceMs(ms: number): Promise<void> {
@@ -471,5 +489,37 @@ describe('PlaylistClient — refresh artwork (cast leads React)', () => {
       (globalThis as { __artworkReloadInvocations?: number })
         .__artworkReloadInvocations
     ).toBe(1);
+  });
+});
+
+describe('PlaylistClient — render-status lifecycle', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    teardownPlaylistWiringTest();
+  });
+
+  it('does not restart a finite slot when render status changes', async () => {
+    const initial = displayCast(
+      [item('a', 1), item('b', 1)],
+      0,
+      LoopMode.playlist
+    );
+    canvasService.setCastInfo(initial, false);
+    render(<LivePlaylistHarness />);
+
+    await advanceMs(900);
+    act(() => {
+      canvasService.setRenderStatus(RenderStatus.loading);
+      canvasService.setRenderStatus(RenderStatus.ready);
+    });
+    await advanceMs(100);
+
+    expect(
+      (globalThis as { __artworkPlayerProps?: Record<string, unknown> })
+        .__artworkPlayerProps?.previewURL
+    ).toBe('https://example.com/b.jpg');
   });
 });

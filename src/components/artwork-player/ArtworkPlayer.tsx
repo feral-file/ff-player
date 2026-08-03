@@ -14,6 +14,7 @@ import {
 import * as Sentry from '@sentry/nextjs';
 import Loading from '../loading/loading';
 import { useAppContext } from '@/context/AppContext';
+import { canvasService } from '@/services/CanvasService';
 import styles from './styles.module.scss';
 import MessageModal from '../MessageModal';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
@@ -43,11 +44,15 @@ import {
   ContentTypeDetectionError,
 } from '@/utils/helper';
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
-import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
+import {
+  RenderStatus,
+} from '@/models';
 import { useArtworkSettings } from '@/services/custom-hooks/useArtworkSettings';
+import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
 import ModelViewerScreen from '../model-viewer/ModelViewerScreen';
 
 const MAX_RECOVERY_TIME = 60000 * 10;
+const RENDER_LOADING_DELAY_MS = 2000;
 const SLOT_INDICES = [0, 1] as const;
 
 type SlotIndex = 0 | 1;
@@ -175,6 +180,7 @@ const ArtworkPlayer = ({
   const loadingDelayRef = useRef<NodeJS.Timeout>();
   const transitionTimeoutRef = useRef<NodeJS.Timeout>();
   const transitionTokenRef = useRef(0);
+  const renderStatusRef = useRef<RenderStatus | undefined>(undefined);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isWebGLContextLost = useRef<boolean>(false);
   const iframeKeyCounterRef = useRef(0);
@@ -193,6 +199,8 @@ const ArtworkPlayer = ({
   ];
 
   const { displaySettings } = useArtworkSettings(displayPreferences);
+  const showRenderLoadingOverlay =
+    context.appRemoteConfig.showRenderLoadingOverlay ?? true;
 
   const mediaLoaders = useRef([createMediaLoader(), createMediaLoader()]);
   const hlsInstancesRef = useRef<[Hls | null, Hls | null]>([null, null]);
@@ -310,28 +318,147 @@ const ArtworkPlayer = ({
   useLayoutEffect(() => {
     displaySettingsRef.current = displaySettings;
   }, [displaySettings]);
-
-  /** Swap the stage onto the settings that are current at commit time. */
   const commitVisualSettings = useCallback(() => {
     setCommittedVisualSettings(displaySettingsRef.current);
   }, []);
-
-  // Settings changes that arrive while NO transition is pending (e.g. the
-  // user adjusts background/margin from the app for the artwork already on
-  // screen) must apply immediately — only transition-driven changes wait
-  // for commit. "Pending" covers both a claimed incoming slot and the gap
-  // where `previewURL` moved ahead of the committed active layer but the
-  // slot-setup effect has not claimed an incoming slot yet.
   useEffect(() => {
     const activeLayer = slotsRef.current[activeSlotRef.current];
     const transitionPending =
       incomingSlotRef.current !== null ||
-      (activeLayer !== null &&
-        activeLayer.previewURL !== previewURLRef.current);
+      (activeLayer !== null && activeLayer.previewURL !== previewURLRef.current);
     if (!transitionPending) {
       setCommittedVisualSettings(displaySettings);
     }
   }, [displaySettings]);
+
+  const clearLoadingDelay = useCallback(() => {
+    if (!loadingDelayRef.current) {
+      return;
+    }
+    clearTimeout(loadingDelayRef.current);
+    loadingDelayRef.current = undefined;
+  }, []);
+
+  const markArtworkPending = useCallback(() => {
+    if (renderStatusRef.current === RenderStatus.pending) {
+      return;
+    }
+    renderStatusRef.current = RenderStatus.pending;
+    canvasService.setRenderStatus(RenderStatus.pending);
+    setGlobalLoading(true);
+    setShowLoading(false);
+    setShowMessageModal(false);
+    setMessageModalText(null);
+    setMessageModalTitle(null);
+  }, []);
+
+  const markArtworkLoading = useCallback(() => {
+    if (renderStatusRef.current === RenderStatus.loading) {
+      return;
+    }
+    renderStatusRef.current = RenderStatus.loading;
+    canvasService.setRenderStatus(RenderStatus.loading);
+    setGlobalLoading(true);
+    setShowLoading(true);
+  }, []);
+
+  /**
+   * Publish `ready` for the committed artwork.
+   *
+   * Called at the commit points only — synchronously for a first load, and at
+   * the end of the fade for the sequential and overlap branches. That timing is
+   * the contract, not an accident: this function also tears the loading overlay
+   * down, so binding the two together means a poll can never answer `ready`
+   * while the wall still shows the outgoing artwork or an opaque overlay. The
+   * cost is that `ready` trails byte arrival by up to FADE_IN_OUT_DURATION_MS on
+   * a transition; the poll reads `pending` (or `loading`) in that window.
+   * Publishing at `loadedSource` instead would also be wrong on the failure
+   * paths, which call `loadedSource` before marking failed.
+   *
+   * `ready` means "the document finished loading", not "the artwork rendered
+   * what it should". For iframe/PDF that distinction is real — a browser can
+   * load its own error document after a failed remote navigation, and Chromium
+   * does not emit an iframe error for it — but the contract deliberately stops
+   * at load completion: withholding `ready` from iframe left the dominant
+   * artwork type (HTML/generative, plus every item whose MIME type is empty and
+   * falls back to iframe) reporting `loading` forever, which is worse for a
+   * controller than an occasional optimistic `ready`. Failures that DO surface
+   * an error event still reach `failed` through handleLoadIframeError.
+   */
+  const markArtworkReady = useCallback(() => {
+    if (renderStatusRef.current === RenderStatus.ready) {
+      return;
+    }
+    // Model-viewer failures commit the slot via loadedSource then mark failed.
+    // Transition completion must not overwrite that failed status with ready.
+    if (renderStatusRef.current === RenderStatus.failed) {
+      return;
+    }
+    renderStatusRef.current = RenderStatus.ready;
+    canvasService.setRenderStatus(RenderStatus.ready);
+    setGlobalLoading(false);
+    setShowLoading(false);
+    clearLoadingDelay();
+    setShowMessageModal(false);
+    setMessageModalText(null);
+    setMessageModalTitle(null);
+  }, [clearLoadingDelay]);
+
+  const markArtworkFailed = useCallback(() => {
+    if (renderStatusRef.current === RenderStatus.failed) {
+      return;
+    }
+    renderStatusRef.current = RenderStatus.failed;
+    canvasService.setRenderStatus(RenderStatus.failed);
+    setGlobalLoading(false);
+    setShowLoading(false);
+    clearLoadingDelay();
+  }, [clearLoadingDelay]);
+
+  const isCurrentArtworkSlot = useCallback(
+    (slotIndex: SlotIndex, expectedLayer?: SlotLayer) => {
+      const currentURL = previewURLRef.current;
+      const slot = slotsRef.current[slotIndex];
+      if (!slot) {
+        return false;
+      }
+      if (
+        expectedLayer &&
+        (slot.previewURL !== expectedLayer.previewURL ||
+          slot.itemIdentity !== expectedLayer.itemIdentity ||
+          slot.iframeKey !== expectedLayer.iframeKey)
+      ) {
+        return false;
+      }
+      if (slot.previewURL !== currentURL) {
+        return false;
+      }
+      if (slot.itemIdentity !== itemIdentityRef.current) {
+        return false;
+      }
+
+      const currentIncoming = incomingSlotRef.current;
+      if (currentIncoming !== null && currentIncoming !== slotIndex) {
+        const incomingLayer = slotsRef.current[currentIncoming];
+        if (
+          incomingLayer?.previewURL === currentURL &&
+          incomingLayer.itemIdentity === itemIdentityRef.current
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    },
+    []
+  );
+
+  useEffect(() => {
+    return () => {
+      canvasService.setRenderStatus(undefined);
+      renderStatusRef.current = undefined;
+    };
+  }, []);
 
   function getPreviewTypeConfig(type: string): {
     previewType: PreviewHTMLTag;
@@ -497,10 +624,8 @@ const ArtworkPlayer = ({
   );
 
   const loadedSource = useCallback(
-    (slotIndex: SlotIndex) => {
-      const currentURL = previewURLRef.current;
-      const slot = slotsRef.current[slotIndex];
-      if (slot?.previewURL !== currentURL) {
+    (slotIndex: SlotIndex, expectedLayer?: SlotLayer): boolean => {
+      if (!isCurrentArtworkSlot(slotIndex, expectedLayer)) {
         return false;
       }
 
@@ -509,15 +634,43 @@ const ArtworkPlayer = ({
       const currentIncoming = incomingSlotRef.current;
       if (currentIncoming !== null && currentIncoming !== slotIndex) {
         const incomingLayer = slotsRef.current[currentIncoming];
-        if (incomingLayer?.previewURL === currentURL) {
+        if (incomingLayer?.previewURL === previewURLRef.current) {
           return false;
         }
       }
+
       incomingSlotRef.current = slotIndex;
       markSlotReady(slotIndex);
       return true;
     },
-    [markSlotReady]
+    [isCurrentArtworkSlot, markSlotReady]
+  );
+
+  const handleArtworkRenderFailure = useCallback(
+    (slotIndex?: SlotIndex, expectedLayer?: SlotLayer) => {
+      if (
+        slotIndex !== undefined &&
+        !isCurrentArtworkSlot(slotIndex, expectedLayer)
+      ) {
+        return;
+      }
+      if (slotIndex !== undefined) {
+        // Treat a current failure as terminal readiness for transition
+        // purposes, so the failed incoming slot replaces the outgoing one.
+        loadedSource(slotIndex, expectedLayer);
+        updateSlot(slotIndex, { loading: false });
+      }
+      if (renderStatusRef.current === RenderStatus.failed) {
+        return;
+      }
+      markArtworkFailed();
+      setMessageModalText(null);
+      setMessageModalTitle(
+        'The artwork cannot be displayed correctly on this device.'
+      );
+      setShowMessageModal(true);
+    },
+    [isCurrentArtworkSlot, loadedSource, markArtworkFailed, updateSlot]
   );
 
   const playVideoForSlot = useCallback(
@@ -528,6 +681,7 @@ const ArtworkPlayer = ({
     ) => {
       const targetSlot = incomingSlotRef.current ?? activeSlotRef.current;
       if (
+        !isCurrentArtworkSlot(slotIndex, layer) ||
         playedVideoURLRef.current[slotIndex] === layer.previewURL ||
         targetSlot !== slotIndex
       ) {
@@ -537,7 +691,7 @@ const ArtworkPlayer = ({
       playedVideoURLRef.current[slotIndex] = layer.previewURL;
       const playPromise = videoElement.play() as Promise<void> | undefined;
       if (!playPromise) {
-        loadedSource(slotIndex);
+        loadedSource(slotIndex, layer);
         return;
       }
 
@@ -547,10 +701,10 @@ const ArtworkPlayer = ({
           reTryToPlayVideo(slotIndex);
         })
         .finally(() => {
-          loadedSource(slotIndex);
+          loadedSource(slotIndex, layer);
         });
     },
-    [loadedSource]
+    [isCurrentArtworkSlot, loadedSource]
   );
 
   const setupStreamingVideoForSlot = useCallback(
@@ -578,6 +732,9 @@ const ArtworkPlayer = ({
         hlsInstancesRef.current[slotIndex] = hlsInstance;
         hlsInstance.attachMedia(videoElement);
         hlsInstance.on(Hls.Events.MEDIA_ATTACHED, () => {
+          if (!isCurrentArtworkSlot(slotIndex, layer)) {
+            return;
+          }
           const sourceURL = `${layer.displayPreviewURL}?clientBandwidthHint=${CLIENT_BANDWIDTH_HINT.toString()}`;
           if (hlsLoadedURLRef.current[slotIndex] !== sourceURL) {
             hlsLoadedURLRef.current[slotIndex] = sourceURL;
@@ -585,28 +742,41 @@ const ArtworkPlayer = ({
           }
           playVideoForSlot(slotIndex, layer, videoElement);
         });
+        const failSlotAndTeardownHls = () => {
+          handleArtworkRenderFailure(slotIndex, layer);
+          hlsInstance?.destroy();
+          if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
+            hlsInstancesRef.current[slotIndex] = null;
+          }
+        };
+        // `fatal` is how hls.js signals recoverability, and it handles the
+        // non-fatal cases itself across every error type: a demuxer Web Worker
+        // failure (OTHER_ERROR/INTERNAL_EXCEPTION) disables the worker and
+        // falls back to inline demuxing, REMUX_ALLOC_ERROR (MUX_ERROR) skips
+        // one buffer, and the KEY_SYSTEM/OTHER teardown errors fire while EME
+        // is being released. Tearing down on those would kill playback the
+        // library was about to resume, and publishing `failed` would raise the
+        // error modal over an artwork that is still on screen — so only a fatal
+        // error is terminal here, whatever its type.
+        //
+        // BUFFER_NUDGE_ON_STALL is the one case that must be matched on
+        // `details` instead: hls.js emits it NON-fatal while it nudges
+        // currentTime, and escalates to a fatal BUFFER_STALLED_ERROR only after
+        // config.nudgeMaxRetry. Calling recoverMediaError on the nudge is what
+        // keeps a transient stall from reaching that escalation, so this check
+        // has to run before the fatal test rather than inside it.
         hlsInstance.on(Hls.Events.ERROR, function (_event, data) {
-          if (data.fatal) {
-            hlsInstance?.destroy();
-            if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
-              hlsInstancesRef.current[slotIndex] = null;
+          if (
+            data.type === Hls.ErrorTypes.MEDIA_ERROR &&
+            data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL
+          ) {
+            if (isCurrentArtworkSlot(slotIndex, layer)) {
+              hlsInstance?.recoverMediaError();
             }
             return;
           }
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              if (data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL) {
-                hlsInstance?.recoverMediaError();
-              }
-              break;
-            default:
-              hlsInstance?.destroy();
-              if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
-                hlsInstancesRef.current[slotIndex] = null;
-              }
-              break;
+          if (data.fatal) {
+            failSlotAndTeardownHls();
           }
         });
       }
@@ -623,7 +793,7 @@ const ArtworkPlayer = ({
         }
       };
     },
-    [playVideoForSlot]
+    [handleArtworkRenderFailure, isCurrentArtworkSlot, playVideoForSlot]
   );
 
   useLayoutEffect(() => {
@@ -639,13 +809,16 @@ const ArtworkPlayer = ({
     if (incomingLayer.loading) {return;}
 
     pendingReadySlotRef.current = null;
-    setGlobalLoading(false);
-    setShowLoading(false);
-    if (loadingDelayRef.current) {
-      clearTimeout(loadingDelayRef.current);
-      loadingDelayRef.current = undefined;
-    }
-
+    // Disarm the slow-load timer the moment the incoming slot commits, not at
+    // fade end where markArtworkReady clears it. The incoming artwork has
+    // finished loading here; leaving the timer armed lets a load that lands
+    // just inside the delay window (say 1.7s) still trip markArtworkLoading at
+    // 2s — the overlay would appear ON TOP of a crossfade already in flight and
+    // status would report `loading` for an artwork that is on its way in. The
+    // overlay stays visible if it was ALREADY showing: that hand-off belongs to
+    // markArtworkReady at fade end, so a genuinely slow load is not revealed
+    // mid-transition.
+    clearLoadingDelay();
     iframeRefs[readySlot].current?.focus();
 
     const other = (readySlot === 0 ? 1 : 0) as SlotIndex;
@@ -656,6 +829,7 @@ const ArtworkPlayer = ({
       setActiveSlot(readySlot);
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
+      markArtworkReady();
       onItemCommitted?.(incomingLayer.itemIdentity);
       return;
     }
@@ -708,8 +882,7 @@ const ArtworkPlayer = ({
         setActiveSlot(incoming);
         incomingSlotRef.current = null;
         setTopSlotIndex(null);
-        // Sequential handoff: this fade-in is the first moment the incoming
-        // work is on the wall.
+        markArtworkReady();
         onItemCommitted?.(incomingLayer.itemIdentity);
       }, FADE_IN_OUT_DURATION_MS);
       return;
@@ -739,13 +912,21 @@ const ArtworkPlayer = ({
       setActiveSlot(incoming);
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
+      markArtworkReady();
     }, FADE_IN_OUT_DURATION_MS);
-  }, [slots, pauseSlotPlayback, commitVisualSettings, onItemCommitted]);
+  }, [
+    clearLoadingDelay,
+    commitVisualSettings,
+    markArtworkReady,
+    onItemCommitted,
+    pauseSlotPlayback,
+    slots,
+  ]);
 
-  const handleIframeLoad = (slotIndex: SlotIndex) => {
+  const handleIframeLoad = (slotIndex: SlotIndex, layer: SlotLayer) => {
     if (isWebGLAvailable()) {
       setShowMessageModal(false);
-      if (loadedSource(slotIndex)) {
+      if (loadedSource(slotIndex, layer)) {
         // Known limitation: a cross-origin iframe fires `load` even when the
         // browser rendered its own network-error page, so an offline iframe
         // artwork reads as a success here and never raises the degraded
@@ -771,8 +952,8 @@ const ArtworkPlayer = ({
     }
   };
 
-  const handleModelLoad = (slotIndex: SlotIndex) => {
-    if (loadedSource(slotIndex)) {
+  const handleModelLoad = (slotIndex: SlotIndex, layer?: SlotLayer) => {
+    if (loadedSource(slotIndex, layer)) {
       notePlaybackOutcome(slotPreviewURL(slotIndex), false);
       setShowMessageModal(false);
     }
@@ -791,14 +972,17 @@ const ArtworkPlayer = ({
    * Keep model-viewer failures inside the transition pipeline so the failed
    * incoming slot becomes the committed artwork state instead of leaving the
    * previous slot visible underneath the error modal.
+   * Also publish RenderStatus.failed so status polls match the error UI.
    */
-  const handleModelLoadError = (slotIndex: SlotIndex) => {
-    if (!loadedSource(slotIndex)) {
+  const handleModelLoadError = (slotIndex: SlotIndex, layer?: SlotLayer) => {
+    if (!loadedSource(slotIndex, layer)) {
       return;
     }
 
     notePlaybackOutcome(slotPreviewURL(slotIndex), true);
     clearLoadingIndicators();
+    markArtworkFailed();
+    setMessageModalText(null);
     setMessageModalTitle(
       'The artwork cannot be displayed correctly on this device.'
     );
@@ -830,14 +1014,17 @@ const ArtworkPlayer = ({
       return next;
     });
 
-    setGlobalLoading(true);
-    setShowLoading(false);
-    if (loadingDelayRef.current) {clearTimeout(loadingDelayRef.current);}
+    markArtworkPending();
+    clearLoadingDelay();
     loadingDelayRef.current = setTimeout(() => {
-      if (!cancelled && previewURLRef.current === url) {
-        setShowLoading(true);
+      if (
+        !cancelled &&
+        previewURLRef.current === url &&
+        renderStatusRef.current === RenderStatus.pending
+      ) {
+        markArtworkLoading();
       }
-    }, 2000);
+    }, RENDER_LOADING_DELAY_MS);
 
     const identity = itemIdentityRef.current;
     // Derived from activeSlotRef/slotsRef, not from the setSlots updater's
@@ -945,6 +1132,18 @@ const ArtworkPlayer = ({
           error.isNetworkFailure
         ) {
           notePlaybackOutcome(url, true);
+          // Publish the lifecycle too: nothing will render for this mount, so
+          // leaving the slot on its way to `loading` would report an in-flight
+          // render that does not exist — the 2s delay below would fire and pin
+          // `loading` until recovery, or permanently once the M7 refresh budget
+          // is spent. markArtworkFailed rather than handleArtworkRenderFailure:
+          // the latter commits the slot through loadedSource (exactly what this
+          // branch avoids) and raises the "cannot be displayed on this device"
+          // modal, which misreads a transient offline state as a broken
+          // artwork. The offline backdrop owns the screen here; this only moves
+          // the reported status. The recovery remount republishes `pending`
+          // (artworkReloadTick is in this effect's deps).
+          markArtworkFailed();
           // Corroborated network failure: do NOT commit the fallback iframe.
           // The device is provably offline, so an iframe pointed at the
           // remote source cannot render the artwork — Chromium paints its
@@ -1038,18 +1237,22 @@ const ArtworkPlayer = ({
 
       const handleMediaError =
         (mediaType: BlobLoadedMediaType) => (error: Error) => {
+          if (!isCurrentArtworkSlot(slotIndex, layer)) {
+            return;
+          }
           console.error(`[ArtworkPlayer] ${mediaType} load failed:`, error);
-          Sentry.captureMessage(`[ArtworkPlayer] ${mediaType} load failed`, {
-            level: 'error',
-            extra: { displayPreviewURL: layer.displayPreviewURL, mediaType },
-          });
           // Commit the failed slot through the transition pipeline (same
           // contract as handleModelLoadError): a claim abandoned on failure
           // wedges the visual-settings latch — incomingSlotRef stays set,
           // every later settings update reads as "transition pending", and
           // the artwork on screen stops receiving settings until the next
-          // artwork request. loadedSource's URL guard drops stale failures.
-          if (loadedSource(slotIndex)) {
+          // artwork request. loadedSource's layer guard drops stale failures.
+          if (loadedSource(slotIndex, layer)) {
+            handleArtworkRenderFailure(slotIndex, layer);
+            Sentry.captureMessage(`[ArtworkPlayer] ${mediaType} load failed`, {
+              level: 'error',
+              extra: { displayPreviewURL: layer.displayPreviewURL, mediaType },
+            });
             // Only a failure loadedSource actually accepted describes what
             // the device is trying to show; a rejected one belongs to a
             // superseded slot and must not mark playback degraded.
@@ -1061,7 +1264,7 @@ const ArtworkPlayer = ({
             }
             notePlaybackOutcome(layer.previewURL, true);
           }
-      };
+        };
 
       const loadMedia = async () => {
         if (isCancelled) {return;}
@@ -1070,26 +1273,18 @@ const ArtworkPlayer = ({
           imageRefs[slotIndex].current
         ) {
           const el = imageRefs[slotIndex].current;
-          // Pre-decode before reporting ready: without it, a large image's
-          // first rasterization lands on the first painted frame of the
-          // crossfade and janks it on kiosk hardware. decode() rejections
-          // (or browsers without it) still mark the slot ready — painting
-          // undecoded is the old behavior, not an error, and loadedSource's
-          // URL guard drops stale results if the slot moved on meanwhile.
           const markImageReady = () => {
             let decoded: Promise<unknown>;
             try {
               decoded =
-                typeof el.decode === 'function'
-                  ? el.decode()
-                  : Promise.resolve();
+                typeof el.decode === 'function' ? el.decode() : Promise.resolve();
             } catch {
               decoded = Promise.resolve();
             }
             void decoded
               .catch(() => undefined)
               .finally(() => {
-                if (!isCancelled && loadedSource(slotIndex)) {
+                if (!isCancelled && loadedSource(slotIndex, layer)) {
                   // Genuine success site: `onload` fired, so the bytes
                   // arrived. `loadedSource` alone cannot serve as the
                   // success signal — the failure paths call it too.
@@ -1109,13 +1304,19 @@ const ArtworkPlayer = ({
             url: layer.displayPreviewURL,
             mediaType: 'image',
             element: el,
-            // Defensive parity with el.onload: the loader currently never
-            // invokes onLoad (it only sets src), but if it ever does, the
-            // decode gate must not be bypassed.
             onLoad: markImageReady,
             onError: handleMediaError('image'),
             signal: abortController.signal,
           });
+          // A memory-cached image can already be complete before the handlers
+          // above attach, so `onload` may never fire and the slot would never
+          // commit. Go through markImageReady rather than loadedSource
+          // directly: it keeps the decode() gate that stops the first
+          // rasterization of a large image from landing inside the crossfade,
+          // and keeps the isCancelled guard for a superseded load.
+          if (el.complete && el.naturalWidth > 0) {
+            markImageReady();
+          }
         } else if (
           layer.previewType === PreviewHTMLTag.video &&
           !layer.isStreaming &&
@@ -1156,7 +1357,7 @@ const ArtworkPlayer = ({
             mediaType: 'video',
             element: el,
             onLoad: () => {
-              loadedSource(slotIndex);
+              loadedSource(slotIndex, layer);
             },
             onError: handleMediaError('video'),
             signal: abortController.signal,
@@ -1168,7 +1369,7 @@ const ArtworkPlayer = ({
           const el = audioRefs[slotIndex].current;
           // createMediaLoader().loadMedia sets src only; it never invokes onLoad (see mediaLoader.ts).
           const handleAudioReady = () => {
-            const claimed = loadedSource(slotIndex);
+            const claimed = loadedSource(slotIndex, layer);
             if (claimed && !mountFailedRef.current[slotIndex]) {
               notePlaybackOutcome(layer.previewURL, false);
             }
@@ -1186,7 +1387,7 @@ const ArtworkPlayer = ({
             mediaType: 'audio',
             element: el,
             onLoad: () => {
-              loadedSource(slotIndex);
+              loadedSource(slotIndex, layer);
             },
             onError: handleMediaError('audio'),
             signal: abortController.signal,
@@ -1204,7 +1405,13 @@ const ArtworkPlayer = ({
         mediaLoaders.current[slotIndex].cleanup();
       };
     },
-    [loadedSource, notePlaybackOutcome, playVideoForSlot]
+    [
+      handleArtworkRenderFailure,
+      isCurrentArtworkSlot,
+      loadedSource,
+      notePlaybackOutcome,
+      playVideoForSlot,
+    ]
   );
 
   useEffect(() => {
@@ -1213,6 +1420,7 @@ const ArtworkPlayer = ({
     slots[0]?.displayPreviewURL,
     slots[0]?.previewType,
     slots[0]?.isStreaming,
+    slots[0]?.itemIdentity,
     setupMediaForSlot,
   ]);
 
@@ -1222,6 +1430,7 @@ const ArtworkPlayer = ({
     slots[1]?.displayPreviewURL,
     slots[1]?.previewType,
     slots[1]?.isStreaming,
+    slots[1]?.itemIdentity,
     setupMediaForSlot,
   ]);
 
@@ -1324,23 +1533,18 @@ const ArtworkPlayer = ({
     slots,
   ]);
 
-  const handleLoadIframeError = (slotIndex: SlotIndex) => {
-    // Route the failure through the transition pipeline like model failures
-    // (handleModelLoadError): abandoning the incoming claim wedges the
-    // visual-settings latch and the on-screen artwork stops receiving
-    // settings updates until the next artwork request. A stale slot (the
-    // playlist already moved on) commits nothing and must not raise the
-    // modal over the artwork that superseded it.
-    if (!loadedSource(slotIndex)) {
+  const handleLoadIframeError = (slotIndex: SlotIndex, layer: SlotLayer) => {
+    // Failure still consumes the current incoming slot. Without this, an
+    // iframe/object error leaves the transition claim active and permanently
+    // holds visual settings on the outgoing artwork.
+    if (!loadedSource(slotIndex, layer)) {
       return;
     }
     notePlaybackOutcome(slotPreviewURL(slotIndex), true);
-    clearLoadingIndicators();
-    updateSlot(slotIndex, { loading: false });
-    setMessageModalTitle(
-      'The artwork cannot be displayed correctly on this device.'
-    );
-    setShowMessageModal(true);
+    // handleArtworkRenderFailure owns the rest of the failure surface here:
+    // it clears the loading indicators, settles the slot, publishes
+    // RenderStatus.failed, and raises the modal.
+    handleArtworkRenderFailure(slotIndex, layer);
   };
 
   const reloadIframe = (slotIndex: SlotIndex) => {
@@ -1368,6 +1572,7 @@ const ArtworkPlayer = ({
     }
 
     isWebGLContextLost.current = true;
+    markArtworkFailed();
     console.log('[ArtworkPlayer] WebGL context lost!');
     setMessageModalText(
       'This artwork appears to be especially demanding and may have caused a GPU crash. ' +
@@ -1413,6 +1618,21 @@ const ArtworkPlayer = ({
 
         isWebGLContextLost.current = false;
         setTimeout(() => {
+          // handleWebGLLost publishes failed; markArtworkReady intentionally
+          // ignores failed→ready (model-viewer commit). Clear failed before
+          // the recovery reload so a successful iframe ready can publish ready.
+          markArtworkPending();
+          // markArtworkPending lowers showLoading, and the artwork-setup effect
+          // that normally arms the delay does not re-run for a recovery reload
+          // (reloadIframe only bumps the slot's iframeKey). Re-arm here, or the
+          // reloaded artwork can never raise an overlay again — including
+          // ModelViewerScreen's own, which is gated on the same showLoading.
+          clearLoadingDelay();
+          loadingDelayRef.current = setTimeout(() => {
+            if (renderStatusRef.current === RenderStatus.pending) {
+              markArtworkLoading();
+            }
+          }, RENDER_LOADING_DELAY_MS);
           reloadIframe(activeSlotRef.current);
         }, 2000);
       }
@@ -1481,19 +1701,34 @@ const ArtworkPlayer = ({
   }, [previewURL]);
 
   const showSlowLoadingSpinner = () => {
-    const incoming = incomingSlotRef.current;
-    const layer = incoming === null ? null : slots[incoming];
-    const t = layer?.previewType ?? null;
-    const isModelAsset = isModelMimeType(layer?.mimeType ?? '');
-    return (
-      showLoading &&
-      globalLoading &&
-      (t === null ||
-        t === PreviewHTMLTag.video ||
-        t === PreviewHTMLTag.audio ||
-        t === PreviewHTMLTag.model ||
-        isModelAsset)
+    // ModelViewerScreen paints its own "Loading 3D model" overlay, so stacking
+    // the global one on top would double up — but only while that overlay can
+    // actually be seen. Its overlay lives inside the slot wrapper and inherits
+    // slotOpacity, so an incoming model still fading in is invisible; blanket
+    // suppression on "a model is involved" left a slow model transition with no
+    // indicator at all, which is the opposite of what the overlay exists for.
+    // Narrowed to a model that is BOTH still loading and painted: that is the
+    // first-load case, where the two overlays really would stack.
+    //
+    // Derived from `slots`/`slotOpacity` rather than incomingSlotRef: a ref read
+    // during render can lag the slots actually being painted.
+    const loadingModelIsVisible = SLOT_INDICES.some(
+      index =>
+        slots[index]?.previewType === PreviewHTMLTag.model &&
+        slots[index]?.loading &&
+        // Scoped to the current artwork: a model whose load never resolved keeps
+        // `loading: true` forever (loadedSource refuses it once previewURL has
+        // moved on), and without this it would suppress the overlay for every
+        // artwork after it — while its own overlay is gone too.
+        slots[index]?.previewURL === previewURL &&
+        slotOpacity[index] > 0
     );
+    if (loadingModelIsVisible) {
+      return false;
+    }
+    // When the remote-config flag is on, show for other media types once
+    // markArtworkLoading has flipped showLoading.
+    return showLoading && globalLoading && showRenderLoadingOverlay;
   };
 
   const renderSlot = (slotIndex: SlotIndex) => {
@@ -1546,7 +1781,10 @@ const ArtworkPlayer = ({
             data={slot.displayPreviewURL}
             type={slot.mimeType ?? undefined}
             onLoad={() => {
-              loadedSource(slotIndex);
+              loadedSource(slotIndex, slot);
+            }}
+            onError={() => {
+              handleLoadIframeError(slotIndex, slot);
             }}>
             Not supported
           </object>
@@ -1557,11 +1795,18 @@ const ArtworkPlayer = ({
               key={slot.iframeKey}
               src={slot.displayPreviewURL}
               onLoad={() => {
-                handleModelLoad(slotIndex);
+                handleModelLoad(slotIndex, slot);
               }}
               onError={() => {
-                handleModelLoadError(slotIndex);
+                handleModelLoadError(slotIndex, slot);
               }}
+              // `showLoading` rather than the raw flag: the model overlay must
+              // honour the same RENDER_LOADING_DELAY_MS gate as every other
+              // type, or a model that loads quickly flashes a spinner the rest
+              // of the player deliberately suppresses. One timer owns both
+              // surfaces — markArtworkLoading raises it, and pending/ready/
+              // failed all lower it.
+              showLoadingOverlay={showRenderLoadingOverlay && showLoading}
             />
           </div>
         )}
@@ -1636,10 +1881,10 @@ const ArtworkPlayer = ({
               className={styles.iframe}
               src={slot.displaySoftwareURL}
               onLoad={() => {
-                handleIframeLoad(slotIndex);
+                handleIframeLoad(slotIndex, slot);
               }}
               onError={() => {
-                handleLoadIframeError(slotIndex);
+                handleLoadIframeError(slotIndex, slot);
               }}
               sandbox="allow-same-origin allow-scripts"
               tabIndex={0}
@@ -1651,10 +1896,10 @@ const ArtworkPlayer = ({
               className={styles.iframe}
               src={slot.displaySoftwareURL}
               onLoad={() => {
-                handleIframeLoad(slotIndex);
+                handleIframeLoad(slotIndex, slot);
               }}
               onError={() => {
-                handleLoadIframeError(slotIndex);
+                handleLoadIframeError(slotIndex, slot);
               }}
               tabIndex={0}
             />

@@ -5,7 +5,7 @@
  * playlist item — important because a strict activeSlot check drops events
  * fired during the 650ms cross-fade before activeSlot commits, which is
  * exactly the case end-of-stream advance is meant to support for short
- * clips. The gate uses `slot.previewURL === previewURLRef.current` instead.
+ * clips. The gate uses `slot.previewURL` and `slot.itemIdentity` together.
  */
 import { AppContext } from '@/context/AppContext';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
@@ -185,7 +185,11 @@ describe('ArtworkPlayer — onSourceEnded during cross-fade', () => {
 
     await findVideoForURL(container, VIDEO_URL_A);
 
-    rerenderArtworkPlayer(rerender, { previewURL: VIDEO_URL_B, itemIdentity: ITEM_B, onSourceEnded });
+    rerenderArtworkPlayer(rerender, {
+      previewURL: VIDEO_URL_B,
+      itemIdentity: ITEM_B,
+      onSourceEnded,
+    });
 
     const incoming = await findVideoForURL(container, VIDEO_URL_B);
 
@@ -211,7 +215,11 @@ describe('ArtworkPlayer — onSourceEnded during cross-fade', () => {
 
     const outgoing = await findVideoForURL(container, VIDEO_URL_A);
 
-    rerenderArtworkPlayer(rerender, { previewURL: VIDEO_URL_B, itemIdentity: ITEM_B, onSourceEnded });
+    rerenderArtworkPlayer(rerender, {
+      previewURL: VIDEO_URL_B,
+      itemIdentity: ITEM_B,
+      onSourceEnded,
+    });
 
     await findVideoForURL(container, VIDEO_URL_B);
 
@@ -259,6 +267,16 @@ describe('ArtworkPlayer — onSourceEnded during cross-fade', () => {
     // target source is VIDEO_URL_B. The combined gate drops the event.
     expect(onSourceEnded).not.toHaveBeenCalled();
   });
+});
+
+describe('ArtworkPlayer — onSourceEnded during same-URL identity transition', () => {
+  beforeEach(() => {
+    installVideoSpies();
+  });
+
+  afterEach(() => {
+    restoreVideoSpies();
+  });
 
   it('drops a late ended from the outgoing slot when adjacent items share a URL', async () => {
     // The bot-flagged regression case: two adjacent playlist items pointing
@@ -278,7 +296,11 @@ describe('ArtworkPlayer — onSourceEnded during cross-fade', () => {
     // Same URL, new identity. ArtworkPlayer must recreate the slot (so
     // the <video> remounts with a fresh iframeKey-derived React key) and
     // reject any `ended` that still fires on the stale element.
-    rerenderArtworkPlayer(rerender, { previewURL: VIDEO_URL_A, itemIdentity: ITEM_B, onSourceEnded });
+    rerenderArtworkPlayer(rerender, {
+      previewURL: VIDEO_URL_A,
+      itemIdentity: ITEM_B,
+      onSourceEnded,
+    });
 
     await waitFor(() => {
       const videos = Array.from(container.querySelectorAll('video'));
@@ -294,6 +316,39 @@ describe('ArtworkPlayer — onSourceEnded during cross-fade', () => {
 
     // The stale element belongs to ITEM_A, but the current itemIdentity is
     // ITEM_B. The identity gate drops the event.
-    expect(onSourceEnded).not.toHaveBeenCalledWith(ITEM_A);
+    expect(onSourceEnded).not.toHaveBeenCalled();
+  });
+
+  it('fires for the incoming slot when adjacent video items share a URL', async () => {
+    const onSourceEnded = vi.fn();
+    const { container, rerender } = renderArtworkPlayer({
+      previewURL: VIDEO_URL_A,
+      itemIdentity: ITEM_A,
+      onSourceEnded,
+    });
+
+    const oldElement = await findVideoForURL(container, VIDEO_URL_A);
+
+    rerenderArtworkPlayer(rerender, {
+      previewURL: VIDEO_URL_A,
+      itemIdentity: ITEM_B,
+      onSourceEnded,
+    });
+
+    const incoming = await waitFor(() => {
+      const videos = Array.from(container.querySelectorAll('video'));
+      const next = videos.find(video => video !== oldElement);
+      if (!next) {
+        throw new Error('new same-URL <video> did not mount');
+      }
+      return next;
+    });
+
+    act(() => {
+      incoming.dispatchEvent(new Event('ended'));
+    });
+
+    expect(onSourceEnded).toHaveBeenCalledTimes(1);
+    expect(onSourceEnded).toHaveBeenCalledWith(ITEM_B);
   });
 });

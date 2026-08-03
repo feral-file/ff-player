@@ -20,7 +20,7 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 
 - At runtime, [RemoteConfigService](../src/services/remoteConfigService.ts) loads `${NEXT_PUBLIC_PUB_DOC_URL}/configs/display.json` when `NEXT_PUBLIC_PUB_DOC_URL` is set at build time.
 - When `NEXT_PUBLIC_PUB_DOC_URL` is empty, the request is same-origin: `/configs/display.json` (serve a matching file from `public/` in the bundle if needed).
-- `duration` controls the browser version-polling interval for web/Pages deployments, and `defaultPlaylistURL` controls fallback playback. Other keys in the published JSON are ignored.
+- `duration` controls the browser version-polling interval for web/Pages deployments, `defaultPlaylistURL` controls fallback playback, and `showRenderLoadingOverlay` controls whether the loading overlay is shown while the current artwork is still rendering. Other keys in the published JSON are ignored.
 - A failed fetch resolves with the local defaults but is **not** cached, so the next caller retries the network. Only a config that actually came back from the remote read is cached for the page lifetime. Without this, a device that boots offline pins itself to the local defaults forever and never reads the published `display.json`, even after Wi-Fi comes up.
 - Overlapping reads settle first-landed-wins: the first successful remote read populates the cache, and a slower concurrent read — whether it fails or succeeds with what is by then an older response — converges on that cached config instead of overwriting it. Once populated, the page-lifetime cache never changes.
 - A superseded `AppContext` read that lands the remote config still publishes it to the player: the effect's cancel guard only drops results that are NOT the immutable cache. Without the carve-out, an older read succeeding after a newer one already failed over to local defaults (flapping link) would strand the published config in the cache — with no further online notification due, the wall would stay on the built-in default.
@@ -38,6 +38,21 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 - The overlay renders above the active artwork player and does not unmount or navigate away from playback. In `pairing_code`, the player shows a code-only "Pairing code" screen and asks the user to enter that code on the website that requested a session.
 - In `request_received`, the player instructs the user to open the Feral File app, go to Settings > Art Computer, and approve the browser session.
 - The device-local static export ships `ffos-player-contract.json` at the bundle root. `feral-controld` and `feral-player.service` use that manifest to verify the deployed player supports this CDP contract before enabling mint pairing.
+
+## Artwork render status (`renderStatus`)
+
+- Status polls expose an optional numeric `renderStatus` on the device-status reply: `0` pending, `1` loading, `2` ready, `3` failed (`RenderStatus` in `src/models/render_status.model.ts`).
+- The value describes the **current page mount** only. Persistence and boot recovery strip it so IndexedDB cannot resurrect a prior ready/failed before `ArtworkPlayer` publishes a new lifecycle.
+- After boot/hydrate, `renderStatus` may be omitted/`undefined` until the player mounts; treat that as “not yet reported”, not as a terminal failure.
+- **Feature-detect via the manifest, not via the field.** `JSON.stringify` drops an `undefined` key, so "this build never reports `renderStatus`" and "this build supports it but has not published a lifecycle yet" are byte-identical on the wire. `contracts.renderStatus` in `public/ffos-player-contract.json` is the deploy-time fuse that separates them, the same role `contracts.playerStatus` plays for the probe: a manifest carrying the entry means an absent field is "not yet reported"; a manifest without it is an older build that never reports at all. A controller that waits for `ready` must check the fuse first or it will wait forever on an old player.
+- A corroborated-offline detection failure reports `failed`: nothing is rendering for that mount, so holding `loading` would claim an in-flight attempt that does not exist — indefinitely, once the M7 refresh budget is spent. The recovery remount republishes `pending`. The error modal is deliberately NOT raised in that state; the offline backdrop owns the screen (see *Offline playback recovery*), and "cannot be displayed on this device" would misread a transient network outage as a broken artwork.
+- `CanvasService` forces `pending` when the selected artwork identity changes (`id` + `source`), including same-id source refresh.
+- `ready` means **the artwork finished loading AND is what the screen is showing** — not that it rendered what it should. Two separate limits are folded into that sentence:
+  - **Not render verification.** Every preview type reports `ready` from its own load-completion signal; the player never inspects what was actually painted.
+  - **Visual commitment, not byte arrival.** `ready` publishes when the incoming slot is committed to the screen, which on a transition with an outgoing artwork is the end of the fade — up to `FADE_IN_OUT_DURATION_MS` (650ms) after the bytes landed. A first load with nothing to fade from publishes immediately. During that window the poll reports `pending` (fast load) or `loading` (load slower than the overlay delay). This is deliberate: `ready` is bound to the same moment the loading overlay comes down, so there is never a state where the poll says `ready` while the wall is showing the previous artwork or an opaque overlay. A controller taking a screenshot or flipping its own “now displaying” UI wants that moment, not byte arrival.
+  - For iframe and PDF the first limit is real: a browser can load its own error document after a failed remote navigation, and Chromium does not emit an iframe error for that case, so a dead HTML artwork can still report `ready`. This is a deliberate trade-off. Withholding `ready` from iframe pinned the dominant artwork type — HTML/generative, plus every item whose MIME type is empty or undetectable and therefore falls back to iframe — at `loading` indefinitely, which gives a controller strictly less to act on than an occasional optimistic `ready`.
+  - Failures that do surface an error event still reach `failed` normally; the gap is limited to navigation failures the browser reports as a successful load.
+- `showRenderLoadingOverlay` only gates the visible loading overlay; it does not change the codes reported on status polls.
 
 ## Setup overlay background artwork
 
@@ -145,11 +160,17 @@ literal percent characters; explicit `;base64` payloads must use valid base64.
 
 This guard rejects inputs the player already knows it cannot render while
 preserving relative DP1 sources used by device-local deployments. Acceptance
-does not promise a successful fetch: an accepted source that later cannot load
-is represented by a renderer failure, rather than being rejected at cast time.
+does not promise a successful fetch: an accepted source that later fails with a
+renderer error surfaces as `renderStatus: failed`, rather than being rejected at
+cast time. The iframe/PDF caveat above still applies — a navigation the browser
+reports as a successful load is indistinguishable from a real render there.
 
 Boot playlist, cast-info, and scheduled-task records are recovery snapshots
 rather than new cast commands. They are intentionally restored or executed
 without source validation so an upgrade does not interrupt a previously
 persisted playlist; records written by the current version have already passed
 the live-command validation boundary.
+
+## Compatibility note
+
+- Persisted storage keys for cast, display settings, and boot recovery are unchanged by this document. Do not rename persisted keys without a migration plan.

@@ -40,6 +40,7 @@ describe('RemoteConfigService defaults', () => {
     await expect(service.getAppRemoteConfig()).resolves.toEqual({
       duration: 1234,
       defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
+      showRenderLoadingOverlay: true,
     });
   });
 
@@ -56,6 +57,7 @@ describe('RemoteConfigService defaults', () => {
     await expect(service.getAppRemoteConfig()).resolves.toEqual({
       duration: 4321,
       defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
+      showRenderLoadingOverlay: true,
     });
   });
 
@@ -68,6 +70,7 @@ describe('RemoteConfigService defaults', () => {
     await expect(service.getAppRemoteConfig()).resolves.toEqual({
       duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,
       defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
+      showRenderLoadingOverlay: true,
     });
   });
 });
@@ -114,12 +117,14 @@ describe('RemoteConfigService caching', () => {
     await expect(service.getAppRemoteConfig()).resolves.toEqual({
       duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,
       defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
+      showRenderLoadingOverlay: true,
     });
     expect(axiosGet).toHaveBeenCalledTimes(1);
 
     await expect(service.getAppRemoteConfig()).resolves.toEqual({
       duration: 1000,
       defaultPlaylistURL: 'https://example.com/published',
+      showRenderLoadingOverlay: true,
     });
     expect(axiosGet).toHaveBeenCalledTimes(2);
   });
@@ -168,6 +173,8 @@ describe('RemoteConfigService concurrent reads', () => {
       duration: 1000,
       defaultPlaylistURL: 'https://example.com/published',
     };
+    // display.json omits the overlay switch, so the service supplies its default.
+    const publishedConfig = { ...published, showRenderLoadingOverlay: true };
     let failSlowRead: ((error: Error) => void) | undefined;
     axiosGet.mockImplementationOnce(
       () =>
@@ -182,13 +189,13 @@ describe('RemoteConfigService concurrent reads', () => {
     // The slow read is still in flight when the second one succeeds and
     // caches the published config.
     const slowRead = service.getAppRemoteConfig();
-    await expect(service.getAppRemoteConfig()).resolves.toEqual(published);
+    await expect(service.getAppRemoteConfig()).resolves.toEqual(publishedConfig);
 
     failSlowRead?.(new Error('link died mid-request'));
 
-    await expect(slowRead).resolves.toEqual(published);
+    await expect(slowRead).resolves.toEqual(publishedConfig);
     // And the cache itself survived: no third request, still published.
-    await expect(service.getAppRemoteConfig()).resolves.toEqual(published);
+    await expect(service.getAppRemoteConfig()).resolves.toEqual(publishedConfig);
     expect(axiosGet).toHaveBeenCalledTimes(2);
   });
 
@@ -206,6 +213,7 @@ describe('RemoteConfigService concurrent reads', () => {
       duration: 2000,
       defaultPlaylistURL: 'https://example.com/landed',
     };
+    const landedConfig = { ...landed, showRenderLoadingOverlay: true };
     let resolveSlowRead: ((response: { data: unknown }) => void) | undefined;
     axiosGet.mockImplementationOnce(
       () =>
@@ -220,14 +228,14 @@ describe('RemoteConfigService concurrent reads', () => {
     // The slow read is still in flight when the second one succeeds and
     // caches its config.
     const slowRead = service.getAppRemoteConfig();
-    await expect(service.getAppRemoteConfig()).resolves.toEqual(landed);
+    await expect(service.getAppRemoteConfig()).resolves.toEqual(landedConfig);
 
     resolveSlowRead?.({ data: stale });
 
     // The slow older read converges on the already-landed config...
-    await expect(slowRead).resolves.toEqual(landed);
+    await expect(slowRead).resolves.toEqual(landedConfig);
     // ...and the cache kept it: no third request, still the landed config.
-    await expect(service.getAppRemoteConfig()).resolves.toEqual(landed);
+    await expect(service.getAppRemoteConfig()).resolves.toEqual(landedConfig);
     expect(axiosGet).toHaveBeenCalledTimes(2);
   });
 });
@@ -248,6 +256,25 @@ describe('RemoteConfigService duration normalization', () => {
     await expect(service.getAppRemoteConfig()).resolves.toEqual({
       duration: undefined,
       defaultPlaylistURL: 'https://example.com/playlist',
+      showRenderLoadingOverlay: true,
+    });
+  });
+
+  it('respects the published render loading overlay switch when present', async () => {
+    vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
+    axiosGet.mockResolvedValueOnce({
+      data: {
+        defaultPlaylistURL: 'https://example.com/playlist',
+        showRenderLoadingOverlay: false,
+      },
+    });
+
+    const service = new RemoteConfigService();
+
+    await expect(service.getAppRemoteConfig()).resolves.toEqual({
+      duration: undefined,
+      defaultPlaylistURL: 'https://example.com/playlist',
+      showRenderLoadingOverlay: false,
     });
   });
 
@@ -291,6 +318,7 @@ describe('RemoteConfigService duration normalization', () => {
     await expect(service.getAppRemoteConfig()).resolves.toEqual({
       duration: undefined,
       defaultPlaylistURL: 'https://example.com/c',
+      showRenderLoadingOverlay: true,
     });
   });
 });

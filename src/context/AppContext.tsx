@@ -32,7 +32,7 @@ import {
   CustomEventName,
 } from '@/models/custom_event';
 import { normalizePlaylistIndex } from '@/utils/playlist';
-import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
+import { stripEphemeralCastInfoFields } from '@/utils/castInfo';
 import { useRouter } from 'next/navigation';
 
 interface AppContextProps {
@@ -391,7 +391,9 @@ export const AppProvider = ({ children }: AppContextProps) => {
         }
       }
 
-      const cleanCastInfo = stripLegacyCastPlaybackTimeline(castInfo);
+      // Ephemeral strip, not just the legacy timeline one: boot recovery must
+      // not restore a stored renderStatus for an artwork that has not mounted.
+      const cleanCastInfo = stripEphemeralCastInfoFields(castInfo);
       canvasService.setCastInfo(cleanCastInfo, false);
       if (!halted) {
         setCastInfo(cleanCastInfo);
@@ -447,6 +449,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
         setAppConfig({
           duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,
           defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
+          showRenderLoadingOverlay: true,
         });
       }
     };

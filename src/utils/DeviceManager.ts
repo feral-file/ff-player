@@ -2,6 +2,7 @@ import { LocalStorageItem } from '@/constants';
 import { DisplaySettings } from '@/models/display_settings.model';
 import { CastInfo, ViewMode } from '@/models';
 import { DP1Call } from '@/models/dp1.model';
+import { stripEphemeralCastInfoFields } from './castInfo';
 import indexedDBStorage from './IndexedDBStorage';
 
 const PRELOAD_KEYS: string[] = [
@@ -193,9 +194,17 @@ class DeviceManager {
     return null;
   }
 
+  /**
+   * Persist cast recovery state. Live-only fields such as renderStatus are
+   * stripped here so any caller (not only useCastInfo) cannot resurrect a
+   * prior page's ready/failed on the next boot.
+   */
   public async setDeviceInfo(castInfo: CastInfo | null): Promise<void> {
     await this.ensureInitialized();
-    const serialized = JSON.stringify(castInfo);
+    const persistable = castInfo
+      ? stripEphemeralCastInfoFields(castInfo)
+      : null;
+    const serialized = JSON.stringify(persistable);
     this.cache.set(LocalStorageItem.castInfo, serialized);
     await indexedDBStorage.setItem(LocalStorageItem.castInfo, serialized);
   }

@@ -1,4 +1,5 @@
 import { DP1Call } from './dp1.model';
+import { RenderStatus } from './render_status.model';
 
 export enum LoopMode {
   none = 'none',
@@ -36,6 +37,7 @@ export interface CastInfo {
   isPaused?: boolean;
   loopMode?: LoopMode;
   shuffle?: boolean;
+  renderStatus?: RenderStatus;
 
   // DP1
   playlist?: DP1Call;

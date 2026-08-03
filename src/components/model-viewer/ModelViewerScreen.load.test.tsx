@@ -76,3 +76,25 @@ describe('ModelViewerScreen', () => {
     expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
   });
 });
+
+describe('ModelViewerScreen — loading overlay switch', () => {
+  it('shows its own loading overlay by default while the model is not loaded', () => {
+    render(<ModelViewerScreen src="https://example.com/model.glb" />);
+
+    expect(screen.queryByText('Loading 3D model')).toBeTruthy();
+  });
+
+  it('suppresses the loading overlay when showLoadingOverlay is false', () => {
+    // ArtworkPlayer is this component's only consumer. It passes
+    // `showRenderLoadingOverlay && showLoading`, so this prop carries both the
+    // display.json kill switch and the shared RENDER_LOADING_DELAY_MS gate.
+    render(
+      <ModelViewerScreen
+        src="https://example.com/model.glb"
+        showLoadingOverlay={false}
+      />
+    );
+
+    expect(screen.queryByText('Loading 3D model')).toBeNull();
+  });
+});

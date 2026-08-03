@@ -28,3 +28,16 @@ export function stripLegacyCastPlaybackTimeline(castInfo: CastInfo): CastInfo {
   void _remainTime;
   return cleanCastInfo;
 }
+
+/**
+ * Drop live-only fields before persistence or boot recovery.
+ *
+ * `renderStatus` describes the current page's artwork lifecycle. Restoring a
+ * stored ready/failed value would report a render that has not mounted yet.
+ */
+export function stripEphemeralCastInfoFields(castInfo: CastInfo): CastInfo {
+  const withoutLegacy = stripLegacyCastPlaybackTimeline(castInfo);
+  const { renderStatus: _renderStatus, ...cleanCastInfo } = withoutLegacy;
+  void _renderStatus;
+  return cleanCastInfo;
+}

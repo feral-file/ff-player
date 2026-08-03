@@ -2,7 +2,7 @@ import { CursorPosition } from '@/services/custom-hooks/useCursorPositions';
 import { TokenDisplaySettings, TombstoneMode } from './display_settings.model';
 import { ErrorType } from './error.model';
 import { DP1Call, DP1Intent, DP1Item, Scaling } from './dp1.model';
-import { CastCommand, LoopMode, ViewMode } from '.';
+import { CastCommand, LoopMode, RenderStatus, ViewMode } from '.';
 
 export interface CursorOffset {
   dx: number;
@@ -61,6 +61,7 @@ export interface CheckDeviceStatusReply extends Reply {
 
   items?: DP1Item[];
   index?: number;
+  renderStatus?: RenderStatus;
   isPaused?: boolean;
 
   // Generation carrier for controld's page-generation tracking (cross-repo

@@ -202,3 +202,66 @@ Live escape hatch: settings changes that arrive while no transition is pending (
 ## 10) Image pre-decode before ready
 
 The image path awaits `img.decode()` before calling `loadedSource`, so a large image's first rasterization does not land on the first painted frame of the crossfade (which janked the fade on kiosk hardware). `decode()` rejections or absence fall back to marking ready anyway — painting undecoded is the old behavior, not an error — and `loadedSource`'s URL guard drops stale results.
+
+## 11) Render-loading overlay vs the transition
+
+The render-status lifecycle drives a visible overlay as well as the status poll
+(see *Artwork render status* in [DEVICE_LOCAL_PLAYER.md](DEVICE_LOCAL_PLAYER.md)).
+This overlay changes what the wall shows during a slow transition, so it is part
+of the transition contract, not a separate concern.
+
+- **Delay before it appears.** The artwork-setup effect arms a
+  `RENDER_LOADING_DELAY_MS` (2s) timer right after calling `markArtworkPending`.
+  Only if the request is still `pending` when it fires does `markArtworkLoading`
+  raise the overlay, so a load that finishes inside the window never flashes it.
+  The timer belongs to the effect, not to `markArtworkPending` — the WebGL
+  recovery path is the other caller of that function and has to re-arm the timer
+  itself, because `reloadIframe` only bumps the slot's `iframeKey` and does not
+  re-run the setup effect.
+- **It covers the stage, including the outgoing artwork.** The overlay is an
+  opaque full-screen panel above the slot layers. This is deliberate: an FF1 that
+  is mid-load should say so on the wall, not hold a stale frame silently. It
+  therefore supersedes the "outgoing artwork stays until the incoming one is
+  ready" behavior for loads slower than the delay — that rule still governs the
+  slots themselves, but the overlay is painted over them.
+- **It is disarmed at slot commit, not at fade end.** The ready-consume effect
+  calls `clearLoadingDelay()` as soon as the incoming slot commits. Without this,
+  a load landing between roughly `RENDER_LOADING_DELAY_MS - FADE_IN_OUT_DURATION_MS`
+  and the delay itself would commit, start its crossfade, and *then* trip the
+  timer — raising the overlay on top of a transition already in flight and
+  reporting `loading` for an artwork that had finished loading. In the overlap
+  and sequential branches `markArtworkReady` only runs at the end of the fade, so
+  the commit point is the only place early enough to disarm it.
+- **An overlay that is already up stays up until fade end.** `markArtworkReady`
+  clears it at the same moment it publishes `ready`, so a genuinely slow load is
+  never revealed mid-crossfade.
+- **`ready` publishes with the teardown, not before it.** `markArtworkReady` both
+  clears the overlay and publishes `renderStatus: ready`, at the commit points —
+  synchronously on a first load, at the end of the fade in the sequential and
+  overlap branches. Keeping them together is what guarantees a status poll can
+  never answer `ready` while the wall still shows the outgoing artwork or an
+  opaque overlay. The cost is that `ready` trails byte arrival by up to
+  `FADE_IN_OUT_DURATION_MS` on a transition, and the poll reads `pending` (fast
+  load) or `loading` (slow load) in that window. See *Artwork render status* in
+  [DEVICE_LOCAL_PLAYER.md](DEVICE_LOCAL_PLAYER.md).
+- **The failure path is asymmetric on purpose.** `markArtworkFailed` publishes and
+  drops the overlay at the error site rather than at the commit point, so on a slow
+  load that fails the rest of the fade is no longer covered: the overlap branch
+  reveals the outgoing artwork, and the sequential branch (iframe/object/model —
+  both slots at opacity 0) shows black. The error modal is raised over either, so
+  the wall is never silently wrong.
+- **Model artworks.** `ModelViewerScreen` paints its own "Loading 3D model"
+  overlay inside the slot wrapper, so it inherits `slotOpacity` and is invisible
+  while the incoming slot is still fading in. The global overlay is therefore
+  suppressed only when a model that is BOTH still loading AND painted would stack
+  the two — in practice the first-load case. A slow transition INTO a model still
+  gets the global overlay, because the model's own one cannot be seen yet. The
+  check is also scoped to the current `previewURL`: a model whose load never
+  resolves keeps `loading: true` for the life of its slot, and an unscoped check
+  would let it suppress the overlay for every artwork after it.
+- **Runtime switch.** `showRenderLoadingOverlay` in `display.json` (default `true`)
+  gates the overlay only; it never changes the codes reported on status polls.
+  `ArtworkPlayer` passes it to `ModelViewerScreen` as
+  `showLoadingOverlay={showRenderLoadingOverlay && showLoading}`, so the model
+  overlay honours both the kill switch and the same `RENDER_LOADING_DELAY_MS`
+  gate as every other type — one timer owns both surfaces.

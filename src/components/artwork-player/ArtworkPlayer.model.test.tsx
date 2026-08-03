@@ -1,6 +1,8 @@
 import { AppContext } from '@/context/AppContext';
+import { RenderStatus } from '@/models';
 import { defaultDP1DisplayPreference, Scaling } from '@/models/dp1.model';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { canvasService } from '@/services/CanvasService';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
@@ -74,6 +76,8 @@ function renderWithDisplaySettings(
 
 afterEach(() => {
   helperMocks.getContentTypeFromURL.mockReset();
+  canvasService.setCastInfo(null, false);
+  canvasService.setRenderStatus(undefined);
   cleanup();
 });
 
@@ -355,5 +359,139 @@ describe('ArtworkPlayer — stale model error handling', () => {
     await waitFor(() => {
       expect(screen.queryByText('Unable to load 3D model')).toBeNull();
     });
+  });
+});
+
+describe('ArtworkPlayer — model render status', () => {
+  it('reports ready after model-viewer load completes', async () => {
+    const { container } = renderWithContext(
+      <ArtworkPlayer
+        previewURL={MODEL_URL}
+        artworkPreviewMIMEType="model/gltf-binary"
+        displayPreferences={defaultDP1DisplayPreference}
+      />
+    );
+
+    const modelViewerEl = await waitFor(() => {
+      const node = container.querySelector('model-viewer');
+      if (!node) {
+        throw new Error('model-viewer element was not rendered');
+      }
+      return node;
+    });
+
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+
+    modelViewerEl.dispatchEvent(new Event('load'));
+
+    await waitFor(() => {
+      expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    });
+  });
+
+  it('reports failed when model-viewer errors for the current artwork', async () => {
+    const { container } = renderWithContext(
+      <ArtworkPlayer
+        previewURL={MODEL_URL}
+        artworkPreviewMIMEType="model/gltf-binary"
+        displayPreferences={defaultDP1DisplayPreference}
+      />
+    );
+
+    const modelViewerEl = await waitFor(() => {
+      const node = container.querySelector('model-viewer');
+      if (!node) {
+        throw new Error('model-viewer element was not rendered');
+      }
+      return node;
+    });
+
+    modelViewerEl.dispatchEvent(new Event('error'));
+
+    await waitFor(() => {
+      expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+    });
+  });
+});
+
+describe('ArtworkPlayer — model loading overlay timing', () => {
+  afterEach(() => {
+    canvasService.setCastInfo(null, false);
+    canvasService.setRenderStatus(undefined);
+    vi.useRealTimers();
+  });
+
+  it('holds the model overlay for the same 2s delay as every other type', async () => {
+    vi.useFakeTimers();
+    const { container } = renderWithContext(
+      <ArtworkPlayer
+        previewURL={MODEL_URL}
+        artworkPreviewMIMEType="model/gltf-binary"
+        displayPreferences={defaultDP1DisplayPreference}
+      />
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(container.querySelector('model-viewer')).toBeTruthy();
+    // A model that loads quickly must not flash a spinner the rest of the
+    // player deliberately suppresses for the first two seconds.
+    expect(screen.queryByText('Loading 3D model')).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2100);
+    });
+    expect(screen.queryByText('Loading 3D model')).toBeTruthy();
+    // And exactly one overlay: a painted, still-loading model suppresses the
+    // global one, which is the whole reason that suppression branch exists.
+    expect(screen.queryByText('Loading...')).toBeNull();
+  });
+
+  it('shows the global overlay for a slow transition into a model', async () => {
+    vi.useFakeTimers();
+    const { rerender } = renderWithContext(
+      <ArtworkPlayer
+        previewURL={IMAGE_URL}
+        artworkPreviewMIMEType="image/png"
+        displayPreferences={defaultDP1DisplayPreference}
+        itemIdentity="item-image"
+      />
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    rerender(
+      <AppContext.Provider
+        value={
+          {
+            context: {
+              isInitialized: true,
+              isOnline: true,
+              appRemoteConfig: {},
+              displaySettings: null,
+              cursorPositions: null,
+              castInfo: null,
+            },
+          } as never
+        }>
+        <ArtworkPlayer
+          previewURL={MODEL_URL}
+          artworkPreviewMIMEType="model/gltf-binary"
+          displayPreferences={defaultDP1DisplayPreference}
+          itemIdentity="item-model"
+        />
+      </AppContext.Provider>
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2100);
+    });
+
+    // The incoming model slot is still at opacity 0, so ModelViewerScreen's own
+    // overlay cannot be seen. Suppressing the global one here would leave a slow
+    // model transition with no indicator at all.
+    expect(screen.queryByText('Loading...')).toBeTruthy();
   });
 });

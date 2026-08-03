@@ -62,7 +62,7 @@ Use `npm run post-implement-check` first to auto-fix and lint only the files cha
 
 ## Runtime Configuration
 
-- `display.json` (loaded from `${NEXT_PUBLIC_PUB_DOC_URL}/configs/display.json`, or same-origin `/configs/display.json` when the env is empty) provides `duration` for web version polling and `defaultPlaylistURL` for fallback playback defaults. Extra keys in the published document are ignored.
+- `display.json` (loaded from `${NEXT_PUBLIC_PUB_DOC_URL}/configs/display.json`, or same-origin `/configs/display.json` when the env is empty) provides `duration` for web version polling, `defaultPlaylistURL` for fallback playback defaults, and `showRenderLoadingOverlay` for the artwork render-loading overlay. Extra keys in the published document are ignored.
 - Cloudflare Pages/web deployments keep the in-browser version polling/reload flow and publish `out/version.json` on deploy so open tabs can refresh onto new JS.
 - The FF OS static export sets `NEXT_PUBLIC_DISABLE_VERSION_CHECK=true`, so the installed bundle does not self-refresh and should ride with the device image or update channel.
 

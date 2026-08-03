@@ -1,6 +1,10 @@
 import type { CastInfo } from '@/models';
+import { RenderStatus } from '@/models';
 import { describe, expect, it } from 'vitest';
-import { stripLegacyCastPlaybackTimeline } from './castInfo';
+import {
+  stripEphemeralCastInfoFields,
+  stripLegacyCastPlaybackTimeline,
+} from './castInfo';
 
 describe('stripLegacyCastPlaybackTimeline', () => {
   it('drops legacy playback timeline fields', () => {
@@ -29,5 +33,21 @@ describe('stripLegacyCastPlaybackTimeline', () => {
     } as CastInfo;
 
     expect(stripLegacyCastPlaybackTimeline(castInfo)).not.toBe(castInfo);
+  });
+});
+
+describe('stripEphemeralCastInfoFields', () => {
+  it('drops renderStatus and legacy timeline fields', () => {
+    const castInfo = {
+      castCommand: 'displayPlaylist',
+      index: 1,
+      renderStatus: RenderStatus.ready,
+      startTime: 10,
+    } as CastInfo & { startTime: number };
+
+    expect(stripEphemeralCastInfoFields(castInfo)).toEqual({
+      castCommand: 'displayPlaylist',
+      index: 1,
+    });
   });
 });

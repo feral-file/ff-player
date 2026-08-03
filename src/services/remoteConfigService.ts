@@ -6,6 +6,8 @@ export interface AppRemoteConfig {
   /** Poll interval for `version.json`; omit, `undefined`, or `0` disables polling. */
   duration?: number;
   defaultPlaylistURL: string;
+  /** When true, ArtworkPlayer shows the loading overlay while renderStatus is loading. */
+  showRenderLoadingOverlay?: boolean;
 }
 
 /**
@@ -41,6 +43,15 @@ function normalizePublishedDuration(raw: unknown): number | undefined {
   return raw;
 }
 
+/** Normalizes a published boolean switch; non-boolean values are ignored. */
+function normalizePublishedBoolean(raw: unknown): boolean | undefined {
+  if (typeof raw !== 'boolean') {
+    return undefined;
+  }
+
+  return raw;
+}
+
 /**
  * Loads published runtime config for display defaults and falls back to local
  * constants if the remote document is unavailable or incomplete.
@@ -48,7 +59,8 @@ function normalizePublishedDuration(raw: unknown): number | undefined {
  * Published `display.json` may still contain legacy fields (for example a
  * historical `duration` used by older clients). This service accepts that
  * field for version polling, but only `defaultPlaylistURL` affects fallback
- * playback selection.
+ * playback selection. `showRenderLoadingOverlay` is a runtime switch for the
+ * visible loading overlay while artwork is still rendering.
  */
 class RemoteConfigService {
   /**
@@ -157,6 +169,9 @@ class RemoteConfigService {
             response.data.defaultPlaylistURL.trim() !== ''
               ? response.data.defaultPlaylistURL.trim()
               : AppSettings.DEFAULT_PLAYLIST_URL,
+          showRenderLoadingOverlay:
+            normalizePublishedBoolean(response.data.showRenderLoadingOverlay) ??
+            true,
         },
         fromRemote: true,
       };
@@ -168,6 +183,7 @@ class RemoteConfigService {
         config: {
           duration: AppSettings.VERSION_CHECK_INTERVAL_DURATION,
           defaultPlaylistURL: AppSettings.DEFAULT_PLAYLIST_URL,
+          showRenderLoadingOverlay: true,
         },
         fromRemote: false,
       };

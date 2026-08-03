@@ -1,19 +1,44 @@
+/** @vitest-environment jsdom */
 /**
- * Boot-recovery contract for cast persistence: control-only commands
- * (moveToArtwork, updateIndex, refreshPlaylist, setShuffle, setLoop,
- * updateDefaultDuration) must be rewritten to displayPlaylist before being
- * persisted. AppContext replays the persisted castInfo verbatim on boot, and
- * only displayPlaylist populates the playlist route — persisting a raw
- * control command would recover to a black screen.
+ * Persistence contracts for useCastInfo:
+ * strip ephemeral renderStatus before IndexedDB write;
+ * rewrite playlist-control commands (including updateDefaultDuration) to
+ * displayPlaylist so AppContext boot replay can populate the playlist route.
  */
-import { CastCommand } from '@/models';
-import type { CastInfo } from '@/models';
+import { CastCommand, RenderStatus, type CastInfo } from '@/models';
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
-import DeviceManager from '@/utils/DeviceManager';
-import { act, renderHook, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useCastInfo from './useCastInfo';
+
+const { setDeviceInfo } = vi.hoisted(() => ({
+  setDeviceInfo: vi.fn<(castInfo: CastInfo | null) => Promise<void>>(() =>
+    Promise.resolve(undefined)
+  ),
+}));
+
+vi.mock('@/utils/DeviceManager', () => ({
+  default: {
+    setDeviceInfo,
+  },
+}));
+
+/** Minimal playlist fixture for persistence assertions. */
+function makePlaylist(): DP1Call {
+  return {
+    dpVersion: '1',
+    id: 'active',
+    title: 'active',
+    items: [
+      {
+        id: 'A',
+        source: 'https://example.com/a.jpg',
+        license: {},
+      } as DP1Item,
+    ],
+  } as DP1Call;
+}
 
 const item = (id: string): DP1Item =>
   ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
@@ -34,11 +59,73 @@ function castWith(castCommand: CastCommand): CastInfo {
   };
 }
 
-describe('useCastInfo persistence rewrite', () => {
-  afterEach(() => {
-    canvasService.setCastInfo(null, false);
+beforeEach(() => {
+  setDeviceInfo.mockImplementation(() => Promise.resolve(undefined));
+});
+
+afterEach(() => {
+  canvasService.onCastInfoChange = null;
+  canvasService.setCastInfo(null, false);
+  cleanup();
+  vi.clearAllMocks();
+});
+
+describe('useCastInfo persistence strip', () => {
+  it('strips renderStatus before persisting cast info', async () => {
+    renderHook(() => useCastInfo());
+    const activePlaylist = makePlaylist();
+
+    act(() => {
+      canvasService.onCastInfoChange?.({
+        castCommand: CastCommand.displayPlaylist,
+        playlist: activePlaylist,
+        index: 0,
+        renderStatus: RenderStatus.ready,
+      });
+    });
+
+    await waitFor(() => {
+      expect(setDeviceInfo).toHaveBeenCalled();
+    });
+
+    const stored: CastInfo | null | undefined = setDeviceInfo.mock.calls.at(
+      -1
+    )?.[0];
+    expect(stored).toEqual({
+      castCommand: CastCommand.displayPlaylist,
+      playlist: activePlaylist,
+      index: 0,
+    });
+    expect(stored).not.toHaveProperty('renderStatus');
   });
 
+  it('rewrites playlist-control commands and strips renderStatus', async () => {
+    renderHook(() => useCastInfo());
+    const activePlaylist = makePlaylist();
+
+    act(() => {
+      canvasService.onCastInfoChange?.({
+        castCommand: CastCommand.updateIndex,
+        playlist: activePlaylist,
+        index: 0,
+        renderStatus: RenderStatus.loading,
+      });
+    });
+
+    await waitFor(() => {
+      expect(setDeviceInfo).toHaveBeenCalled();
+    });
+
+    expect(setDeviceInfo.mock.calls.at(-1)?.[0]).toEqual({
+      castCommand: CastCommand.displayPlaylist,
+      playlist: activePlaylist,
+      index: 0,
+    });
+  });
+});
+
+
+describe('useCastInfo persistence rewrite', () => {
   it('persists updateDefaultDuration as displayPlaylist for boot recovery', async () => {
     renderHook(() => useCastInfo());
 
@@ -47,10 +134,11 @@ describe('useCastInfo persistence rewrite', () => {
     });
 
     await waitFor(() => {
-      const persisted = DeviceManager.getCachedCastInfo();
-      expect(persisted?.castCommand).toBe(CastCommand.displayPlaylist);
+      expect(setDeviceInfo).toHaveBeenCalled();
     });
-    const persisted = DeviceManager.getCachedCastInfo();
+
+    const persisted = setDeviceInfo.mock.calls.at(-1)?.[0];
+    expect(persisted?.castCommand).toBe(CastCommand.displayPlaylist);
     expect(persisted?.playlist?.items?.map(entry => entry.id)).toEqual([
       'a',
       'b',
@@ -66,9 +154,11 @@ describe('useCastInfo persistence rewrite', () => {
     });
 
     await waitFor(() => {
-      expect(DeviceManager.getCachedCastInfo()?.castCommand).toBe(
-        CastCommand.displayPlaylist
-      );
+      expect(setDeviceInfo).toHaveBeenCalled();
     });
+
+    expect(setDeviceInfo.mock.calls.at(-1)?.[0]?.castCommand).toBe(
+      CastCommand.displayPlaylist
+    );
   });
 });
