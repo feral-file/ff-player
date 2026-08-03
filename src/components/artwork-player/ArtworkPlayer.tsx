@@ -362,26 +362,26 @@ const ArtworkPlayer = ({
     setShowLoading(true);
   }, []);
 
-  const markArtworkReady = useCallback((isVerified = true) => {
+  /**
+   * Publish `ready` for the committed artwork.
+   *
+   * `ready` means "the document finished loading", not "the artwork rendered
+   * what it should". For iframe/PDF that distinction is real — a browser can
+   * load its own error document after a failed remote navigation, and Chromium
+   * does not emit an iframe error for it — but the contract deliberately stops
+   * at load completion: withholding `ready` from iframe left the dominant
+   * artwork type (HTML/generative, plus every item whose MIME type is empty and
+   * falls back to iframe) reporting `loading` forever, which is worse for a
+   * controller than an occasional optimistic `ready`. Failures that DO surface
+   * an error event still reach `failed` through handleLoadIframeError.
+   */
+  const markArtworkReady = useCallback(() => {
     if (renderStatusRef.current === RenderStatus.ready) {
       return;
     }
     // Model-viewer failures commit the slot via loadedSource then mark failed.
     // Transition completion must not overwrite that failed status with ready.
     if (renderStatusRef.current === RenderStatus.failed) {
-      return;
-    }
-    if (!isVerified) {
-      // An iframe/PDF load only proves that navigation completed. Browsers can
-      // load an error document after a failed remote navigation, and do not
-      // reliably emit iframe errors for that case. Finish the visual swap so
-      // playback does not wedge, but retain loading to avoid claiming ready
-      // without a renderer-owned success signal.
-      renderStatusRef.current = RenderStatus.loading;
-      canvasService.setRenderStatus(RenderStatus.loading);
-      setGlobalLoading(false);
-      setShowLoading(false);
-      clearLoadingDelay();
       return;
     }
     renderStatusRef.current = RenderStatus.ready;
@@ -811,10 +811,7 @@ const ArtworkPlayer = ({
       setActiveSlot(readySlot);
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
-      markArtworkReady(
-        incomingLayer.previewType !== PreviewHTMLTag.iframe &&
-          incomingLayer.previewType !== PreviewHTMLTag.iframePDF
-      );
+      markArtworkReady();
       onItemCommitted?.(incomingLayer.itemIdentity);
       return;
     }
@@ -867,10 +864,7 @@ const ArtworkPlayer = ({
         setActiveSlot(incoming);
         incomingSlotRef.current = null;
         setTopSlotIndex(null);
-        markArtworkReady(
-          incomingLayer.previewType !== PreviewHTMLTag.iframe &&
-            incomingLayer.previewType !== PreviewHTMLTag.iframePDF
-        );
+        markArtworkReady();
         onItemCommitted?.(incomingLayer.itemIdentity);
       }, FADE_IN_OUT_DURATION_MS);
       return;
@@ -900,10 +894,7 @@ const ArtworkPlayer = ({
       setActiveSlot(incoming);
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
-      markArtworkReady(
-        incomingLayer.previewType !== PreviewHTMLTag.iframe &&
-          incomingLayer.previewType !== PreviewHTMLTag.iframePDF
-      );
+      markArtworkReady();
     }, FADE_IN_OUT_DURATION_MS);
   }, [
     commitVisualSettings,

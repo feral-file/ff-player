@@ -308,7 +308,7 @@ describe('ArtworkPlayer render status - ready and failure transitions', () => {
     ['HTML iframe', 'text/html'],
     ['PDF iframe', 'application/pdf'],
   ])(
-    'keeps %s loading after load because navigation is not render verification',
+    'reports %s ready once the document finishes loading',
     async (_label, artworkPreviewMIMEType) => {
       ensureWebGLConstructors();
       vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
@@ -334,7 +334,11 @@ describe('ArtworkPlayer render status - ready and failure transitions', () => {
         await Promise.resolve();
       });
 
-      expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.loading);
+      // `ready` here means the document finished loading, not that the artwork
+      // rendered correctly — see markArtworkReady. Withholding it left every
+      // HTML/generative artwork (and every untyped item that falls back to
+      // iframe) reporting `loading` forever.
+      expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
       expect(screen.queryByText('Loading...')).toBeNull();
     }
   );

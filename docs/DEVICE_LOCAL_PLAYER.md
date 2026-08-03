@@ -45,7 +45,9 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 - The value describes the **current page mount** only. Persistence and boot recovery strip it so IndexedDB cannot resurrect a prior ready/failed before `ArtworkPlayer` publishes a new lifecycle.
 - After boot/hydrate, `renderStatus` may be omitted/`undefined` until the player mounts; treat that as “not yet reported”, not as a terminal failure.
 - `CanvasService` forces `pending` when the selected artwork identity changes (`id` + `source`), including same-id source refresh.
-- Iframe and PDF navigation can complete with a browser-generated error document, and cross-origin iframe failures do not reliably emit an error event. Their `load` event therefore completes the visual transition but deliberately leaves `renderStatus` at `loading`; only a renderer-owned success signal may report `ready`.
+- `ready` means **the document finished loading**, not that the artwork rendered what it should. Every preview type reports `ready` from its own load-completion signal.
+  - For iframe and PDF that distinction is real: a browser can load its own error document after a failed remote navigation, and Chromium does not emit an iframe error for that case, so a dead HTML artwork can still report `ready`. This is a deliberate trade-off. Withholding `ready` from iframe pinned the dominant artwork type — HTML/generative, plus every item whose MIME type is empty or undetectable and therefore falls back to iframe — at `loading` indefinitely, which gives a controller strictly less to act on than an occasional optimistic `ready`.
+  - Failures that do surface an error event still reach `failed` normally; the gap is limited to navigation failures the browser reports as a successful load.
 - `showRenderLoadingOverlay` only gates the visible loading overlay; it does not change the codes reported on status polls.
 
 ## Setup overlay background artwork
@@ -154,9 +156,10 @@ literal percent characters; explicit `;base64` payloads must use valid base64.
 
 This guard rejects inputs the player already knows it cannot render while
 preserving relative DP1 sources used by device-local deployments. Acceptance
-does not promise a successful fetch: an accepted source that later cannot load
-is represented by `renderStatus: failed`, rather than being rejected at cast
-time.
+does not promise a successful fetch: an accepted source that later fails with a
+renderer error surfaces as `renderStatus: failed`, rather than being rejected at
+cast time. The iframe/PDF caveat above still applies — a navigation the browser
+reports as a successful load is indistinguishable from a real render there.
 
 Boot playlist, cast-info, and scheduled-task records are recovery snapshots
 rather than new cast commands. They are intentionally restored or executed
