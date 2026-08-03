@@ -1,8 +1,10 @@
+import { LocalStorageItem } from '@/constants';
 import { CastCommand } from '@/models';
 import { DP1Action, type DP1Call, type DP1Item } from '@/models/dp1.model';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
 import DP1ScheduleService from './DP1ScheduleService';
+import DeviceManager from '@/utils/DeviceManager';
 
 const item = (id: string): DP1Item =>
   ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
@@ -115,6 +117,60 @@ describe('CanvasService data URL validation', () => {
 describe('CanvasService rejected source state preservation', () => {
   afterEach(() => {
     canvasService.setCastInfo(null, false);
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    [
+      'Now Display',
+      {
+        intent: { action: DP1Action.NowDisplay },
+        dp1_call: playlist('invalid-now-display', [
+          { id: 'invalid-now-display', source: 'about:blank', license: {} } as DP1Item,
+        ]),
+      },
+    ],
+    [
+      'Schedule Play',
+      {
+        intent: {
+          action: DP1Action.SchedulePlay,
+          schedule_time: '2030-01-01T00:00:00Z',
+        },
+        dp1_call: playlist('invalid-schedule', [
+          { id: 'invalid-schedule', source: 'about:blank', license: {} } as DP1Item,
+        ]),
+      },
+    ],
+  ])('keeps the critical-temperature marker for rejected %s', (_kind, request) => {
+    const removeSpy = vi
+      .spyOn(DeviceManager, 'removeItem')
+      .mockResolvedValue(undefined);
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.displayPlaylist,
+      request,
+    });
+
+    expect(reply).toEqual({ ok: false });
+    expect(removeSpy).not.toHaveBeenCalledWith(LocalStorageItem.criticalTemp);
+  });
+
+  it('clears the critical-temperature marker after an accepted Now Display', () => {
+    const removeSpy = vi
+      .spyOn(DeviceManager, 'removeItem')
+      .mockResolvedValue(undefined);
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.displayPlaylist,
+      request: {
+        intent: { action: DP1Action.NowDisplay },
+        dp1_call: playlist('valid-now-display', [item('valid-now-display')]),
+      },
+    });
+
+    expect(reply).toEqual({ ok: true });
+    expect(removeSpy).toHaveBeenCalledWith(LocalStorageItem.criticalTemp);
   });
 
   it('does not persist a rejected scheduled playlist', () => {
