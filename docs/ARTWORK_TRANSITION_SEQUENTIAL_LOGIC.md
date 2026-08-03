@@ -231,7 +231,28 @@ of the transition contract, not a separate concern.
 - **An overlay that is already up stays up until fade end.** `markArtworkReady`
   clears it at the same moment it publishes `ready`, so a genuinely slow load is
   never revealed mid-crossfade.
+- **`ready` publishes with the teardown, not before it.** `markArtworkReady` both
+  clears the overlay and publishes `renderStatus: ready`, at the commit points —
+  synchronously on a first load, at the end of the fade in the sequential and
+  overlap branches. Keeping them together is what guarantees a status poll can
+  never answer `ready` while the wall still shows the outgoing artwork or an
+  opaque overlay. The cost is that `ready` trails byte arrival by up to
+  `FADE_IN_OUT_DURATION_MS` on a transition, and the poll reads `pending` (fast
+  load) or `loading` (slow load) in that window. See *Artwork render status* in
+  [DEVICE_LOCAL_PLAYER.md](DEVICE_LOCAL_PLAYER.md).
+- **The failure path is asymmetric on purpose.** `markArtworkFailed` publishes and
+  drops the overlay at the error site rather than at the commit point, so a slow
+  load that fails reveals the outgoing artwork for the rest of the fade. The error
+  modal is raised over it, so the wall is never silently wrong.
+- **Model artworks.** `ModelViewerScreen` paints its own "Loading 3D model"
+  overlay inside the slot wrapper, so it inherits `slotOpacity` and is invisible
+  while the incoming slot is still fading in. The global overlay is therefore
+  suppressed only when a model that is BOTH still loading AND painted would stack
+  the two — in practice the first-load case. A slow transition INTO a model still
+  gets the global overlay, because the model's own one cannot be seen yet.
 - **Runtime switch.** `showRenderLoadingOverlay` in `display.json` (default `true`)
-  gates the overlay only. It never changes the codes reported on status polls, and
-  `ModelViewerScreen` receives it as `showLoadingOverlay` so the model route's own
-  "Loading 3D model" overlay honours the same switch.
+  gates the overlay only; it never changes the codes reported on status polls.
+  `ArtworkPlayer` passes it to `ModelViewerScreen` as
+  `showLoadingOverlay={showRenderLoadingOverlay && showLoading}`, so the model
+  overlay honours both the kill switch and the same `RENDER_LOADING_DELAY_MS`
+  gate as every other type — one timer owns both surfaces.

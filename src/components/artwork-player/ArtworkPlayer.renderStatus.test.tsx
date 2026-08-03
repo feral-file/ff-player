@@ -673,8 +673,9 @@ describe('ArtworkPlayer render status - loading overlay switch', () => {
       await vi.advanceTimersByTimeAsync(1700);
     });
 
-    // Crossing 2s must NOT raise the overlay over a transition already running,
-    // nor report `loading` for an artwork that has finished loading.
+    // Crossing 2s must NOT raise the overlay over a transition already running.
+    // The status stays `pending` here — `ready` is bound to the fade-end commit
+    // so it never claims the wall before the swap; see markArtworkReady.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(400);
     });

@@ -365,6 +365,16 @@ const ArtworkPlayer = ({
   /**
    * Publish `ready` for the committed artwork.
    *
+   * Called at the commit points only — synchronously for a first load, and at
+   * the end of the fade for the sequential and overlap branches. That timing is
+   * the contract, not an accident: this function also tears the loading overlay
+   * down, so binding the two together means a poll can never answer `ready`
+   * while the wall still shows the outgoing artwork or an opaque overlay. The
+   * cost is that `ready` trails byte arrival by up to FADE_IN_OUT_DURATION_MS on
+   * a transition; the poll reads `pending` (or `loading`) in that window.
+   * Publishing at `loadedSource` instead would also be wrong on the failure
+   * paths, which call `loadedSource` before marking failed.
+   *
    * `ready` means "the document finished loading", not "the artwork rendered
    * what it should". For iframe/PDF that distinction is real — a browser can
    * load its own error document after a failed remote navigation, and Chromium
@@ -1683,17 +1693,24 @@ const ArtworkPlayer = ({
   }, [previewURL]);
 
   const showSlowLoadingSpinner = () => {
-    // ModelViewerScreen owns its own "Loading 3D model" overlay; stacking the
-    // global ArtworkPlayer spinner on top creates a dual-overlay flash. Check
-    // incoming as well so image→model transitions do not briefly stack both.
-    const activePreviewType = slots[activeSlot]?.previewType;
-    const incoming = incomingSlotRef.current;
-    const incomingPreviewType =
-      incoming !== null ? slots[incoming]?.previewType : undefined;
-    if (
-      activePreviewType === PreviewHTMLTag.model ||
-      incomingPreviewType === PreviewHTMLTag.model
-    ) {
+    // ModelViewerScreen paints its own "Loading 3D model" overlay, so stacking
+    // the global one on top would double up — but only while that overlay can
+    // actually be seen. Its overlay lives inside the slot wrapper and inherits
+    // slotOpacity, so an incoming model still fading in is invisible; blanket
+    // suppression on "a model is involved" left a slow model transition with no
+    // indicator at all, which is the opposite of what the overlay exists for.
+    // Narrowed to a model that is BOTH still loading and painted: that is the
+    // first-load case, where the two overlays really would stack.
+    //
+    // Derived from `slots`/`slotOpacity` rather than incomingSlotRef: a ref read
+    // during render can lag the slots actually being painted.
+    const loadingModelIsVisible = SLOT_INDICES.some(
+      index =>
+        slots[index]?.previewType === PreviewHTMLTag.model &&
+        slots[index]?.loading &&
+        slotOpacity[index] > 0
+    );
+    if (loadingModelIsVisible) {
       return false;
     }
     // When the remote-config flag is on, show for other media types once
@@ -1770,7 +1787,13 @@ const ArtworkPlayer = ({
               onError={() => {
                 handleModelLoadError(slotIndex, slot);
               }}
-              showLoadingOverlay={showRenderLoadingOverlay}
+              // `showLoading` rather than the raw flag: the model overlay must
+              // honour the same RENDER_LOADING_DELAY_MS gate as every other
+              // type, or a model that loads quickly flashes a spinner the rest
+              // of the player deliberately suppresses. One timer owns both
+              // surfaces — markArtworkLoading raises it, and pending/ready/
+              // failed all lower it.
+              showLoadingOverlay={showRenderLoadingOverlay && showLoading}
             />
           </div>
         )}

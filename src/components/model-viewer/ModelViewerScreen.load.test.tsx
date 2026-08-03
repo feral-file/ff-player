@@ -85,9 +85,9 @@ describe('ModelViewerScreen — loading overlay switch', () => {
   });
 
   it('suppresses the loading overlay when showLoadingOverlay is false', () => {
-    // ArtworkPlayer passes the display.json showRenderLoadingOverlay switch
-    // straight through, so this prop is the model route's half of that kill
-    // switch — the global ArtworkPlayer spinner never covers model artworks.
+    // ArtworkPlayer is this component's only consumer. It passes
+    // `showRenderLoadingOverlay && showLoading`, so this prop carries both the
+    // display.json kill switch and the shared RENDER_LOADING_DELAY_MS gate.
     render(
       <ModelViewerScreen
         src="https://example.com/model.glb"
