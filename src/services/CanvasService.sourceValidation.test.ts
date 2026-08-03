@@ -114,7 +114,7 @@ describe('CanvasService data URL validation', () => {
   );
 });
 
-describe('CanvasService rejected source state preservation', () => {
+describe('CanvasService critical-temperature marker', () => {
   afterEach(() => {
     canvasService.setCastInfo(null, false);
     vi.restoreAllMocks();
@@ -171,6 +171,13 @@ describe('CanvasService rejected source state preservation', () => {
 
     expect(reply).toEqual({ ok: true });
     expect(removeSpy).toHaveBeenCalledWith(LocalStorageItem.criticalTemp);
+  });
+
+});
+
+describe('CanvasService rejected source state preservation', () => {
+  afterEach(() => {
+    canvasService.setCastInfo(null, false);
   });
 
   it('does not persist a rejected scheduled playlist', () => {
