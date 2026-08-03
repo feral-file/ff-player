@@ -5,16 +5,10 @@ import { canvasService } from '../CanvasService';
 import { CastCommand, CastInfo } from '@/models';
 import { stripEphemeralCastInfoFields } from '@/utils/castInfo';
 import DeviceManager from '@/utils/DeviceManager';
-import { deepEqual } from '@/utils/helper';
 
 const useCastInfo = () => {
   const [castInfo, setCastInfo] = useState<CastInfo | null>(null);
   const isFirstRender = useRef(true);
-  // Last payload written to DeviceManager after ephemeral strip + command rewrite.
-  // undefined = never persisted in this mount; used to skip renderStatus-only churn.
-  const lastPersistedCastInfoRef = useRef<CastInfo | null | undefined>(
-    undefined
-  );
 
   const isPlaylistControlCommand = (castInfo: CastInfo) => {
     return (
@@ -68,16 +62,6 @@ const useCastInfo = () => {
             : castInfo.castCommand,
         }
       : null;
-
-    // Render-status changes stay inside CanvasService so they cannot replay a
-    // cast command. Keep this equality guard for other ephemeral-only updates.
-    if (
-      lastPersistedCastInfoRef.current !== undefined &&
-      deepEqual(lastPersistedCastInfoRef.current, castInfoToStore)
-    ) {
-      return;
-    }
-    lastPersistedCastInfoRef.current = castInfoToStore;
 
     DeviceManager.setDeviceInfo(castInfoToStore).catch((error: unknown) => {
       console.error('[useCastInfo] Error saving castInfo:', error);

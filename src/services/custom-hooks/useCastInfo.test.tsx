@@ -2,7 +2,6 @@
 /**
  * Persistence contracts for useCastInfo:
  * strip ephemeral renderStatus before IndexedDB write;
- * skip persist thrash when only renderStatus changes;
  * rewrite playlist-control commands (including updateDefaultDuration) to
  * displayPlaylist so AppContext boot replay can populate the playlist route.
  */
@@ -125,59 +124,6 @@ describe('useCastInfo persistence strip', () => {
   });
 });
 
-describe('useCastInfo persistence thrash', () => {
-  it('does not persist again when only renderStatus changes', async () => {
-    renderHook(() => useCastInfo());
-    const activePlaylist = makePlaylist();
-
-    act(() => {
-      canvasService.onCastInfoChange?.({
-        castCommand: CastCommand.displayPlaylist,
-        playlist: activePlaylist,
-        index: 0,
-        renderStatus: RenderStatus.pending,
-      });
-    });
-
-    await waitFor(() => {
-      expect(setDeviceInfo).toHaveBeenCalledTimes(1);
-    });
-
-    act(() => {
-      canvasService.onCastInfoChange?.({
-        castCommand: CastCommand.displayPlaylist,
-        playlist: activePlaylist,
-        index: 0,
-        renderStatus: RenderStatus.loading,
-      });
-    });
-
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(setDeviceInfo).toHaveBeenCalledTimes(1);
-
-    act(() => {
-      canvasService.onCastInfoChange?.({
-        castCommand: CastCommand.displayPlaylist,
-        playlist: activePlaylist,
-        index: 1,
-        renderStatus: RenderStatus.ready,
-      });
-    });
-
-    await waitFor(() => {
-      expect(setDeviceInfo).toHaveBeenCalledTimes(2);
-    });
-
-    expect(setDeviceInfo.mock.calls.at(-1)?.[0]).toEqual({
-      castCommand: CastCommand.displayPlaylist,
-      playlist: activePlaylist,
-      index: 1,
-    });
-  });
-});
 
 describe('useCastInfo persistence rewrite', () => {
   it('persists updateDefaultDuration as displayPlaylist for boot recovery', async () => {
