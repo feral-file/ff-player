@@ -101,7 +101,10 @@ vi.mock('@sentry/nextjs', () => ({
   addBreadcrumb: vi.fn(),
 }));
 
-function renderArtworkPlayer(itemIdentity = 'hls-error-item') {
+function renderArtworkPlayer(
+  itemIdentity = 'hls-error-item',
+  onItemCommitted?: (identity: string) => void
+) {
   const value = {
     context: {
       isInitialized: true,
@@ -119,6 +122,7 @@ function renderArtworkPlayer(itemIdentity = 'hls-error-item') {
         artworkPreviewMIMEType="application/vnd.apple.mpegurl"
         displayPreferences={defaultDP1DisplayPreference}
         itemIdentity={itemIdentity}
+        onItemCommitted={onItemCommitted}
       />
     </AppContext.Provider>
   );
@@ -202,6 +206,71 @@ describe('ArtworkPlayer — HLS error handling', () => {
     expect(staleHls.recoverMediaError).not.toHaveBeenCalled();
     expect(canvasService.getStatus().renderStatus).not.toBe(RenderStatus.failed);
   });
+});
+
+describe('ArtworkPlayer — current-slot fatal HLS failures', () => {
+  let playSpy: ReturnType<typeof vi.spyOn>;
+  let pauseSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    clearHlsTestState();
+    playSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'play')
+      .mockImplementation(() => Promise.resolve());
+    pauseSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'pause')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    playSpy.mockRestore();
+    pauseSpy.mockRestore();
+    clearHlsTestState();
+    canvasService.setCastInfo(null, false);
+    canvasService.setRenderStatus(undefined);
+    cleanup();
+  });
+
+  it.each([
+    ['networkError', undefined],
+    ['mediaError', 'manifestIncompatible'],
+  ] as const)(
+    'publishes failed for a current-slot fatal HLS %s',
+    async (type, details) => {
+      const onItemCommitted = vi.fn();
+      render(renderArtworkPlayer('hls-fatal-item', onItemCommitted));
+
+      await waitFor(() => {
+        expect(hlsTest.errorHandlers.length).toBeGreaterThan(0);
+      });
+
+      const activeIndex = hlsTest.errorHandlers.length - 1;
+      const activeHls = hlsTest.instances[activeIndex];
+      act(() => {
+        hlsTest.errorHandlers[activeIndex]('error', {
+          fatal: true,
+          type,
+          details,
+        });
+      });
+
+      // Fatal load failures must tear down HLS and complete the incoming
+      // transition claim so the outgoing frame is not left latched forever.
+      expect(activeHls.recoverMediaError).not.toHaveBeenCalled();
+      expect(activeHls.destroy).toHaveBeenCalledTimes(1);
+      await waitFor(() => {
+        expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+      });
+      expect(
+        screen.getByText(
+          'The artwork cannot be displayed correctly on this device.'
+        )
+      ).toBeTruthy();
+      await waitFor(() => {
+        expect(onItemCommitted).toHaveBeenCalledWith('hls-fatal-item');
+      });
+    }
+  );
 });
 
 /** Clears shared HLS mock state between describes so length assertions stay stable. */
