@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 // jsdom (not the node default for .test.ts): displayDefaultPlaylist's whole
 // contract is a window CustomEvent dispatch to AppContext's fallback loop.
+import { LocalStorageItem } from '@/constants';
 import { CastCommand } from '@/models';
 import { CustomEventName } from '@/models/custom_event';
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
+import DeviceManager from '@/utils/DeviceManager';
 
 const item = (id: string): DP1Item =>
   ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
@@ -63,6 +65,16 @@ describe('CanvasService displayDefaultPlaylist', () => {
     expect(dispatchedEvents(spy)).toContain(
       CustomEventName.DisplayDefaultPlaylist
     );
+  });
+
+  it('clears the critical-temperature marker after accepting the request', () => {
+    const removeSpy = vi
+      .spyOn(DeviceManager, 'removeItem')
+      .mockResolvedValue(undefined);
+
+    expect(send({})).toEqual({ ok: true });
+
+    expect(removeSpy).toHaveBeenCalledWith(LocalStorageItem.criticalTemp);
   });
 
   it('force push dispatches even while a playlist is displaying (OOM recovery)', () => {
