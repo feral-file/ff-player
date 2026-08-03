@@ -67,13 +67,22 @@ function softApQrValue(ssid: string, password: string | undefined): string {
  * catch-all DNS, so telling the user to type it covers every phone that
  * doesn't auto-open the sheet.
  */
+/*
+ * Three elements only: a heading that is also the instruction, the QR, and
+ * two compact fallback lines. The SSID/password ride the fallback sentence
+ * rather than labeled Network:/Password: lines — the QR already encodes
+ * both, and the manual path only matters to whoever can't (or won't) scan.
+ * Deliberately no "phone": the portal is plain HTTP on the hotspot, so a
+ * laptop joining the network and browsing to ff1.config works identically.
+ * Only the claim step (the app) actually requires a phone, and only that
+ * panel says so.
+ */
 function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   const ssid = display.ssid ?? '';
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Connect to Set Up This Device</p>
-        <p className={styles.stepLabel}>Scan to join the setup network</p>
+        <p className={styles.title}>Scan to set up your Art Computer</p>
         <div className={styles.qrFrame}>
           <QRCodeSVG
             value={softApQrValue(ssid, display.password)}
@@ -81,13 +90,19 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
             marginSize={2}
           />
         </div>
-        <p className={styles.credential}>Network: {ssid}</p>
-        {display.password ? (
-          <p className={styles.credential}>Password: {display.password}</p>
-        ) : null}
         <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          The setup page opens once your phone connects. If it doesn&apos;t,
-          open <strong>{portalUrl}</strong> in your phone&apos;s browser.
+          Or join <strong>{ssid}</strong>
+          {display.password ? (
+            <>
+              {' '}
+              (password <strong>{display.password}</strong>)
+            </>
+          ) : null}{' '}
+          in your Wi-Fi settings.
+        </p>
+        <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
+          If the setup page doesn&apos;t open, go to{' '}
+          <strong>{portalUrl}</strong>.
         </p>
       </div>
     </section>
@@ -105,9 +120,9 @@ function ScanningPanel() {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Looking for Wi-Fi Networks&hellip;</p>
+        <p className={styles.title}>Looking for Wi-Fi networks</p>
         <p className={styles.subtitle}>
-          The setup screen will appear here in a moment.
+          The setup screen will appear in a moment.
         </p>
       </div>
     </section>
@@ -118,7 +133,7 @@ function JoiningPanel() {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Connecting to Wi-Fi&hellip;</p>
+        <p className={styles.title}>Connecting to Wi-Fi</p>
       </div>
     </section>
   );
@@ -134,25 +149,35 @@ function FinalizingPanel() {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Wi-Fi Connected</p>
+        <p className={styles.title}>Wi-Fi connected</p>
         <p className={styles.subtitle}>
-          Getting this frame ready&hellip; This can take a minute.
+          Getting your Art Computer ready. This can take a minute.
         </p>
       </div>
     </section>
   );
 }
 
+/*
+ * Title + reason only — no "rejoin and try again" instruction. join_failed
+ * is a transient frame: the provisioning machine re-raises the AP after ANY
+ * join failure and the narration re-renders softap_qr, so the QR screen
+ * that follows IS the rejoin instruction (the cross-repo contract is
+ * ffos-user docs/setup-flow.md, "Join and the AP bounce": every failure
+ * class re-raises the AP; setupui narrates join_failed, then softap_qr on
+ * AP-up). The reason string from controld already carries the action
+ * ("Please check it and try again."), and the phone gets the same reason
+ * as a banner on the portal picker. A bare join_failed (no reason — valid
+ * per the CDP validator) still gets one actionable line so the panel is
+ * never a dead-end title while the re-raise is in flight.
+ */
 function JoinFailedPanel({ display }: { display: SetupDisplayDetail }) {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Couldn&apos;t Connect to Wi-Fi</p>
-        {display.reason ? (
-          <p className={styles.subtitle}>{display.reason}</p>
-        ) : null}
+        <p className={styles.title}>Couldn&apos;t connect to Wi-Fi</p>
         <p className={styles.subtitle}>
-          Reconnect to the device&apos;s setup hotspot and try again.
+          {display.reason ?? 'Please try again.'}
         </p>
       </div>
     </section>
@@ -173,10 +198,15 @@ function UpdatingPanel({ display }: { display: SetupDisplayDetail }) {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Updating Device Software&hellip;</p>
+        <p className={styles.title}>Updating software</p>
         {percent !== null ? (
           <p className={styles.subtitle}>{percent}%</p>
         ) : null}
+        {/* Same warning as factory reset: the screen may sit on a percent
+            for a while and a watcher's worst move is pulling the plug
+            mid-write. If the OTA path is provably power-loss-safe end to
+            end, this line can go — flagged for controld review. */}
+        <p className={styles.subtitle}>Don&apos;t unplug it.</p>
       </div>
     </section>
   );
@@ -186,8 +216,8 @@ function FactoryResetPanel() {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Resetting to Factory Settings&hellip;</p>
-        <p className={styles.subtitle}>Do not power off this device.</p>
+        <p className={styles.title}>Resetting to factory settings</p>
+        <p className={styles.subtitle}>Don&apos;t unplug it.</p>
       </div>
     </section>
   );
@@ -201,33 +231,35 @@ function FactoryResetPanel() {
  * browses mDNS (`_ff1._tcp`) on the local network and finds this frame by
  * its advertised name. The app only auto-prompts to pair when the frame has
  * no pairing yet (first claim); once claimed, additional phones must add the
- * frame manually inside the app — the "If pairing doesn't start
- * automatically" line is what routes that second case without a separate
- * screen. The QR code is deliberately framed as the backup for when
- * discovery fails (cross-VLAN, multicast-filtering APs, or the phone on a
- * different network).
+ * frame manually inside the app — "look for <name>" is the one instruction
+ * that routes both cases without a separate screen. The QR code is
+ * deliberately framed as the backup for when discovery fails (cross-VLAN,
+ * multicast-filtering APs, or the phone on a different network).
  */
 function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
   const frameName = display.device_name?.trim();
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Pair with the Feral File App</p>
+        <p className={styles.title}>Pair with the Feral File app</p>
+        {/* "Look for <name>" covers both discovery cases in two words: on a
+            first claim the app auto-prompts (the frame appears), and on an
+            already-claimed frame the user finds it via manual add. The old
+            "If pairing doesn't start automatically, add ... in the app"
+            conditional routed the second case explicitly; looking for the
+            name routes both. */}
         <p className={styles.subtitle}>
-          Open the Feral File app on a phone connected to the same Wi-Fi
-          network. If pairing doesn&apos;t start automatically, add{' '}
+          Open the app on a phone on the same Wi-Fi and look for{' '}
           {frameName ? (
             <strong>{frameName}</strong>
           ) : (
-            'this frame'
-          )}{' '}
-          in the app.
+            'this Art Computer'
+          )}
+          .
         </p>
         {display.url ? (
           <>
-            <p className={styles.stepLabel}>
-              Frame not showing up in the app? Scan this code instead.
-            </p>
+            <p className={styles.stepLabel}>Or scan this code.</p>
             <div className={styles.qrFrame}>
               <QRCodeSVG value={display.url} size={qrSize} marginSize={2} />
             </div>

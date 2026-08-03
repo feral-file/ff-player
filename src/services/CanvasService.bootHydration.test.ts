@@ -118,3 +118,200 @@ describe('CanvasService boot cast hydration gate', () => {
     ).toHaveLength(1);
   });
 });
+
+// A deliberate stop leaves no castInfo for initCastInfo's live-cast bail-out
+// to see (disconnect clears it; sleep and error navigation never set it), so
+// at the boot decision null would read as "nothing happened" and the stale
+// persisted state would be restored (or the fallback armed) onto a wall a
+// stop already decided. The flag latches from the PlaybackHalted event — the
+// one contract every stop source honors — for that one decision.
+describe('CanvasService mid-hydration halt flag', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('any PlaybackHalted while hydration is pending latches the halt flag', async () => {
+    // Event-level contract: error-page navigation lives in utils and only
+    // dispatches; the latch must not depend on the source calling in.
+    const service = await freshCanvasService();
+    expect(service.wasHaltedDuringBootHydration()).toBe(false);
+
+    window.dispatchEvent(new CustomEvent(CustomEventName.PlaybackHalted));
+
+    expect(service.wasHaltedDuringBootHydration()).toBe(true);
+  });
+
+  it('a PlaybackHalted after hydration settles does not latch the flag', async () => {
+    // Post-hydration the boot decision has already been made; latching here
+    // would be inert but misdescribe history.
+    const service = await freshCanvasService();
+    service.completeBootCastHydration();
+
+    window.dispatchEvent(new CustomEvent(CustomEventName.PlaybackHalted));
+
+    expect(service.wasHaltedDuringBootHydration()).toBe(false);
+  });
+
+  it('a mid-hydration disconnect latches through its own dispatch', async () => {
+    const service = await freshCanvasService();
+
+    expect(service.disconnect()).toEqual({ ok: true });
+
+    expect(service.wasHaltedDuringBootHydration()).toBe(true);
+    // Disconnect is the cast-CLEARING flavor: boot must skip the persisted
+    // restore entirely — the persisted playlist is what it just cleared.
+    expect(service.didHydrationHaltClearCast()).toBe(true);
+  });
+
+  it('a mid-hydration sleep latches through its own dispatch', async () => {
+    const service = await freshCanvasService();
+
+    expect(service.setSleepMode({ sleepMode: true })).toEqual({ ok: true });
+
+    expect(service.wasHaltedDuringBootHydration()).toBe(true);
+    // Sleep PRESERVES cast state: boot must still restore the persisted
+    // playlist (without navigating) so a later wake finds it — a clearing
+    // verdict here would trade the user's playlist for the default at wake.
+    expect(service.didHydrationHaltClearCast()).toBe(false);
+  });
+
+  it('a bare PlaybackHalted (error navigation) is not cast-clearing', async () => {
+    const service = await freshCanvasService();
+
+    window.dispatchEvent(new CustomEvent(CustomEventName.PlaybackHalted));
+
+    expect(service.wasHaltedDuringBootHydration()).toBe(true);
+    expect(service.didHydrationHaltClearCast()).toBe(false);
+  });
+
+  it('a mid-hydration disconnect clears the persisted castInfo directly, without a React re-render', async () => {
+    // useCastInfo's React state starts at useState(null): disconnect()'s
+    // setCastInfo(null) is a same-value bail-out this early, so the
+    // persistence effect that would normally call DeviceManager.setDeviceInfo
+    // never fires. The service must clear the persisted record itself, or a
+    // stale playlist survives to resurrect on the next boot.
+    const service = await freshCanvasService();
+    const { default: DeviceManager } = await import('@/utils/DeviceManager');
+    const persistSpy = vi
+      .spyOn(DeviceManager, 'setDeviceInfo')
+      .mockResolvedValue(undefined);
+
+    expect(service.disconnect()).toEqual({ ok: true });
+
+    expect(persistSpy).toHaveBeenCalledWith(null);
+  });
+
+  it('a mid-hydration disconnect leaves nothing for a later read to restore', async () => {
+    // End-to-end version of the test above, against DeviceManager's real
+    // in-memory cache instead of a spy: seed the record as an earlier boot
+    // would have left it, disconnect mid-hydration, then read it back the
+    // way initCastInfo does on the next boot.
+    const service = await freshCanvasService();
+    const { default: DeviceManager } = await import('@/utils/DeviceManager');
+    await DeviceManager.setDeviceInfo({
+      castCommand: CastCommand.displayPlaylist,
+      playlist: playlist('stale'),
+      index: 0,
+    });
+
+    expect(service.disconnect()).toEqual({ ok: true });
+
+    await expect(DeviceManager.getCastInfo()).resolves.toBeNull();
+  });
+
+  it('a mid-hydration sleep does NOT clear the persisted castInfo', async () => {
+    // Sleep is a PRESERVING halt: the persisted playlist must survive for the
+    // eventual wake to restore, so it must not be cleared the way a
+    // cast-clearing disconnect is.
+    const service = await freshCanvasService();
+    const { default: DeviceManager } = await import('@/utils/DeviceManager');
+    const persistSpy = vi
+      .spyOn(DeviceManager, 'setDeviceInfo')
+      .mockResolvedValue(undefined);
+
+    expect(service.setSleepMode({ sleepMode: true })).toEqual({ ok: true });
+
+    expect(persistSpy).not.toHaveBeenCalled();
+  });
+
+  it('a post-hydration disconnect still relies on the normal React persistence path (no direct clear)', async () => {
+    // Once hydration has settled, disconnect's setCastInfo(null) is a real
+    // React state transition (assuming prior non-null state), so the
+    // service-layer clear added for the mid-hydration gap is unnecessary
+    // here and must not double-fire.
+    const service = await freshCanvasService();
+    service.completeBootCastHydration();
+    const { default: DeviceManager } = await import('@/utils/DeviceManager');
+    const persistSpy = vi
+      .spyOn(DeviceManager, 'setDeviceInfo')
+      .mockResolvedValue(undefined);
+
+    expect(service.disconnect()).toEqual({ ok: true });
+
+    expect(persistSpy).not.toHaveBeenCalled();
+  });
+});
+
+// The latch must gate BOTH boot paths that can arm the fallback: initCastInfo
+// covers the restore decision, and this covers the deferred onlyIfNoPlaylist
+// replay — a conditional push deferred before the halt is older intent than
+// the stop, and replaying it would re-arm the fallback the halt just stood
+// down (AppContext's DisplayDefaultPlaylist listener re-arms unconditionally)
+// and relight the stopped wall.
+describe('CanvasService deferred default replay vs mid-hydration halt', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('a mid-hydration halt drops the deferred conditional default push', async () => {
+    const service = await freshCanvasService();
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    // Claim-time conditional push lands mid-hydration: accepted, deferred.
+    expect(
+      service.processMessage({
+        command: CastCommand.displayDefaultPlaylist,
+        request: { onlyIfNoPlaylist: true },
+      })
+    ).toEqual({ ok: true });
+
+    // The controller stops playback before hydration settles.
+    window.dispatchEvent(new CustomEvent(CustomEventName.PlaybackHalted));
+
+    // Settling hydration must NOT replay the stale conditional push.
+    service.completeBootCastHydration();
+    expect(dispatchedEvents(spy)).not.toContain(
+      CustomEventName.DisplayDefaultPlaylist
+    );
+  });
+
+  it('a conditional push arriving AFTER the halt is still honored at settle', async () => {
+    // Last command wins in both directions: cancellation happens at the
+    // halt (not by gating the settle replay on the sticky latch), so a
+    // "make sure something is playing" push that FOLLOWS the stop is the
+    // newer intent and must survive to the replay.
+    const service = await freshCanvasService();
+    const spy = vi.spyOn(window, 'dispatchEvent');
+
+    window.dispatchEvent(new CustomEvent(CustomEventName.PlaybackHalted));
+    expect(
+      service.processMessage({
+        command: CastCommand.displayDefaultPlaylist,
+        request: { onlyIfNoPlaylist: true },
+      })
+    ).toEqual({ ok: true });
+
+    service.completeBootCastHydration();
+    expect(dispatchedEvents(spy)).toContain(
+      CustomEventName.DisplayDefaultPlaylist
+    );
+  });
+});

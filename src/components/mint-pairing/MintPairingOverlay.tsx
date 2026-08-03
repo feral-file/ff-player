@@ -22,6 +22,11 @@ function browserLabel(browserName: string | undefined): string {
   return 'the browser';
 }
 
+/** Capitalizes the fallback label when it opens a sentence. */
+function sentenceStart(label: string): string {
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 /**
  * MintPairingOverlay renders above playback without changing the active route
  * or unmounting artwork media. `feral-controld` owns lifecycle state and drives
@@ -78,10 +83,11 @@ export default function MintPairingOverlay() {
     return (
       <section className={styles.overlay} aria-live="polite">
         <div className={styles.codePanel}>
-          <p className={styles.title}>External Device Pairing Mode</p>
+          <p className={styles.title}>Pairing code</p>
           <p className={styles.code}>{display.pairingCode}</p>
           <p className={styles.subtitle}>
-            Input the code on the website that is asking for a session.
+            Enter it on the website that wants to play art on this Art
+            Computer.
           </p>
         </div>
       </section>
@@ -92,9 +98,15 @@ export default function MintPairingOverlay() {
     return (
       <section className={styles.overlay} aria-live="polite">
         <div className={styles.messagePanel}>
+          {/* The wire calls this step "creating a token", but the token is
+              an ephemeral browser-session credential (ephemeral-token-minter
+              via controld), not an artwork — on an art device that word
+              reads as "something was minted to my collection". What the
+              person experiences: they approved, and the website is being
+              connected. */}
           <p className={styles.title}>
-            Creating a new token and sending it to{' '}
-            {browserLabel(display.browserName)}.
+            Connecting {browserLabel(display.browserName)} to this Art
+            Computer&hellip;
           </p>
         </div>
       </section>
@@ -105,11 +117,12 @@ export default function MintPairingOverlay() {
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.messagePanel}>
         <p className={styles.title}>
-          Received a minting request from {browserLabel(display.browserName)}.
+          {sentenceStart(browserLabel(display.browserName))} wants to play art
+          on this Art Computer.
         </p>
         <p className={styles.subtitle}>
-          Open the Feral File mobile app, go to Settings &gt; Art Computer, and
-          approve the session.
+          Open the Feral File app, go to Settings &gt; Art Computer, and
+          approve the request.
         </p>
       </div>
     </section>

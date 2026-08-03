@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import { CDPRequestHandler } from './CDPRequestHandler';
+import { CastCommand } from '@/models';
+import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import {
   CustomEventName,
   MintPairingDisplayDetail,
@@ -298,5 +300,151 @@ describe('CDPRequestHandler setup display command (rejected requests)', () => {
       state: SetupDisplayState.JoinFailed,
       reason: 500,
     });
+  });
+});
+
+const item = (id: string): DP1Item =>
+  ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
+
+const playlist = (id: string, items: DP1Item[]): DP1Call => ({
+  dpVersion: '1',
+  id,
+  title: id,
+  items,
+});
+
+type StatusWindow = Window & { __ffosPlayerStatus?: (() => string) | null };
+
+/** Parses the installed __ffosPlayerStatus global's JSON payload. */
+function readPlayerStatus(): Record<string, unknown> {
+  const fn = (window as unknown as StatusWindow).__ffosPlayerStatus;
+  if (!fn) {
+    throw new Error('__ffosPlayerStatus is not installed');
+  }
+  return JSON.parse(fn()) as Record<string, unknown>;
+}
+
+// Fresh module registry per test: bootHydrationState()'s 'pending' value is
+// only observable before completeBootCastHydration ever runs on a given
+// CanvasService singleton (same one-way-gate constraint as
+// CanvasService.bootHydration.test.ts), and CDPRequestHandler is itself a
+// singleton. Both are re-imported together so the fresh CDPRequestHandler
+// binds the SAME fresh canvasService instance the test then drives directly.
+const freshHandlerAndService = async () => {
+  vi.resetModules();
+  const [{ CDPRequestHandler: FreshHandler }, { canvasService: freshCanvas }] =
+    await Promise.all([
+      import('./CDPRequestHandler'),
+      import('../CanvasService'),
+    ]);
+  return { handler: FreshHandler.getInstance(), canvas: freshCanvas };
+};
+
+describe('CDPRequestHandler __ffosPlayerStatus', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Note: getInstance() alone installs the global — the constructor calls
+  // initialize() eagerly whenever `window` exists — so there is no
+  // observable "before initialize()" window from outside; every test here
+  // calls initialize() explicitly anyway to document the intended call
+  // site, but it is a no-op against the constructor's own call.
+
+  it('reports protocol 1, the current route, and pending hydration on install', async () => {
+    const { handler } = await freshHandlerAndService();
+    handler.initialize();
+
+    expect(readPlayerStatus()).toEqual({
+      protocol: 1,
+      route: window.location.pathname,
+      handlerRegistered: false,
+      hasArtwork: false,
+      bootHydration: 'pending',
+    });
+
+    handler.cleanup();
+  });
+
+  it('reflects a registered refresh handler and active artwork', async () => {
+    const { handler, canvas } = await freshHandlerAndService();
+    handler.initialize();
+
+    canvas.onRefreshArtwork = () => true;
+    canvas.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: playlist('active', ['A'].map(item)),
+        index: 0,
+      },
+      false
+    );
+
+    const status = readPlayerStatus();
+    expect(status.handlerRegistered).toBe(true);
+    expect(status.hasArtwork).toBe(true);
+
+    handler.cleanup();
+  });
+
+  it('reports ok once boot hydration settles cleanly', async () => {
+    const { handler, canvas } = await freshHandlerAndService();
+    handler.initialize();
+
+    canvas.completeBootCastHydration('ok');
+
+    expect(readPlayerStatus().bootHydration).toBe('ok');
+
+    handler.cleanup();
+  });
+
+  it('reports failed when initCastInfo\'s outcome was recorded as failed', async () => {
+    const { handler, canvas } = await freshHandlerAndService();
+    handler.initialize();
+
+    canvas.completeBootCastHydration('failed');
+
+    expect(readPlayerStatus().bootHydration).toBe('failed');
+
+    handler.cleanup();
+  });
+
+  it('reports halted_cleared after a mid-hydration disconnect settles', async () => {
+    const { handler, canvas } = await freshHandlerAndService();
+    handler.initialize();
+
+    canvas.disconnect();
+    canvas.completeBootCastHydration('ok');
+
+    expect(readPlayerStatus().bootHydration).toBe('halted_cleared');
+
+    handler.cleanup();
+  });
+
+  it('is nulled by cleanup(), so a torn-down page reports nothing', async () => {
+    const { handler } = await freshHandlerAndService();
+    handler.initialize();
+
+    handler.cleanup();
+
+    expect((window as unknown as StatusWindow).__ffosPlayerStatus).toBeNull();
+  });
+
+  it('re-reads live state on every call rather than caching', async () => {
+    const { handler, canvas } = await freshHandlerAndService();
+    handler.initialize();
+
+    expect(readPlayerStatus().hasArtwork).toBe(false);
+    canvas.setCastInfo(
+      {
+        castCommand: CastCommand.displayPlaylist,
+        playlist: playlist('active', ['A'].map(item)),
+        index: 0,
+      },
+      false
+    );
+    expect(readPlayerStatus().hasArtwork).toBe(true);
+
+    handler.cleanup();
   });
 });

@@ -2,7 +2,10 @@
 // existing rgba(0, 0, 0, 0.82) scrim dims the artwork, so setup text and QR
 // contrast stay exactly as they were before the background existed. Do not
 // raise this z-index to or above the overlay's.
-.background {
+//
+// The wrapper (not the iframe) owns positioning and opacity so the offline
+// status chip fades and unmounts with the artwork it labels.
+.layer {
   position: fixed;
   inset: 0;
   z-index: 999;
@@ -10,7 +13,6 @@
   height: 100vh;
   pointer-events: none;
   background: #000000;
-  border: 0;
   opacity: 1;
   // Exit fade, matching ArtworkPlayer's FADE_IN_OUT_DURATION_MS so the setup
   // artwork leaves like any outgoing artwork on a cast command. Duration must
@@ -18,6 +20,33 @@
   transition: opacity 650ms ease;
 }
 
+.background {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
 .fading {
   opacity: 0;
+}
+
+// Offline status line for the no-panel case. Sizes follow the overlay's
+// resolution-independence convention (see SetupOverlay.module.scss): every
+// dimension is led by a vmin term so 1080p and 4K render proportionally, and
+// the scale matches .softApSubtitle — this is a quiet status line, not a
+// panel title. The dark pill reuses the panels' scrim value so the text stays
+// legible over the bright regions of the generative artwork.
+.statusChip {
+  position: absolute;
+  bottom: 6vh;
+  left: 50%;
+  padding: 1.2vmin 2.6vmin;
+  font-size: clamp(22px, 3vmin, 80px);
+  line-height: 1.14;
+  color: #ffffff;
+  letter-spacing: 0;
+  background: rgba(0, 0, 0, 0.82);
+  border-radius: 1.5vmin;
+  transform: translateX(-50%);
 }

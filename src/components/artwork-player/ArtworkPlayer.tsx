@@ -41,6 +41,7 @@ import {
   convertScalingToObjectFit,
   getDP1Margin,
   resolveArtworkSourceURL,
+  ContentTypeDetectionError,
 } from '@/utils/helper';
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
 import {
@@ -215,8 +216,102 @@ const ArtworkPlayer = ({
 
   const cursorRef = useRef<CursorLayerHandle>(null);
 
-  // Latch visual settings until the incoming artwork is actually committed,
-  // so an outgoing slot never redraws using the next item's appearance.
+  // ---- Degraded-playback signal ------------------------------------------
+  // "The artwork this player is currently trying to show failed to load."
+  // Every failure path below deliberately still commits its slot through
+  // `loadedSource` (abandoning the incoming claim wedges the visual-settings
+  // latch — see handleMediaError), so the commit point cannot tell success
+  // from failure; the outcome is recorded at the error and success sites
+  // instead. AppContext lifts the flag so two consumers can act on it: the
+  // reconnect-recovery refresh, and the setup background, which puts the
+  // bundled offline artwork on screen instead of a black frame.
+  //
+  // A ref holds the failing URL and only genuine transitions reach context,
+  // so repeated failures on the same artwork cost no re-render.
+  const { setPlaybackDegraded } = context;
+  const degradedURLRef = useRef<string | null>(null);
+  const notePlaybackOutcome = useCallback(
+    (url: string, failed: boolean) => {
+      // Staleness is checked in two halves, and callers must satisfy both.
+      // This is the argument-based half: `url` is the URL the reporting
+      // layer was actually rendering, so a load that settles after the
+      // playlist moved on says nothing about what is on the wall now and is
+      // dropped. `loadedSource` owns the slot-based half — whether this slot
+      // is the one whose commit the transition pipeline accepted — which is
+      // why nearly every call site below sits inside its gate.
+      if (url !== previewURLRef.current) {
+        return;
+      }
+      const nextDegradedURL = failed ? url : null;
+      if (degradedURLRef.current === nextDegradedURL) {
+        return;
+      }
+      degradedURLRef.current = nextDegradedURL;
+      setPlaybackDegraded?.(failed, url);
+    },
+    [setPlaybackDegraded]
+  );
+
+  // ---- M7 damping, Layer 1 (cross-repo recovery design §4.4) ------------
+  // Per-slot, per-mount latch: once a video/audio mount has reported a
+  // FAILURE, a later `loadeddata` on that SAME mount must not clear the
+  // degraded flag. Without this, a video/audio element that errors and then
+  // fires a stray `loadeddata` (browsers do this — a partially-buffered
+  // element can still reach `loadeddata` after `error`) flips the flag
+  // false and immediately true again on the next real error, turning one
+  // genuine failure into a rapid clear/re-raise cycle that re-triggers
+  // AppContext's reconnect-recovery refresh on every flap. One-shot in the
+  // success→clear direction only: a failure can still supersede an earlier
+  // success within the same mount (handleMediaError always reports). Reset
+  // at slot creation (a NEW mount — fresh iframeKey — deserves a fresh
+  // chance), not on every media-setup effect re-run. Image/iframe/object
+  // success paths are unaffected; their failure signals do not exhibit this
+  // flap (see DEVICE_LOCAL_PLAYER.md's per-type known-gaps list).
+  const mountFailedRef = useRef<[boolean, boolean]>([false, false]);
+
+  /**
+   * The URL a slot is actually rendering. Handlers that only receive a
+   * slotIndex report through this rather than `previewURLRef.current`, which
+   * would make notePlaybackOutcome's guard compare a value against itself.
+   */
+  const slotPreviewURL = (slotIndex: SlotIndex) =>
+    slotsRef.current[slotIndex]?.previewURL ?? '';
+
+  // Moving to a different artwork (or unmounting) invalidates the flag: the
+  // previous item's failure must not hold the offline backdrop over an
+  // artwork that is loading fine. "Different artwork" is previewURL OR
+  // itemIdentity — adjacent playlist items may share a URL, and the slot
+  // pipeline treats an identity change as a real transition, so the flag
+  // must reset with it or the stale failure suppresses the fresh degraded
+  // edge reconnect recovery listens for. A same-item remount — which is
+  // exactly what the reconnect recovery triggers (artworkReloadTick changes,
+  // identity does not) — intentionally does NOT clear it, so a retry that
+  // fails again stays degraded and only a real success clears it.
+  useEffect(() => {
+    return () => {
+      if (degradedURLRef.current === null) {
+        return;
+      }
+      degradedURLRef.current = null;
+      setPlaybackDegraded?.(false);
+    };
+  }, [previewURL, itemIdentity, setPlaybackDegraded]);
+
+  // ---- Latched visual settings -------------------------------------------
+  // `displaySettings` flips to the NEXT item's preferences the moment the
+  // playlist advances, but the incoming artwork only becomes visible after
+  // load + fade (often seconds later). Painting background/margin/scaling
+  // straight from `displaySettings` restyled the OUTGOING artwork with the
+  // incoming item's settings for that whole window (background snapping
+  // early, margins resizing the old artwork). The stage therefore renders
+  // from `committedVisualSettings`, which swaps only at the moments a
+  // transition commits (`setActiveSlot`), so whatever is on screen always
+  // pairs with its own item's visual settings.
+  //
+  // Trade-off: during the crossfade the INCOMING slot briefly renders with
+  // the outgoing item's scaling. That is bounded (FADE_IN_OUT_DURATION_MS,
+  // at partial opacity) and strictly less visible than the old behavior —
+  // the fully-visible outgoing artwork restyling seconds before the swap.
   const [committedVisualSettings, setCommittedVisualSettings] =
     useState(displaySettings);
   const displaySettingsRef = useRef(displaySettings);
@@ -821,7 +916,27 @@ const ArtworkPlayer = ({
   const handleIframeLoad = (slotIndex: SlotIndex, layer: SlotLayer) => {
     if (isWebGLAvailable()) {
       setShowMessageModal(false);
-      loadedSource(slotIndex, layer);
+      if (loadedSource(slotIndex, layer)) {
+        // Known limitation: a cross-origin iframe fires `load` even when the
+        // browser rendered its own network-error page, so an offline iframe
+        // artwork reads as a success here and never raises the degraded
+        // flag. Nothing in-page can inspect that document; `onError` (below)
+        // stays the only signal we can trust for this preview type.
+        //
+        // Worse, the iframe is also where type detection FAILURES land:
+        // offline, `getContentTypeFromURL`'s HEAD dies and an extensionless
+        // source pins here as a guess (detectPreviewType's catch, marked by
+        // `mimeType: null`). That `load` says nothing about the artwork —
+        // scoring it as success would CLEAR a degraded flag raised by the
+        // real preview type on exactly the offline boot the reconnect
+        // recovery exists for, so only a confidently-typed iframe reports.
+        // The guessed typing is not sticky: the recovery's remount re-runs
+        // detection once the network is back, and the artwork's real type
+        // takes over the signals.
+        if (slotsRef.current[slotIndex]?.mimeType !== null) {
+          notePlaybackOutcome(slotPreviewURL(slotIndex), false);
+        }
+      }
     } else {
       handleWebGLLost();
     }
@@ -829,6 +944,7 @@ const ArtworkPlayer = ({
 
   const handleModelLoad = (slotIndex: SlotIndex, layer?: SlotLayer) => {
     if (loadedSource(slotIndex, layer)) {
+      notePlaybackOutcome(slotPreviewURL(slotIndex), false);
       setShowMessageModal(false);
     }
   };
@@ -853,6 +969,7 @@ const ArtworkPlayer = ({
       return;
     }
 
+    notePlaybackOutcome(slotPreviewURL(slotIndex), true);
     clearLoadingIndicators();
     markArtworkFailed();
     setMessageModalText(null);
@@ -900,20 +1017,29 @@ const ArtworkPlayer = ({
     }, RENDER_LOADING_DELAY_MS);
 
     const identity = itemIdentityRef.current;
+    // Derived from activeSlotRef/slotsRef, not from the setSlots updater's
+    // `prev` — the updater must stay a pure function of its argument, and
+    // `incomingSlotRef`/`mountFailedRef` are refs, not state, so writing
+    // them from inside it is a render-phase side effect React may invoke
+    // more than once for the same commit.
+    const hasAny = slotsRef.current[currentActive] !== null;
+    const targetSlot: SlotIndex = hasAny
+      ? ((currentActive === 0 ? 1 : 0) as SlotIndex)
+      : currentActive;
+    incomingSlotRef.current = targetSlot;
+    // Fresh mount: give it a clean one-shot latch (see the Layer-1 damping
+    // comment above).
+    mountFailedRef.current[targetSlot] = false;
     setSlots(prev => {
-      const hasAny = prev[currentActive] !== null;
       if (!hasAny) {
         const k = ++iframeKeyCounterRef.current;
-        incomingSlotRef.current = currentActive;
         const next: [SlotLayer | null, SlotLayer | null] = [null, null];
-        next[currentActive] = createSlotLayer(url, k, identity);
+        next[targetSlot] = createSlotLayer(url, k, identity);
         return next;
       }
-      const incoming = (currentActive === 0 ? 1 : 0) as SlotIndex;
-      incomingSlotRef.current = incoming;
       const k = ++iframeKeyCounterRef.current;
       const next = [...prev] as [SlotLayer | null, SlotLayer | null];
-      next[incoming] = createSlotLayer(url, k, identity);
+      next[targetSlot] = createSlotLayer(url, k, identity);
       return next;
     });
 
@@ -966,6 +1092,50 @@ const ArtworkPlayer = ({
       .catch((error: unknown) => {
         if (cancelled || previewURLRef.current !== url) {return;}
         Sentry.captureException(error);
+        // Detection failure is a first-class outcome, not just a typing
+        // guess: getContentTypeFromURL's HEAD dies offline (or on any other
+        // network-level failure) exactly as often as it dies on a merely
+        // unhelpful response (4xx/5xx, or 2xx with no Content-Type header —
+        // server reachable, type just unknown). The fallback iframe below
+        // covers BOTH cases identically (something still renders), but only
+        // the network case is evidence the artwork itself is currently
+        // unreachable — a reached-but-untyped source is a healthy artwork
+        // this device simply can't classify, and must NOT be marked
+        // degraded on that basis alone.
+        //
+        // A false positive here is cheap to correct even so: the M7 Layer-2
+        // budget (AppContext) bounds any refresh consequences, and the
+        // offline backdrop only shows when offline signals corroborate
+        // (`(!isOnline || !browserOnline) && playbackDegraded` in
+        // SetupArtworkBackground) — a stray degraded report on a genuinely
+        // healthy, online wall cannot black it out on its own.
+        //
+        // Loop closure: raising the flag here does not strand it guessed.
+        // The reconnect-recovery refresh bumps `artworkReloadTick`, which is
+        // in this effect's deps, so detection re-runs on the SAME url; a
+        // now-successful HEAD takes the confidently-typed `.then` branch
+        // above (real `mimeType`, not null), and handleIframeLoad's own
+        // `mimeType !== null` gate (see its comment) is exactly what lets
+        // THAT mount's success reporting clear the flag.
+        if (
+          error instanceof ContentTypeDetectionError &&
+          error.isNetworkFailure
+        ) {
+          notePlaybackOutcome(url, true);
+          // Corroborated network failure: do NOT commit the fallback iframe.
+          // The device is provably offline, so an iframe pointed at the
+          // remote source cannot render the artwork — Chromium paints its
+          // own net-error page inside the frame, which becomes visible the
+          // moment the offline backdrop lifts on reconnect (field bug: the
+          // "dinosaur" flash after an offline boot). The slot stays pending
+          // (previewType null renders nothing; renderSlot bails on it), the
+          // degraded flag raised above drives the reconnect-recovery
+          // refresh, and that refresh bumps `artworkReloadTick` to re-run
+          // detection on the same URL once the network is back. The
+          // fallback below stays reserved for the reached-but-untyped case,
+          // where a render attempt can genuinely succeed.
+          return;
+        }
         setSlots(prev => {
           const incoming = incomingSlotRef.current;
           if (incoming === null) {return prev;}
@@ -1049,14 +1219,29 @@ const ArtworkPlayer = ({
             return;
           }
           console.error(`[ArtworkPlayer] ${mediaType} load failed:`, error);
-          // A failed incoming layer must still resolve its transition claim;
-          // otherwise visual settings remain latched to the outgoing artwork.
-          loadedSource(slotIndex, layer);
-          handleArtworkRenderFailure(slotIndex, layer);
-          Sentry.captureMessage(`[ArtworkPlayer] ${mediaType} load failed`, {
-            level: 'error',
-            extra: { displayPreviewURL: layer.displayPreviewURL, mediaType },
-          });
+          // Commit the failed slot through the transition pipeline (same
+          // contract as handleModelLoadError): a claim abandoned on failure
+          // wedges the visual-settings latch — incomingSlotRef stays set,
+          // every later settings update reads as "transition pending", and
+          // the artwork on screen stops receiving settings until the next
+          // artwork request. loadedSource's layer guard drops stale failures.
+          if (loadedSource(slotIndex, layer)) {
+            handleArtworkRenderFailure(slotIndex, layer);
+            Sentry.captureMessage(`[ArtworkPlayer] ${mediaType} load failed`, {
+              level: 'error',
+              extra: { displayPreviewURL: layer.displayPreviewURL, mediaType },
+            });
+            // Only a failure loadedSource actually accepted describes what
+            // the device is trying to show; a rejected one belongs to a
+            // superseded slot and must not mark playback degraded.
+            if (mediaType === 'video' || mediaType === 'audio') {
+              // Layer-1 latch: this mount is now barred from clearing the
+              // flag via a later loadeddata success (image is unaffected —
+              // see the damping comment above).
+              mountFailedRef.current[slotIndex] = true;
+            }
+            notePlaybackOutcome(layer.previewURL, true);
+          }
         };
 
       const loadMedia = async () => {
@@ -1074,11 +1259,16 @@ const ArtworkPlayer = ({
             } catch {
               decoded = Promise.resolve();
             }
-            void decoded.catch(() => undefined).finally(() => {
-              if (!isCancelled) {
-                loadedSource(slotIndex, layer);
-              }
-            });
+            void decoded
+              .catch(() => undefined)
+              .finally(() => {
+                if (!isCancelled && loadedSource(slotIndex, layer)) {
+                  // Genuine success site: `onload` fired, so the bytes
+                  // arrived. `loadedSource` alone cannot serve as the
+                  // success signal — the failure paths call it too.
+                  notePlaybackOutcome(layer.previewURL, false);
+                }
+              });
           };
           el.onload = markImageReady;
           el.onerror = () => {
@@ -1112,6 +1302,24 @@ const ArtworkPlayer = ({
         ) {
           const el = videoRefs[slotIndex].current;
           const handleNonStreamingVideoReady = () => {
+            // `loadeddata` is the unambiguous success moment for progressive
+            // video. playVideoForSlot's own loadedSource call is not usable
+            // as one: it fires from play()'s `finally`, i.e. on a rejected
+            // play just as much as a resolved one.
+            //
+            // Guarded like loadedSource's competing-claim check, but without
+            // its side effects (claiming the slot here would start the
+            // crossfade before play() is even called). Adjacent playlist
+            // items may share a previewURL, so the URL guard inside
+            // notePlaybackOutcome alone would let a late `loadeddata` from
+            // the PREVIOUS item clear a failure raised by the current one.
+            const claimed = incomingSlotRef.current;
+            if (
+              (claimed === null || claimed === slotIndex) &&
+              !mountFailedRef.current[slotIndex]
+            ) {
+              notePlaybackOutcome(layer.previewURL, false);
+            }
             playVideoForSlot(slotIndex, layer, el);
           };
           el.addEventListener('loadeddata', handleNonStreamingVideoReady);
@@ -1139,7 +1347,10 @@ const ArtworkPlayer = ({
           const el = audioRefs[slotIndex].current;
           // createMediaLoader().loadMedia sets src only; it never invokes onLoad (see mediaLoader.ts).
           const handleAudioReady = () => {
-            loadedSource(slotIndex, layer);
+            const claimed = loadedSource(slotIndex, layer);
+            if (claimed && !mountFailedRef.current[slotIndex]) {
+              notePlaybackOutcome(layer.previewURL, false);
+            }
           };
           el.addEventListener('loadeddata', handleAudioReady);
           el.onerror = () => {
@@ -1177,6 +1388,7 @@ const ArtworkPlayer = ({
       clearLoadingDelay,
       isCurrentArtworkSlot,
       loadedSource,
+      notePlaybackOutcome,
       playVideoForSlot,
       markArtworkLoading,
       markArtworkPending,
@@ -1309,6 +1521,10 @@ const ArtworkPlayer = ({
     if (!loadedSource(slotIndex, layer)) {
       return;
     }
+    notePlaybackOutcome(slotPreviewURL(slotIndex), true);
+    // handleArtworkRenderFailure owns the rest of the failure surface here:
+    // it clears the loading indicators, settles the slot, publishes
+    // RenderStatus.failed, and raises the modal.
     handleArtworkRenderFailure(slotIndex, layer);
   };
 

@@ -86,13 +86,6 @@ export default function PlaylistClient() {
     };
   }, [clearTimer]);
 
-  const registerArtworkReload = useCallback(
-    (reload: (() => void) | null) => {
-      artworkPerformReloadRef.current = reload;
-    },
-    []
-  );
-
   // Same-slot loops park on the end frame either when there's no duration
   // (timer is a no-op) or when display.loop=false has already fired `ended`.
   // Under display.loop=true the element loops natively, so cause='timer'
@@ -131,6 +124,27 @@ export default function PlaylistClient() {
     performReload();
     return true;
   }, []);
+
+  const registerArtworkReload = useCallback(
+    (reload: (() => void) | null) => {
+      artworkPerformReloadRef.current = reload;
+      if (reload) {
+        // Second flush trigger (§4.2 of the cross-repo recovery design):
+        // covers a registration-ordering gap the `onRefreshArtwork` setter's
+        // own flush cannot close on its own. If a refusal parks while
+        // `onRefreshArtwork` gets set (below) but ArtworkPlayer has not
+        // mounted yet — `currentItemDisplayPreference` still resolving, so
+        // this ref was still null — that flush runs against a still-empty
+        // reload ref and leaves the refusal parked. Nothing else re-arms it
+        // once ArtworkPlayer finally mounts. Re-assigning the setter here
+        // (its own body always attempts a flush) re-triggers it now that the
+        // reload function actually exists. Teardown (reload === null) must
+        // NOT flush — there is nothing to refresh into a torn-down handler.
+        canvasService.onRefreshArtwork = triggerArtworkRefresh;
+      }
+    },
+    [triggerArtworkRefresh]
+  );
 
   useLayoutEffect(() => {
     if (currentIndex < 0 || playlist.length === 0) {

@@ -41,7 +41,11 @@ import {
 } from '@/utils/castInfo';
 import { LoopMode } from '@/models/cast_info.model';
 import { DP1Item } from '@/models/dp1.model';
-import { CustomEventName, NavigateEventDetail } from '@/models/custom_event';
+import {
+  CustomEventName,
+  NavigateEventDetail,
+  PlaybackHaltedDetail,
+} from '@/models/custom_event';
 import DeviceManager from '@/utils/DeviceManager';
 import {
   CursorPositionListener,
@@ -225,6 +229,93 @@ class CanvasService {
   // restore is about to overwrite.
   private bootCastHydrationPending = true;
   private deferredConditionalDefaultRequest = false;
+  // A deliberate stop (disconnect, setSleepMode(true), error-page
+  // navigation) landed while hydration was still pending — latched from the
+  // PlaybackHalted event in the constructor. initCastInfo's live-command
+  // bail-out reads castInfo, but none of these stops leave one to see:
+  // disconnect CLEARS castInfo and sleep/error never set it, so at the
+  // decision point they are indistinguishable from "nothing happened".
+  // Same ambiguity bootCastHydrationPending exists for (null means
+  // "unknown", not "empty screen"), from the other direction: here null
+  // must mean "a stop already decided the wall", so boot must not restore
+  // persisted state or arm the fallback over it. Sticky for the page
+  // lifetime — it is only consulted at the one boot decision.
+  private haltedDuringBootHydration = false;
+  // The mid-hydration halt CLEARED cast state (disconnect's
+  // PlaybackHaltedDetail.clearedCast). Only this flavor makes boot skip the
+  // persisted-playlist restore: the persisted state is exactly what the
+  // controller cleared. A preserving halt (sleep, error navigation) leaves
+  // this false, and boot still restores the playlist — suppressing only
+  // navigation and fallback arming — so a wake after a mid-hydration sleep
+  // finds the user's playlist instead of casting (and persisting) the
+  // default over it.
+  private haltClearedCastDuringBootHydration = false;
+  // True between setSleepMode(true) and the wake that ends it. The wake
+  // re-arm below must fire only for a wake that ends a REAL sleep: a wake
+  // sent to a disconnected wall (castInfo cleared, never slept) must not
+  // cast the default playlist over a deliberate clear. disconnect() resets
+  // it for the same reason — a wall cleared DURING sleep stays dark on
+  // wake.
+  private sleepModeEntered = false;
+  // Set only when initCastInfo itself threw (completeBootCastHydration's
+  // `outcome` argument), never for an initialDisplaySettings failure that
+  // shares the same try block in AppContext — see bootHydrationState(). Once
+  // hydration is no longer pending, this is what turns a caught exception
+  // into the CDP status probe's 'failed' outcome, which is the only
+  // bootHydration value that drives boot recovery's navigate-away row.
+  private bootHydrationFailed = false;
+
+  private constructor() {
+    // Latch any deliberate-stop notification that lands before boot
+    // hydration settles. The PlaybackHalted event is the one contract every
+    // halt source already honors (disconnect and sleep in this class, error
+    // navigation in utils — which must not import this service back), so
+    // the latch subscribes to the bus instead of each source calling in: a
+    // future halt source is covered by construction. dispatchEvent runs
+    // listeners synchronously, so the latch is visible in the same task as
+    // the halt itself. Never removed — the singleton lives for the page.
+    // The window guard covers module import during prerender.
+    if (typeof window !== 'undefined') {
+      window.addEventListener(CustomEventName.PlaybackHalted, event => {
+        if (this.bootCastHydrationPending) {
+          this.haltedDuringBootHydration = true;
+          // detail is null at runtime for a bare CustomEvent (error
+          // navigation dispatches without one), whatever the generic claims.
+          const detail = (
+            event as CustomEvent<PlaybackHaltedDetail | undefined>
+          ).detail;
+          if (detail?.clearedCast) {
+            this.haltClearedCastDuringBootHydration = true;
+            // This early, useCastInfo's React state is still at its
+            // useState(null) initial value: this.setCastInfo(null) inside
+            // disconnect() is a same-value bail-out, so React never
+            // re-renders and the persistence effect (DeviceManager
+            // .setDeviceInfo) that would normally clear the stored record
+            // never runs. Without this direct write, the STALE persisted
+            // castInfo survives to the next boot and initCastInfo resurrects
+            // exactly the playlist this disconnect just cleared. Clear it
+            // here at the service layer instead of depending on a React
+            // re-render. Fire-and-forget, matching this class's other
+            // storage writes off the event path.
+            DeviceManager.setDeviceInfo(null).catch((error: unknown) => {
+              console.error(
+                '[CanvasService] Error clearing persisted castInfo after a mid-hydration disconnect:',
+                error
+              );
+            });
+          }
+          // A deferred conditional default push predates this stop: cancel
+          // it here, the same way the halt cancels AppContext's active
+          // request. Cancelling at the halt rather than gating the settle
+          // replay keeps last-command-wins in BOTH directions — a push
+          // arriving AFTER the halt is deferred anew and still honored at
+          // settle ("make sure something is playing" is then the newer
+          // intent).
+          this.deferredConditionalDefaultRequest = false;
+        }
+      });
+    }
+  }
   public onCastInfoChange: ((castInfo: CastInfo | null) => void) | null = null;
   /**
    * Playlist route registers a cache-bust reload for the active artwork.
@@ -323,6 +414,36 @@ class CanvasService {
     return this.castInfo;
   }
 
+  /**
+   * Whether `next` is the same playlist content as `prev`, for
+   * setCastInfo's pendingRefreshArtwork guard below. Mirrors the identity
+   * checks refreshPlaylist already uses elsewhere in this file (DP1Call.id,
+   * then a content compare via `deepEqual`) rather than inventing a new
+   * comparison: cheapest first — an assigned `playlist.id` or `playlistUrl`
+   * settles it in O(1) — falling back to a full item compare only when
+   * neither playlist carries a stable identity (ad-hoc/boot-restored casts).
+   */
+  private isSamePlaylistContent(
+    prev: CastInfo | null,
+    next: CastInfo
+  ): boolean {
+    const prevPlaylist = prev?.playlist;
+    const nextPlaylist = next.playlist;
+    if (prevPlaylist === nextPlaylist) {
+      return true;
+    }
+    if (!prevPlaylist || !nextPlaylist) {
+      return false;
+    }
+    if (prevPlaylist.id !== undefined || nextPlaylist.id !== undefined) {
+      return prevPlaylist.id === nextPlaylist.id;
+    }
+    if (prev.playlistUrl !== undefined || next.playlistUrl !== undefined) {
+      return prev.playlistUrl === next.playlistUrl;
+    }
+    return deepEqual(prevPlaylist.items ?? [], nextPlaylist.items ?? []);
+  }
+
   public setCastInfo(castInfo: CastInfo | null, notify = true) {
     console.log('[CanvasService] Setting castInfo:', notify);
     if (castInfo === null) {
@@ -332,6 +453,23 @@ class CanvasService {
       this.renderStatus = undefined;
       this.castInfo = null;
     } else {
+      if (!this.isSamePlaylistContent(this.castInfo, castInfo)) {
+        // A REAL cast-content change supersedes any refresh parked against
+        // the PREVIOUS artwork (refreshArtwork's handler_pending /
+        // preview_update_failed refusals — see refreshArtwork below):
+        // replaying it later would refresh whatever is now on screen, not the
+        // artwork the refusal was actually about. The no-artwork refusal has
+        // nothing to supersede — it never sets the flag in the first place.
+        //
+        // Narrower than "every non-null setCastInfo" on purpose: a bare
+        // `connect`, a loop-mode/duration setter, a wake, or a slot advance
+        // (moveToArtwork) all pass through here too, but none of them replace
+        // the playlist the parked refresh is about — clearing on those drops
+        // the player's own reconnect refresh for no reason.
+        this.pendingRefreshArtwork = false;
+      }
+      // Both reads above and below must happen before this.castInfo is
+      // reassigned: they compare the outgoing cast against the incoming one.
       const nextRenderStatus = resolveRenderStatusForCastInfo(
         this.castInfo,
         castInfo,
@@ -679,6 +817,18 @@ class CanvasService {
         // describes a previous page render, not the current mount lifecycle.
         renderStatus: this.renderStatus,
 
+        // Generation stamp echo (cross-repo recovery design §2.1, source 3):
+        // rides this existing round-trip so controld can detect a
+        // document-stamp mismatch without a second evaluate. The key is
+        // ALWAYS present from THIS player — '' when the session has not
+        // stamped the document yet (a fresh mount, or a foreign/unstamped
+        // document), the stamp string otherwise — so controld can tell a new
+        // player's unstamped document apart from an OLD player, which omits
+        // the key entirely (pre-stamp code never sent it).
+        stamp:
+          (window as unknown as { __ffosDocStamp?: string }).__ffosDocStamp ??
+          '',
+
         deviceSettings: {
           scaling:
             DeviceManager.getCachedDeviceDisplaySettings()?.scaling ??
@@ -719,7 +869,87 @@ class CanvasService {
   public disconnect(): DisconnectReplyV2 {
     console.log('[CanvasService] Disconnect');
     this.setCastInfo(null);
+    // A disconnect during sleep clears the wall; the wake that eventually
+    // ends that sleep must find the marker down or it would re-arm the
+    // fallback over the deliberate clear.
+    this.sleepModeEntered = false;
+    // The controller stopped playback: AppContext must stand its fallback
+    // machinery down (and, mid-hydration, the constructor's listener
+    // latches the halt for the boot decision). Without this, an armed
+    // boot-fallback retry or the config-change supersede could later cast
+    // the default playlist and relight a wall the controller just cleared.
+    // Window guard: SSR safety, matching this file's other dispatches.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent<PlaybackHaltedDetail>(
+          CustomEventName.PlaybackHalted as string,
+          // The one cast-CLEARING halt: boot must not restore the persisted
+          // playlist this disconnect just cleared (see PlaybackHaltedDetail).
+          { detail: { clearedCast: true } }
+        )
+      );
+    }
     return { ok: true };
+  }
+
+  /**
+   * True when a deliberate stop (disconnect, sleep, error navigation)
+   * landed before boot hydration finished — latched from the PlaybackHalted
+   * event in the constructor.
+   * InitCastInfo consults this alongside getCastInfo(): a live command
+   * already took authority over the wall, so boot must not navigate or arm
+   * the fallback over it. Whether the persisted playlist may still be
+   * RESTORED is a separate question — see didHydrationHaltClearCast.
+   */
+  public wasHaltedDuringBootHydration(): boolean {
+    return this.haltedDuringBootHydration;
+  }
+
+  /**
+   * True when the mid-hydration halt was cast-CLEARING (disconnect): the
+   * persisted playlist is exactly the state the controller cleared, so boot
+   * must skip the restore entirely. Preserving halts (sleep, error
+   * navigation) return false and boot restores the playlist without
+   * navigating, so a later wake finds the user's content.
+   */
+  public didHydrationHaltClearCast(): boolean {
+    return this.haltClearedCastDuringBootHydration;
+  }
+
+  /**
+   * Mirrors refreshArtwork's exact "anything to refresh" check below, so the
+   * CDP status probe and the live refusal path can never disagree about
+   * whether the current cast has active artwork.
+   */
+  public hasActiveArtwork(): boolean {
+    return Boolean(this.castInfo?.playlist?.items?.length);
+  }
+
+  /**
+   * Boot-hydration precondition for the CDP status probe
+   * (`window.__ffosPlayerStatus`, cross-repo recovery design §4.1). Order
+   * matters: hydration still in progress always reports 'pending' —
+   * whatever a mid-hydration halt or failure latched only becomes
+   * meaningful once completeBootCastHydration has actually run.
+   */
+  public bootHydrationState():
+    | 'pending'
+    | 'ok'
+    | 'halted_cleared'
+    | 'halted_preserving'
+    | 'failed' {
+    if (this.bootCastHydrationPending) {
+      return 'pending';
+    }
+    if (this.bootHydrationFailed) {
+      return 'failed';
+    }
+    if (this.haltedDuringBootHydration) {
+      return this.haltClearedCastDuringBootHydration
+        ? 'halted_cleared'
+        : 'halted_preserving';
+    }
+    return 'ok';
   }
 
   public setSleepMode(request: SetSleepModeRequest): SetSleepModeReply {
@@ -728,10 +958,39 @@ class CanvasService {
 
     if (typeof window !== 'undefined') {
       if (!request.sleepMode) {
-        this.setCastInfo({
-          ...this.castInfo,
-          castCommand: CastCommand.displayPlaylist,
-        });
+        const endsRealSleep = this.sleepModeEntered;
+        this.sleepModeEntered = false;
+        if (this.castInfo?.playlist?.items?.length) {
+          this.setCastInfo({
+            ...this.castInfo,
+            castCommand: CastCommand.displayPlaylist,
+          });
+        } else if (endsRealSleep) {
+          // Wake ending a real sleep with nothing playable: entering sleep
+          // stood the fallback machinery down (PlaybackHalted), so a device
+          // that slept during its first-boot/offline fallback would
+          // otherwise wake to an empty player until the next controller
+          // command. Re-enter the fallback flow through the same event a
+          // forced displayDefaultPlaylist uses; AppContext's nonce guard
+          // makes a redundant re-arm harmless. Deliberately NO setCastInfo
+          // on this path: committing a playlist-less castInfo would persist
+          // through useCastInfo, and the next boot's restore branch would
+          // take it as real content and never arm the fallback — a reboot
+          // would trade this in-session recovery for a permanent black
+          // wall.
+          window.dispatchEvent(
+            new CustomEvent(CustomEventName.DisplayDefaultPlaylist as string)
+          );
+        }
+      } else {
+        this.sleepModeEntered = true;
+        // Sleep hides playback without clearing castInfo, but the fallback
+        // machinery must stand down the same as for disconnect: a published
+        // config landing after sleep would otherwise re-arm the fallback,
+        // whose successful cast navigates to '/' and wakes the device.
+        window.dispatchEvent(
+          new CustomEvent(CustomEventName.PlaybackHalted as string)
+        );
       }
       window.dispatchEvent(
         new CustomEvent<NavigateEventDetail>(
@@ -761,11 +1020,37 @@ class CanvasService {
     return { ok: true };
   }
 
+  /**
+   * Re-mounts the artwork currently on screen, for the app's OWN recovery
+   * rather than a controller command. AppContext calls this when WAN
+   * connectivity returns while the selected artwork failed to load: the
+   * remount re-runs exactly the remote asset fetches that died offline, with
+   * the player's normal crossfade, and without touching castInfo or playlist
+   * position. It shares `refreshArtwork`'s pendingRefreshArtwork machinery,
+   * so a nudge that arrives before the playlist route has registered its
+   * handler is replayed once the handler lands instead of being dropped.
+   * Returns whether the refresh was applied; a `false` result is not retried
+   * here, the next connectivity notification is the retry.
+   */
+  public requestArtworkRefresh(): boolean {
+    return this.refreshArtwork().ok;
+  }
+
   private refreshArtwork(): Reply {
     const activeCastInfo = this.castInfo;
+    // Refusals carry their reason in the reply, not only the console: the
+    // daemon's boot recovery escalates a refused refresh to a Page.reload
+    // and logs `message.error` to distinguish the expected "no active
+    // artwork" escalation from a genuinely broken page. `code` is the same
+    // classification as a stable machine-readable value — `error` stays
+    // byte-for-byte unchanged for existing log readers.
     if (!activeCastInfo?.playlist?.items?.length) {
       console.error('[CanvasService] No active artwork to refresh');
-      return { ok: false };
+      return {
+        ok: false,
+        error: 'No active artwork to refresh',
+        code: 'no_artwork',
+      };
     }
 
     if (!this._onRefreshArtwork) {
@@ -773,14 +1058,30 @@ class CanvasService {
       console.warn(
         '[CanvasService] refreshArtwork: no playlist handler registered'
       );
-      return { ok: false };
+      return {
+        ok: false,
+        error: 'No playlist handler registered yet',
+        code: 'handler_pending',
+      };
     }
     const applied = this._onRefreshArtwork();
     if (!applied) {
+      // Third refusal flavor: a live page whose refresh path is broken
+      // (registered handler, but it could not update the preview URL).
+      // Parked the same way as the "no handler yet" branch above — playing
+      // the artwork on a healthy re-registration is exactly the recovery
+      // this refusal was refused for. flushPendingRefreshArtwork() replays
+      // it on the next handler registration (including the second flush
+      // trigger at the playlist route's reload registration).
+      this.pendingRefreshArtwork = true;
       console.warn(
         '[CanvasService] refreshArtwork: handler could not update preview URL'
       );
-      return { ok: false };
+      return {
+        ok: false,
+        error: 'Playlist handler could not update preview URL',
+        code: 'preview_update_failed',
+      };
     }
     this.pendingRefreshArtwork = false;
     // The playlist route applies the reload on a later React turn. Publish
@@ -1296,10 +1597,25 @@ class CanvasService {
    * event. That is intentional redundancy, not a bug: both requests resolve
    * to the same default playlist and AppContext's nonce guard makes the
    * extra re-arm harmless.
+   *
+   * A deferred request that PREDATES a mid-hydration halt never reaches
+   * this replay — the halt listener in the constructor cancels it, the same
+   * way the halt cancels AppContext's active request. One deferred after
+   * the halt is honored here: it is the newer intent.
+   *
+   * `outcome` feeds bootHydrationState()'s 'failed' value. It must be
+   * SCOPED to an initCastInfo failure only — AppContext's boot catch also
+   * covers initialDisplaySettings, whose failure is not fatal to playback
+   * and must report 'ok' (the caller is responsible for that scoping; this
+   * method just records whatever it is told). Absent/'ok' leaves the failed
+   * flag clear.
    */
-  public completeBootCastHydration() {
+  public completeBootCastHydration(outcome?: 'ok' | 'failed') {
     if (!this.bootCastHydrationPending) {
       return;
+    }
+    if (outcome === 'failed') {
+      this.bootHydrationFailed = true;
     }
     this.bootCastHydrationPending = false;
     if (this.deferredConditionalDefaultRequest) {

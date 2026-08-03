@@ -30,7 +30,7 @@ npm run build
 
 - `npm run lint` is the changed-files ESLint gate against `origin/main` by default.
 - `npm run typecheck` runs `tsc --noEmit`.
-- `npm run test` runs the Vitest unit test suite.
+- `npm run test` first runs the user-facing copy check (`scripts/check-copy.mjs`, banned-term rules from Canon `reference/voice/product-copy.md` — approved terms are also listed in the script header), then the Vitest unit test suite.
 - `npm run build` is the production Next.js build.
 
 By default, `npm run verify` lints changed files against `origin/main`. To verify against a different base, run either `VERIFY_BASE_REF=origin/develop npm run verify` or `npm run verify -- --base=origin/develop`.
@@ -45,6 +45,62 @@ By default, `npm run verify` lints changed files against `origin/main`. To verif
 - Re-run `npm run verify` after addressing any valid review feedback.
 - If the change touches playback, cast recovery, display settings, or route behavior, pair verification with a manual smoke pass for the affected flow.
 - **Playlist route / repeat-off hold:** With loop `none`, advance to the last timed slot so playback holds on the final artwork; confirm a queued shuffle or refresh **promotes the new playlist on cast** only in that hold (not when the final item has no finite slot timer); leaving `none` via `setLoop` should resume the slot timer from the held frame. Expect the current artwork to stay selected after shuffle (anchor at index `0`) until its slot timer completes before advancing.
+
+## Manual visual smoke: setup and pairing overlays
+
+Copy or layout changes to `SetupOverlay` / `MintPairingOverlay` cannot be
+verified by jsdom tests — computed sizes, font selection (real bold vs
+synthesized), and wall legibility need eyes on rendered output. The
+procedure, runnable entirely in a browser:
+
+1. `npm run dev`, open http://localhost:3000, open the devtools console.
+2. Define the drivers (the overlays listen for these window events; state
+   and field names are the `setupDisplay` / `mintPairingDisplay` CDP
+   contracts in `src/models/custom_event.ts`):
+
+   ```js
+   const setup = (state, extra={}) => window.dispatchEvent(
+     new CustomEvent('setupDisplay', {detail:{state, ...extra}}));
+   const mint = (state, extra={}) => window.dispatchEvent(
+     new CustomEvent('mintPairingDisplay', {detail:{state, ...extra}}));
+   ```
+
+3. Walk the setup flow in order, reading it as a sequence (after a failed
+   join the device re-raises the AP, so `softap_qr` follows `join_failed`):
+
+   ```js
+   setup('scanning');
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623'});
+   setup('softap_qr', {ssid:'FF1-DEMO4242'});               // open network
+   setup('joining');
+   setup('join_failed', {reason:'Wrong Wi-Fi password. Please check it and try again.'});
+   setup('finalizing');
+   setup('updating', {progress:42});
+   setup('claim_qr', {url:'https://link.feralfile.com/device_connect/demo', device_name:'FF1-DEMO4242'});
+   setup('claim_qr', {url:'https://link.feralfile.com/device_connect/demo'}); // nameless variant
+   setup('factory_reset');
+   setup('hidden');
+   mint('pairing_code', {pairingCode:'8FK2ZQ'});
+   mint('request_received', {browserName:'Chrome'});
+   mint('request_received', {});                            // fallback label
+   mint('creating_token', {browserName:'Chrome'});
+   mint('hidden');
+   ```
+
+4. Check each panel at three viewports (devtools responsive mode):
+   - **3840x2160** — the shipping 4K mode. Text must respect the px caps
+     (setup and pairing titles render the same size; see the cap rationale
+     in `SetupOverlay.module.scss`).
+   - **1920x1080** — the vmin terms govern; this is the design-reference
+     rendering.
+   - **2160x3840** — portrait. Sizes key off the short edge; nothing may
+     track viewport height.
+5. Look specifically at `<strong>` runs (the ff1.config address, the frame
+   name): they must render the real PPMori-Bold face, not a synthesized
+   smear — compare stroke weight against the pairing-code digits.
+
+Report the pass (viewports checked, anything off) in the PR body; review
+agents treat its absence as a missing-verification finding.
 
 ## CI parity
 

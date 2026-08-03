@@ -308,7 +308,7 @@ describe('AppWrapper mint pairing overlay', () => {
       dispatchMintPairingRequest();
     });
 
-    const requestMessage = 'Received a minting request from Chrome.';
+    const requestMessage = 'Chrome wants to play art on this Art Computer.';
     expect(await screen.findByText(requestMessage)).toBeTruthy();
 
     rerender(
@@ -335,7 +335,7 @@ describe('AppWrapper mint pairing overlay', () => {
     });
 
     expect(
-      await screen.findByText('Received a minting request from Chrome.')
+      await screen.findByText('Chrome wants to play art on this Art Computer.')
     ).toBeTruthy();
     expect(screen.getByTestId('child')).toBeTruthy();
   });
