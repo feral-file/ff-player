@@ -743,7 +743,20 @@ const ArtworkPlayer = ({
           playVideoForSlot(slotIndex, layer, videoElement);
         });
         const failSlotAndTeardownHls = () => {
+          // Snapshot before the teardown: this fatal error is a degraded
+          // outcome only if it belongs to the artwork currently on screen.
+          const isCurrent = isCurrentArtworkSlot(slotIndex, layer);
           handleArtworkRenderFailure(slotIndex, layer);
+          if (isCurrent) {
+            // Same pairing every other failure handler uses (handleMediaError,
+            // handleModelLoadError, handleLoadIframeError): publish `failed`
+            // AND report the degraded outcome, so AppContext's reconnect
+            // recovery remounts the current stream when connectivity returns.
+            // handleArtworkRenderFailure only does the `failed` half; without
+            // this a fatal HLS stream would be the one failure type that shows
+            // the error modal but never gets the recovery remount.
+            notePlaybackOutcome(layer.previewURL, true);
+          }
           hlsInstance?.destroy();
           if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
             hlsInstancesRef.current[slotIndex] = null;
@@ -793,7 +806,12 @@ const ArtworkPlayer = ({
         }
       };
     },
-    [handleArtworkRenderFailure, isCurrentArtworkSlot, playVideoForSlot]
+    [
+      handleArtworkRenderFailure,
+      isCurrentArtworkSlot,
+      notePlaybackOutcome,
+      playVideoForSlot,
+    ]
   );
 
   useLayoutEffect(() => {

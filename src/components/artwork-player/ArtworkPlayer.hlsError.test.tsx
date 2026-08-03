@@ -112,7 +112,8 @@ vi.mock('@sentry/nextjs', () => ({
 
 function renderArtworkPlayer(
   itemIdentity = 'hls-error-item',
-  onItemCommitted?: (identity: string) => void
+  onItemCommitted?: (identity: string) => void,
+  setPlaybackDegraded?: (degraded: boolean, url?: string) => void
 ) {
   const value = {
     context: {
@@ -122,6 +123,7 @@ function renderArtworkPlayer(
       displaySettings: null,
       cursorPositions: null,
       castInfo: null,
+      setPlaybackDegraded,
     },
   };
   return (
@@ -341,6 +343,34 @@ describe('ArtworkPlayer — current-slot fatal HLS failures', () => {
       });
     }
   );
+
+  it('reports the degraded outcome so reconnect recovery can remount', async () => {
+    const setPlaybackDegraded = vi.fn();
+    render(
+      renderArtworkPlayer('hls-fatal-item', undefined, setPlaybackDegraded)
+    );
+
+    await waitFor(() => {
+      expect(hlsTest.errorHandlers.length).toBeGreaterThan(0);
+    });
+
+    const activeIndex = hlsTest.errorHandlers.length - 1;
+    act(() => {
+      hlsTest.errorHandlers[activeIndex]('error', {
+        fatal: true,
+        type: 'networkError',
+      });
+    });
+
+    // A fatal HLS failure must raise playbackDegraded like every other failure
+    // type, or AppContext's reconnect recovery never remounts the stream.
+    await waitFor(() => {
+      expect(setPlaybackDegraded).toHaveBeenCalledWith(
+        true,
+        'https://ipfs.io/ipfs/QmTest/stream.m3u8'
+      );
+    });
+  });
 });
 
 /** Clears shared HLS mock state between describes so length assertions stay stable. */
