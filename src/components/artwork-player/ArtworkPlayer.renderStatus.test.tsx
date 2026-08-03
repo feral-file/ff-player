@@ -641,6 +641,52 @@ describe('ArtworkPlayer render status - loading overlay switch', () => {
     expect(screen.queryByText('Loading...')).toBeNull();
   });
 
+  it('does not raise the overlay when a crossfade load lands inside the delay window', async () => {
+    vi.useFakeTimers();
+    loaderState.mode = 'fast';
+
+    const { rerender } = render(
+      artworkTree('https://feralfile.com/test/outgoing.jpg', undefined, 'item-a')
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await flushTimers();
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+
+    // Advance to a second artwork so there IS an outgoing layer: markArtworkReady
+    // is then deferred to fade end, which is what leaves the slow-load timer
+    // armed past the commit.
+    loaderState.mode = 'slow';
+    loaderState.delays = [1700];
+    rerender(
+      artworkTree('https://feralfile.com/test/incoming.jpg', undefined, 'item-b')
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+
+    // Incoming commits at 1.7s and the crossfade starts; markArtworkReady is
+    // scheduled for 1.7s + FADE_IN_OUT_DURATION_MS, i.e. after the 2s mark.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1700);
+    });
+
+    // Crossing 2s must NOT raise the overlay over a transition already running,
+    // nor report `loading` for an artwork that has finished loading.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(canvasService.getStatus().renderStatus).not.toBe(
+      RenderStatus.loading
+    );
+    expect(screen.queryByText('Loading...')).toBeNull();
+
+    await flushTimers();
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+  });
+
   it('shows loading only after 2s for a slow image and then returns to ready', async () => {
     vi.useFakeTimers();
     loaderState.mode = 'slow';

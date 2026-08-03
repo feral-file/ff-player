@@ -799,6 +799,16 @@ const ArtworkPlayer = ({
     if (incomingLayer.loading) {return;}
 
     pendingReadySlotRef.current = null;
+    // Disarm the slow-load timer the moment the incoming slot commits, not at
+    // fade end where markArtworkReady clears it. The incoming artwork has
+    // finished loading here; leaving the timer armed lets a load that lands
+    // just inside the delay window (say 1.7s) still trip markArtworkLoading at
+    // 2s — the overlay would appear ON TOP of a crossfade already in flight and
+    // status would report `loading` for an artwork that is on its way in. The
+    // overlay stays visible if it was ALREADY showing: that hand-off belongs to
+    // markArtworkReady at fade end, so a genuinely slow load is not revealed
+    // mid-transition.
+    clearLoadingDelay();
     iframeRefs[readySlot].current?.focus();
 
     const other = (readySlot === 0 ? 1 : 0) as SlotIndex;
@@ -895,10 +905,11 @@ const ArtworkPlayer = ({
       markArtworkReady();
     }, FADE_IN_OUT_DURATION_MS);
   }, [
+    clearLoadingDelay,
     commitVisualSettings,
     markArtworkReady,
     onItemCommitted,
-    pauseAndTeardownSlot,
+    pauseSlotPlayback,
     slots,
   ]);
 

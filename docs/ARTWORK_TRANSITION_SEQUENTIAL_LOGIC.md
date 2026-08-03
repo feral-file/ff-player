@@ -202,3 +202,36 @@ Live escape hatch: settings changes that arrive while no transition is pending (
 ## 10) Image pre-decode before ready
 
 The image path awaits `img.decode()` before calling `loadedSource`, so a large image's first rasterization does not land on the first painted frame of the crossfade (which janked the fade on kiosk hardware). `decode()` rejections or absence fall back to marking ready anyway — painting undecoded is the old behavior, not an error — and `loadedSource`'s URL guard drops stale results.
+
+## 11) Render-loading overlay vs the transition
+
+The render-status lifecycle drives a visible overlay as well as the status poll
+(see *Artwork render status* in [DEVICE_LOCAL_PLAYER.md](DEVICE_LOCAL_PLAYER.md)).
+This overlay changes what the wall shows during a slow transition, so it is part
+of the transition contract, not a separate concern.
+
+- **Delay before it appears.** `markArtworkPending` arms a `RENDER_LOADING_DELAY_MS`
+  (2s) timer at the start of every artwork request. Only if the request is still
+  `pending` when it fires does `markArtworkLoading` raise the overlay. A load that
+  finishes inside the window never flashes it.
+- **It covers the stage, including the outgoing artwork.** The overlay is an
+  opaque full-screen panel above the slot layers. This is deliberate: an FF1 that
+  is mid-load should say so on the wall, not hold a stale frame silently. It
+  therefore supersedes the "outgoing artwork stays until the incoming one is
+  ready" behavior for loads slower than the delay — that rule still governs the
+  slots themselves, but the overlay is painted over them.
+- **It is disarmed at slot commit, not at fade end.** The ready-consume effect
+  calls `clearLoadingDelay()` as soon as the incoming slot commits. Without this,
+  a load landing between roughly `RENDER_LOADING_DELAY_MS - FADE_IN_OUT_DURATION_MS`
+  and the delay itself would commit, start its crossfade, and *then* trip the
+  timer — raising the overlay on top of a transition already in flight and
+  reporting `loading` for an artwork that had finished loading. In the overlap
+  and sequential branches `markArtworkReady` only runs at the end of the fade, so
+  the commit point is the only place early enough to disarm it.
+- **An overlay that is already up stays up until fade end.** `markArtworkReady`
+  clears it at the same moment it publishes `ready`, so a genuinely slow load is
+  never revealed mid-crossfade.
+- **Runtime switch.** `showRenderLoadingOverlay` in `display.json` (default `true`)
+  gates the overlay only. It never changes the codes reported on status polls, and
+  `ModelViewerScreen` receives it as `showLoadingOverlay` so the model route's own
+  "Loading 3D model" overlay honours the same switch.
