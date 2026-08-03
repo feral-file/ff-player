@@ -182,6 +182,44 @@ function ensureWebGLConstructors() {
   }
 }
 
+function captureWebGLLostListener(): {
+  getListener: () => ((event: Event) => void) | undefined;
+} {
+  let lostListener: ((event: Event) => void) | undefined;
+  // Capture the listener without relying on Document.createElement (deprecated
+  // in this repo's typed DOM surface) or aliasing `this`.
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- prototype method saved before spy
+  const originalAddEventListener = HTMLCanvasElement.prototype.addEventListener;
+  vi.spyOn(HTMLCanvasElement.prototype, 'addEventListener').mockImplementation(
+    function (
+      this: HTMLCanvasElement,
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions
+    ) {
+      if (type === 'webglcontextlost' && typeof listener === 'function') {
+        lostListener = listener;
+      }
+      originalAddEventListener.call(this, type, listener, options);
+    }
+  );
+  return {
+    getListener: () => lostListener,
+  };
+}
+
+async function fireIframeLoad(container: HTMLElement) {
+  const iframe = container.querySelector('iframe');
+  expect(iframe).not.toBeNull();
+  if (iframe === null) {
+    return;
+  }
+  await act(async () => {
+    iframe.dispatchEvent(new Event('load'));
+    await Promise.resolve();
+  });
+}
+
 beforeEach(() => {
   loaderState.mode = 'fast';
   loaderState.delays = [];
@@ -214,36 +252,16 @@ describe('ArtworkPlayer render status - ready and failure transitions', () => {
     expect(screen.queryByText('Loading...')).toBeNull();
   });
 
-  it('marks cached image artwork ready even if the load callback is missed', async () => {
+  it('commits a cached image only after decode resolves', async () => {
     loaderState.mode = 'cached';
 
+    // 'cached' never invokes onLoad, so reaching ready at all proves the
+    // completeness shortcut commits the slot when the load callback is missed.
+    // The decode gate must still hold, otherwise the first rasterization of a
+    // large image lands inside the crossfade frame.
     vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true);
     vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(320);
 
-    renderWithContext(
-      <ArtworkPlayer
-        previewURL="https://feralfile.com/test/cached-image.jpg"
-        artworkPreviewMIMEType="image/jpeg"
-        displayPreferences={defaultDP1DisplayPreference}
-      />
-    );
-
-    await waitFor(() => {
-      expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
-    });
-    expect(screen.queryByText('Loading...')).toBeNull();
-  });
-
-  it('waits for decode before committing a cached image slot', async () => {
-    loaderState.mode = 'cached';
-
-    vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true);
-    vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(320);
-
-    // A cached image is already complete before onload can attach, so the
-    // commit runs from the completeness shortcut. It must still go through the
-    // decode gate, otherwise the first rasterization of a large image lands
-    // inside the crossfade frame.
     let resolveDecode: () => void = () => undefined;
     const decodeSpy = vi.fn(
       () =>
@@ -716,5 +734,53 @@ describe('ArtworkPlayer render status - loading overlay switch', () => {
     expect(
       screen.queryByText('The artwork cannot be displayed correctly on this device.')
     ).toBeNull();
+  });
+});
+
+describe('ArtworkPlayer render status - WebGL recovery', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    ensureWebGLConstructors();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+      {} as RenderingContext
+    );
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('clears failed so an iframe can publish ready again after recovery', async () => {
+    const { getListener } = captureWebGLLostListener();
+    const { container } = renderArtworkPlayer(
+      'https://feralfile.com/test/webgl-recovery',
+      undefined,
+      'item-html',
+      'text/html'
+    );
+    await settleReact();
+    await fireIframeLoad(container);
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+
+    const lostListener = getListener();
+    expect(lostListener).toBeTypeOf('function');
+    if (lostListener === undefined) {
+      return;
+    }
+    await act(async () => {
+      lostListener(new Event('webglcontextlost', { cancelable: true }));
+      await Promise.resolve();
+    });
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+
+    // Recovery polls every 5s, then waits 2s before reloading the active iframe.
+    await advanceTimersBy(5000);
+    await advanceTimersBy(2000);
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+
+    // markArtworkReady ignores failed→ready, so the recovery must have cleared
+    // failed for this reload's load event to publish ready at all.
+    await fireIframeLoad(container);
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
   });
 });
