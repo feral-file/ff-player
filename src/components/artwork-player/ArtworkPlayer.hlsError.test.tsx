@@ -31,12 +31,21 @@ vi.mock('hls.js', () => {
     MEDIA_ATTACHED: 'hlsMediaAttached',
     ERROR: 'error',
   };
+  // Mirrors hls.js 1.5's own string values so a test firing a literal type or
+  // detail exercises the same branch the real library would.
   const ErrorTypes = {
     NETWORK_ERROR: 'networkError',
     MEDIA_ERROR: 'mediaError',
+    KEY_SYSTEM_ERROR: 'keySystemError',
+    MUX_ERROR: 'muxError',
+    OTHER_ERROR: 'otherError',
   };
   const ErrorDetails = {
     BUFFER_NUDGE_ON_STALL: 'bufferNudgeOnStall',
+    BUFFER_STALLED_ERROR: 'bufferStalledError',
+    INTERNAL_EXCEPTION: 'internalException',
+    REMUX_ALLOC_ERROR: 'remuxAllocError',
+    KEY_SYSTEM_DESTROY_MEDIA_KEYS_ERROR: 'keySystemDestroyMediaKeysError',
   };
 
   class MockHls {
@@ -128,6 +137,66 @@ function renderArtworkPlayer(
   );
 }
 
+describe('ArtworkPlayer — non-fatal HLS errors', () => {
+  let playSpy: ReturnType<typeof vi.spyOn>;
+  let pauseSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    hlsTest.instances.length = 0;
+    hlsTest.errorHandlers.length = 0;
+    playSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'play')
+      .mockImplementation(() => Promise.resolve());
+    pauseSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'pause')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    playSpy.mockRestore();
+    pauseSpy.mockRestore();
+    hlsTest.instances.length = 0;
+    hlsTest.errorHandlers.length = 0;
+    canvasService.setCastInfo(null, false);
+    canvasService.setRenderStatus(undefined);
+    cleanup();
+  });
+
+  it.each([
+    ['otherError', 'internalException'],
+    ['muxError', 'remuxAllocError'],
+    ['keySystemError', 'keySystemDestroyMediaKeysError'],
+  ] as const)(
+    'leaves playback alone for a non-fatal %s that hls.js recovers from',
+    async (type, details) => {
+      render(renderArtworkPlayer());
+
+      await waitFor(() => {
+        expect(hlsTest.errorHandlers.length).toBeGreaterThan(0);
+      });
+
+      const activeHls = hlsTest.instances[0];
+      act(() => {
+        hlsTest.errorHandlers[0]('error', { fatal: false, type, details });
+      });
+
+      // hls.js resolves these itself (worker → inline demuxing, one skipped
+      // buffer, EME teardown). Destroying would kill playback it was about to
+      // resume, and publishing failed would raise the modal over a live artwork.
+      expect(activeHls.destroy).not.toHaveBeenCalled();
+      expect(activeHls.recoverMediaError).not.toHaveBeenCalled();
+      expect(canvasService.getStatus().renderStatus).not.toBe(
+        RenderStatus.failed
+      );
+      expect(
+        screen.queryByText(
+          'The artwork cannot be displayed correctly on this device.'
+        )
+      ).toBeNull();
+    }
+  );
+});
+
 describe('ArtworkPlayer — HLS error handling', () => {
   let playSpy: ReturnType<typeof vi.spyOn>;
   let pauseSpy: ReturnType<typeof vi.spyOn>;
@@ -153,7 +222,7 @@ describe('ArtworkPlayer — HLS error handling', () => {
     cleanup();
   });
 
-  it('keeps unknown HLS errors terminal even when they are non-fatal', async () => {
+  it('keeps a fatal unknown HLS error terminal', async () => {
     render(renderArtworkPlayer());
 
     await waitFor(() => {
@@ -163,8 +232,9 @@ describe('ArtworkPlayer — HLS error handling', () => {
     const activeHls = hlsTest.instances[0];
     act(() => {
       hlsTest.errorHandlers[0]('error', {
-        fatal: false,
+        fatal: true,
         type: 'otherError',
+        details: 'internalException',
       });
     });
 

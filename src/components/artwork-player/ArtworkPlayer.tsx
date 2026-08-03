@@ -732,43 +732,41 @@ const ArtworkPlayer = ({
           }
           playVideoForSlot(slotIndex, layer, videoElement);
         });
-        // Typed handling must run before any blanket fatal teardown:
-        // BUFFER_NUDGE_ON_STALL is reported as fatal but is recoverable via
-        // recoverMediaError. An early destroy/return would skip that path and
-        // strand playback as failed for a transient stall.
+        const failSlotAndTeardownHls = () => {
+          handleArtworkRenderFailure(slotIndex, layer);
+          hlsInstance?.destroy();
+          if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
+            hlsInstancesRef.current[slotIndex] = null;
+          }
+        };
+        // `fatal` is how hls.js signals recoverability, and it handles the
+        // non-fatal cases itself across every error type: a demuxer Web Worker
+        // failure (OTHER_ERROR/INTERNAL_EXCEPTION) disables the worker and
+        // falls back to inline demuxing, REMUX_ALLOC_ERROR (MUX_ERROR) skips
+        // one buffer, and the KEY_SYSTEM/OTHER teardown errors fire while EME
+        // is being released. Tearing down on those would kill playback the
+        // library was about to resume, and publishing `failed` would raise the
+        // error modal over an artwork that is still on screen — so only a fatal
+        // error is terminal here, whatever its type.
+        //
+        // BUFFER_NUDGE_ON_STALL is the one case that must be matched on
+        // `details` instead: hls.js emits it NON-fatal while it nudges
+        // currentTime, and escalates to a fatal BUFFER_STALLED_ERROR only after
+        // config.nudgeMaxRetry. Calling recoverMediaError on the nudge is what
+        // keeps a transient stall from reaching that escalation, so this check
+        // has to run before the fatal test rather than inside it.
         hlsInstance.on(Hls.Events.ERROR, function (_event, data) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              if (data.fatal) {
-                handleArtworkRenderFailure(slotIndex, layer);
-                hlsInstance?.destroy();
-                if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
-                  hlsInstancesRef.current[slotIndex] = null;
-                }
-              }
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              if (data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL) {
-                if (isCurrentArtworkSlot(slotIndex, layer)) {
-                  hlsInstance?.recoverMediaError();
-                }
-                break;
-              }
-              if (data.fatal) {
-                handleArtworkRenderFailure(slotIndex, layer);
-                hlsInstance?.destroy();
-                if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
-                  hlsInstancesRef.current[slotIndex] = null;
-                }
-              }
-              break;
-            default:
-              handleArtworkRenderFailure(slotIndex, layer);
-              hlsInstance?.destroy();
-              if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
-                hlsInstancesRef.current[slotIndex] = null;
-              }
-              break;
+          if (
+            data.type === Hls.ErrorTypes.MEDIA_ERROR &&
+            data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL
+          ) {
+            if (isCurrentArtworkSlot(slotIndex, layer)) {
+              hlsInstance?.recoverMediaError();
+            }
+            return;
+          }
+          if (data.fatal) {
+            failSlotAndTeardownHls();
           }
         });
       }
