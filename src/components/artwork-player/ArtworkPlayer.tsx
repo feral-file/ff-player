@@ -792,6 +792,20 @@ const ArtworkPlayer = ({
             failSlotAndTeardownHls();
           }
         });
+        // Streaming has no per-slot loadeddata success report — that path is
+        // gated to non-streaming video — so a fatal error that raised
+        // playbackDegraded would stay latched through a healthy recovery
+        // remount: the item-change effect only clears on a DIFFERENT artwork,
+        // not a same-item reload. FRAG_BUFFERED is the stream's own "data is
+        // flowing" signal, so clearing here lets AppContext's reconnect
+        // recovery settle instead of remounting a recovered stream forever on
+        // the M7 age valve. Idempotent: notePlaybackOutcome dedupes once
+        // cleared, and the slot guard drops a superseded stream's frags.
+        hlsInstance.on(Hls.Events.FRAG_BUFFERED, () => {
+          if (isCurrentArtworkSlot(slotIndex, layer)) {
+            notePlaybackOutcome(layer.previewURL, false);
+          }
+        });
       }
 
       return () => {

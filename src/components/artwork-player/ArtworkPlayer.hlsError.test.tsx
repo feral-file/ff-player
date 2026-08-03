@@ -22,6 +22,7 @@ const hlsTest = vi.hoisted(() => ({
       event: string,
       data: { fatal?: boolean }
     ) => void;
+    fragBufferedHandler?: () => void;
   }[],
   errorHandlers: [] as ((event: string, data: HlsErrorData) => void)[],
 }));
@@ -30,6 +31,7 @@ vi.mock('hls.js', () => {
   const Events = {
     MEDIA_ATTACHED: 'hlsMediaAttached',
     ERROR: 'error',
+    FRAG_BUFFERED: 'hlsFragBuffered',
   };
   // Mirrors hls.js 1.5's own string values so a test firing a literal type or
   // detail exercises the same branch the real library would.
@@ -72,6 +74,8 @@ vi.mock('hls.js', () => {
       data: { fatal?: boolean }
     ) => void;
 
+    fragBufferedHandler?: () => void;
+
     constructor() {
       hlsTest.instances.push(this);
     }
@@ -94,6 +98,9 @@ vi.mock('hls.js', () => {
         hlsTest.errorHandlers.push(
           handler as (event: string, data: HlsErrorData) => void
         );
+      }
+      if (event === Events.FRAG_BUFFERED) {
+        this.fragBufferedHandler = handler as () => void;
       }
     }
   }
@@ -344,6 +351,31 @@ describe('ArtworkPlayer — current-slot fatal HLS failures', () => {
     }
   );
 
+});
+
+describe('ArtworkPlayer — fatal HLS recovery signal', () => {
+  let playSpy: ReturnType<typeof vi.spyOn>;
+  let pauseSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    clearHlsTestState();
+    playSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'play')
+      .mockImplementation(() => Promise.resolve());
+    pauseSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'pause')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    playSpy.mockRestore();
+    pauseSpy.mockRestore();
+    clearHlsTestState();
+    canvasService.setCastInfo(null, false);
+    canvasService.setRenderStatus(undefined);
+    cleanup();
+  });
+
   it('reports the degraded outcome so reconnect recovery can remount', async () => {
     const setPlaybackDegraded = vi.fn();
     render(
@@ -367,6 +399,45 @@ describe('ArtworkPlayer — current-slot fatal HLS failures', () => {
     await waitFor(() => {
       expect(setPlaybackDegraded).toHaveBeenCalledWith(
         true,
+        'https://ipfs.io/ipfs/QmTest/stream.m3u8'
+      );
+    });
+  });
+
+  it('clears the degraded flag once the recovered stream buffers again', async () => {
+    const setPlaybackDegraded = vi.fn();
+    render(
+      renderArtworkPlayer('hls-fatal-item', undefined, setPlaybackDegraded)
+    );
+
+    await waitFor(() => {
+      expect(hlsTest.errorHandlers.length).toBeGreaterThan(0);
+    });
+
+    const activeIndex = hlsTest.errorHandlers.length - 1;
+    const activeHls = hlsTest.instances[activeIndex];
+    act(() => {
+      hlsTest.errorHandlers[activeIndex]('error', {
+        fatal: true,
+        type: 'networkError',
+      });
+    });
+    await waitFor(() => {
+      expect(setPlaybackDegraded).toHaveBeenCalledWith(
+        true,
+        'https://ipfs.io/ipfs/QmTest/stream.m3u8'
+      );
+    });
+
+    // Streaming has no loadeddata success path, so without a FRAG_BUFFERED
+    // clear the flag would stay latched through a healthy recovery and the M7
+    // budget would remount the recovered stream on the age valve forever.
+    act(() => {
+      activeHls.fragBufferedHandler?.();
+    });
+    await waitFor(() => {
+      expect(setPlaybackDegraded).toHaveBeenLastCalledWith(
+        false,
         'https://ipfs.io/ipfs/QmTest/stream.m3u8'
       );
     });
