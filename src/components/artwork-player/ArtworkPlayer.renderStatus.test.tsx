@@ -234,6 +234,59 @@ describe('ArtworkPlayer render status - ready and failure transitions', () => {
     expect(screen.queryByText('Loading...')).toBeNull();
   });
 
+  it('waits for decode before committing a cached image slot', async () => {
+    loaderState.mode = 'cached';
+
+    vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true);
+    vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(320);
+
+    // A cached image is already complete before onload can attach, so the
+    // commit runs from the completeness shortcut. It must still go through the
+    // decode gate, otherwise the first rasterization of a large image lands
+    // inside the crossfade frame.
+    let resolveDecode: () => void = () => undefined;
+    const decodeSpy = vi.fn(
+      () =>
+        new Promise<void>(resolve => {
+          resolveDecode = resolve;
+        })
+    );
+    // jsdom's HTMLImageElement has no decode(), so define it rather than spy.
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      writable: true,
+      value: decodeSpy,
+    });
+
+    try {
+      renderWithContext(
+        <ArtworkPlayer
+          previewURL="https://feralfile.com/test/cached-decode.jpg"
+          artworkPreviewMIMEType="image/jpeg"
+          displayPreferences={defaultDP1DisplayPreference}
+        />
+      );
+
+      await waitFor(() => {
+        expect(decodeSpy).toHaveBeenCalled();
+      });
+      expect(canvasService.getStatus().renderStatus).not.toBe(
+        RenderStatus.ready
+      );
+
+      await act(async () => {
+        resolveDecode();
+        await Promise.resolve();
+      });
+
+      await waitFor(() => {
+        expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+      });
+    } finally {
+      delete (HTMLImageElement.prototype as { decode?: unknown }).decode;
+    }
+  });
+
   it('marks render failed when a valid image load errors', async () => {
     loaderState.mode = 'fail';
 

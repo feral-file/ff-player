@@ -148,6 +148,22 @@ function isSameSelectedArtworkIdentity(
 }
 
 /**
+ * Item a cast is currently pointing at, using the same wrap-around index
+ * normalization the playlist route applies. Returns undefined when there is no
+ * playlist to select from, so callers can tell "no selection" apart from a real
+ * item instead of guessing from an out-of-range index.
+ */
+function selectedPlaylistItem(
+  items: DP1Item[] | undefined,
+  index: number | undefined
+): DP1Item | undefined {
+  if (!items?.length || index === undefined) {
+    return undefined;
+  }
+  return items.at(((index % items.length) + items.length) % items.length);
+}
+
+/**
  * Resolve the render status to publish with a cast-info update.
  *
  * Index-only transitions often spread the previous castInfo, which would keep
@@ -161,27 +177,18 @@ function resolveRenderStatusForCastInfo(
   next: CastInfo,
   currentRenderStatus: RenderStatus | undefined
 ): RenderStatus | undefined {
-  const previousIndex = previous?.index;
-  const nextIndex = next.index;
-  const previousItems = previous?.playlist?.items;
-  const nextItems = next.playlist?.items;
+  const previousItem = selectedPlaylistItem(
+    previous?.playlist?.items,
+    previous?.index
+  );
+  const nextItem = selectedPlaylistItem(next.playlist?.items, next.index);
 
   if (
-    previousItems?.length &&
-    nextItems?.length &&
-    previousIndex !== undefined &&
-    nextIndex !== undefined
+    previousItem !== undefined &&
+    nextItem !== undefined &&
+    !isSameSelectedArtworkIdentity(previousItem, nextItem)
   ) {
-    const previousItem = previousItems.at(
-      ((previousIndex % previousItems.length) + previousItems.length) %
-        previousItems.length
-    );
-    const nextItem = nextItems.at(
-      ((nextIndex % nextItems.length) + nextItems.length) % nextItems.length
-    );
-    if (!isSameSelectedArtworkIdentity(previousItem, nextItem)) {
-      return RenderStatus.pending;
-    }
+    return RenderStatus.pending;
   }
 
   return next.renderStatus ?? currentRenderStatus ?? undefined;
@@ -918,7 +925,23 @@ class CanvasService {
     this.originalPlaylistItems = null;
     this.queuedPlaylistPending = false;
     this.setDeferredRefreshPlaylist(null);
-    this.setRenderStatus(RenderStatus.pending);
+    // Re-casting the artwork already on screen must not reset the lifecycle.
+    // ArtworkPlayer only re-publishes when previewURL/itemIdentity change, so a
+    // forced pending here would never be answered and status polls would report
+    // pending for a visibly rendered artwork. Casts that do change the selected
+    // artwork still get their pending from resolveRenderStatusForCastInfo.
+    const currentSelectedItem = selectedPlaylistItem(
+      this.castInfo?.playlist?.items,
+      this.castInfo?.index
+    );
+    if (
+      !isSameSelectedArtworkIdentity(
+        currentSelectedItem,
+        request.dp1CallData.items[0]
+      )
+    ) {
+      this.setRenderStatus(RenderStatus.pending);
+    }
 
     console.log('[CanvasService] Display playlist');
     // Each Now Display starts a new cast session surface: do not inherit prior

@@ -1096,8 +1096,14 @@ const ArtworkPlayer = ({
             onError: handleMediaError('image'),
             signal: abortController.signal,
           });
+          // A memory-cached image can already be complete before the handlers
+          // above attach, so `onload` may never fire and the slot would never
+          // commit. Go through markImageReady rather than loadedSource
+          // directly: it keeps the decode() gate that stops the first
+          // rasterization of a large image from landing inside the crossfade,
+          // and keeps the isCancelled guard for a superseded load.
           if (el.complete && el.naturalWidth > 0) {
-            loadedSource(slotIndex, layer);
+            markImageReady();
           }
         } else if (
           layer.previewType === PreviewHTMLTag.video &&

@@ -166,6 +166,56 @@ it('accepts relative and protocol-relative sources on Now Display', () => {
   );
 });
 
+it('keeps ready when Now Display re-casts the artwork already on screen', () => {
+  const active = playlist('active', ['A', 'B'].map(item));
+  canvasService.setCastInfo(
+    {
+      castCommand: CastCommand.displayPlaylist,
+      playlist: active,
+      index: 0,
+      renderStatus: RenderStatus.ready,
+    },
+    false
+  );
+
+  const reply = canvasService.processMessage({
+    command: CastCommand.displayPlaylist,
+    request: {
+      intent: { action: DP1Action.NowDisplay },
+      dp1_call: active,
+    },
+  });
+
+  // ArtworkPlayer only re-publishes when previewURL/itemIdentity change, so a
+  // forced pending here would never be answered and the poll would report
+  // pending for an artwork that is visibly rendered.
+  expect(reply).toEqual({ ok: true });
+  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+});
+
+it('resets render status to pending when Now Display selects a different artwork', () => {
+  canvasService.setCastInfo(
+    {
+      castCommand: CastCommand.displayPlaylist,
+      playlist: playlist('active', ['A', 'B'].map(item)),
+      index: 0,
+      renderStatus: RenderStatus.ready,
+    },
+    false
+  );
+
+  const reply = canvasService.processMessage({
+    command: CastCommand.displayPlaylist,
+    request: {
+      intent: { action: DP1Action.NowDisplay },
+      dp1_call: playlist('next', ['C'].map(item)),
+    },
+  });
+
+  expect(reply).toEqual({ ok: true });
+  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+});
+
 it('resets render status to pending on moveToArtwork', () => {
   const active = playlist('active', ['A', 'B'].map(item));
   canvasService.setCastInfo(
