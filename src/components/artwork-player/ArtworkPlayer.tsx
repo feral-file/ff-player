@@ -743,20 +743,7 @@ const ArtworkPlayer = ({
           playVideoForSlot(slotIndex, layer, videoElement);
         });
         const failSlotAndTeardownHls = () => {
-          // Snapshot before the teardown: this fatal error is a degraded
-          // outcome only if it belongs to the artwork currently on screen.
-          const isCurrent = isCurrentArtworkSlot(slotIndex, layer);
           handleArtworkRenderFailure(slotIndex, layer);
-          if (isCurrent) {
-            // Same pairing every other failure handler uses (handleMediaError,
-            // handleModelLoadError, handleLoadIframeError): publish `failed`
-            // AND report the degraded outcome, so AppContext's reconnect
-            // recovery remounts the current stream when connectivity returns.
-            // handleArtworkRenderFailure only does the `failed` half; without
-            // this a fatal HLS stream would be the one failure type that shows
-            // the error modal but never gets the recovery remount.
-            notePlaybackOutcome(layer.previewURL, true);
-          }
           hlsInstance?.destroy();
           if (hlsInstancesRef.current[slotIndex] === hlsInstance) {
             hlsInstancesRef.current[slotIndex] = null;
@@ -792,20 +779,6 @@ const ArtworkPlayer = ({
             failSlotAndTeardownHls();
           }
         });
-        // Streaming has no per-slot loadeddata success report — that path is
-        // gated to non-streaming video — so a fatal error that raised
-        // playbackDegraded would stay latched through a healthy recovery
-        // remount: the item-change effect only clears on a DIFFERENT artwork,
-        // not a same-item reload. FRAG_BUFFERED is the stream's own "data is
-        // flowing" signal, so clearing here lets AppContext's reconnect
-        // recovery settle instead of remounting a recovered stream forever on
-        // the M7 age valve. Idempotent: notePlaybackOutcome dedupes once
-        // cleared, and the slot guard drops a superseded stream's frags.
-        hlsInstance.on(Hls.Events.FRAG_BUFFERED, () => {
-          if (isCurrentArtworkSlot(slotIndex, layer)) {
-            notePlaybackOutcome(layer.previewURL, false);
-          }
-        });
       }
 
       return () => {
@@ -820,12 +793,7 @@ const ArtworkPlayer = ({
         }
       };
     },
-    [
-      handleArtworkRenderFailure,
-      isCurrentArtworkSlot,
-      notePlaybackOutcome,
-      playVideoForSlot,
-    ]
+    [handleArtworkRenderFailure, isCurrentArtworkSlot, playVideoForSlot]
   );
 
   useLayoutEffect(() => {
