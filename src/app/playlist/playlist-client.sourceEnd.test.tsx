@@ -7,7 +7,7 @@
  * ArtworkPlayer.refresh.test.tsx and ArtworkPlayer.sourceEnd.test.tsx
  * (this file mocks ArtworkPlayer).
  */
-import { CastCommand } from '@/models';
+import { CastCommand, RenderStatus } from '@/models';
 import type { CastInfo } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import { NO_DURATION_VALUE } from '@/constants';
@@ -23,6 +23,7 @@ import {
   canvasInternals,
   displayCast,
   dp1Call,
+  emitRenderStatus,
   item,
   PlaylistHarness,
   teardownPlaylistWiringTest,
@@ -87,6 +88,9 @@ describe('PlaylistClient — source-end advance (DP-1 §4.1)', () => {
     canvasService.setCastInfo(displayCast(items, 0, LoopMode.playlist), false);
     render(<PlaylistHarness castInfo={displayCast(items, 0, LoopMode.playlist)} />);
 
+    // Healthy loaded item: render watchdog disarms, so nothing but source-end
+    // advances it.
+    emitRenderStatus(RenderStatus.ready);
     await advanceMs(60000);
     expect(canvasService.getCastInfo()?.index).toBe(0);
 

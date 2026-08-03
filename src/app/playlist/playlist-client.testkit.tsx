@@ -7,7 +7,7 @@
  * across suites.
  */
 import { AppContext } from '@/context/AppContext';
-import { CastCommand } from '@/models';
+import { CastCommand, RenderStatus } from '@/models';
 import type { CastInfo } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
@@ -105,6 +105,28 @@ export function teardownPlaylistWiringTest(): void {
   };
   g.__artworkPlayerProps = undefined;
   g.__artworkReloadInvocations = undefined;
+}
+
+/**
+ * Drive ArtworkPlayer's onRenderStatusChange prop. Emitting `ready` models a
+ * healthy loaded item, which disarms the render watchdog (ff-app#520) so a
+ * no-duration item advances only on source-end, matching production where the
+ * render layer always reports `ready` on a successful load.
+ */
+export function emitRenderStatus(status: RenderStatus | undefined): void {
+  const cb = (
+    globalThis as { __artworkPlayerProps?: Record<string, unknown> }
+  ).__artworkPlayerProps?.onRenderStatusChange as
+    | ((s: RenderStatus | undefined) => void)
+    | undefined;
+  if (!cb) {
+    throw new Error(
+      'onRenderStatusChange was not wired through to ArtworkPlayer'
+    );
+  }
+  act(() => {
+    cb(status);
+  });
 }
 
 export function callSourceEnded(endedIdentity: string): void {

@@ -7,6 +7,7 @@
 import { NO_DURATION_VALUE } from '@/constants';
 import type { DP1Item } from '@/models/dp1.model';
 import { LoopMode } from '@/models/cast_info.model';
+import { RenderStatus } from '@/models';
 import { canvasService } from '@/services/CanvasService';
 import { clearRefManifestDisplayCache } from '@/utils/playlistDisplayPreference';
 import DeviceManager from '@/utils/DeviceManager';
@@ -18,6 +19,7 @@ import {
   advanceMs,
   callSourceEnded,
   displayCast,
+  emitRenderStatus,
   item,
   teardownPlaylistWiringTest,
 } from './playlist-client.testkit';
@@ -129,6 +131,8 @@ describe('PlaylistClient — device default duration vs ref-manifest gates', () 
     render(<PlaylistHarness castInfo={initial} />);
 
     await advanceMs(0);
+    // Healthy loaded item: render watchdog disarms so only source-end advances.
+    emitRenderStatus(RenderStatus.ready);
     // Well past the device default: natural-length item must still hold.
     await advanceMs(60000);
     expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);

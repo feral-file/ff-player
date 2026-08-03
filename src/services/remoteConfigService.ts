@@ -8,6 +8,12 @@ export interface AppRemoteConfig {
   defaultPlaylistURL: string;
   /** When true, ArtworkPlayer shows the loading overlay while renderStatus is loading. */
   showRenderLoadingOverlay?: boolean;
+  /**
+   * Kill-switch for the playback watchdog (ff-app#520). When explicitly
+   * `false`, `useRenderWatchdog` never force-advances a stuck/failed
+   * no-duration slot. Defaults to enabled when omitted.
+   */
+  playbackWatchdogEnabled?: boolean;
 }
 
 /**

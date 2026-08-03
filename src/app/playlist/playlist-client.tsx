@@ -1,4 +1,7 @@
 'use client';
+/* eslint-disable max-lines -- PlaylistClient is the single playback-control hub
+   (slot timers, source-end, queued refresh, loop modes, and the #520 render
+   watchdog wiring); splitting it would scatter tightly-coupled refs. */
 
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import TombstoneOverlay from '@/components/tombstone/TombstoneOverlay';
@@ -25,6 +28,7 @@ import {
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
 import { usePlaylistItemDisplayPreference } from './usePlaylistItemDisplayPreference';
+import { useRenderWatchdog, type WatchdogReason } from './useRenderWatchdog';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 // 'sourceEnd' means the media just ended (display.loop=false) and needs a
@@ -36,6 +40,7 @@ type AdvanceCause = 'timer' | 'sourceEnd';
 export default function PlaylistClient() {
   const castInfo = useAppContext().context.castInfo;
   const deviceDisplaySettings = useAppContext().context.displaySettings;
+  const appRemoteConfig = useAppContext().context.appRemoteConfig;
 
   const [playlist, setPlaylist] = useState<DP1Item[]>([]);
   const [playlistDefaultsSettings, setPlaylistDefaultsSettings] =
@@ -306,6 +311,33 @@ export default function PlaylistClient() {
     [applyQueuedPlaylistIfExists, clearTimer, publishCurrentIndex]
   );
 
+  // Playback watchdog (ff-app#520, Layers C+D). Force-advance the current slot
+  // when the render layer reports it is stuck loading or has failed with no
+  // other advance trigger. advanceFromSlot's index guard makes this a no-op if
+  // a normal advance already moved on, so a late fire cannot double-skip.
+  const forceAdvanceCurrentSlot = useCallback(
+    (reason: WatchdogReason): void => {
+      const idx = currentIndexRef.current;
+      const snapshot = playlistRef.current;
+      if (idx < 0 || !snapshot.length) {
+        return;
+      }
+      const normalizedIndex = normalizePlaylistIndex(idx, snapshot.length);
+      console.warn(
+        `[PlaylistClient] render watchdog force-advance (${reason}) from slot ${String(
+          normalizedIndex
+        )}`
+      );
+      advanceFromSlot(normalizedIndex, snapshot, 'timer');
+    },
+    [advanceFromSlot]
+  );
+
+  const watchdog = useRenderWatchdog({
+    onForceAdvance: forceAdvanceCurrentSlot,
+    enabled: appRemoteConfig.playbackWatchdogEnabled !== false,
+  });
+
   const scheduleCurrentItemTimer = useCallback(
     function scheduleCurrentItemTimer(
       index: number,
@@ -315,6 +347,7 @@ export default function PlaylistClient() {
       clearTimer();
 
       if (!snapshot.length) {
+        watchdog.disarm();
         return;
       }
       if (!preserveElapsed) {
@@ -355,6 +388,12 @@ export default function PlaylistClient() {
         mergedDisplay,
       });
       if (duration <= 0 || duration >= NO_DURATION_VALUE) {
+        // No finite advance timer for this slot — the watchdog is its only
+        // backstop against a stuck load or an unrecoverable render failure.
+        watchdog.armForSlot({
+          identity: itemIdentityFor(snapshot, normalizedIndex),
+          watch: true,
+        });
         return;
       }
 
@@ -372,6 +411,11 @@ export default function PlaylistClient() {
         0
       );
 
+      // A finite duration timer governs this slot; the watchdog steps aside.
+      watchdog.armForSlot({
+        identity: itemIdentityFor(snapshot, normalizedIndex),
+        watch: false,
+      });
       timerRef.current = setTimeout(() => {
         // The timeout is firing now, so the previous handle is no longer active.
         // Clearing it lets later loop-mode changes detect a true "held on final
@@ -385,6 +429,7 @@ export default function PlaylistClient() {
       clearTimer,
       mergedDisplayForItemRef,
       playlistDefaultsSettings,
+      watchdog,
     ]
   );
 
@@ -418,6 +463,7 @@ export default function PlaylistClient() {
     if (currentIndex < 0 || playlist.length === 0) {
       holdAfterFinalSlotRef.current = false;
       clearTimer();
+      watchdog.disarm();
       return;
     }
 
@@ -438,6 +484,7 @@ export default function PlaylistClient() {
     clearTimer,
     handleItemDisplayPreference,
     scheduleCurrentItemTimer,
+    watchdog,
   ]);
 
   // Once the async display-preference merge (incl. the ref-manifest layer)
@@ -466,6 +513,7 @@ export default function PlaylistClient() {
   useEffect(() => {
     if (!castInfo) {
       clearTimer();
+      watchdog.disarm();
       holdAfterFinalSlotRef.current = false;
       currentItemRef.current = undefined;
       loopModeRef.current = LoopMode.playlist;
@@ -615,6 +663,7 @@ export default function PlaylistClient() {
     resetItemDisplayPreference,
     scheduleCurrentItemTimer,
     triggerArtworkRefresh,
+    watchdog,
   ]);
 
   // Identity of the slot the player is currently rendering. Recomputed when
@@ -652,6 +701,7 @@ export default function PlaylistClient() {
             itemIdentity={currentItemIdentity}
             onRegisterArtworkReload={registerArtworkReload}
             onSourceEnded={handleSourceEnded}
+            onRenderStatusChange={watchdog.onRenderStatusChange}
             onItemCommitted={handleItemCommitted}
           />
         )}

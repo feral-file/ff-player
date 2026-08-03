@@ -113,6 +113,7 @@ const ArtworkPlayer = ({
   onRegisterArtworkReload,
   onSourceEnded,
   onItemCommitted,
+  onRenderStatusChange,
 }: {
   previewURL: string;
   isCustomView?: boolean;
@@ -140,6 +141,11 @@ const ArtworkPlayer = ({
   // wall" (the tombstone label, feral-file#3452) must key off this commit,
   // never off selection.
   onItemCommitted?: (itemIdentity: string) => void;
+  // Fired on every render-lifecycle transition of the current mount (the same
+  // value published to CanvasService). PlaylistClient's watchdog (ff-app#520)
+  // uses it to force-advance a no-duration slot that gets stuck loading or
+  // reports `failed`. Undefined is emitted when the mount is disposed.
+  onRenderStatusChange?: (status: RenderStatus | undefined) => void;
 }) => {
   const FADE_IN_OUT_DURATION_MS = 650;
   const { context } = useAppContext();
@@ -181,6 +187,18 @@ const ArtworkPlayer = ({
   const transitionTimeoutRef = useRef<NodeJS.Timeout>();
   const transitionTokenRef = useRef(0);
   const renderStatusRef = useRef<RenderStatus | undefined>(undefined);
+  // Latest onRenderStatusChange without re-binding the mark* callbacks.
+  const onRenderStatusChangeRef = useRef(onRenderStatusChange);
+  onRenderStatusChangeRef.current = onRenderStatusChange;
+  // Single sink for a status transition: mirror to CanvasService (status polls)
+  // and notify the consumer's watchdog. Every mark* path goes through here.
+  const publishRenderStatus = useCallback(
+    (status: RenderStatus | undefined) => {
+      canvasService.setRenderStatus(status);
+      onRenderStatusChangeRef.current?.(status);
+    },
+    []
+  );
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isWebGLContextLost = useRef<boolean>(false);
   const iframeKeyCounterRef = useRef(0);
@@ -344,23 +362,23 @@ const ArtworkPlayer = ({
       return;
     }
     renderStatusRef.current = RenderStatus.pending;
-    canvasService.setRenderStatus(RenderStatus.pending);
+    publishRenderStatus(RenderStatus.pending);
     setGlobalLoading(true);
     setShowLoading(false);
     setShowMessageModal(false);
     setMessageModalText(null);
     setMessageModalTitle(null);
-  }, []);
+  }, [publishRenderStatus]);
 
   const markArtworkLoading = useCallback(() => {
     if (renderStatusRef.current === RenderStatus.loading) {
       return;
     }
     renderStatusRef.current = RenderStatus.loading;
-    canvasService.setRenderStatus(RenderStatus.loading);
+    publishRenderStatus(RenderStatus.loading);
     setGlobalLoading(true);
     setShowLoading(true);
-  }, []);
+  }, [publishRenderStatus]);
 
   /**
    * Publish `ready` for the committed artwork.
@@ -395,25 +413,25 @@ const ArtworkPlayer = ({
       return;
     }
     renderStatusRef.current = RenderStatus.ready;
-    canvasService.setRenderStatus(RenderStatus.ready);
+    publishRenderStatus(RenderStatus.ready);
     setGlobalLoading(false);
     setShowLoading(false);
     clearLoadingDelay();
     setShowMessageModal(false);
     setMessageModalText(null);
     setMessageModalTitle(null);
-  }, [clearLoadingDelay]);
+  }, [clearLoadingDelay, publishRenderStatus]);
 
   const markArtworkFailed = useCallback(() => {
     if (renderStatusRef.current === RenderStatus.failed) {
       return;
     }
     renderStatusRef.current = RenderStatus.failed;
-    canvasService.setRenderStatus(RenderStatus.failed);
+    publishRenderStatus(RenderStatus.failed);
     setGlobalLoading(false);
     setShowLoading(false);
     clearLoadingDelay();
-  }, [clearLoadingDelay]);
+  }, [clearLoadingDelay, publishRenderStatus]);
 
   const isCurrentArtworkSlot = useCallback(
     (slotIndex: SlotIndex, expectedLayer?: SlotLayer) => {
@@ -455,10 +473,10 @@ const ArtworkPlayer = ({
 
   useEffect(() => {
     return () => {
-      canvasService.setRenderStatus(undefined);
+      publishRenderStatus(undefined);
       renderStatusRef.current = undefined;
     };
-  }, []);
+  }, [publishRenderStatus]);
 
   function getPreviewTypeConfig(type: string): {
     previewType: PreviewHTMLTag;
