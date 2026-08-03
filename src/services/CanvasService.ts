@@ -612,20 +612,6 @@ class CanvasService {
   private commandHandler(command: CastCommand, requestJson: unknown): Reply {
     console.log('[CAST] commandHandler:', JSON.stringify(command));
     try {
-      if (
-        command === CastCommand.displayPlaylist ||
-        command === CastCommand.displayDefaultPlaylist
-      ) {
-        DeviceManager.removeItem(LocalStorageItem.criticalTemp).catch(
-          (error: unknown) => {
-            console.error(
-              '[CanvasService] Error removing criticalTemp:',
-              error
-            );
-          }
-        );
-      }
-
       switch (command) {
         case CastCommand.connect:
           return this.connect();
@@ -633,8 +619,15 @@ class CanvasService {
           return this.disconnect();
         case CastCommand.checkStatus:
           return this.getStatus();
-        case CastCommand.displayPlaylist:
-          return this.displayPlaylist(requestJson as DisplayPlaylistRequest);
+        case CastCommand.displayPlaylist: {
+          const reply = this.displayPlaylist(
+            requestJson as DisplayPlaylistRequest
+          );
+          if (reply.ok) {
+            this.clearCriticalTemperatureMarker();
+          }
+          return reply;
+        }
         case CastCommand.updateArtFraming:
           return this.updateArtFraming(requestJson as UpdateArtFramingRequest);
         case CastCommand.updateDisplaySettings:
@@ -655,10 +648,15 @@ class CanvasService {
           return this.setShuffle(requestJson as SetShuffleRequest);
         case CastCommand.setLoop:
           return this.setLoop(requestJson as SetLoopRequest);
-        case CastCommand.displayDefaultPlaylist:
-          return this.displayDefaultPlaylist(
+        case CastCommand.displayDefaultPlaylist: {
+          const reply = this.displayDefaultPlaylist(
             requestJson as DisplayDefaultPlaylistRequest
           );
+          if (reply.ok) {
+            this.clearCriticalTemperatureMarker();
+          }
+          return reply;
+        }
         case CastCommand.updateDefaultDuration:
           return this.updateDefaultDuration(
             requestJson as UpdateDefaultDurationRequest
@@ -671,6 +669,14 @@ class CanvasService {
       console.error('[CAST] Error handling command:', error);
       return { ok: false };
     }
+  }
+
+  private clearCriticalTemperatureMarker() {
+    DeviceManager.removeItem(LocalStorageItem.criticalTemp).catch(
+      (error: unknown) => {
+        console.error('[CanvasService] Error removing criticalTemp:', error);
+      }
+    );
   }
 
   public getStatus(): CheckDeviceStatusReply {
