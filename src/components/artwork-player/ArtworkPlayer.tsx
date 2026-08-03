@@ -1407,13 +1407,10 @@ const ArtworkPlayer = ({
     },
     [
       handleArtworkRenderFailure,
-      clearLoadingDelay,
       isCurrentArtworkSlot,
       loadedSource,
       notePlaybackOutcome,
       playVideoForSlot,
-      markArtworkLoading,
-      markArtworkPending,
     ]
   );
 
@@ -1625,6 +1622,17 @@ const ArtworkPlayer = ({
           // ignores failed→ready (model-viewer commit). Clear failed before
           // the recovery reload so a successful iframe ready can publish ready.
           markArtworkPending();
+          // markArtworkPending lowers showLoading, and the artwork-setup effect
+          // that normally arms the delay does not re-run for a recovery reload
+          // (reloadIframe only bumps the slot's iframeKey). Re-arm here, or the
+          // reloaded artwork can never raise an overlay again — including
+          // ModelViewerScreen's own, which is gated on the same showLoading.
+          clearLoadingDelay();
+          loadingDelayRef.current = setTimeout(() => {
+            if (renderStatusRef.current === RenderStatus.pending) {
+              markArtworkLoading();
+            }
+          }, RENDER_LOADING_DELAY_MS);
           reloadIframe(activeSlotRef.current);
         }, 2000);
       }
@@ -1708,6 +1716,11 @@ const ArtworkPlayer = ({
       index =>
         slots[index]?.previewType === PreviewHTMLTag.model &&
         slots[index]?.loading &&
+        // Scoped to the current artwork: a model whose load never resolved keeps
+        // `loading: true` forever (loadedSource refuses it once previewURL has
+        // moved on), and without this it would suppress the overlay for every
+        // artwork after it — while its own overlay is gone too.
+        slots[index]?.previewURL === previewURL &&
         slotOpacity[index] > 0
     );
     if (loadingModelIsVisible) {

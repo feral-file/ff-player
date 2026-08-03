@@ -210,10 +210,14 @@ The render-status lifecycle drives a visible overlay as well as the status poll
 This overlay changes what the wall shows during a slow transition, so it is part
 of the transition contract, not a separate concern.
 
-- **Delay before it appears.** `markArtworkPending` arms a `RENDER_LOADING_DELAY_MS`
-  (2s) timer at the start of every artwork request. Only if the request is still
-  `pending` when it fires does `markArtworkLoading` raise the overlay. A load that
-  finishes inside the window never flashes it.
+- **Delay before it appears.** The artwork-setup effect arms a
+  `RENDER_LOADING_DELAY_MS` (2s) timer right after calling `markArtworkPending`.
+  Only if the request is still `pending` when it fires does `markArtworkLoading`
+  raise the overlay, so a load that finishes inside the window never flashes it.
+  The timer belongs to the effect, not to `markArtworkPending` — the WebGL
+  recovery path is the other caller of that function and has to re-arm the timer
+  itself, because `reloadIframe` only bumps the slot's `iframeKey` and does not
+  re-run the setup effect.
 - **It covers the stage, including the outgoing artwork.** The overlay is an
   opaque full-screen panel above the slot layers. This is deliberate: an FF1 that
   is mid-load should say so on the wall, not hold a stale frame silently. It
@@ -241,15 +245,20 @@ of the transition contract, not a separate concern.
   load) or `loading` (slow load) in that window. See *Artwork render status* in
   [DEVICE_LOCAL_PLAYER.md](DEVICE_LOCAL_PLAYER.md).
 - **The failure path is asymmetric on purpose.** `markArtworkFailed` publishes and
-  drops the overlay at the error site rather than at the commit point, so a slow
-  load that fails reveals the outgoing artwork for the rest of the fade. The error
-  modal is raised over it, so the wall is never silently wrong.
+  drops the overlay at the error site rather than at the commit point, so on a slow
+  load that fails the rest of the fade is no longer covered: the overlap branch
+  reveals the outgoing artwork, and the sequential branch (iframe/object/model —
+  both slots at opacity 0) shows black. The error modal is raised over either, so
+  the wall is never silently wrong.
 - **Model artworks.** `ModelViewerScreen` paints its own "Loading 3D model"
   overlay inside the slot wrapper, so it inherits `slotOpacity` and is invisible
   while the incoming slot is still fading in. The global overlay is therefore
   suppressed only when a model that is BOTH still loading AND painted would stack
   the two — in practice the first-load case. A slow transition INTO a model still
-  gets the global overlay, because the model's own one cannot be seen yet.
+  gets the global overlay, because the model's own one cannot be seen yet. The
+  check is also scoped to the current `previewURL`: a model whose load never
+  resolves keeps `loading: true` for the life of its slot, and an unscoped check
+  would let it suppress the overlay for every artwork after it.
 - **Runtime switch.** `showRenderLoadingOverlay` in `display.json` (default `true`)
   gates the overlay only; it never changes the codes reported on status polls.
   `ArtworkPlayer` passes it to `ModelViewerScreen` as

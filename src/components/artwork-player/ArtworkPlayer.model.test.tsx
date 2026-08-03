@@ -443,6 +443,9 @@ describe('ArtworkPlayer — model loading overlay timing', () => {
       await vi.advanceTimersByTimeAsync(2100);
     });
     expect(screen.queryByText('Loading 3D model')).toBeTruthy();
+    // And exactly one overlay: a painted, still-loading model suppresses the
+    // global one, which is the whole reason that suppression branch exists.
+    expect(screen.queryByText('Loading...')).toBeNull();
   });
 
   it('shows the global overlay for a slow transition into a model', async () => {
