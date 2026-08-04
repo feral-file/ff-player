@@ -315,7 +315,8 @@ function isSetupDisplayDetail(request: unknown): request is SetupDisplayDetail {
     }
 
     case SetupDisplayState.JoinFailed:
-    case SetupDisplayState.Connecting: {
+    case SetupDisplayState.Connecting:
+    case SetupDisplayState.SetupError: {
       if (detail.reason !== undefined && typeof detail.reason !== 'string') {
         return false;
       }

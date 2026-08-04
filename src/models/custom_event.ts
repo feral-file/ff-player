@@ -97,6 +97,14 @@ export enum SetupDisplayState {
   // "Couldn't connect to Wi-Fi" for the ~1s between CDP connect and the
   // first online confirmation.
   Connecting = 'connecting',
+  // Persistent provisioning failure the daemon cannot fix on its own
+  // (controld's escalation latches: the setup hotspot repeatedly failing to
+  // start, or refusing to release the radio). `reason` carries the full
+  // user-facing prose — what happened, that retries continue automatically,
+  // and the power-cycle fallback — matching the connecting convention.
+  // Distinct from JoinFailed, which narrates one failed join attempt in a
+  // working setup flow; these errors fire while no join is in progress.
+  SetupError = 'setup_error',
   Updating = 'updating',
   Finalizing = 'finalizing',
   ClaimQr = 'claim_qr',

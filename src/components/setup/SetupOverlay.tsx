@@ -183,6 +183,33 @@ function ConnectingPanel({ display }: { display: SetupDisplayDetail }) {
 }
 
 /*
+ * Persistent provisioning failure (controld's escalation latches: the setup
+ * hotspot repeatedly failing to start or to release the radio). The reason
+ * line carries controld's full prose — what happened, that retries continue
+ * automatically underneath, and the power-cycle fallback — so this panel
+ * adds only a title. The title must not assert a failed Wi-Fi join
+ * (join_failed's does): these errors fire while no join is in progress at
+ * all, and on old players the send-time downgrade already shows this prose
+ * under the wrong "Couldn't connect" title — the native rendering exists to
+ * fix exactly that. A bare request (no reason — valid per the CDP
+ * validator) still gets one honest line so the panel is never a dead-end
+ * title.
+ */
+function SetupErrorPanel({ display }: { display: SetupDisplayDetail }) {
+  return (
+    <section className={styles.overlay} aria-live="polite">
+      <div className={styles.panel}>
+        <p className={styles.title}>Setup needs attention</p>
+        <p className={styles.subtitle}>
+          {display.reason ??
+            'The Art Computer ran into a problem with setup mode. It will keep trying automatically.'}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/*
  * Title + reason only — no "rejoin and try again" instruction. join_failed
  * is a transient frame: the provisioning machine re-raises the AP after ANY
  * join failure and the narration re-renders softap_qr, so the QR screen
@@ -331,6 +358,10 @@ export function renderSetupPanel(
 
     case SetupDisplayState.Connecting: {
       return <ConnectingPanel display={display} />;
+    }
+
+    case SetupDisplayState.SetupError: {
+      return <SetupErrorPanel display={display} />;
     }
 
     case SetupDisplayState.Updating: {
