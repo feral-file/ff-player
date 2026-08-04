@@ -21,6 +21,38 @@ const relativeSources = [
   ['protocol-relative', '//cdn.example.com/artwork.html', 'http://cdn.example.com/artwork.html'],
 ] as const;
 
+/**
+ * The display-mode hint must join the source's query string with the right
+ * separator. A query-less source previously produced `?&display_mode=...`;
+ * that empty leading pair reduces to a dangling `?` once controld's
+ * offline-cache replay strips `display_mode`, missing the captured resource
+ * key and failing a fully cached artwork closed to Chromium's error page.
+ * Sources that already carry params must keep their exact order and
+ * encoding, because the same lookup matches by exact string.
+ */
+const querySeparatorSources = [
+  [
+    'no query string',
+    'https://generator.artblocks.io/1/0xabc/147000065',
+    'https://generator.artblocks.io/1/0xabc/147000065?display_mode=crop',
+  ],
+  [
+    'existing query string',
+    'https://cdn.example.com/previews/x/?edition_number=0&blockchain=bitmark',
+    'https://cdn.example.com/previews/x/?edition_number=0&blockchain=bitmark&display_mode=crop',
+  ],
+  [
+    'percent-encoded query preserved verbatim',
+    'https://cdn.example.com/a?path=%2Fnested&b=1',
+    'https://cdn.example.com/a?path=%2Fnested&b=1&display_mode=crop',
+  ],
+  [
+    'empty query string',
+    'https://cdn.example.com/a?',
+    'https://cdn.example.com/a?display_mode=crop',
+  ],
+] as const;
+
 /** Tiny valid payloads so MIME discovery selects the media renderer without network. */
 const base64MediaSources = [
   [
@@ -66,7 +98,20 @@ describe('ArtworkPlayer — accepted artwork source compatibility', () => {
       await waitFor(() => {
         const iframe = container.querySelector('iframe');
         expect(iframe).toBeTruthy();
-        expect(iframe?.src).toBe(`${expectedURL}?&display_mode=crop`);
+        expect(iframe?.src).toBe(`${expectedURL}?display_mode=crop`);
+      });
+    }
+  );
+
+  it.each(querySeparatorSources)(
+    'joins the display-mode hint to a source with %s',
+    async (_kind, source, expectedURL) => {
+      const { container } = renderArtwork(source, 'text/html');
+
+      await waitFor(() => {
+        const iframe = container.querySelector('iframe');
+        expect(iframe).toBeTruthy();
+        expect(iframe?.getAttribute('src')).toBe(expectedURL);
       });
     }
   );
