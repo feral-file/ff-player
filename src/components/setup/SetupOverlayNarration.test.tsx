@@ -9,12 +9,33 @@ import SetupOverlay from './SetupOverlay';
  * SetupOverlay.test.tsx purely to keep that file inside the max-lines lint
  * budget — the states under test are ordinary setupDisplay states and share
  * all machinery with the ones tested there.
+ *
+ * Also home to join_failed's blank-`reason` cases. join_failed's rendering
+ * lives in the other file, but all three panels share one invariant — a
+ * present-but-blank reason must be treated as absent — and keeping every case
+ * that pins it in one place is what stops a future edit from restoring the
+ * truthiness gap in only the panel whose tests happen to sit elsewhere.
  */
 
 function displaySetup(detail: Record<string, unknown>) {
   window.dispatchEvent(
     new CustomEvent(CustomEventName.SetupDisplay, { detail })
   );
+}
+
+/** The line SetupErrorPanel shows when controld sends no usable reason. */
+const setupErrorFallback =
+  'The Art Computer ran into a problem with setup mode. ' +
+  'It will keep trying automatically.';
+
+/*
+ * Reason-absence assertion for `connecting`, whose no-reason branch renders
+ * no subtitle element at all (unlike setup_error/join_failed, which fall back
+ * to a line). Counting the panel's children rather than matching a CSS-module
+ * class keeps this independent of how SCSS modules resolve under vitest.
+ */
+function expectTitleOnlyPanel(title: HTMLElement) {
+  expect(title.parentElement?.childElementCount).toBe(1);
 }
 
 describe('SetupOverlay connecting state', () => {
@@ -42,7 +63,27 @@ describe('SetupOverlay connecting state', () => {
 
     displaySetup({ state: SetupDisplayState.Connecting });
 
-    expect(await screen.findByText('Connecting to the network')).toBeTruthy();
+    expectTitleOnlyPanel(
+      await screen.findByText('Connecting to the network')
+    );
+  });
+
+  /*
+   * A present-but-blank reason passes the CDP validator (it only checks the
+   * type), so it must collapse to the same title-only rendering as an absent
+   * one rather than leaving an empty subtitle under the title.
+   */
+  it.each([
+    ['an empty reason', ''],
+    ['a whitespace-only reason', '   \n\t '],
+  ])('renders the title alone for %s', async (_label, reason) => {
+    render(<SetupOverlay />);
+
+    displaySetup({ state: SetupDisplayState.Connecting, reason });
+
+    expectTitleOnlyPanel(
+      await screen.findByText('Connecting to the network')
+    );
   });
 });
 
@@ -56,9 +97,14 @@ describe('SetupOverlay setup_error state', () => {
 
     displaySetup({
       state: SetupDisplayState.SetupError,
+      // Verbatim from feral-controld's AP-raise escalation
+      // (provisioning/provisioning.go, noteAPRaiseFailure) so a daemon copy
+      // change that this panel would have to re-render shows up as a diff
+      // here rather than passing against invented prose.
       reason:
-        'The frame could not start setup mode. It will keep trying automatically. ' +
-        'If this persists, disconnect power for ten seconds and restart. (FF1-TEST)',
+        'The Art Computer could not start setup mode. It will keep trying ' +
+        'automatically. If this persists, disconnect power for ten seconds ' +
+        'and restart.',
     });
 
     expect(await screen.findByText('Setup needs attention')).toBeTruthy();
@@ -69,6 +115,25 @@ describe('SetupOverlay setup_error state', () => {
     expect(screen.queryByText(/Couldn't connect/)).toBeNull();
   });
 
+  it('renders the teardown-twin reason', async () => {
+    // The second escalation controld can latch (noteAPReleaseFailure); same
+    // panel, so this only pins that the twin prose is carried verbatim too.
+    render(<SetupOverlay />);
+
+    displaySetup({
+      state: SetupDisplayState.SetupError,
+      reason:
+        'The Art Computer could not release its setup hotspot. It will keep ' +
+        'trying automatically. If this persists, disconnect power for ten ' +
+        'seconds and restart.',
+    });
+
+    expect(await screen.findByText('Setup needs attention')).toBeTruthy();
+    expect(
+      screen.getByText(/could not release its setup hotspot/)
+    ).toBeTruthy();
+  });
+
   it('renders a bare setup_error with a fallback line', async () => {
     // A reason-less setup_error is valid per the CDP validator; the panel
     // must not be a dead-end title.
@@ -77,6 +142,41 @@ describe('SetupOverlay setup_error state', () => {
     displaySetup({ state: SetupDisplayState.SetupError });
 
     expect(await screen.findByText('Setup needs attention')).toBeTruthy();
-    expect(screen.getByText(/keep trying automatically/)).toBeTruthy();
+    expect(screen.getByText(setupErrorFallback)).toBeTruthy();
+  });
+
+  /*
+   * A present-but-blank reason passes the CDP validator (it only checks the
+   * type), so it must land on the same fallback as an absent one rather than
+   * rendering an empty subtitle under the title.
+   */
+  it.each([
+    ['an empty reason', ''],
+    ['a whitespace-only reason', '   \n\t '],
+  ])('renders the fallback line for %s', async (_label, reason) => {
+    render(<SetupOverlay />);
+
+    displaySetup({ state: SetupDisplayState.SetupError, reason });
+
+    expect(await screen.findByText('Setup needs attention')).toBeTruthy();
+    expect(screen.getByText(setupErrorFallback)).toBeTruthy();
+  });
+});
+
+describe('SetupOverlay join_failed blank reason', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it.each([
+    ['an empty reason', ''],
+    ['a whitespace-only reason', '   \n\t '],
+  ])('renders the fallback line for %s', async (_label, reason) => {
+    render(<SetupOverlay />);
+
+    displaySetup({ state: SetupDisplayState.JoinFailed, reason });
+
+    expect(await screen.findByText("Couldn't connect to Wi-Fi")).toBeTruthy();
+    expect(screen.getByText('Please try again.')).toBeTruthy();
   });
 });

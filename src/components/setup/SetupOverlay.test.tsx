@@ -137,7 +137,9 @@ describe('SetupOverlay known states (connectivity)', () => {
 });
 
 // The connecting and setup_error prose-narration states are tested in
-// SetupOverlayNarration.test.tsx (split to stay inside the max-lines budget).
+// SetupOverlayNarration.test.tsx (split to stay inside the max-lines budget),
+// as is join_failed's blank-`reason` handling — all three panels share that
+// invariant, so the cases that pin it are kept together over there.
 
 describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
   afterEach(() => {
