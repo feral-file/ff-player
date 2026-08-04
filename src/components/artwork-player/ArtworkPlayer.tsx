@@ -41,6 +41,7 @@ import {
   convertScalingToObjectFit,
   getDP1Margin,
   resolveArtworkSourceURL,
+  appendDisplayModeParam,
   ContentTypeDetectionError,
 } from '@/utils/helper';
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
@@ -1514,8 +1515,15 @@ const ArtworkPlayer = ({
           // boundary. Relative web URLs are resolved only for this iframe
           // setting, leaving the persisted/display source unchanged.
           if (resolvedURL.protocol !== 'data:') {
-            resolvedURL.search += `&display_mode=${displayMode}`;
-            softwareURL = resolvedURL.toString();
+            // Delegated so the reversibility contract lives beside the rule
+            // it protects: controld's offline-cache replay strips
+            // `display_mode` back off and matches the remainder against the
+            // captured bare `item.Source` by exact string, so this append
+            // must round-trip byte-for-byte — including the source's
+            // original query delimiter — or a fully cached artwork fails
+            // closed to Chromium's error page. A plain `search += '&...'`
+            // did not, for any query-less source.
+            softwareURL = appendDisplayModeParam(resolvedURL, displayMode);
           }
         }
         if (softwareURL !== slot.displaySoftwareURL) {

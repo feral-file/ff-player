@@ -21,6 +21,43 @@ const relativeSources = [
   ['protocol-relative', '//cdn.example.com/artwork.html', 'http://cdn.example.com/artwork.html'],
 ] as const;
 
+/**
+ * The display-mode hint must join the source's query string so that stripping
+ * `display_mode` returns the captured replay key byte-for-byte — a query-less
+ * source previously produced `?&display_mode=...`, whose empty leading pair
+ * reduces to a dangling `?` on strip, missing the key and failing a fully
+ * cached artwork closed to Chromium's error page.
+ *
+ * These cases pin the wiring through the component. The reversibility
+ * contract itself, including why an explicit empty query keeps its `?&` form
+ * while a query-less source does not, is owned and exhaustively tested by
+ * `appendDisplayModeParam` in utils/helper.test.ts.
+ */
+const querySeparatorSources = [
+  [
+    'no query string',
+    'https://generator.artblocks.io/1/0xabc/147000065',
+    'https://generator.artblocks.io/1/0xabc/147000065?display_mode=crop',
+  ],
+  [
+    'existing query string',
+    'https://cdn.example.com/previews/x/?edition_number=0&blockchain=bitmark',
+    'https://cdn.example.com/previews/x/?edition_number=0&blockchain=bitmark&display_mode=crop',
+  ],
+  [
+    'percent-encoded query preserved verbatim',
+    'https://cdn.example.com/a?path=%2Fnested&b=1',
+    'https://cdn.example.com/a?path=%2Fnested&b=1&display_mode=crop',
+  ],
+  [
+    // Distinct from the query-less row above: this source's captured key
+    // carries a trailing '?', so the hint must keep that delimiter.
+    'empty query string',
+    'https://cdn.example.com/a?',
+    'https://cdn.example.com/a?&display_mode=crop',
+  ],
+] as const;
+
 /** Tiny valid payloads so MIME discovery selects the media renderer without network. */
 const base64MediaSources = [
   [
@@ -66,7 +103,20 @@ describe('ArtworkPlayer — accepted artwork source compatibility', () => {
       await waitFor(() => {
         const iframe = container.querySelector('iframe');
         expect(iframe).toBeTruthy();
-        expect(iframe?.src).toBe(`${expectedURL}?&display_mode=crop`);
+        expect(iframe?.src).toBe(`${expectedURL}?display_mode=crop`);
+      });
+    }
+  );
+
+  it.each(querySeparatorSources)(
+    'joins the display-mode hint to a source with %s',
+    async (_kind, source, expectedURL) => {
+      const { container } = renderArtwork(source, 'text/html');
+
+      await waitFor(() => {
+        const iframe = container.querySelector('iframe');
+        expect(iframe).toBeTruthy();
+        expect(iframe?.getAttribute('src')).toBe(expectedURL);
       });
     }
   );
