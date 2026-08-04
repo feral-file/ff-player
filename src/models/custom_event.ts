@@ -89,6 +89,14 @@ export enum SetupDisplayState {
   SoftApQr = 'softap_qr',
   Joining = 'joining',
   JoinFailed = 'join_failed',
+  // Provisioned-device connectivity narration (controld's boot/offline
+  // "hedge"): the device has saved Wi-Fi but its link or internet access is
+  // not confirmed yet, so the copy must stay neutral. Distinct from
+  // JoinFailed, whose title asserts a failed join — controld used to borrow
+  // that screen for this prose, which made every normal reboot flash
+  // "Couldn't connect to Wi-Fi" for the ~1s between CDP connect and the
+  // first online confirmation.
+  Connecting = 'connecting',
   Updating = 'updating',
   Finalizing = 'finalizing',
   ClaimQr = 'claim_qr',

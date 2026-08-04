@@ -159,6 +159,30 @@ function FinalizingPanel() {
 }
 
 /*
+ * Provisioned-device connectivity narration (controld's boot/offline hedge,
+ * M-0/M-1): the device has saved Wi-Fi but its link or internet access is
+ * not confirmed yet. The title is deliberately neutral — on a NORMAL reboot
+ * controld paints this state in the ~1s window between CDP connect and the
+ * first online confirmation, so an asserting title (join_failed's
+ * "Couldn't connect") would flash a false failure on every boot. The reason
+ * line carries controld's evidence-scoped prose ("Checking the network
+ * connection…", "…no internet access. Retrying…"); a bare request renders
+ * the title alone.
+ */
+function ConnectingPanel({ display }: { display: SetupDisplayDetail }) {
+  return (
+    <section className={styles.overlay} aria-live="polite">
+      <div className={styles.panel}>
+        <p className={styles.title}>Connecting to the network</p>
+        {display.reason ? (
+          <p className={styles.subtitle}>{display.reason}</p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+/*
  * Title + reason only — no "rejoin and try again" instruction. join_failed
  * is a transient frame: the provisioning machine re-raises the AP after ANY
  * join failure and the narration re-renders softap_qr, so the QR screen
@@ -303,6 +327,10 @@ export function renderSetupPanel(
 
     case SetupDisplayState.JoinFailed: {
       return <JoinFailedPanel display={display} />;
+    }
+
+    case SetupDisplayState.Connecting: {
+      return <ConnectingPanel display={display} />;
     }
 
     case SetupDisplayState.Updating: {

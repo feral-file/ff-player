@@ -56,7 +56,8 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 
 ## Setup overlay background artwork
 
-- Every visible `setupDisplay` state (scanning, softap_qr, joining, finalizing, updating, claim_qr, factory_reset, join_failed) renders a bundled artwork beneath its panel, behind the panels' existing dark scrim. The panels themselves are unchanged.
+- Every visible `setupDisplay` state (scanning, softap_qr, joining, connecting, finalizing, updating, claim_qr, factory_reset, join_failed) renders a bundled artwork beneath its panel, behind the panels' existing dark scrim. The panels themselves are unchanged.
+- `connecting` is the provisioned-device connectivity narration (controld's boot/offline hedge): neutral "Connecting to the network" title with controld's optional `reason` prose beneath. It exists so that narration no longer borrows `join_failed`, whose asserting title flashed a false "Couldn't connect to Wi-Fi" on every normal reboot.
 - The artwork ships in `public/setup-artwork/` (`index.html` plus a local `p5.min.js`). Source: `https://generator.artblocks.io/1/0x0000000c687daed0fba60d1dba4e5f6149e8b894/55`, saved with the CDN p5.js reference rewritten to the local sibling so it renders with zero connectivity — factory-fresh setup runs before Wi-Fi exists, so the background must be same-origin and offline-complete.
 - The background is deliberately NOT cast through `CanvasService`: a cast is persisted as `castInfo` and would replace the boot fallback-playlist recovery contract. It is a render-only layer inside `SetupOverlay` ([SetupArtworkBackground](../src/components/setup/SetupArtworkBackground.tsx)).
 - Under a panel it renders only while no cast is active. When `castInfo` exists (for example an OTA `updating` overlay raised over live playback), the user's playing artwork remains what shows beneath the scrim. The one exception is a device whose playback is degraded — see *Offline playback recovery* below.

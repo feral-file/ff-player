@@ -177,6 +177,7 @@ describe('CDPRequestHandler setup display command (accepted requests)', () => {
   it.each([
     SetupDisplayState.Joining,
     SetupDisplayState.JoinFailed,
+    SetupDisplayState.Connecting,
     SetupDisplayState.Updating,
     SetupDisplayState.Ready,
     SetupDisplayState.Hidden,
@@ -298,6 +299,13 @@ describe('CDPRequestHandler setup display command (rejected requests)', () => {
   it('rejects join_failed requests with a non-string reason', () => {
     expectInvalidSetupDisplayRequest({
       state: SetupDisplayState.JoinFailed,
+      reason: 500,
+    });
+  });
+
+  it('rejects connecting requests with a non-string reason', () => {
+    expectInvalidSetupDisplayRequest({
+      state: SetupDisplayState.Connecting,
       reason: 500,
     });
   });

@@ -136,6 +136,35 @@ describe('SetupOverlay known states (connectivity)', () => {
   });
 });
 
+describe('SetupOverlay connecting state', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('renders connecting with the provided reason', async () => {
+    render(<SetupOverlay />);
+
+    displaySetup({
+      state: SetupDisplayState.Connecting,
+      reason: 'Checking the network connection…',
+    });
+
+    expect(await screen.findByText('Connecting to the network')).toBeTruthy();
+    expect(screen.getByText('Checking the network connection…')).toBeTruthy();
+    // The neutral title is the point of this state: the boot hedge must not
+    // flash a failure-asserting title on a normal reboot.
+    expect(screen.queryByText(/Couldn't connect/)).toBeNull();
+  });
+
+  it('renders a bare connecting request as the title alone', async () => {
+    render(<SetupOverlay />);
+
+    displaySetup({ state: SetupDisplayState.Connecting });
+
+    expect(await screen.findByText('Connecting to the network')).toBeTruthy();
+  });
+});
+
 describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
   afterEach(() => {
     cleanup();
