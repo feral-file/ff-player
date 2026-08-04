@@ -74,6 +74,10 @@ procedure, runnable entirely in a browser:
    setup('softap_qr', {ssid:'FF1-DEMO4242'});               // open network
    setup('joining');
    setup('join_failed', {reason:'Wrong Wi-Fi password. Please check it and try again.'});
+   // Provisioned-device boot/offline narration (not part of the OOBE story):
+   // neutral title, prose body from controld.
+   setup('connecting', {reason:'Looking for your Wi-Fi network… Setup mode will start in a few minutes if the connection does not return.'});
+   setup('connecting');                                     // bare variant: title only
    setup('finalizing');
    setup('updating', {progress:42});
    setup('claim_qr', {url:'https://link.feralfile.com/device_connect/demo', device_name:'FF1-DEMO4242'});

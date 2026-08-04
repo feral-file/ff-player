@@ -21,6 +21,7 @@
         "softap_qr",
         "joining",
         "join_failed",
+        "connecting",
         "updating",
         "finalizing",
         "claim_qr",
@@ -34,6 +35,9 @@
           "optional": ["password"]
         },
         "join_failed": {
+          "optional": ["reason"]
+        },
+        "connecting": {
           "optional": ["reason"]
         },
         "updating": {

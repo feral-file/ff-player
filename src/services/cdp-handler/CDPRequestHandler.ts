@@ -314,7 +314,8 @@ function isSetupDisplayDetail(request: unknown): request is SetupDisplayDetail {
       break;
     }
 
-    case SetupDisplayState.JoinFailed: {
+    case SetupDisplayState.JoinFailed:
+    case SetupDisplayState.Connecting: {
       if (detail.reason !== undefined && typeof detail.reason !== 'string') {
         return false;
       }
