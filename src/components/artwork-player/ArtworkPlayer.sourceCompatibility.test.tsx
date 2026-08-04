@@ -22,13 +22,16 @@ const relativeSources = [
 ] as const;
 
 /**
- * The display-mode hint must join the source's query string with the right
- * separator. A query-less source previously produced `?&display_mode=...`;
- * that empty leading pair reduces to a dangling `?` once controld's
- * offline-cache replay strips `display_mode`, missing the captured resource
- * key and failing a fully cached artwork closed to Chromium's error page.
- * Sources that already carry params must keep their exact order and
- * encoding, because the same lookup matches by exact string.
+ * The display-mode hint must join the source's query string so that stripping
+ * `display_mode` returns the captured replay key byte-for-byte — a query-less
+ * source previously produced `?&display_mode=...`, whose empty leading pair
+ * reduces to a dangling `?` on strip, missing the key and failing a fully
+ * cached artwork closed to Chromium's error page.
+ *
+ * These cases pin the wiring through the component. The reversibility
+ * contract itself, including why an explicit empty query keeps its `?&` form
+ * while a query-less source does not, is owned and exhaustively tested by
+ * `appendDisplayModeParam` in utils/helper.test.ts.
  */
 const querySeparatorSources = [
   [
@@ -47,9 +50,11 @@ const querySeparatorSources = [
     'https://cdn.example.com/a?path=%2Fnested&b=1&display_mode=crop',
   ],
   [
+    // Distinct from the query-less row above: this source's captured key
+    // carries a trailing '?', so the hint must keep that delimiter.
     'empty query string',
     'https://cdn.example.com/a?',
-    'https://cdn.example.com/a?display_mode=crop',
+    'https://cdn.example.com/a?&display_mode=crop',
   ],
 ] as const;
 

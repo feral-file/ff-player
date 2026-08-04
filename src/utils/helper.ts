@@ -451,3 +451,41 @@ export function isContentAddressed(u: string): boolean {
     return false;
   }
 }
+
+/**
+ * Append ff-player's UI-local `display_mode` rendering hint to an artwork
+ * URL, preserving the source's original query delimiter exactly.
+ *
+ * This append must be losslessly reversible. The offline-cache replay in
+ * `controld` strips `display_mode` back off and matches the remainder against
+ * the captured resource key by exact string, and the capture stores the
+ * *bare* `item.Source`, so any byte this adds or drops beyond the hint itself
+ * turns a fully cached artwork into Chromium's error page. Source, appended
+ * form, and what the strip must return:
+ *
+ * - `https://host/a` / `https://host/a?display_mode=fit` / `https://host/a`
+ * - `https://host/a?` / `https://host/a?&display_mode=fit` / `https://host/a?`
+ * - `https://host/a?b=1` / `https://host/a?b=1&display_mode=fit` / `https://host/a?b=1`.
+ *
+ * The delimiter is read from the serialized href rather than from `search`,
+ * because `search` is `''` for BOTH a query-less URL and one carrying an
+ * explicit empty query — collapsing the first two rows above into the same
+ * output and breaking one of them whichever way it resolves. The fragment is
+ * excluded from that test since it may legitimately contain a `?`.
+ *
+ * The whole search string is assigned rather than going through
+ * `URLSearchParams`: that setter re-serializes every existing parameter, and
+ * the resulting reorder/re-encode would break the same exact-match lookup.
+ *
+ * Callers must exclude `data:` sources — their query-like text is content,
+ * not parameters.
+ */
+export function appendDisplayModeParam(url: URL, displayMode: string): string {
+  const next = new URL(url.href);
+  const fragmentStart = next.href.indexOf('#');
+  const beforeFragment =
+    fragmentStart === -1 ? next.href : next.href.slice(0, fragmentStart);
+  const hint = `display_mode=${displayMode}`;
+  next.search = beforeFragment.includes('?') ? `${next.search}&${hint}` : hint;
+  return next.toString();
+}

@@ -40,6 +40,7 @@ import {
   convertScalingToObjectFit,
   getDP1Margin,
   resolveArtworkSourceURL,
+  appendDisplayModeParam,
   ContentTypeDetectionError,
 } from '@/utils/helper';
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
@@ -1305,26 +1306,15 @@ const ArtworkPlayer = ({
           // boundary. Relative web URLs are resolved only for this iframe
           // setting, leaving the persisted/display source unchanged.
           if (resolvedURL.protocol !== 'data:') {
-            // Pick the separator explicitly instead of `search += '&...'`:
-            // on a source with no query string `search` is empty, so `+=`
-            // emits `?&display_mode=...`. That empty leading pair is not
-            // cosmetic — controld's offline-cache replay strips only
-            // `display_mode` and then matches the remainder against the
-            // captured resource key by exact string, so the request URL
-            // reduces to a dangling `?`, misses, and fails closed to
-            // Chromium's error page even though the artwork is fully
-            // cached. It hits every query-less source (Art Blocks
-            // generator URLs); sources that already carry params were
-            // masked because their `&` is legitimate there.
-            //
-            // Assign the whole search string rather than going through
-            // URLSearchParams: that setter re-serializes every existing
-            // param, and the reordering/re-encoding would break the same
-            // exact-match lookup this fix exists to satisfy.
-            resolvedURL.search = resolvedURL.search
-              ? `${resolvedURL.search}&display_mode=${displayMode}`
-              : `display_mode=${displayMode}`;
-            softwareURL = resolvedURL.toString();
+            // Delegated so the reversibility contract lives beside the rule
+            // it protects: controld's offline-cache replay strips
+            // `display_mode` back off and matches the remainder against the
+            // captured bare `item.Source` by exact string, so this append
+            // must round-trip byte-for-byte — including the source's
+            // original query delimiter — or a fully cached artwork fails
+            // closed to Chromium's error page. A plain `search += '&...'`
+            // did not, for any query-less source.
+            softwareURL = appendDisplayModeParam(resolvedURL, displayMode);
           }
         }
         if (softwareURL !== slot.displaySoftwareURL) {
