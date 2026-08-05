@@ -6,6 +6,20 @@ import {
   FileUseVideo,
 } from '@/models';
 import { Scaling } from '@/models/dp1.model';
+import { waitForDaemonConnectivity } from '@/services/DaemonConnectivity';
+
+/**
+ * Upper bound on waiting for the daemon's FIRST connectivity verdict before
+ * classifying a no-response HEAD failure as network-or-not. The daemon's
+ * generation-ready replay lands within ~1s of the page installing its CDP
+ * handlers, so a device with a healthy daemon resolves this wait early in
+ * either direction. The full bound is paid whenever no verdict ever arrives
+ * — a standalone browser, a daemon that is down, or a controld predating
+ * the generation-ready replay — and then on EVERY such classification
+ * (extensionless source, HEAD got no response, `navigator.onLine` still
+ * true), which is why the constant must stay small.
+ */
+export const DAEMON_VERDICT_WAIT_MS = 3_000;
 
 /**
  * Read the declared media type from a `data:` URL without probing the network.
@@ -25,14 +39,16 @@ function contentTypeFromDataURL(url: URL): string {
  * Thrown by `getContentTypeFromURL` when detection ultimately fails
  * (extension inference also came up empty). Carries `isNetworkFailure`: true
  * only when BOTH `fetch` never got a response at all (offline, DNS failure,
- * connection refused — the request never reached a server) AND
- * `navigator.onLine` corroborates that the browser itself is offline; false
- * otherwise — including a response that DID come back but was unhelpful
- * (4xx/5xx, or 2xx with no `Content-Type` header), and a `fetch` rejection
- * that `navigator.onLine` does not corroborate (the common CORS/CSP case: a
- * reachable, unrelated-to-connectivity host that rejects with the same bare
- * error a real network failure would). Either way the server is effectively
- * reachable from the player's perspective, and the type is simply unknown.
+ * connection refused — the request never reached a server) AND an offline
+ * corroboration signal agrees: `navigator.onLine` false, OR the daemon's
+ * pushed connectivity verdict is offline (awaited briefly when not yet known
+ * — see the classification site). False otherwise — including a response
+ * that DID come back but was unhelpful (4xx/5xx, or 2xx with no
+ * `Content-Type` header), and a `fetch` rejection nothing corroborates (the
+ * common CORS/CSP case: a reachable, unrelated-to-connectivity host that
+ * rejects with the same bare error a real network failure would). Either way
+ * the server is effectively reachable from the player's perspective, and the
+ * type is simply unknown.
  * Callers that need to tell "offline" apart from "reachable but untyped"
  * (ArtworkPlayer's fallback-iframe path, for the offline degraded signal)
  * read this instead of parsing the message string.
@@ -117,16 +133,43 @@ export async function getContentTypeFromURL(
     // corroboration, an ONLINE device hitting that CORS wall would get
     // `isNetworkFailure: true` and raise the degraded flag with nothing
     // left to ever clear it — a healthy artwork stuck degraded forever.
-    // `navigator.onLine` is independent, browser-level evidence the link
-    // itself is actually down (not just this one cross-origin request), and
-    // the cold-offline-boot case this classification exists for always has
-    // it false, so requiring it corroborates the reading without weakening
-    // the genuinely-offline case this exists to catch.
+    //
+    // Two independent corroborating signals, either suffices:
+    //  - `navigator.onLine` false: the browser's own interface is down.
+    //    Necessary but NOT sufficient coverage on its own — the device's
+    //    setup AP keeps the interface up, so an offline frame in AP mode
+    //    reads `onLine: true` (the 2026-08-05 blank-wall incident: this
+    //    classification silently fell through to the fallback iframe, whose
+    //    cross-origin `load` masks failure, and the offline backdrop never
+    //    rose).
+    //  - The daemon's pushed connectivity verdict says offline. It is the
+    //    authoritative WAN probe and covers AP mode and link-without-internet.
+    //    Its first push races this very classification (it arrived 7ms too
+    //    late in the incident), so when no verdict is known yet we WAIT for
+    //    one, bounded by DAEMON_VERDICT_WAIT_MS. The wait only engages on
+    //    the already-failed no-response path with `onLine` still true: a
+    //    HEAD that reaches the server never pays it, and an online cold
+    //    boot's CORS-blocked HEAD pays at most the time to the first replay
+    //    (the full bound only when no daemon ever answers — see the
+    //    constant's doc). Timeout resolves to `null` = uncorroborated,
+    //    preserving the CORS-safe default.
+    //    Known limitation, accepted: the verdict proves "no WAN", not "this
+    //    host is unreachable" — a LAN-reachable, CORS-blocked host on a
+    //    LAN-without-WAN device now classifies as a network failure (no
+    //    fallback iframe; backdrop instead of a possibly-renderable LAN
+    //    artwork). Fielded artwork sources are WAN-hosted; the recorded
+    //    alternative in DEVICE_LOCAL_PLAYER.md removes this if it ever
+    //    bites.
     const browserOffline =
       typeof navigator !== 'undefined' && !navigator.onLine;
+    let offlineCorroborated = browserOffline;
+    if (!reachedServer && !offlineCorroborated) {
+      offlineCorroborated =
+        (await waitForDaemonConnectivity(DAEMON_VERDICT_WAIT_MS)) === false;
+    }
     throw new ContentTypeDetectionError(
       `Failed to determine content type: ${String(error)}`,
-      !reachedServer && browserOffline
+      !reachedServer && offlineCorroborated
     );
   }
 }
