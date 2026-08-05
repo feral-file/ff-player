@@ -136,34 +136,10 @@ describe('SetupOverlay known states (connectivity)', () => {
   });
 });
 
-describe('SetupOverlay connecting state', () => {
-  afterEach(() => {
-    cleanup();
-  });
-
-  it('renders connecting with the provided reason', async () => {
-    render(<SetupOverlay />);
-
-    displaySetup({
-      state: SetupDisplayState.Connecting,
-      reason: 'Checking the network connection…',
-    });
-
-    expect(await screen.findByText('Connecting to the network')).toBeTruthy();
-    expect(screen.getByText('Checking the network connection…')).toBeTruthy();
-    // The neutral title is the point of this state: the boot hedge must not
-    // flash a failure-asserting title on a normal reboot.
-    expect(screen.queryByText(/Couldn't connect/)).toBeNull();
-  });
-
-  it('renders a bare connecting request as the title alone', async () => {
-    render(<SetupOverlay />);
-
-    displaySetup({ state: SetupDisplayState.Connecting });
-
-    expect(await screen.findByText('Connecting to the network')).toBeTruthy();
-  });
-});
+// The connecting and setup_error prose-narration states are tested in
+// SetupOverlayNarration.test.tsx (split to stay inside the max-lines budget),
+// as is join_failed's blank-`reason` handling — all three panels share that
+// invariant, so the cases that pin it are kept together over there.
 
 describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
   afterEach(() => {

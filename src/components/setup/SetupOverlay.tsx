@@ -30,6 +30,23 @@ const qrSize = 320;
 const portalUrl = 'http://ff1.config';
 
 /**
+ * controld's `reason` prose, or `undefined` when there is nothing worth
+ * rendering. The CDP validator only checks that `reason` is a string, so an
+ * empty or whitespace-only value is a valid command and reaches these panels
+ * — most plausibly from a daemon-side template whose substitution came back
+ * empty. Collapsing that to absent is what makes every panel below take its
+ * no-reason branch (fallback line, or no subtitle element at all) instead of
+ * rendering a blank subtitle under the title.
+ */
+function proseReason(display: SetupDisplayDetail): string | undefined {
+  // Explicit `=== ''` rather than a truthiness fold: `??` cannot express this
+  // (an empty string is not nullish) and `||` on a nullable left operand trips
+  // prefer-nullish-coalescing, so the emptiness test has to be spelled out.
+  const trimmed = display.reason?.trim();
+  return trimmed === '' ? undefined : trimmed;
+}
+
+/**
  * Escapes the characters the `WIFI:` URI convention treats as field
  * separators/terminators (`\`, `;`, `,`, `:`, `"`) with a backslash.
  * `feral-controld` currently generates SSIDs/passwords from a charset that
@@ -166,17 +183,43 @@ function FinalizingPanel() {
  * first online confirmation, so an asserting title (join_failed's
  * "Couldn't connect") would flash a false failure on every boot. The reason
  * line carries controld's evidence-scoped prose ("Checking the network
- * connection…", "…no internet access. Retrying…"); a bare request renders
- * the title alone.
+ * connection…", "…no internet access. Retrying…"); a bare request — reason
+ * absent or blank — renders the title alone.
  */
 function ConnectingPanel({ display }: { display: SetupDisplayDetail }) {
+  const reason = proseReason(display);
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
         <p className={styles.title}>Connecting to the network</p>
-        {display.reason ? (
-          <p className={styles.subtitle}>{display.reason}</p>
-        ) : null}
+        {reason ? <p className={styles.subtitle}>{reason}</p> : null}
+      </div>
+    </section>
+  );
+}
+
+/*
+ * Persistent provisioning failure (controld's escalation latches: the setup
+ * hotspot repeatedly failing to start or to release the radio). The reason
+ * line carries controld's full prose — what happened, that retries continue
+ * automatically underneath, and the power-cycle fallback — so this panel
+ * adds only a title. The title must not assert a failed Wi-Fi join
+ * (join_failed's does): these errors fire while no join is in progress at
+ * all, and on old players the send-time downgrade already shows this prose
+ * under the wrong "Couldn't connect" title — the native rendering exists to
+ * fix exactly that. A bare request (no usable reason — both an absent one
+ * and a blank one are valid per the CDP validator; see `proseReason`) still
+ * gets one honest line so the panel is never a dead-end title.
+ */
+function SetupErrorPanel({ display }: { display: SetupDisplayDetail }) {
+  return (
+    <section className={styles.overlay} aria-live="polite">
+      <div className={styles.panel}>
+        <p className={styles.title}>Setup needs attention</p>
+        <p className={styles.subtitle}>
+          {proseReason(display) ??
+            'The Art Computer ran into a problem with setup mode. It will keep trying automatically.'}
+        </p>
       </div>
     </section>
   );
@@ -191,9 +234,10 @@ function ConnectingPanel({ display }: { display: SetupDisplayDetail }) {
  * class re-raises the AP; setupui narrates join_failed, then softap_qr on
  * AP-up). The reason string from controld already carries the action
  * ("Please check it and try again."), and the phone gets the same reason
- * as a banner on the portal picker. A bare join_failed (no reason — valid
- * per the CDP validator) still gets one actionable line so the panel is
- * never a dead-end title while the re-raise is in flight.
+ * as a banner on the portal picker. A bare join_failed (no usable reason —
+ * both an absent one and a blank one are valid per the CDP validator; see
+ * `proseReason`) still gets one actionable line so the panel is never a
+ * dead-end title while the re-raise is in flight.
  */
 function JoinFailedPanel({ display }: { display: SetupDisplayDetail }) {
   return (
@@ -201,7 +245,7 @@ function JoinFailedPanel({ display }: { display: SetupDisplayDetail }) {
       <div className={styles.panel}>
         <p className={styles.title}>Couldn&apos;t connect to Wi-Fi</p>
         <p className={styles.subtitle}>
-          {display.reason ?? 'Please try again.'}
+          {proseReason(display) ?? 'Please try again.'}
         </p>
       </div>
     </section>
@@ -331,6 +375,10 @@ export function renderSetupPanel(
 
     case SetupDisplayState.Connecting: {
       return <ConnectingPanel display={display} />;
+    }
+
+    case SetupDisplayState.SetupError: {
+      return <SetupErrorPanel display={display} />;
     }
 
     case SetupDisplayState.Updating: {

@@ -78,6 +78,12 @@ procedure, runnable entirely in a browser:
    // neutral title, prose body from controld.
    setup('connecting', {reason:'Looking for your Wi-Fi network… Setup mode will start in a few minutes if the connection does not return.'});
    setup('connecting');                                     // bare variant: title only
+   // Persistent provisioning failure (controld's escalation latches):
+   setup('setup_error', {reason:'The Art Computer could not start setup mode. It will keep trying automatically. If this persists, disconnect power for ten seconds and restart. (FF1-DEMO4242)'});
+   // ^ keep the identity suffix: controld's withIdentity appends " (FF1-XXXX)"
+   //   on-wire, so this is the longest string the wrapping check must survive.
+   setup('setup_error', {reason:'The Art Computer could not release its setup hotspot. It will keep trying automatically. If this persists, disconnect power for ten seconds and restart.'});
+   setup('setup_error');                                    // bare variant: title + fallback line
    setup('finalizing');
    setup('updating', {progress:42});
    setup('claim_qr', {url:'https://link.feralfile.com/device_connect/demo', device_name:'FF1-DEMO4242'});

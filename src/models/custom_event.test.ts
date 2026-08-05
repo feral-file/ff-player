@@ -17,9 +17,10 @@ describe('ffos-player-contract.json setupDisplay manifest', () => {
     }
   });
 
-  it('declares the optional reason field for both prose-carrying states', () => {
+  it('declares the optional reason field for every prose-carrying state', () => {
     const fields = contract.contracts.setupDisplay.stateFields;
     expect(fields.join_failed.optional).toContain('reason');
     expect(fields.connecting.optional).toContain('reason');
+    expect(fields.setup_error.optional).toContain('reason');
   });
 });

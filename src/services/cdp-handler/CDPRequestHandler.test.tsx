@@ -140,6 +140,18 @@ function expectInvalidSetupDisplayRequest(request: Record<string, unknown>) {
   window.removeEventListener(CustomEventName.SetupDisplay, listener);
 }
 
+// States whose requests are valid with no extra fields at all. Hoisted so
+// the describe body stays within the max-lines-per-function lint budget.
+const bareAcceptedStates = [
+  SetupDisplayState.Joining,
+  SetupDisplayState.JoinFailed,
+  SetupDisplayState.Connecting,
+  SetupDisplayState.SetupError,
+  SetupDisplayState.Updating,
+  SetupDisplayState.Ready,
+  SetupDisplayState.Hidden,
+];
+
 describe('CDPRequestHandler setup display command (accepted requests)', () => {
   beforeEach(() => {
     CDPRequestHandler.getInstance().initialize();
@@ -174,14 +186,7 @@ describe('CDPRequestHandler setup display command (accepted requests)', () => {
     window.removeEventListener(CustomEventName.SetupDisplay, listener);
   });
 
-  it.each([
-    SetupDisplayState.Joining,
-    SetupDisplayState.JoinFailed,
-    SetupDisplayState.Connecting,
-    SetupDisplayState.Updating,
-    SetupDisplayState.Ready,
-    SetupDisplayState.Hidden,
-  ])('dispatches a bare %s request', (state) => {
+  it.each(bareAcceptedStates)('dispatches a bare %s request', (state) => {
     const listener = vi.fn();
     window.addEventListener(CustomEventName.SetupDisplay, listener);
 
@@ -306,6 +311,13 @@ describe('CDPRequestHandler setup display command (rejected requests)', () => {
   it('rejects connecting requests with a non-string reason', () => {
     expectInvalidSetupDisplayRequest({
       state: SetupDisplayState.Connecting,
+      reason: 500,
+    });
+  });
+
+  it('rejects setup_error requests with a non-string reason', () => {
+    expectInvalidSetupDisplayRequest({
+      state: SetupDisplayState.SetupError,
       reason: 500,
     });
   });
