@@ -1,4 +1,5 @@
 import { canvasService } from '../CanvasService';
+import { noteDaemonConnectivity } from '../DaemonConnectivity';
 import { WebSocketMessage } from '@/models';
 import {
   ConnectivityEventDetail,
@@ -195,6 +196,13 @@ export class CDPRequestHandler {
   }
 
   private handleConnectivityChange(isOnline: boolean) {
+    // Record the verdict BEFORE dispatching: the daemon's generation-ready
+    // replay can land milliseconds after CDP connect, when nothing is
+    // listening yet, and a missed event used to leave the optimistic
+    // `useNetworkManger` seed uncorrected for the whole page lifetime (field
+    // incident: offline cold start under the setup AP stayed "online"
+    // forever). Consumers seed/wait on the store, so ordering matters.
+    noteDaemonConnectivity(isOnline);
     window.dispatchEvent(
       new CustomEvent<ConnectivityEventDetail>(
         CustomEventName.ConnectivityChange,

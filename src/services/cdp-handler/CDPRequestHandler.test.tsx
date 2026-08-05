@@ -11,6 +11,10 @@ import {
   SetupDisplayState,
 } from '@/models/custom_event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  daemonConnectivity,
+  resetDaemonConnectivityForTests,
+} from '@/services/DaemonConnectivity';
 
 type CDPTestWindow = Window & {
   handleCDPRequest: (payload: Record<string, unknown>) => string;
@@ -466,5 +470,41 @@ describe('CDPRequestHandler __ffosPlayerStatus', () => {
     expect(readPlayerStatus().hasArtwork).toBe(true);
 
     handler.cleanup();
+  });
+});
+
+describe('CDPRequestHandler connectivity push', () => {
+  beforeEach(() => {
+    CDPRequestHandler.getInstance().initialize();
+  });
+
+  afterEach(() => {
+    CDPRequestHandler.getInstance().cleanup();
+    resetDaemonConnectivityForTests();
+    vi.restoreAllMocks();
+  });
+
+  it('records the verdict in the daemon store before dispatching the event', () => {
+    // Ordering is the contract: a consumer woken by the event must already
+    // see the store updated, and a consumer with NO listener yet (React
+    // still mounting — the field shape behind the blank-wall incident) must
+    // find the verdict in the store later.
+    let storeAtDispatch: boolean | null = null;
+    const listener = vi.fn(() => {
+      storeAtDispatch = daemonConnectivity();
+    });
+    window.addEventListener(CustomEventName.ConnectivityChange, listener);
+
+    (
+      window as unknown as Window & {
+        handleConnectivityChange: (isOnline: boolean) => void;
+      }
+    ).handleConnectivityChange(false);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(storeAtDispatch).toBe(false);
+    expect(daemonConnectivity()).toBe(false);
+
+    window.removeEventListener(CustomEventName.ConnectivityChange, listener);
   });
 });

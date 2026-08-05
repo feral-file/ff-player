@@ -89,17 +89,18 @@ export const CONNECTING_GRACE_MS = 60_000;
  * read as "online and playing fine", which leaves setup behavior unchanged.
  */
 /**
- * Second, level-triggered source of offline evidence. `isOnline` is only as
- * good as the daemon's edge-triggered pushes: after a reload while the device
- * is ALREADY offline it sits at its optimistic `true` seed until the next
- * real transition (see DEVICE_LOCAL_PLAYER.md), which is exactly when a
- * claimed offline wall needs this backdrop. `navigator.onLine` reads the
- * browser's own interface state — level, not edge — so it catches the
- * link-down half of that case with no daemon involvement. It cannot see
- * "associated but no internet", so it widens coverage rather than replacing
- * the daemon signal; false positives are not a concern (interface down ⟹
- * genuinely offline). Scoped to this component on purpose: other `isOnline`
- * consumers (streaming pause) keep their existing daemon-driven semantics.
+ * Second, level-triggered source of offline evidence, alongside the daemon
+ * signal. `isOnline` is now level-correct in its own right (the daemon
+ * replays connectivity on every generation-ready, and `useNetworkManger`
+ * seeds from the `DaemonConnectivity` store — see DEVICE_LOCAL_PLAYER.md),
+ * but `navigator.onLine` still adds daemon-independent coverage: it reads
+ * the browser's own interface state, so a reload while the link is
+ * physically down is caught even if the daemon or its replay is unavailable.
+ * It cannot see "associated but no internet" — including the device's own
+ * setup AP holding the interface up — so it widens coverage rather than
+ * replacing the daemon signal; false positives are not a concern (interface
+ * down ⟹ genuinely offline). Scoped to this component on purpose: other
+ * `isOnline` consumers (streaming pause) keep their daemon-driven semantics.
  */
 function useBrowserOnline(): boolean {
   const [browserOnline, setBrowserOnline] = useState(() =>

@@ -138,13 +138,16 @@ export const AppProvider = ({ children }: AppContextProps) => {
     setFallbackRequest(prev => ({ active: true, nonce: prev.nonce + 1 }));
   }, []);
   // Counts every "online" connectivity NOTIFICATION, not the derived
-  // isOnline boolean. useNetworkManger starts at `true`, so on an offline
-  // SoftAP boot the first ConnectivityChange({isOnline: true}) is a
-  // true→true no-op that never re-keys the fallback effect — the device
-  // would sit out the 5–60s backoff instead of retrying the moment
-  // provisioning lands. A counter re-keys on the notification itself, so
-  // even a repeated `true` restarts the loop (harmless when idle: the
-  // effect early-returns unless a request is active).
+  // isOnline boolean. The boolean routinely repeats: useNetworkManger seeds
+  // from the DaemonConnectivity store (optimistic `true` when no daemon has
+  // spoken), and the daemon re-delivers its level (generation-ready
+  // replays, sys-monitord restart re-emissions) — so an online notification
+  // often arrives with isOnline already true, a true→true no-op that would
+  // never re-key the fallback effect, and the device would sit out the
+  // 5–60s backoff instead of retrying the moment provisioning lands. A
+  // counter re-keys on the notification itself, so even a repeated `true`
+  // restarts the loop (harmless when idle: the effect early-returns unless
+  // a request is active).
   const [onlineSignal, setOnlineSignal] = useState(0);
   // URL of the last SUCCESSFUL fallback cast, null once an explicit cast
   // replaces that content or the controller stops playback (disconnect /
@@ -648,18 +651,19 @@ export const AppProvider = ({ children }: AppContextProps) => {
   //   - `onlineSignal`, for a load that had already failed when connectivity
   //     returned. It counts online NOTIFICATIONS rather than reading the
   //     isOnline boolean for the same reason the fallback loop above does
-  //     (see its declaration comment): useNetworkManger starts at `true`, so
-  //     the first real ConnectivityChange after provisioning is a true→true
-  //     no-op that would never re-key an isOnline-keyed effect.
+  //     (see its declaration comment): repeated `true` deliveries — a
+  //     store-seeded `true`, generation-ready replays, sys-monitord
+  //     re-emissions — never flip the boolean, so an isOnline-keyed effect
+  //     would not re-key.
   //   - `playbackDegraded` itself, for a load still in flight when that
   //     notification arrived and only erroring seconds later — on a
   //     single-item playlist there is no playlist advance to retry it, so
   //     without this edge the wall stays black indefinitely.
   //
-  // Firing regardless of `isOnline` is DELIBERATE: that boolean is only as
-  // good as the daemon's edge-triggered pushes (see DEVICE_LOCAL_PLAYER.md),
-  // so gating on it would make recovery exactly as unreliable as the
-  // best-effort backdrop.
+  // Firing regardless of `isOnline` is DELIBERATE: that boolean depends on
+  // the daemon being alive to deliver it (see DEVICE_LOCAL_PLAYER.md's
+  // "`isOnline` delivery" section), so gating on it would tie recovery to
+  // daemon health.
   //
   // M7 damping (§4.4 of the cross-repo recovery design): a single failing
   // URL cannot loop through `playbackDegraded` itself — Layer 1 in
