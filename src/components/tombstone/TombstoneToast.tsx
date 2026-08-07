@@ -24,6 +24,9 @@ const toastStyle: CSSProperties = {
   left: '50%',
   bottom: designPx(40),
   transform: 'translateX(-50%)',
+  // Deliberately not `designPx`: the toast's fixed confirmation strings never
+  // approach this cap (nowrap keeps them one line), so the value is an inert
+  // safety net, not part of the vmin sizing contract the label follows.
   maxWidth: '80%',
   backgroundColor: '#000000',
   borderRadius: designPx(12),

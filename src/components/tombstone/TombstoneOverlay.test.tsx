@@ -47,6 +47,25 @@ describe('TombstoneOverlay rendering', () => {
     expect(screen.queryByText(/Curated by:/)).toBeNull();
   });
 
+  it('sizes type and the text-wrap cap by the viewport short edge (vmin)', () => {
+    // Guards the portrait-scaling contract: every responsive dimension on the
+    // plaque — including maxWidth, which was previously a viewport-width `50%`
+    // that wrapped portrait metadata at half the *short* axis — must come from
+    // `designPx` (vmin). See designPx.test.ts for the conversion itself.
+    render(
+      <TombstoneOverlay mode={TombstoneMode.On} itemKey="a" title="Arrels #1" />
+    );
+    const style = screen.getByTestId('tombstone-overlay').style;
+    expect(style.fontSize).toMatch(/vmin$/);
+    // 640 frame px: half the 1280 frame (landscape-identical to the old 50%)
+    // and the 720 short edge minus both 40px stand-offs.
+    expect(style.maxWidth).toBe('88.8889vmin');
+    // No dimension on the container may bind to the viewport's long side or
+    // to ancestor width: a stray vh/vw/% anywhere (offset, gap, padding,
+    // shadow, transform) reintroduces the portrait inflation bug.
+    expect(style.cssText).not.toMatch(/\d(vh|vw|%)/);
+  });
+
   it('renders nothing when mode is Off or the title is missing', () => {
     const { rerender } = render(
       <TombstoneOverlay
