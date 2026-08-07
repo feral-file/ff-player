@@ -24,8 +24,10 @@ export const TOMBSTONE_AUTO_DISMISS_SECONDS = 30;
 // The countdown track moves from the card's top edge (which read as a loading
 // bar) to a quiet hairline along the bottom edge.
 //
-// Frame px are converted to vh by `designPx` (see ./designPx) so the label
-// holds its designed proportion at any output resolution.
+// Frame px are converted to vmin by `designPx` (see ./designPx) so the label
+// holds its designed proportion at any output resolution and orientation —
+// vmin, not vh, because a rotated portrait wall reports a viewport whose
+// height is the artwork's long side.
 
 const containerStyle: CSSProperties = {
   position: 'absolute',
@@ -47,7 +49,14 @@ const containerStyle: CSSProperties = {
   lineHeight: 1.4,
   letterSpacing: '0.015em',
   color: '#1A1916',
-  maxWidth: '50%',
+  // Text-wrap cap: 640 frame px is half the 1280 frame (the old `50%` in
+  // landscape, so no visual change there) and exactly the 720 short edge
+  // minus the two 40px stand-offs. Sizing it by the short edge keeps the cap
+  // proportional to the type it wraps in portrait — a viewport-relative `50%`
+  // would bind to the shrunken width axis and wrap long metadata far earlier —
+  // and the stand-off identity means the plaque can never cross the far-side
+  // margin in either orientation.
+  maxWidth: designPx(640),
   pointerEvents: 'none',
   zIndex: 20,
   transition: 'opacity 400ms ease, transform 400ms ease',
