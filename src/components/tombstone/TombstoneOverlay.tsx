@@ -11,48 +11,63 @@ import { designPx } from './designPx';
  */
 export const TOMBSTONE_AUTO_DISMISS_SECONDS = 30;
 
-// Visual spec from Figma "FF1 Art Computer" frame 3811-14394 ("Tombstone
-// 1.0"): white label flush to the bottom-left corner, width hugging its
-// content, PP Mori 12px with 1.4 line-height, 10px padding and internal gap.
-// The timer bar is a 1px #E3E3E3 track across the label's top whose #A0A0A0
-// fill depletes over the auto-dismiss window — the visible countdown.
+// Visual language: a museum wall plaque rather than a UI card (supersedes the
+// flush-corner "Tombstone 1.0" spec from Figma frame 3811-14394, restyled per
+// design direction 2026-08: the label should read as a gallery object). Three
+// moves carry the effect:
+//   1. A 40px stand-off from the corner — wall labels are never flush to the
+//      frame; the surrounding "wall" is half the plaque feel.
+//   2. Warm paper white (#FAF8F4) with a soft two-layer drop shadow so the
+//      card separates from light artworks by depth, not by border.
+//   3. A wider type hierarchy: artist line, larger bold-italic title, and a
+//      letterspaced small-caps curator credit.
+// The countdown track moves from the card's top edge (which read as a loading
+// bar) to a quiet hairline along the bottom edge.
 //
 // Frame px are converted to vh by `designPx` (see ./designPx) so the label
 // holds its designed proportion at any output resolution.
 
 const containerStyle: CSSProperties = {
   position: 'absolute',
-  left: 0,
-  bottom: 0,
+  left: designPx(40),
+  bottom: designPx(40),
   display: 'flex',
   flexDirection: 'column',
-  gap: designPx(10),
-  padding: designPx(10),
-  backgroundColor: '#FFFFFF',
+  gap: designPx(14),
+  padding: `${designPx(20)} ${designPx(24)} ${designPx(22)}`,
+  backgroundColor: '#FAF8F4',
+  // Lift tuned on the wall 2026-08: opacity carries the float, blur stays
+  // tight so the dark halo does not bleed into the artwork as a vignette.
+  boxShadow: `0 ${designPx(12)} ${designPx(32)} rgba(0, 0, 0, 0.40), 0 ${designPx(3)} ${designPx(8)} rgba(0, 0, 0, 0.24)`,
   fontFamily: "'PP Mori', sans-serif",
-  // Deviation from the frame's 12px, flagged for B&F review: the frame was
-  // designed on a desktop canvas, and 12px-at-720 (18px on a 1080p wall)
-  // sits below TV-distance legibility floors. 16px-at-720 (24px @1080p)
-  // clears the floor while keeping the label quieter than a caption card.
+  // 16px-at-720 (24px @1080p) is the TV-distance legibility floor for the
+  // artist line; the title sits a step above it (see titleStyle).
   fontSize: designPx(16),
   fontWeight: 400,
   lineHeight: 1.4,
-  color: '#000000',
-  maxWidth: '60%',
+  letterSpacing: '0.015em',
+  color: '#1A1916',
+  maxWidth: '50%',
   pointerEvents: 'none',
   zIndex: 20,
-  transition: 'opacity 300ms ease',
+  transition: 'opacity 400ms ease, transform 400ms ease',
 };
 
+// The depleting track hugs the plaque's bottom edge — inside the card but
+// outside the text block — so the countdown reads as the label quietly
+// receding instead of a progress bar loading.
 const trackStyle: CSSProperties = {
-  width: '100%',
-  height: `max(1px, ${designPx(1)})`,
-  backgroundColor: '#E3E3E3',
+  position: 'absolute',
+  left: 0,
+  right: 0,
+  bottom: 0,
+  height: `max(1px, ${designPx(1.5)})`,
+  backgroundColor: '#EDEAE2',
 };
 
 const fillStyle: CSSProperties = {
   height: '100%',
-  backgroundColor: '#A0A0A0',
+  backgroundColor: '#C4BFB4',
 };
 
 // Bold italic title over a regular-weight artist line, matching how ff-app
@@ -66,10 +81,18 @@ const fillStyle: CSSProperties = {
 const titleStyle: CSSProperties = {
   fontWeight: 700,
   fontStyle: 'italic',
+  fontSize: designPx(20),
+  marginTop: designPx(4),
 };
 
+// Letterspaced small caps in a warm grey — the museum-credit register. The
+// source string keeps its original casing ("Curated by: X") so tests and
+// screen readers see prose; only the rendering is uppercased.
 const curatedStyle: CSSProperties = {
-  color: '#A0A0A0',
+  fontSize: designPx(14),
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase',
+  color: '#8A857C',
 };
 
 /**
@@ -171,18 +194,25 @@ export default function TombstoneOverlay({
     <div
       data-testid="tombstone-overlay"
       aria-hidden={!visible}
-      style={{ ...containerStyle, opacity: visible ? 1 : 0 }}>
-      {mode === TombstoneMode.Timed && visible && (
-        <TimerBar seconds={TOMBSTONE_AUTO_DISMISS_SECONDS} runKey={runKey} />
-      )}
-      {/* Timer bar, the artist+title info block, and the curated line are
-          separate flex children per the design frame — the container's
-          column gap is what produces the visible space above "Curated by". */}
+      style={{
+        ...containerStyle,
+        opacity: visible ? 1 : 0,
+        // The hidden state sits 8px low so appearing reads as a settle-up
+        // and dismissal as a sink — one directional gesture, not a blink.
+        transform: visible ? 'translateY(0)' : `translateY(${designPx(8)})`,
+      }}>
+      {/* The artist+title info block and the curated line are separate flex
+          children — the container's column gap is what produces the visible
+          space above "Curated by". The timer track is absolutely positioned
+          on the card's bottom edge, so its DOM position carries no layout. */}
       <div>
         {artistName && <div>{artistName}</div>}
         <div style={titleStyle}>{title}</div>
       </div>
       {curatorName && <div style={curatedStyle}>Curated by: {curatorName}</div>}
+      {mode === TombstoneMode.Timed && visible && (
+        <TimerBar seconds={TOMBSTONE_AUTO_DISMISS_SECONDS} runKey={runKey} />
+      )}
     </div>
   );
 }
