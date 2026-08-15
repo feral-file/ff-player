@@ -59,11 +59,24 @@ export interface DP1Item {
   display?: DP1DisplayPreference;
   repro?: DP1Repro;
   provenance?: DP1Provenance;
+  // A complete Ref Manifest carried inside the playlist instead of behind
+  // `ref` (playlists extension §3.6) — the same document, validated by the
+  // unmodified ref-manifest schema, and already covered by the playlist
+  // signature (there is no `refHash` counterpart because the bytes never
+  // leave the signed document).
+  //
+  // Outranked by a manifest actually fetched from `ref`, which §3.6 makes
+  // authoritative; this is the offline/degraded carriage. It is also the
+  // standardized replacement for `metadata` below, and unlike `ref` it
+  // needs no network round trip, so an item carrying only this resolves
+  // its label and display preferences synchronously.
+  inlineManifest?: RefManifest;
   // Tolerant read of inline label metadata mirroring the ref-manifest
   // metadata block (dp1 core/v1.1.0 ref-manifest.md §4). Not in playlist
   // core: playlist builders that host no ref manifest (today's ff-cli) can
   // carry artist/title data inline for the tombstone (feral-file#3452).
-  // A resolved ref manifest always outranks this.
+  // Predates `inlineManifest` and is outranked by it; kept for playlists
+  // already in the field. A resolved ref manifest outranks both.
   metadata?: RefManifestMetadata;
 }
 
@@ -193,8 +206,14 @@ export interface RefManifestMetadata {
 
 interface RefManifestThumbnail {
   uri: string;
-  w: number;
-  h: number;
+  // Optional since the core changelog of 2026-08-12 relaxed the
+  // ref-manifest schema's `required` from ["uri","w","h"] to ["uri"]:
+  // producers holding only a bare thumbnail URL omit the dimensions
+  // rather than guess one, so consumers must treat them as possibly
+  // absent. Nothing reads these today; typed correctly so the first
+  // reader is forced to handle the absent case.
+  w?: number;
+  h?: number;
   sha256: string;
 }
 

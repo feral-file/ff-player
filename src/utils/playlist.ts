@@ -97,6 +97,13 @@ export function mergeStillDescribesActiveSlot(params: {
  * anything earlier would either let a short baseline beat a longer owner
  * default or fire the override against unknown gates; the merge is bounded,
  * so the re-arm always follows.
+ *
+ * The gate is `item.ref` alone, deliberately: an `inlineManifest` is already
+ * in hand, so there is nothing pending to hold for and the merge resolves in
+ * the same tick. An item carrying BOTH still waits on the ref, because §3.6
+ * makes the fetched document authoritative and it can therefore reopen a veto
+ * the inline copy did not declare. So the "no waiting" benefit of an inline
+ * manifest is real only for items that carry no ref.
  */
 export function shouldHoldForPendingMerge(params: {
   item: DP1Item;
@@ -151,9 +158,19 @@ interface ResolveSlotDurationSecondsOptions {
  * Gate fields come from `mergedDisplay` — the same merged preference
  * rendering applies, including the async `item.ref` manifest layer — when the
  * caller has it. Before that merge lands, the synchronous subset of the
- * cascade (defaults.display → item.override.display → item.display) stands
- * in, and the caller re-arms the timer once the full merge resolves so a
- * manifest-only `userOverrides: false` or `loop: false` still wins.
+ * cascade (defaults.display → item.inlineManifest.controls.display →
+ * item.override.display → item.display) stands in, and the caller re-arms the
+ * timer once the full merge resolves so a manifest-only `userOverrides: false`
+ * or `loop: false` still wins.
+ *
+ * LOCKSTEP: that fallback is a second, hand-maintained copy of
+ * mergeItemDisplayPreference's layer order (minus the async ref layer, which
+ * by definition has not arrived yet). A layer added there must be added here.
+ * Today the only caller passes a non-null `deviceDefaultDurationSeconds`
+ * exclusively when `mergedDisplay` is set, so the fallback never actually
+ * runs — which is precisely why a drift here would go unnoticed until some
+ * later change relaxed that guard, and then an artist's veto carried in an
+ * inline manifest would be silently overridden by the device default.
  */
 export function resolveSlotDurationSeconds({
   item,
@@ -170,6 +187,7 @@ export function resolveSlotDurationSeconds({
   const display: DP1DisplayPreference = mergedDisplay ?? {
     ...defaultDP1DisplayPreference,
     ...(playlistDefaults?.display ?? {}),
+    ...(item.inlineManifest?.controls?.display ?? {}),
     ...(item.override?.display ?? {}),
     ...(item.display ?? {}),
   };

@@ -119,3 +119,102 @@ describe('useTombstoneInfo', () => {
     expect(result.current.artistName).toBeUndefined();
   });
 });
+
+/**
+ * A Ref Manifest can reach the item by two carriages. `inlineManifest`
+ * (playlists extension §3.6) is already in hand, so it labels the item with no
+ * effect and no fetch; a manifest fetched from `ref` is authoritative and
+ * replaces it when it lands.
+ */
+describe('useTombstoneInfo with an inline manifest', () => {
+  it('labels with no fetch, outranking the legacy inline metadata block', () => {
+    // The non-standard `metadata` block is present precisely to prove it
+    // loses — playlists carrying both must not regress to the older field.
+    const inlineItem = {
+      id: 'inline-manifest-1',
+      title: 'Playlist Title',
+      source: 'https://example.com/s',
+      license: 'open',
+      inlineManifest: {
+        refVersion: '1.1.0',
+        id: 'manifest-1',
+        created: '2026-01-01T00:00:00Z',
+        metadata: {
+          title: 'Sudfah #1 (2022)',
+          artists: [{ name: 'Melissa Wiederrecht', id: '' }],
+        },
+      },
+      metadata: {
+        title: 'Legacy Title',
+        artists: [{ name: 'Legacy Artist', id: '' }],
+      },
+    } as unknown as DP1Item;
+
+    const { result } = renderHook(() => useTombstoneInfo(inlineItem));
+    expect(result.current.title).toBe('Sudfah #1 (2022)');
+    expect(result.current.artistName).toBe('Melissa Wiederrecht');
+    expect(loadRefManifestLabelMock).not.toHaveBeenCalled();
+  });
+
+  it('is outranked by a manifest fetched from ref', async () => {
+    loadRefManifestLabelMock.mockResolvedValue({
+      artistNames: 'Ref Artist',
+      title: 'Ref Title',
+    });
+    const bothItem = {
+      id: 'both-1',
+      title: 'Playlist Title',
+      source: 'https://example.com/s',
+      ref: 'https://example.com/manifest.json',
+      license: 'open',
+      inlineManifest: {
+        refVersion: '1.1.0',
+        id: 'manifest-1',
+        created: '2026-01-01T00:00:00Z',
+        metadata: {
+          title: 'Inline Title',
+          artists: [{ name: 'Inline Artist', id: '' }],
+        },
+      },
+    } as unknown as DP1Item;
+
+    const { result } = renderHook(() => useTombstoneInfo(bothItem));
+    // Before the fetch resolves the inline copy already labels the item, so
+    // the tombstone is never blank waiting on the network...
+    expect(result.current.title).toBe('Inline Title');
+    expect(result.current.artistName).toBe('Inline Artist');
+    // ...and the authoritative document replaces it once it lands.
+    await waitFor(() => {
+      expect(result.current.title).toBe('Ref Title');
+    });
+    expect(result.current.artistName).toBe('Ref Artist');
+  });
+  it('does not mix the two carriages: a partial ref manifest wins whole', async () => {
+    // A fetched manifest with a title but no artists must not print its title
+    // above the inline manifest's artist line — the two lines describe one
+    // work, so the document wins outright rather than field by field.
+    loadRefManifestLabelMock.mockResolvedValue({ title: 'Ref Title Only' });
+    const bothItem = {
+      id: 'partial-ref-1',
+      title: 'Playlist Title',
+      source: 'https://example.com/s',
+      ref: 'https://example.com/manifest.json',
+      license: 'open',
+      inlineManifest: {
+        refVersion: '1.1.0',
+        id: 'manifest-1',
+        created: '2026-01-01T00:00:00Z',
+        metadata: {
+          title: 'Inline Title',
+          artists: [{ name: 'Inline Artist', id: '' }],
+        },
+      },
+    } as unknown as DP1Item;
+
+    const { result } = renderHook(() => useTombstoneInfo(bothItem));
+    await waitFor(() => {
+      expect(result.current.title).toBe('Ref Title Only');
+    });
+    expect(result.current.artistName).toBeUndefined();
+  });
+});
