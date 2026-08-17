@@ -179,32 +179,64 @@ export const defaultDP1DisplayPreference: DP1DisplayPreference = {
   userOverrides: true,
 };
 
-// ---- Manifest envelope which content from "ref" of DP1Item ----
+// ---- Manifest envelope: the content behind DP1Item.ref, or carried inline ----
+//
+// These interfaces are a hand-written transcription of the ref-manifest JSON
+// Schema (dp1 `core/v1.1.0/ref-manifest.json`). Nothing generates them and
+// nothing checks them against it, so the mapping is written out below; when
+// the spec moves, this table is what tells the next reader what to change.
+//
+//   Object              Schema `required`        Modelled here as
+//   ------------------  ----------------------   ------------------------------
+//   RefManifest         refVersion, id,          same four required, rest ?
+//                       created, locale
+//   metadata            (none)                   every field ?
+//   metadata.artists[]  (none)                   every field ?
+//   thumbnails.*        uri                      uri required, rest ?
+//   controls            (none)                   every field ?
+//
+// Optionality here is not a style choice, it decides which documents compile.
+// The interfaces used to require ~10 fields the schema lets a producer omit,
+// so a manifest that dp1-go's own ParseAndValidateRefManifest accepts — a
+// title, one artist with just a name, a thumbnail with just a uri — failed to
+// typecheck.
+//
+// That was inert for a long time because a manifest only ever arrived as
+// `axios.get<RefManifest>(...)`: an assertion over parsed JSON, which
+// TypeScript never verifies, so nothing had to satisfy the type. It stopped
+// being inert when DP1Item gained `inlineManifest` (playlists ext §3.6),
+// because a manifest became something you WRITE — in a fixture, a mock, a
+// playlist builder — and therefore something the compiler checks, against a
+// description that was wrong. An over-required type leaves the author two bad
+// options: invent values the spec says may be absent, or cast the check away
+// exactly where it is worth most.
+//
+// The test fixtures in useTombstoneInfo.test.tsx and
+// playlistDisplayPreference.test.ts deliberately build manifests with NO `as`
+// cast for that reason: they stop compiling if these types drift back to
+// over-required.
+//
+// Note the direction runs both ways. Being too LAX is the more dangerous
+// error now: an inline manifest that omits a schema-required field is a
+// document `feral-controld` will reject on the dynamicQuery acceptance path —
+// and dp1-go fails the whole batch rather than skipping the bad item, so one
+// under-specified manifest takes down a whole cast.
 export interface RefManifest {
   refVersion: string;
   id: string; // unique identifier (for caching)
   created: string;
-  locale?: string; // 'en' as default locale
+  // Required by the schema, despite reading like a nicety: a manifest with no
+  // locale is invalid, and an invalid inlineManifest fails its whole playlist
+  // (see the note above). Modelled required so a fixture cannot omit it.
+  locale: string; // 'en' as the conventional default
   metadata?: RefManifestMetadata;
   controls?: RefManifestControls;
   i18n?: Record<string, unknown>;
 }
 
-// Every field here is optional because the ref-manifest schema
-// (core/v1.1.0/ref-manifest.json) declares no `required` list on `metadata`,
-// none on an `artists` entry, and only `["uri"]` on a thumbnail. Requiring
-// them here would reject documents the spec accepts: a manifest carrying just
-// a title and an artist name is valid, and dp1-go's own
-// ParseAndValidateRefManifest accepts it.
-//
-// That divergence sat harmless while a manifest only ever arrived as
-// `axios.get<RefManifest>(...)` — an assertion over parsed JSON, which
-// TypeScript never checks. It stopped being harmless when DP1Item gained
-// `inlineManifest`, because a manifest can now be WRITTEN as a literal
-// (fixtures, mocks, playlist builders) and is therefore checked. An
-// over-required type leaves the author two bad options: invent values the
-// spec says may be absent, or cast the check away exactly where it is worth
-// most.
+// Schema `required`: none. A manifest may carry a metadata block with only
+// the one field its producer actually holds — see the mapping table on
+// RefManifest for why every field here is therefore optional.
 export interface RefManifestMetadata {
   title?: string;
   artists?: { name?: string; id?: string; url?: string }[];
