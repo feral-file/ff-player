@@ -5,6 +5,7 @@
  * though the new item's manifest is still pending.
  */
 import type { DP1Item } from '@/models/dp1.model';
+import { DP1License } from '@/models/dp1.model';
 import type { RefManifestLabel } from '@/utils/playlistDisplayPreference';
 import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -126,31 +127,44 @@ describe('useTombstoneInfo', () => {
  * effect and no fetch; a manifest fetched from `ref` is authoritative and
  * replaces it when it lands.
  */
+/**
+ * An item carrying a §3.6 inline manifest, plus the legacy non-standard
+ * `metadata` block it is meant to outrank.
+ *
+ * Built with NO `as` cast, unlike the ref fixtures above, and that is
+ * load-bearing rather than tidiness. The manifest is a realistic producer
+ * document — a title, one artist with only a name, a thumbnail with only a
+ * uri, and no creditLine/description/tags/safety — every one of which the
+ * ref-manifest schema allows to be absent. So it compiles only while
+ * RefManifest still agrees with that schema, which makes this fixture the
+ * standing guard against the type drifting back to over-required (verified:
+ * restoring `sha256` to required breaks exactly this literal).
+ */
+const inlineManifestItem: DP1Item = {
+  id: 'inline-manifest-1',
+  title: 'Playlist Title',
+  source: 'https://example.com/s',
+  license: DP1License.Open,
+  inlineManifest: {
+    refVersion: '1.1.0',
+    id: 'manifest-1',
+    created: '2026-01-01T00:00:00Z',
+    locale: 'en',
+    metadata: {
+      title: 'Sudfah #1 (2022)',
+      artists: [{ name: 'Melissa Wiederrecht' }],
+      thumbnails: { default: { uri: 'https://example.com/t.png' } },
+    },
+  },
+  metadata: {
+    title: 'Legacy Title',
+    artists: [{ name: 'Legacy Artist', id: '' }],
+  },
+};
+
 describe('useTombstoneInfo with an inline manifest', () => {
   it('labels with no fetch, outranking the legacy inline metadata block', () => {
-    // The non-standard `metadata` block is present precisely to prove it
-    // loses — playlists carrying both must not regress to the older field.
-    const inlineItem = {
-      id: 'inline-manifest-1',
-      title: 'Playlist Title',
-      source: 'https://example.com/s',
-      license: 'open',
-      inlineManifest: {
-        refVersion: '1.1.0',
-        id: 'manifest-1',
-        created: '2026-01-01T00:00:00Z',
-        metadata: {
-          title: 'Sudfah #1 (2022)',
-          artists: [{ name: 'Melissa Wiederrecht', id: '' }],
-        },
-      },
-      metadata: {
-        title: 'Legacy Title',
-        artists: [{ name: 'Legacy Artist', id: '' }],
-      },
-    } as unknown as DP1Item;
-
-    const { result } = renderHook(() => useTombstoneInfo(inlineItem));
+    const { result } = renderHook(() => useTombstoneInfo(inlineManifestItem));
     expect(result.current.title).toBe('Sudfah #1 (2022)');
     expect(result.current.artistName).toBe('Melissa Wiederrecht');
     expect(loadRefManifestLabelMock).not.toHaveBeenCalled();

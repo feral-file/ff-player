@@ -190,38 +190,57 @@ export interface RefManifest {
   i18n?: Record<string, unknown>;
 }
 
+// Every field here is optional because the ref-manifest schema
+// (core/v1.1.0/ref-manifest.json) declares no `required` list on `metadata`,
+// none on an `artists` entry, and only `["uri"]` on a thumbnail. Requiring
+// them here would reject documents the spec accepts: a manifest carrying just
+// a title and an artist name is valid, and dp1-go's own
+// ParseAndValidateRefManifest accepts it.
+//
+// That divergence sat harmless while a manifest only ever arrived as
+// `axios.get<RefManifest>(...)` — an assertion over parsed JSON, which
+// TypeScript never checks. It stopped being harmless when DP1Item gained
+// `inlineManifest`, because a manifest can now be WRITTEN as a literal
+// (fixtures, mocks, playlist builders) and is therefore checked. An
+// over-required type leaves the author two bad options: invent values the
+// spec says may be absent, or cast the check away exactly where it is worth
+// most.
 export interface RefManifestMetadata {
-  title: string;
-  artists: { name: string; id: string; url?: string }[];
-  creditLine: string;
-  description: string;
-  tags: string[];
-  thumbnails: {
-    small: RefManifestThumbnail;
-    large: RefManifestThumbnail;
-    xlarge: RefManifestThumbnail;
-    default: RefManifestThumbnail;
-  };
+  title?: string;
+  artists?: { name?: string; id?: string; url?: string }[];
+  creditLine?: string;
+  description?: string;
+  tags?: string[];
+  // Partial because the schema names no required size key either: a producer
+  // may ship only `default`, or only `small`.
+  thumbnails?: Partial<
+    Record<'small' | 'large' | 'xlarge' | 'default', RefManifestThumbnail>
+  >;
 }
 
 interface RefManifestThumbnail {
+  // The one field the schema actually requires.
   uri: string;
-  // Optional since the core changelog of 2026-08-12 relaxed the
-  // ref-manifest schema's `required` from ["uri","w","h"] to ["uri"]:
-  // producers holding only a bare thumbnail URL omit the dimensions
-  // rather than guess one, so consumers must treat them as possibly
-  // absent. Nothing reads these today; typed correctly so the first
-  // reader is forced to handle the absent case.
+  // `required` was relaxed from ["uri","w","h"] to ["uri"] in the core
+  // changelog of 2026-08-12: producers holding only a bare thumbnail URL omit
+  // the dimensions rather than guess them. sha256 was never required.
+  //
+  // Nothing reads any of this today. Typed honestly anyway, so the first
+  // reader is forced to handle the absent case instead of inheriting a
+  // guarantee that does not exist.
   w?: number;
   h?: number;
-  sha256: string;
+  sha256?: string;
 }
 
+// Optional for the same reason as RefManifestMetadata: the schema declares no
+// `required` on `controls`. A manifest that only pins display preferences and
+// says nothing about safety limits is valid, and is the common shape.
 export interface RefManifestControls {
-  display: DP1DisplayPreference;
-  safety: {
-    orientation: DisplayOrientation[]; // ['landscape', 'portrait', 'any']
-    maxCpuPct: number;
-    maxMemMB: number;
+  display?: DP1DisplayPreference;
+  safety?: {
+    orientation?: DisplayOrientation[]; // ['landscape', 'portrait', 'any']
+    maxCpuPct?: number;
+    maxMemMB?: number;
   };
 }

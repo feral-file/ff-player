@@ -9,7 +9,7 @@ import type {
   DP1DisplayPreference,
   DP1Item,
 } from '@/models/dp1.model';
-import { Scaling } from '@/models/dp1.model';
+import { DP1License, Scaling } from '@/models/dp1.model';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clearRefManifestDisplayCache,
@@ -38,7 +38,16 @@ function refItem(refHash?: string): DP1Item {
   } as DP1Item;
 }
 
-/** An item carrying a complete Ref Manifest inline (§3.6), no ref. */
+/**
+ * An item carrying a complete Ref Manifest inline (§3.6), no ref.
+ *
+ * Deliberately built with NO `as` cast, unlike refItem above: the manifest
+ * here is the minimum the ref-manifest schema accepts (only refVersion/id/
+ * created/locale are required of it), so this fixture stops compiling the
+ * moment RefManifest starts demanding a field the spec allows to be absent.
+ * That is the standing guard against the over-required types this suite
+ * previously had to cast its way past.
+ */
 function inlineManifestItem(
   display: DP1DisplayPreference,
   ref?: string
@@ -46,7 +55,7 @@ function inlineManifestItem(
   return {
     id: 'a',
     source: 'https://example.com/a.html',
-    license: {},
+    license: DP1License.Open,
     ref,
     inlineManifest: {
       refVersion: '1.1.0',
@@ -55,7 +64,7 @@ function inlineManifestItem(
       locale: 'en',
       controls: { display },
     },
-  } as DP1Item;
+  };
 }
 
 describe('inlineManifest display layer (§3.6)', () => {
