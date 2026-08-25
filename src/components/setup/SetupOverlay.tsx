@@ -85,21 +85,19 @@ function softApQrValue(ssid: string, password: string | undefined): string {
  * doesn't auto-open the sheet.
  */
 /*
- * Three elements only: a heading that is also the instruction, the QR, and
- * two compact fallback lines. The SSID/password ride the fallback sentence
- * rather than labeled Network:/Password: lines — the QR already encodes
- * both, and the manual path only matters to whoever can't (or won't) scan.
- * Deliberately no "phone": the portal is plain HTTP on the hotspot, so a
- * laptop joining the network and browsing to ff1.config works identically.
- * Only the claim step (the app) actually requires a phone, and only that
- * panel says so.
+ * Scanning a WIFI: code proposes the hotspot; it does not guarantee that the
+ * phone joins it. Some phones require a second Join/Connect tap, while others
+ * open Wi-Fi settings and leave the setup SSID unselected. Name that handoff
+ * explicitly so scanning never reads as the completed action. The manual
+ * path still works from a laptop because it is phrased in terms of Wi-Fi
+ * settings, not a camera-only action.
  */
 function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   const ssid = display.ssid ?? '';
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Scan to set up your Art Computer</p>
+        <p className={styles.title}>Connect your phone to begin setup</p>
         <div className={styles.qrFrame}>
           <QRCodeSVG
             value={softApQrValue(ssid, display.password)}
@@ -108,14 +106,18 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
           />
         </div>
         <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          Or join <strong>{ssid}</strong>
+          After scanning, tap Join or Connect on your phone.
+        </p>
+        <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
+          If no prompt appears, open Wi-Fi settings and tap the setup network{' '}
+          <strong>{ssid}</strong>
           {display.password ? (
             <>
               {' '}
               (password <strong>{display.password}</strong>)
             </>
-          ) : null}{' '}
-          in your Wi-Fi settings.
+          ) : null}
+          .
         </p>
         <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
           If the setup page doesn&apos;t open, go to{' '}

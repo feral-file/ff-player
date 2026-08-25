@@ -26,9 +26,7 @@ function qrValue(container: HTMLElement): string | null {
 }
 
 describe('SetupOverlay known states (connectivity)', () => {
-  afterEach(() => {
-    cleanup();
-  });
+  afterEach(cleanup);
 
   it('renders nothing before any setupDisplay event has fired', () => {
     const { container } = render(<SetupOverlay />);
@@ -44,13 +42,16 @@ describe('SetupOverlay known states (connectivity)', () => {
       password: 'correct-horse',
     });
 
-    expect(await screen.findByText('Scan to set up your Art Computer')).toBeTruthy();
+    expect(await screen.findByText('Connect your phone to begin setup')).toBeTruthy();
+    expect(
+      screen.getByText('After scanning, tap Join or Connect on your phone.')
+    ).toBeTruthy();
     expect(
       screen.getByText(
         (_, el) =>
           el?.tagName === 'P' &&
           el.textContent ===
-            'Or join FF1-Setup-ABCD (password correct-horse) in your Wi-Fi settings.'
+            'If no prompt appears, open Wi-Fi settings and tap the setup network FF1-Setup-ABCD (password correct-horse).'
       )
     ).toBeTruthy();
     // Exactly ONE code (the network join). The portal is reached via the
@@ -68,7 +69,7 @@ describe('SetupOverlay known states (connectivity)', () => {
       password: 'correct-horse',
     });
 
-    await screen.findByText('Scan to set up your Art Computer');
+    await screen.findByText('Connect your phone to begin setup');
     // The address must match the DNS/NAT captive design (ff1.config →
     // 192.0.2.1) — a change here has to move in lockstep with captive.conf
     // in the ffos image.
@@ -87,7 +88,8 @@ describe('SetupOverlay known states (connectivity)', () => {
       await screen.findByText(
         (_, el) =>
           el?.tagName === 'P' &&
-          el.textContent === 'Or join FF1-Setup-ABCD in your Wi-Fi settings.'
+          el.textContent ===
+            'If no prompt appears, open Wi-Fi settings and tap the setup network FF1-Setup-ABCD.'
       )
     ).toBeTruthy();
     expect(screen.queryByText(/\(password/)).toBeNull();
@@ -155,7 +157,7 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       password: 'correct-horse',
     });
 
-    await screen.findByText('Scan to set up your Art Computer');
+    await screen.findByText('Connect your phone to begin setup');
     expect(qrValue(container)).toBe('WIFI:T:WPA;S:FF1-Setup-ABCD;P:correct-horse;;');
   });
 
@@ -167,7 +169,7 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       ssid: 'FF1-Setup-ABCD',
     });
 
-    await screen.findByText('Scan to set up your Art Computer');
+    await screen.findByText('Connect your phone to begin setup');
     expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
   });
 
@@ -180,7 +182,7 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       password: '',
     });
 
-    await screen.findByText('Scan to set up your Art Computer');
+    await screen.findByText('Connect your phone to begin setup');
     expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
   });
 
@@ -193,7 +195,7 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       password: 'pa,ss"w\\ord;1',
     });
 
-    await screen.findByText('Scan to set up your Art Computer');
+    await screen.findByText('Connect your phone to begin setup');
     expect(qrValue(container)).toBe(
       'WIFI:T:WPA;S:FF1\\;Setup\\:ABCD;P:pa\\,ss\\"w\\\\ord\\;1;;'
     );
