@@ -44,14 +44,14 @@ describe('SetupOverlay known states (connectivity)', () => {
     });
 
     expect(
-      await screen.findByText('Scan this QR code, then tap Join or Connect')
+      await screen.findByText('Scan this QR code to begin setup')
     ).toBeTruthy();
     expect(
       screen.getByText(
         (_, el) =>
           el?.tagName === 'P' &&
           el.textContent ===
-            'No response? Wi-Fi Settings → FF1-Setup-ABCD · Password correct-horse · Stay connected. No setup page? Mobile data/VPN off → http://10.42.0.1'
+            'Nothing opened? Wi-Fi Settings → FF1-Setup-ABCD Password correct-horse · Keep connected · Still stuck? http://10.42.0.1'
       )
     ).toBeTruthy();
     expect(screen.getByText('http://10.42.0.1')).toBeTruthy();
@@ -74,7 +74,7 @@ describe('SetupOverlay known states (connectivity)', () => {
         (_, el) =>
           el?.tagName === 'P' &&
           el.textContent ===
-            'No response? Wi-Fi Settings → FF1-Setup-ABCD · Stay connected.'
+            'Nothing opened? Wi-Fi Settings → FF1-Setup-ABCD Keep connected'
       )
     ).toBeTruthy();
     expect(screen.queryByText(/Password/)).toBeNull();
@@ -148,7 +148,7 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       password: 'correct-horse',
     });
 
-    await screen.findByText('Scan this QR code, then tap Join or Connect');
+    await screen.findByText('Scan this QR code to begin setup');
     expect(qrValue(container)).toBe('WIFI:T:WPA;S:FF1-Setup-ABCD;P:correct-horse;;');
   });
 
@@ -160,7 +160,7 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       ssid: 'FF1-Setup-ABCD',
     });
 
-    await screen.findByText('Scan this QR code, then tap Join or Connect');
+    await screen.findByText('Scan this QR code to begin setup');
     expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
   });
 
@@ -173,7 +173,7 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       password: '',
     });
 
-    await screen.findByText('Scan this QR code, then tap Join or Connect');
+    await screen.findByText('Scan this QR code to begin setup');
     expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
   });
 
@@ -186,7 +186,7 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       password: 'pa,ss"w\\ord;1',
     });
 
-    await screen.findByText('Scan this QR code, then tap Join or Connect');
+    await screen.findByText('Scan this QR code to begin setup');
     expect(qrValue(container)).toBe(
       'WIFI:T:WPA;S:FF1\\;Setup\\:ABCD;P:pa\\,ss\\"w\\\\ord\\;1;;'
     );

@@ -70,12 +70,11 @@ function softApQrValue(ssid: string, password: string | undefined): string {
  * manual-address instruction rather than presenting an unreliable DNS name.
  */
 /*
- * Scanning a WIFI: code proposes the hotspot; it does not guarantee that the
- * phone joins it. Some phones require a second Join/Connect tap, while others
- * open Wi-Fi settings and leave the setup SSID unselected. Name that handoff
- * explicitly so scanning never reads as the completed action. The manual
- * path still works from a laptop because it is phrased in terms of Wi-Fi
- * settings, not a camera-only action.
+ * Scanning a WIFI: code proposes the hotspot; the phone owns every prompt
+ * after that. Those labels vary (Join, Connect, Sign in, or no prompt), so the
+ * display names the goal instead of an OS-specific button. The manual path
+ * still works from a laptop because it is phrased in terms of Wi-Fi settings,
+ * not a camera-only action.
  */
 function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   const ssid = display.ssid ?? '';
@@ -83,9 +82,7 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>
-          Scan this QR code, then tap Join or Connect
-        </p>
+        <p className={styles.title}>Scan this QR code to begin setup</p>
         <div className={styles.qrFrame}>
           <QRCodeSVG
             value={softApQrValue(ssid, display.password)}
@@ -94,18 +91,17 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
           />
         </div>
         <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          No response? Wi-Fi Settings → <strong>{ssid}</strong>
+          Nothing opened? Wi-Fi Settings → <strong>{ssid}</strong>
+          <br />{' '}
           {display.password ? (
             <>
-              {' '}· Password <strong>{display.password}</strong>
+              Password <strong>{display.password}</strong> ·{' '}
             </>
           ) : null}
-          {' '}· Stay connected.
+          Keep connected
           {portalUrl ? (
             <>
-              <br />{' '}
-              No setup page? Mobile data/VPN off →{' '}
-              <strong>{portalUrl}</strong>
+              {' '}· Still stuck? <strong>{portalUrl}</strong>
             </>
           ) : null}
         </p>
