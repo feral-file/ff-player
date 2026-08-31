@@ -174,6 +174,7 @@ describe('CDPRequestHandler setup display command (accepted requests)', () => {
       state: SetupDisplayState.SoftApQr,
       ssid: 'FF1-Setup-ABCD',
       password: 'correct-horse',
+      portal_url: 'http://10.42.0.1',
     });
 
     expect(JSON.parse(response)).toEqual({ message: { ok: true } });
@@ -185,6 +186,7 @@ describe('CDPRequestHandler setup display command (accepted requests)', () => {
       state: SetupDisplayState.SoftApQr,
       ssid: 'FF1-Setup-ABCD',
       password: 'correct-horse',
+      portal_url: 'http://10.42.0.1',
     });
 
     window.removeEventListener(CustomEventName.SetupDisplay, listener);
@@ -281,6 +283,14 @@ describe('CDPRequestHandler setup display command (rejected requests)', () => {
       state: SetupDisplayState.SoftApQr,
       ssid: 'FF1-Setup-ABCD',
       password: 12345,
+    });
+  });
+
+  it('rejects softap_qr requests with a non-string portal_url', () => {
+    expectInvalidSetupDisplayRequest({
+      state: SetupDisplayState.SoftApQr,
+      ssid: 'FF1-Setup-ABCD',
+      portal_url: 1042001,
     });
   });
 

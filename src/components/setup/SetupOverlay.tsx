@@ -17,19 +17,6 @@ const hiddenDisplay: SetupDisplayDetail = { state: SetupDisplayState.Hidden };
 const qrSize = 320;
 
 /**
- * Canonical human-facing address of the provisioning portal. The hotspot's
- * dnsmasq answers EVERY DNS name (catch-all plus an explicit ff1.config
- * entry) with 192.0.2.1 — a public-looking TEST-NET address, because Samsung
- * One UI refuses captive-portal detection when probe hostnames resolve to
- * private IPs — and an nftables rule redirects 192.0.2.1:80 back to the
- * portal, so ff1.config is reachable only while the phone is on the setup
- * hotspot. Must stay in sync with `captive.conf` / `nftables.conf` in the
- * `ffos` repo and the captive-detection section of `ffos-user`
- * docs/api-design.md.
- */
-const portalUrl = 'http://ff1.config';
-
-/**
  * controld's `reason` prose, or `undefined` when there is nothing worth
  * rendering. The CDP validator only checks that `reason` is a string, so an
  * empty or whitespace-only value is a valid command and reaches these panels
@@ -73,16 +60,14 @@ function softApQrValue(ssid: string, password: string | undefined): string {
 }
 
 /**
- * One join QR plus a spelled-out portal address, not a second "open the
+ * One join QR plus a direct on-link portal address, not a second "open the
  * portal" QR: the auto-opening captive sheet cannot be relied on across
- * phones (iOS joins scanned `WIFI:` codes from the Camera without ever
- * raising the captive-portal sheet, and some Android builds surface the
- * "sign in" notification silently or not at all), but a second code proved
- * confusing — phones can't scan it while the sheet is up, and two codes read
- * as two competing entry points. The deterministic fallback is therefore the
- * typed address: `portalUrl` resolves on the hotspot via the image's
- * catch-all DNS, so telling the user to type it covers every phone that
- * doesn't auto-open the sheet.
+ * phones, but a second code reads as a competing entry point. controld gets
+ * the address NetworkManager actually assigned to the active hotspot and
+ * sends it as portal_url. Once the user accepts the no-internet setup Wi-Fi,
+ * a literal on-link IP bypasses Private DNS and cellular DNS entirely.
+ * Older controllers omit the optional field, and this player then omits the
+ * manual-address instruction rather than presenting an unreliable DNS name.
  */
 /*
  * Scanning a WIFI: code proposes the hotspot; it does not guarantee that the
@@ -94,10 +79,11 @@ function softApQrValue(ssid: string, password: string | undefined): string {
  */
 function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   const ssid = display.ssid ?? '';
+  const portalUrl = display.portal_url?.trim();
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Connect your phone to begin setup</p>
+        <p className={styles.title}>Scan this QR code with your phone</p>
         <div className={styles.qrFrame}>
           <QRCodeSVG
             value={softApQrValue(ssid, display.password)}
@@ -106,23 +92,25 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
           />
         </div>
         <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          After scanning, tap Join or Connect on your phone.
+          Then tap Join or Connect. If your phone says there is no internet,
+          choose to stay connected.
         </p>
         <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          If no prompt appears, open Wi-Fi settings and tap the setup network{' '}
-          <strong>{ssid}</strong>
+          No prompt? Open Wi-Fi settings and tap <strong>{ssid}</strong>.
           {display.password ? (
             <>
-              {' '}
-              (password <strong>{display.password}</strong>)
+              {' '}If asked there, use password{' '}
+              <strong>{display.password}</strong>.
             </>
           ) : null}
-          .
         </p>
-        <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          If the setup page doesn&apos;t open, go to{' '}
-          <strong>{portalUrl}</strong>.
-        </p>
+        {portalUrl ? (
+          <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
+            No setup page? Temporarily turn off mobile data and any VPN. Stay on{' '}
+            <strong>{ssid}</strong> and open{' '}
+            <strong>{portalUrl}</strong>.
+          </p>
+        ) : null}
       </div>
     </section>
   );

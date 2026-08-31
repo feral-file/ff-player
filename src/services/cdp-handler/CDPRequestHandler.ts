@@ -319,6 +319,12 @@ function isSetupDisplayDetail(request: unknown): request is SetupDisplayDetail {
       if (detail.password !== undefined && typeof detail.password !== 'string') {
         return false;
       }
+      if (
+        detail.portal_url !== undefined &&
+        typeof detail.portal_url !== 'string'
+      ) {
+        return false;
+      }
       break;
     }
 

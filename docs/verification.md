@@ -70,7 +70,7 @@ procedure, runnable entirely in a browser:
 
    ```js
    setup('scanning');
-   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623'});
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1'});
    setup('softap_qr', {ssid:'FF1-DEMO4242'});               // open network
    setup('joining');
    setup('join_failed', {reason:'Wrong Wi-Fi password. Please check it and try again.'});
@@ -105,11 +105,12 @@ procedure, runnable entirely in a browser:
      rendering.
    - **2160x3840** — portrait. Sizes key off the short edge; nothing may
      track viewport height.
-5. Look specifically at `<strong>` runs (the ff1.config address, the frame
+5. Look specifically at `<strong>` runs (the direct portal address, the frame
    name): they must render the real PPMori-Bold face, not a synthesized
    smear — compare stroke weight against the pairing-code digits.
-6. On `softap_qr`, confirm the post-scan Join/Connect instruction and the
-   manual setup-network fallback both remain legible without crowding the QR.
+6. On `softap_qr`, confirm the QR-first Join/Connect instruction, no-internet
+   warning, manual setup-network path, and mobile-data/VPN direct-IP fallback
+   all remain legible without crowding the QR.
 
 Report the pass (viewports checked, anything off) in the PR body; review
 agents treat its absence as a missing-verification finding.

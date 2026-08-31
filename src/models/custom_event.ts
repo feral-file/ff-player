@@ -135,6 +135,9 @@ export interface SetupDisplayDetail {
   state: string;
   ssid?: string;
   password?: string;
+  // softap_qr only: direct HTTP address on the active setup hotspot's own
+  // subnet. Optional for compatibility with older controllers.
+  portal_url?: string;
   reason?: string;
   progress?: number;
   url?: string;
