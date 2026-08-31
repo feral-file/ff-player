@@ -110,7 +110,8 @@ procedure, runnable entirely in a browser:
    smear — compare stroke weight against the pairing-code digits.
 6. On `softap_qr`, confirm the platform-neutral heading carries the complete
    happy path and the single recovery block keeps Wi-Fi Settings, password,
-   keep-connected, and direct-IP cues legible without crowding the QR.
+   keep-connected, mobile-data/VPN, and direct-IP cues legible without
+   crowding the QR.
 
 Report the pass (viewports checked, anything off) in the PR body; review
 agents treat its absence as a missing-verification finding.

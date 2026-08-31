@@ -70,11 +70,11 @@ function softApQrValue(ssid: string, password: string | undefined): string {
  * manual-address instruction rather than presenting an unreliable DNS name.
  */
 /*
- * Scanning a WIFI: code proposes the hotspot; the phone owns every prompt
- * after that. Those labels vary (Join, Connect, Sign in, or no prompt), so the
- * display names the goal instead of an OS-specific button. The manual path
- * still works from a laptop because it is phrased in terms of Wi-Fi settings,
- * not a camera-only action.
+ * Scanning a WIFI: code only proposes the hotspot; the phone owns the prompt
+ * that accepts it. Those labels vary (Join, Connect, Sign in, or no prompt),
+ * so the display names the required follow-up instead of an OS-specific
+ * button. The manual path still works from a laptop because it is phrased in
+ * terms of Wi-Fi settings, not a camera-only action.
  */
 function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   const ssid = display.ssid ?? '';
@@ -82,7 +82,9 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Scan this QR code to begin setup</p>
+        <p className={styles.title}>
+          Scan the QR code, then follow your phone&apos;s prompt to connect
+        </p>
         <div className={styles.qrFrame}>
           <QRCodeSVG
             value={softApQrValue(ssid, display.password)}
@@ -101,7 +103,8 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
           Keep connected
           {portalUrl ? (
             <>
-              {' '}· Still stuck? <strong>{portalUrl}</strong>
+              <br /> Still stuck? Mobile data/VPN off →{' '}
+              <strong>{portalUrl}</strong>
             </>
           ) : null}
         </p>

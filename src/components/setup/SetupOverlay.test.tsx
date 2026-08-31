@@ -44,16 +44,19 @@ describe('SetupOverlay known states (connectivity)', () => {
     });
 
     expect(
-      await screen.findByText('Scan this QR code to begin setup')
+      await screen.findByText(
+        "Scan the QR code, then follow your phone's prompt to connect"
+      )
     ).toBeTruthy();
     expect(
       screen.getByText(
         (_, el) =>
           el?.tagName === 'P' &&
           el.textContent ===
-            'Nothing opened? Wi-Fi Settings → FF1-Setup-ABCD Password correct-horse · Keep connected · Still stuck? http://10.42.0.1'
+            'Nothing opened? Wi-Fi Settings → FF1-Setup-ABCD Password correct-horse · Keep connected Still stuck? Mobile data/VPN off → http://10.42.0.1'
       )
     ).toBeTruthy();
+    expect(screen.getByText(/Mobile data\/VPN off/)).toBeTruthy();
     expect(screen.getByText('http://10.42.0.1')).toBeTruthy();
     // Exactly ONE code (the network join). The portal is reached via the
     // auto-opening captive sheet or by typing the direct address — a
@@ -79,6 +82,7 @@ describe('SetupOverlay known states (connectivity)', () => {
     ).toBeTruthy();
     expect(screen.queryByText(/Password/)).toBeNull();
     expect(screen.queryByText(/Setup page/)).toBeNull();
+    expect(screen.queryByText(/Mobile data\/VPN off/)).toBeNull();
     expect(screen.queryByText(/ff1\.config/)).toBeNull();
   });
 });
@@ -148,7 +152,9 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       password: 'correct-horse',
     });
 
-    await screen.findByText('Scan this QR code to begin setup');
+    await screen.findByText(
+      "Scan the QR code, then follow your phone's prompt to connect"
+    );
     expect(qrValue(container)).toBe('WIFI:T:WPA;S:FF1-Setup-ABCD;P:correct-horse;;');
   });
 
@@ -160,7 +166,9 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       ssid: 'FF1-Setup-ABCD',
     });
 
-    await screen.findByText('Scan this QR code to begin setup');
+    await screen.findByText(
+      "Scan the QR code, then follow your phone's prompt to connect"
+    );
     expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
   });
 
@@ -173,7 +181,9 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       password: '',
     });
 
-    await screen.findByText('Scan this QR code to begin setup');
+    await screen.findByText(
+      "Scan the QR code, then follow your phone's prompt to connect"
+    );
     expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
   });
 
@@ -186,7 +196,9 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
       password: 'pa,ss"w\\ord;1',
     });
 
-    await screen.findByText('Scan this QR code to begin setup');
+    await screen.findByText(
+      "Scan the QR code, then follow your phone's prompt to connect"
+    );
     expect(qrValue(container)).toBe(
       'WIFI:T:WPA;S:FF1\\;Setup\\:ABCD;P:pa\\,ss\\"w\\\\ord\\;1;;'
     );
