@@ -17,19 +17,6 @@ const hiddenDisplay: SetupDisplayDetail = { state: SetupDisplayState.Hidden };
 const qrSize = 320;
 
 /**
- * Canonical human-facing address of the provisioning portal. The hotspot's
- * dnsmasq answers EVERY DNS name (catch-all plus an explicit ff1.config
- * entry) with 192.0.2.1 — a public-looking TEST-NET address, because Samsung
- * One UI refuses captive-portal detection when probe hostnames resolve to
- * private IPs — and an nftables rule redirects 192.0.2.1:80 back to the
- * portal, so ff1.config is reachable only while the phone is on the setup
- * hotspot. Must stay in sync with `captive.conf` / `nftables.conf` in the
- * `ffos` repo and the captive-detection section of `ffos-user`
- * docs/api-design.md.
- */
-const portalUrl = 'http://ff1.config';
-
-/**
  * controld's `reason` prose, or `undefined` when there is nothing worth
  * rendering. The CDP validator only checks that `reason` is a string, so an
  * empty or whitespace-only value is a valid command and reaches these panels
@@ -73,33 +60,31 @@ function softApQrValue(ssid: string, password: string | undefined): string {
 }
 
 /**
- * One join QR plus a spelled-out portal address, not a second "open the
+ * One join QR plus a direct on-link portal address, not a second "open the
  * portal" QR: the auto-opening captive sheet cannot be relied on across
- * phones (iOS joins scanned `WIFI:` codes from the Camera without ever
- * raising the captive-portal sheet, and some Android builds surface the
- * "sign in" notification silently or not at all), but a second code proved
- * confusing — phones can't scan it while the sheet is up, and two codes read
- * as two competing entry points. The deterministic fallback is therefore the
- * typed address: `portalUrl` resolves on the hotspot via the image's
- * catch-all DNS, so telling the user to type it covers every phone that
- * doesn't auto-open the sheet.
+ * phones, but a second code reads as a competing entry point. controld gets
+ * the address NetworkManager actually assigned to the active hotspot and
+ * sends it as portal_url. Once the user accepts the no-internet setup Wi-Fi,
+ * a literal on-link IP bypasses Private DNS and cellular DNS entirely.
+ * Older controllers omit the optional field, and this player then omits the
+ * manual-address instruction rather than presenting an unreliable DNS name.
  */
 /*
- * Three elements only: a heading that is also the instruction, the QR, and
- * two compact fallback lines. The SSID/password ride the fallback sentence
- * rather than labeled Network:/Password: lines — the QR already encodes
- * both, and the manual path only matters to whoever can't (or won't) scan.
- * Deliberately no "phone": the portal is plain HTTP on the hotspot, so a
- * laptop joining the network and browsing to ff1.config works identically.
- * Only the claim step (the app) actually requires a phone, and only that
- * panel says so.
+ * Scanning a WIFI: code only proposes the hotspot; the phone owns the prompt
+ * that accepts it. Those labels vary (Join, Connect, Sign in, or no prompt),
+ * so the display names the required follow-up instead of an OS-specific
+ * button. The manual path still works from a laptop because it is phrased in
+ * terms of Wi-Fi settings, not a camera-only action.
  */
 function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   const ssid = display.ssid ?? '';
+  const portalUrl = display.portal_url?.trim();
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Scan to set up your Art Computer</p>
+        <p className={styles.title}>
+          Scan the QR code, then follow your phone&apos;s prompt to connect
+        </p>
         <div className={styles.qrFrame}>
           <QRCodeSVG
             value={softApQrValue(ssid, display.password)}
@@ -108,18 +93,20 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
           />
         </div>
         <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          Or join <strong>{ssid}</strong>
+          Nothing opened? Wi-Fi Settings → <strong>{ssid}</strong>
+          <br />{' '}
           {display.password ? (
             <>
-              {' '}
-              (password <strong>{display.password}</strong>)
+              Password <strong>{display.password}</strong> ·{' '}
             </>
-          ) : null}{' '}
-          in your Wi-Fi settings.
-        </p>
-        <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          If the setup page doesn&apos;t open, go to{' '}
-          <strong>{portalUrl}</strong>.
+          ) : null}
+          Keep connected
+          {portalUrl ? (
+            <>
+              <br /> Still stuck? Mobile data/VPN off →{' '}
+              <strong>{portalUrl}</strong>
+            </>
+          ) : null}
         </p>
       </div>
     </section>

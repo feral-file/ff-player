@@ -23,4 +23,9 @@ describe('ffos-player-contract.json setupDisplay manifest', () => {
     expect(fields.connecting.optional).toContain('reason');
     expect(fields.setup_error.optional).toContain('reason');
   });
+
+  it('declares the direct portal fallback carried by softap_qr', () => {
+    const fields = contract.contracts.setupDisplay.stateFields;
+    expect(fields.softap_qr.optional).toContain('portal_url');
+  });
 });

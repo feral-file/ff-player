@@ -77,7 +77,7 @@
   letter-spacing: 0;
 }
 
-// The softap_qr panel's two fallback lines (manual join, typed ff1.config)
+// The softap_qr panel's compact action/fallback lines
 // step down from the shared .subtitle scale so the QR stays the subject.
 // This override shares specificity with .subtitle and MUST stay below it in
 // this file — source order is what makes it win.
