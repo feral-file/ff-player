@@ -83,7 +83,9 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Scan this QR code with your phone</p>
+        <p className={styles.title}>
+          Scan this QR code, then tap Join or Connect
+        </p>
         <div className={styles.qrFrame}>
           <QRCodeSVG
             value={softApQrValue(ssid, display.password)}
@@ -92,25 +94,21 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
           />
         </div>
         <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          Then tap Join or Connect. If your phone says there is no internet,
-          choose to stay connected.
-        </p>
-        <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          No prompt? Open Wi-Fi settings and tap <strong>{ssid}</strong>.
+          No response? Wi-Fi Settings → <strong>{ssid}</strong>
           {display.password ? (
             <>
-              {' '}If asked there, use password{' '}
-              <strong>{display.password}</strong>.
+              {' '}· Password <strong>{display.password}</strong>
+            </>
+          ) : null}
+          {' '}· Stay connected.
+          {portalUrl ? (
+            <>
+              <br />{' '}
+              No setup page? Mobile data/VPN off →{' '}
+              <strong>{portalUrl}</strong>
             </>
           ) : null}
         </p>
-        {portalUrl ? (
-          <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-            No setup page? Temporarily turn off mobile data and any VPN. Stay on{' '}
-            <strong>{ssid}</strong> and open{' '}
-            <strong>{portalUrl}</strong>.
-          </p>
-        ) : null}
       </div>
     </section>
   );
