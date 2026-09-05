@@ -54,7 +54,11 @@ function renderWithContext(ui: React.ReactElement): ReturnType<typeof render> {
   );
 }
 
-/** Renders the player in the display-settings path that rewrites iframe URLs. */
+/**
+ * Renders the player with a persisted device record of `fit`. Scaling reaches
+ * the iframe URL from the item's merged preference; the device record is the
+ * merge's lowest layer, not an override, so it must not win over the item.
+ */
 function renderWithDisplaySettings(
   ui: React.ReactElement
 ): ReturnType<typeof render> {
@@ -63,7 +67,7 @@ function renderWithDisplaySettings(
       isInitialized: true,
       isOnline: true,
       appRemoteConfig: {},
-      displaySettings: { scaling: Scaling.Fill },
+      displaySettings: { scaling: Scaling.Fit },
       deviceRotation: { viewMode: 'landscape' },
       cursorPositions: null,
       castInfo: null,
@@ -180,7 +184,10 @@ describe('ArtworkPlayer — relative iframe display settings', () => {
     const { container } = renderWithDisplaySettings(
       <ArtworkPlayer
         previewURL="artwork.html"
-        displayPreferences={defaultDP1DisplayPreference}
+        displayPreferences={{
+          ...defaultDP1DisplayPreference,
+          scaling: Scaling.Fill,
+        }}
       />
     );
 
