@@ -164,9 +164,11 @@ interface ResolveSlotDurationSecondsOptions {
  * or `loop: false` still wins.
  *
  * LOCKSTEP: that fallback is a second, hand-maintained copy of
- * mergeItemDisplayPreference's layer order (minus the async ref layer, which
- * by definition has not arrived yet). A layer added there must be added here.
- * Today the only caller passes a non-null `deviceDefaultDurationSeconds`
+ * mergeItemDisplayPreference's layer order, minus two layers on purpose: the
+ * async ref layer, which by definition has not arrived yet, and the device
+ * machine-default layer, which deviceDefaultDisplay guarantees only ever
+ * carries `scaling` — a field this gate does not read. Any other layer added
+ * there must be added here. Today the only caller passes a non-null `deviceDefaultDurationSeconds`
  * exclusively when `mergedDisplay` is set, so the fallback never actually
  * runs — which is precisely why a drift here would go unnoticed until some
  * later change relaxed that guard, and then an artist's veto carried in an

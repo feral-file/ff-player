@@ -69,6 +69,7 @@ export default function PlaylistClient() {
     reset: resetItemDisplayPreference,
   } = usePlaylistItemDisplayPreference({
     playlistDefaults: playlistDefaultsSettings,
+    deviceDisplaySettings,
     currentItemRef,
     currentIndexRef,
     playlistRef,
