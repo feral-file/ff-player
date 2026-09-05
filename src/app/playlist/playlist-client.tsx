@@ -24,8 +24,9 @@ import {
 } from '@/utils/playlist';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
+import { useCurrentItemIdentity } from './useCurrentItemIdentity';
 import { usePlaylistItemDisplayPreference } from './usePlaylistItemDisplayPreference';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 // 'sourceEnd' means the media just ended (display.loop=false) and needs a
 // reload to restart playback; 'timer' lets the natively-looping element
@@ -45,6 +46,9 @@ export default function PlaylistClient() {
   const artworkPerformReloadRef = useRef<(() => void) | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
+  // Effective duration the active slot's timer was last armed with, so a
+  // re-arm that resolves to the same pacing can keep the deadline.
+  const armedDurationRef = useRef<number | null>(null);
   // Wall-clock moment the active slot last (re)started, so a merge-landed
   // re-arm can preserve elapsed time for baseline durations instead of
   // granting a vetoed item a fresh full interval.
@@ -320,6 +324,7 @@ export default function PlaylistClient() {
       }
       if (!preserveElapsed) {
         slotStartedAtRef.current = Date.now();
+        armedDurationRef.current = null;
       }
 
       const normalizedIndex = normalizePlaylistIndex(index, snapshot.length);
@@ -359,19 +364,25 @@ export default function PlaylistClient() {
         return;
       }
 
-      // A merge-landed re-arm that resolves to the item's own duration (the
-      // override was withheld — artist veto or no default) must not grant a
-      // fresh interval: the artwork has been on screen since slot entry, so
-      // only the remaining time is scheduled. Override re-arms deliberately
-      // restart from zero (owner just changed the pacing).
+      // A merge-landed re-arm must not grant a fresh interval when it does
+      // not change the pacing: the artwork has been on screen since slot
+      // entry, so only the remaining time is scheduled. That is the case
+      // when the re-arm resolves to the item's own duration (the override
+      // was withheld — artist veto or no default) and when it resolves to
+      // the duration already armed (a re-merge that changed only display
+      // fields, e.g. the device scaling record landing late). A re-arm that
+      // changes the effective duration restarts from zero (the override
+      // just arrived, or the owner changed the pacing).
       const keepElapsed =
         preserveElapsed &&
-        duration === (currentItem.duration ?? NO_DURATION_VALUE);
+        (duration === armedDurationRef.current ||
+          duration === (currentItem.duration ?? NO_DURATION_VALUE));
       const delayMs = Math.max(
         duration * 1000 -
           (keepElapsed ? Date.now() - slotStartedAtRef.current : 0),
         0
       );
+      armedDurationRef.current = duration;
 
       timerRef.current = setTimeout(() => {
         // The timeout is firing now, so the previous handle is no longer active.
@@ -618,19 +629,7 @@ export default function PlaylistClient() {
     triggerArtworkRefresh,
   ]);
 
-  // Identity of the slot the player is currently rendering. Recomputed when
-  // the playlist or current index changes; passed to ArtworkPlayer so the
-  // end-of-stream gate can reject events from a previous adjacent item that
-  // happens to share the same source URL.
-  const currentItemIdentity = useMemo(() => {
-    if (currentIndex < 0 || playlist.length === 0) {
-      return '';
-    }
-    return itemIdentityFor(
-      playlist,
-      normalizePlaylistIndex(currentIndex, playlist.length)
-    );
-  }, [currentIndex, playlist]);
+  const currentItemIdentity = useCurrentItemIdentity(playlist, currentIndex);
 
   // Tombstone state (feral-file#3452): committed-item tracking, label
   // resolution, mode coercion, and the FF1-side toast — see useTombstone.

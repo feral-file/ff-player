@@ -15,11 +15,16 @@ export type TokenDisplaySettingWithChanged = DP1DisplayPreference & {
  *
  * Two layers, in order. The base is [displayPreferences], the merged DP-1
  * preference for the item (mergeItemDisplayPreference: baked-in → device
- * machine default → playlist defaults → manifests → item), re-supplied on
- * every item change. On top sit `updateDisplaySettings` writes with
- * `isSaved: false` — the viewer's live Fit/Fill or matting choice for the
- * artwork on screen — merged in and forgotten the moment
- * [displayPreferences] changes, which is what makes them session-scoped.
+ * machine default → playlist defaults → manifests → item). On top sit
+ * `updateDisplaySettings` writes with `isSaved: false` — the viewer's live
+ * Fit/Fill or matting choice for the artwork on screen.
+ *
+ * The adjustment is scoped to [itemIdentity], not to the preference object:
+ * the same showing can receive a fresh merged preference without changing
+ * work (the device scaling record landing after the slot was entered, or a
+ * late ref manifest), and a Fit chosen for this work must survive that. It
+ * is forgotten when the identity changes, which is what makes it
+ * session-scoped.
  *
  * The device's PERSISTED settings (`isSaved: true`, AppContext
  * `displaySettings`) are deliberately not read here any more. They used to
@@ -30,16 +35,18 @@ export type TokenDisplaySettingWithChanged = DP1DisplayPreference & {
  * as its lowest DP-1 layer (usePlaylistItemDisplayPreference), so it still
  * fills the gap when a playlist is silent, but never overrides a curator.
  */
-export function useArtworkSettings(displayPreferences: DP1DisplayPreference) {
-  const [tokenDisplaySettings, setTokenDisplaySettings] = useState<
-    TokenDisplaySettingWithChanged | null | undefined
-  >(displayPreferences);
+export function useArtworkSettings(
+  displayPreferences: DP1DisplayPreference,
+  itemIdentity = ''
+) {
+  const [sessionAdjustment, setSessionAdjustment] =
+    useState<Partial<DP1DisplayPreference> | null>(null);
 
-  // A new item's preference replaces the whole layer stack, including any
-  // session adjustment made to the previous showing.
+  // A new work replaces the whole stack, including any adjustment made to
+  // the previous showing.
   useEffect(() => {
-    setTokenDisplaySettings(displayPreferences);
-  }, [displayPreferences]);
+    setSessionAdjustment(null);
+  }, [itemIdentity]);
 
   // Session-scoped viewer adjustments from the mobile app. Persistent
   // writes (`isSaved: true`) are the device layer of the merge, not an
@@ -54,11 +61,7 @@ export function useArtworkSettings(displayPreferences: DP1DisplayPreference) {
       }
 
       console.log('[useArtworkSettings] Updating artist settings', newSettings);
-      setTokenDisplaySettings(prev => ({
-        ...prev,
-        ...newSettings,
-        changed: true,
-      }));
+      setSessionAdjustment(prev => ({ ...prev, ...newSettings }));
     };
     canvasService.addDisplaySettingsChangedListener(onSettingsChanged);
     return () => {
@@ -69,8 +72,11 @@ export function useArtworkSettings(displayPreferences: DP1DisplayPreference) {
   const displaySettings = useMemo(():
     | TokenDisplaySettingWithChanged
     | undefined => {
-    return tokenDisplaySettings ?? undefined;
-  }, [tokenDisplaySettings]);
+    if (!sessionAdjustment) {
+      return displayPreferences;
+    }
+    return { ...displayPreferences, ...sessionAdjustment, changed: true };
+  }, [displayPreferences, sessionAdjustment]);
 
   return {
     displaySettings,

@@ -199,7 +199,10 @@ const ArtworkPlayer = ({
     useRef<HTMLAudioElement | null>(null),
   ];
 
-  const { displaySettings } = useArtworkSettings(displayPreferences);
+  const { displaySettings } = useArtworkSettings(
+    displayPreferences,
+    itemIdentity
+  );
   const showRenderLoadingOverlay =
     context.appRemoteConfig.showRenderLoadingOverlay ?? true;
 

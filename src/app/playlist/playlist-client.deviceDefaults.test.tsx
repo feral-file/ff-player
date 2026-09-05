@@ -14,6 +14,7 @@ import type { DP1Defaults, DP1DisplayPreference } from '@/models/dp1.model';
 import { Scaling } from '@/models/dp1.model';
 import type { DisplaySettings } from '@/models/display_settings.model';
 import { canvasService } from '@/services/CanvasService';
+import DeviceManager from '@/utils/DeviceManager';
 import { cleanup, render, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -80,9 +81,10 @@ function Harness(props: {
   );
 }
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
   vi.useRealTimers();
+  await DeviceManager.setDefaultItemDurationSeconds(null);
   canvasService.setCastInfo(null, false);
   (
     globalThis as { __artworkPlayerProps?: Record<string, unknown> }
@@ -141,6 +143,34 @@ describe('PlaylistClient — device machine-default layer', () => {
 
     // The slot still advances at its original deadline: 10 s later, not 30.
     await advanceMs(10_000);
+    expect(playerProps()?.previewURL).toBe('https://example.com/B.jpg');
+  });
+
+  it('keeps the deadline under a device default duration too', async () => {
+    vi.useFakeTimers();
+    // With a device default the merge-landed re-arm is not skipped; a
+    // re-merge that changes only scaling must keep the armed deadline
+    // rather than granting a fresh 5 s interval.
+    await DeviceManager.setDefaultItemDurationSeconds(5);
+    const castInfo = cast();
+    const { rerender } = render(
+      <Harness castInfo={castInfo} displaySettings={null} />
+    );
+    await advanceMs(0);
+    expect(playerProps()?.previewURL).toBe('https://example.com/A.jpg');
+
+    await advanceMs(4_000);
+    rerender(
+      <Harness
+        castInfo={castInfo}
+        displaySettings={{ scaling: Scaling.Fill } as DisplaySettings}
+      />
+    );
+    await advanceMs(0);
+    expect(renderedPreference()?.scaling).toBe(Scaling.Fill);
+    expect(playerProps()?.previewURL).toBe('https://example.com/A.jpg');
+
+    await advanceMs(1_000);
     expect(playerProps()?.previewURL).toBe('https://example.com/B.jpg');
   });
 });
