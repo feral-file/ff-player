@@ -19,12 +19,13 @@ export type TokenDisplaySettingWithChanged = DP1DisplayPreference & {
  * `updateDisplaySettings` writes with `isSaved: false` — the viewer's live
  * Fit/Fill or matting choice for the artwork on screen.
  *
- * The adjustment is scoped to [itemIdentity], not to the preference object:
- * the same showing can receive a fresh merged preference without changing
- * work (the device scaling record landing after the slot was entered, or a
- * late ref manifest), and a Fit chosen for this work must survive that. It
- * is forgotten when the identity changes, which is what makes it
- * session-scoped.
+ * The adjustment is scoped to [sessionKey] (useShowingKey: slot, item
+ * identity and source), not to the preference object: the same showing can
+ * receive a fresh merged preference without changing work (the device
+ * scaling record landing after the slot was entered, or a late ref
+ * manifest), and a Fit chosen for this work must survive that. It is
+ * forgotten when the key changes — the next slot, even one sharing the
+ * item's id — which is what makes it session-scoped.
  *
  * The device's PERSISTED settings (`isSaved: true`, AppContext
  * `displaySettings`) are deliberately not read here any more. They used to
@@ -37,16 +38,16 @@ export type TokenDisplaySettingWithChanged = DP1DisplayPreference & {
  */
 export function useArtworkSettings(
   displayPreferences: DP1DisplayPreference,
-  itemIdentity = ''
+  sessionKey = ''
 ) {
   const [sessionAdjustment, setSessionAdjustment] =
     useState<Partial<DP1DisplayPreference> | null>(null);
 
-  // A new work replaces the whole stack, including any adjustment made to
-  // the previous showing.
+  // A new showing replaces the whole stack, including any adjustment made
+  // to the previous one.
   useEffect(() => {
     setSessionAdjustment(null);
-  }, [itemIdentity]);
+  }, [sessionKey]);
 
   // Session-scoped viewer adjustments from the mobile app. Persistent
   // writes (`isSaved: true`) are the device layer of the merge, not an

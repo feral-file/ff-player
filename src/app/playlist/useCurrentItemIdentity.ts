@@ -25,3 +25,23 @@ export function useCurrentItemIdentity(
     );
   }, [currentIndex, playlist]);
 }
+
+/**
+ * Key of one SHOWING at the active slot, for state that must live exactly as
+ * long as that showing — the viewer's session Fit/Fill in useArtworkSettings.
+ * Coarser than a preference object (a same-slot re-merge, e.g. the device
+ * scaling record landing late, must not reset the session) and finer than
+ * useCurrentItemIdentity (adjacent slots may share an id while carrying
+ * different display preferences, and a new cast may reuse an id for a
+ * different source): normalized slot index, item identity, and source.
+ */
+export function useShowingKey(playlist: DP1Item[], currentIndex: number): string {
+  return useMemo(() => {
+    if (currentIndex < 0 || playlist.length === 0) {
+      return '';
+    }
+    const index = normalizePlaylistIndex(currentIndex, playlist.length);
+    const source = playlist[index]?.source ?? '';
+    return `${String(index)}|${itemIdentityFor(playlist, index)}|${source}`;
+  }, [currentIndex, playlist]);
+}

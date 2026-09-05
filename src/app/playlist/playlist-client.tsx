@@ -24,7 +24,8 @@ import {
 } from '@/utils/playlist';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
-import { useCurrentItemIdentity } from './useCurrentItemIdentity';
+import { useCurrentItemIdentity, useShowingKey } from './useCurrentItemIdentity';
+import { useMergeLandedRearm } from './useMergeLandedRearm';
 import { usePlaylistItemDisplayPreference } from './usePlaylistItemDisplayPreference';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
@@ -32,6 +33,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 // reload to restart playback; 'timer' lets the natively-looping element
 // keep playing on the same-slot replay paths.
 type AdvanceCause = 'timer' | 'sourceEnd';
+
+/** Effective duration and wall-clock deadline of the armed slot timer. */
+interface ArmedInterval { duration: number; deadline: number }
 
 // eslint-disable-next-line max-lines-per-function
 export default function PlaylistClient() {
@@ -46,9 +50,11 @@ export default function PlaylistClient() {
   const artworkPerformReloadRef = useRef<(() => void) | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
-  // Effective duration the active slot's timer was last armed with, so a
-  // re-arm that resolves to the same pacing can keep the deadline.
-  const armedDurationRef = useRef<number | null>(null);
+  // The interval the active slot's timer is armed with — effective duration
+  // and wall-clock deadline — so a re-arm that resolves to the same pacing
+  // keeps the real deadline (not one measured from slot entry, which a slot
+  // held pre-merge only started counting after its first arm).
+  const armedRef = useRef<ArmedInterval | null>(null);
   // Wall-clock moment the active slot last (re)started, so a merge-landed
   // re-arm can preserve elapsed time for baseline durations instead of
   // granting a vetoed item a fresh full interval.
@@ -324,7 +330,7 @@ export default function PlaylistClient() {
       }
       if (!preserveElapsed) {
         slotStartedAtRef.current = Date.now();
-        armedDurationRef.current = null;
+        armedRef.current = null;
       }
 
       const normalizedIndex = normalizePlaylistIndex(index, snapshot.length);
@@ -365,24 +371,30 @@ export default function PlaylistClient() {
       }
 
       // A merge-landed re-arm must not grant a fresh interval when it does
-      // not change the pacing: the artwork has been on screen since slot
-      // entry, so only the remaining time is scheduled. That is the case
-      // when the re-arm resolves to the item's own duration (the override
-      // was withheld — artist veto or no default) and when it resolves to
-      // the duration already armed (a re-merge that changed only display
-      // fields, e.g. the device scaling record landing late). A re-arm that
-      // changes the effective duration restarts from zero (the override
-      // just arrived, or the owner changed the pacing).
+      // not change the pacing. Two cases: the re-arm resolves to the
+      // duration already armed (a re-merge that changed only display
+      // fields, e.g. the device scaling record landing late) — keep the
+      // armed deadline itself; or it resolves to the item's own duration
+      // (the override was withheld — artist veto or no default) — the
+      // artwork has been on screen since slot entry, so schedule only the
+      // remaining time. A re-arm that changes the effective duration
+      // restarts from zero (the override just arrived, or the owner changed
+      // the pacing).
+      const remainingMs =
+        preserveElapsed && armedRef.current?.duration === duration
+          ? Math.max(armedRef.current.deadline - Date.now(), 0)
+          : null;
       const keepElapsed =
         preserveElapsed &&
-        (duration === armedDurationRef.current ||
-          duration === (currentItem.duration ?? NO_DURATION_VALUE));
-      const delayMs = Math.max(
-        duration * 1000 -
-          (keepElapsed ? Date.now() - slotStartedAtRef.current : 0),
-        0
-      );
-      armedDurationRef.current = duration;
+        duration === (currentItem.duration ?? NO_DURATION_VALUE);
+      const delayMs =
+        remainingMs ??
+        Math.max(
+          duration * 1000 -
+            (keepElapsed ? Date.now() - slotStartedAtRef.current : 0),
+          0
+        );
+      armedRef.current = { duration, deadline: Date.now() + delayMs };
 
       timerRef.current = setTimeout(() => {
         // The timeout is firing now, so the previous handle is no longer active.
@@ -452,27 +464,12 @@ export default function PlaylistClient() {
     scheduleCurrentItemTimer,
   ]);
 
-  // Once the async display-preference merge (incl. the ref-manifest layer)
-  // lands for the current slot, re-arm its timer: the initial arm ran without
-  // the device override (merge unknown), and only the merged preference may
-  // grant it. Restart-from-zero on re-arm is deliberate — manifest loads
-  // settle well before any human-scale duration elapses.
-  useEffect(() => {
-    if (!currentItemDisplayPreference) {
-      return;
-    }
-    if (currentIndexRef.current < 0 || playlistRef.current.length === 0) {
-      return;
-    }
-    // Without a device default the merge cannot change the timer (only the
-    // item duration governs), so skip the re-arm and let the entry-armed
-    // baseline keep its elapsed time — ref items must not restart at 10s
-    // just because their manifest landed.
-    if (DeviceManager.getCachedDefaultItemDurationSeconds() === null) {
-      return;
-    }
-    scheduleCurrentItemTimer(currentIndexRef.current, playlistRef.current, true);
-  }, [currentItemDisplayPreference, scheduleCurrentItemTimer]);
+  useMergeLandedRearm({
+    preference: currentItemDisplayPreference,
+    currentIndexRef,
+    playlistRef,
+    scheduleCurrentItemTimer,
+  });
 
   // eslint-disable-next-line max-lines-per-function
   useEffect(() => {
@@ -630,6 +627,7 @@ export default function PlaylistClient() {
   ]);
 
   const currentItemIdentity = useCurrentItemIdentity(playlist, currentIndex);
+  const currentShowingKey = useShowingKey(playlist, currentIndex);
 
   // Tombstone state (feral-file#3452): committed-item tracking, label
   // resolution, mode coercion, and the FF1-side toast — see useTombstone.
@@ -650,6 +648,7 @@ export default function PlaylistClient() {
             previewURL={castPreviewURL ?? ''}
             displayPreferences={currentItemDisplayPreference}
             itemIdentity={currentItemIdentity}
+            sessionKey={currentShowingKey}
             onRegisterArtworkReload={registerArtworkReload}
             onSourceEnded={handleSourceEnded}
             onItemCommitted={handleItemCommitted}

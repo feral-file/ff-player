@@ -111,6 +111,7 @@ const ArtworkPlayer = ({
   artworkPreviewMIMEType,
   displayPreferences,
   itemIdentity,
+  sessionKey,
   onRegisterArtworkReload,
   onSourceEnded,
   onItemCommitted,
@@ -125,6 +126,11 @@ const ArtworkPlayer = ({
   // playback on transition and (b) reject `ended` events from the previous
   // item once the next one has become current.
   itemIdentity?: string;
+  /**
+   * Key of the current showing (useShowingKey); scopes the viewer's session
+   * Fit/Fill adjustment. Falls back to itemIdentity when absent.
+   */
+  sessionKey?: string;
   onRegisterArtworkReload?: (reload: (() => void) | null) => void;
   // Fired when a time-based source (video/audio) reaches end-of-stream.
   // The HTML5 media element only emits `ended` when its `loop` attribute is
@@ -201,7 +207,7 @@ const ArtworkPlayer = ({
 
   const { displaySettings } = useArtworkSettings(
     displayPreferences,
-    itemIdentity
+    sessionKey ?? itemIdentity
   );
   const showRenderLoadingOverlay =
     context.appRemoteConfig.showRenderLoadingOverlay ?? true;

@@ -10,11 +10,16 @@ import { AppContext } from '@/context/AppContext';
 import { CastCommand } from '@/models';
 import type { CastInfo } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
-import type { DP1Defaults, DP1DisplayPreference } from '@/models/dp1.model';
+import type {
+  DP1Defaults,
+  DP1DisplayPreference,
+  DP1Item,
+} from '@/models/dp1.model';
 import { Scaling } from '@/models/dp1.model';
 import type { DisplaySettings } from '@/models/display_settings.model';
 import { canvasService } from '@/services/CanvasService';
 import DeviceManager from '@/utils/DeviceManager';
+import { clearRefManifestDisplayCache } from '@/utils/playlistDisplayPreference';
 import { cleanup, render, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -36,6 +41,12 @@ vi.mock('@sentry/nextjs', () => ({
   addBreadcrumb: vi.fn(),
 }));
 
+const { getItemRefMock } = vi.hoisted(() => ({ getItemRefMock: vi.fn() }));
+
+vi.mock('@/services/DP1Service', () => ({
+  DP1Service: { getItemRef: getItemRefMock, getPlaylist: vi.fn() },
+}));
+
 function playerProps(): Record<string, unknown> | undefined {
   return (globalThis as { __artworkPlayerProps?: Record<string, unknown> })
     .__artworkPlayerProps;
@@ -45,16 +56,23 @@ function renderedPreference(): DP1DisplayPreference | undefined {
   return playerProps()?.displayPreferences as DP1DisplayPreference | undefined;
 }
 
-function cast(defaults?: Partial<DP1Defaults>): CastInfo {
+function cast(
+  defaults?: Partial<DP1Defaults>,
+  items: DP1Item[] = [item('A', 30), item('B', 30)]
+): CastInfo {
   return {
     castCommand: CastCommand.displayPlaylist,
-    playlist: {
-      ...dp1Call('pl', [item('A', 30), item('B', 30)]),
-      defaults,
-    } as never,
+    playlist: { ...dp1Call('pl', items), defaults } as never,
     index: 0,
     loopMode: LoopMode.playlist,
   };
+}
+
+/** Advance in act-sized steps so effect-scheduled timers fire in sequence. */
+async function advanceSteps(totalMs: number, stepMs = 5000): Promise<void> {
+  for (let t = 0; t < totalMs; t += stepMs) {
+    await advanceMs(Math.min(stepMs, totalMs - t));
+  }
 }
 
 function Harness(props: {
@@ -84,6 +102,8 @@ function Harness(props: {
 afterEach(async () => {
   cleanup();
   vi.useRealTimers();
+  getItemRefMock.mockReset();
+  clearRefManifestDisplayCache();
   await DeviceManager.setDefaultItemDurationSeconds(null);
   canvasService.setCastInfo(null, false);
   (
@@ -146,6 +166,9 @@ describe('PlaylistClient — device machine-default layer', () => {
     expect(playerProps()?.previewURL).toBe('https://example.com/B.jpg');
   });
 
+});
+
+describe('PlaylistClient — device layer keeps slot timing', () => {
   it('keeps the deadline under a device default duration too', async () => {
     vi.useFakeTimers();
     // With a device default the merge-landed re-arm is not skipped; a
@@ -171,6 +194,52 @@ describe('PlaylistClient — device machine-default layer', () => {
     expect(playerProps()?.previewURL).toBe('https://example.com/A.jpg');
 
     await advanceMs(1_000);
+    expect(playerProps()?.previewURL).toBe('https://example.com/B.jpg');
+  });
+
+  it('keeps the armed deadline of a slot that was held pre-merge', async () => {
+    vi.useFakeTimers();
+    // A ref item is held at entry under a device default while its manifest
+    // is pending; the bounded merge (~10 s) arms the 5 s override, so the
+    // real deadline is ~15 s after entry. The manifest then lands at 11 s
+    // (same gates) and the device scaling record at 12 s: both re-merge
+    // the same slot at the same effective duration. Measuring elapsed time
+    // from slot entry would schedule 0 ms and skip the artwork; the armed
+    // deadline must hold.
+    await DeviceManager.setDefaultItemDurationSeconds(5);
+    let resolveManifest: (manifest: unknown) => void = () => undefined;
+    getItemRefMock.mockReturnValue(
+      new Promise(resolve => {
+        resolveManifest = resolve;
+      }) as never
+    );
+    const castInfo = cast(undefined, [
+      { ...item('A', 30), ref: 'https://example.com/A-manifest.json' } as DP1Item,
+      item('B', 300),
+    ]);
+    const { rerender } = render(
+      <Harness castInfo={castInfo} displaySettings={null} />
+    );
+    await advanceMs(0);
+    await advanceSteps(11_000);
+    expect(playerProps()?.previewURL).toBe('https://example.com/A.jpg');
+    resolveManifest({ controls: { display: {} } });
+    await advanceMs(0);
+
+    await advanceMs(1_000);
+    rerender(
+      <Harness
+        castInfo={castInfo}
+        displaySettings={{ scaling: Scaling.Fill } as DisplaySettings}
+      />
+    );
+    await advanceMs(0);
+    expect(renderedPreference()?.scaling).toBe(Scaling.Fill);
+    expect(playerProps()?.previewURL).toBe('https://example.com/A.jpg');
+
+    await advanceMs(2_000);
+    expect(playerProps()?.previewURL).toBe('https://example.com/A.jpg');
+    await advanceMs(1_500);
     expect(playerProps()?.previewURL).toBe('https://example.com/B.jpg');
   });
 });
