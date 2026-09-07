@@ -93,6 +93,10 @@ describe('SetupOverlay softap_qr attached phase', () => {
     expect(await screen.findByText(/follow your phone/)).toBeTruthy();
     expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
   });
+});
+
+describe('SetupOverlay softap_qr attached phase: unusable portal_url', () => {
+  afterEach(cleanup);
 
   it.each([
     'http://?',
