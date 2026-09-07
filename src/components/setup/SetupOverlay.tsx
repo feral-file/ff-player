@@ -121,10 +121,14 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
           />
         </div>
         <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          {/* Sets the wait: across five 2026-09-07 trials iOS took 5–12 s
-              between the Join tap and associating, during which the join
-              code is still up and taps do nothing (feral-file#3515). */}
-          Once your phone joins, this code changes (about 10 seconds)
+          {/* Sets the wait, conditionally: across the 2026-09-07 trials iOS
+              took 5–12 s between the Join tap and associating, during which
+              the join code is still up and taps do nothing; the code then
+              changes for Apple phones only (feral-file#3515). Android and
+              older controllers never change it, so the line promises a
+              wait, not a change. */}
+          After you join, wait about 10 seconds: if this code changes, scan it
+          again
           <br /> Nothing opened? Wi-Fi Settings → <strong>{ssid}</strong>
           <br />{' '}
           {display.password ? (
