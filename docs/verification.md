@@ -110,9 +110,9 @@ procedure, runnable entirely in a browser:
    name): they must render the real PPMori-Bold face, not a synthesized
    smear — compare stroke weight against the pairing-code digits.
 6. On `softap_qr`, confirm the platform-neutral heading carries the complete
-   happy path and the single recovery block keeps Wi-Fi Settings, password,
-   keep-connected, mobile-data/VPN, and direct-IP cues legible without
-   crowding the QR.
+   happy path and the single recovery block keeps the code-changes wait cue,
+   Wi-Fi Settings, password, keep-connected, mobile-data/VPN, and direct-IP
+   cues legible without crowding the QR.
 7. On the `client_attached` repaint, confirm the panel shows ONE code (the
    portal address, not the WIFI: payload), the "Finish setup on your phone"
    heading, and a recovery block that keeps scan-again, mobile-data/VPN,
