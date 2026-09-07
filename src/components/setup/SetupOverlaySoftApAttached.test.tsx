@@ -35,11 +35,7 @@ describe('SetupOverlay softap_qr attached phase', () => {
       client_attached: true,
     });
 
-    expect(
-      await screen.findByText(
-        'Phone connected. Scan the code again to open setup'
-      )
-    ).toBeTruthy();
+    expect(await screen.findByText('Finish setup on your phone')).toBeTruthy();
     // The camera is still aimed at the screen: the ONE code on it is now a
     // browser link, not the Wi-Fi join payload (feral-file#3515).
     expect(container.querySelectorAll('svg')).toHaveLength(1);
@@ -51,7 +47,7 @@ describe('SetupOverlay softap_qr attached phase', () => {
         (_, el) =>
           el?.tagName === 'P' &&
           el.textContent ===
-            'Nothing opened? Mobile data/VPN off → http://10.42.0.1 Wi-Fi FF1-Setup-ABCD · Password correct-horse'
+            'Nothing opened? Scan the code, or mobile data/VPN off → http://10.42.0.1 Wi-Fi FF1-Setup-ABCD · Password correct-horse · Keep connected'
       )
     ).toBeTruthy();
     expect(screen.queryByText(/follow your phone/)).toBeNull();
@@ -85,7 +81,7 @@ describe('SetupOverlay softap_qr attached phase', () => {
       portal_url: 'http://10.42.0.1',
       client_attached: true,
     });
-    expect(await screen.findByText(/Phone connected/)).toBeTruthy();
+    expect(await screen.findByText('Finish setup on your phone')).toBeTruthy();
 
     // A failed join re-raises the AP; the phone has to re-associate, so the
     // controller's fresh announcement (no flag) must paint the join code.
@@ -94,6 +90,22 @@ describe('SetupOverlay softap_qr attached phase', () => {
       ssid: 'FF1-Setup-ABCD',
       portal_url: 'http://10.42.0.1',
     });
+    expect(await screen.findByText(/follow your phone/)).toBeTruthy();
+    expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
+  });
+
+  it('keeps the join QR when the portal_url is not an http(s) link', async () => {
+    // A bare address would render as an inert plain-text code with no join
+    // code left on screen; the swap is gated on a scannable link.
+    const { container } = render(<SetupOverlay />);
+
+    displaySetup({
+      state: SetupDisplayState.SoftApQr,
+      ssid: 'FF1-Setup-ABCD',
+      portal_url: '10.42.0.1',
+      client_attached: true,
+    });
+
     expect(await screen.findByText(/follow your phone/)).toBeTruthy();
     expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
   });

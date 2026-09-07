@@ -113,6 +113,10 @@ procedure, runnable entirely in a browser:
    happy path and the single recovery block keeps Wi-Fi Settings, password,
    keep-connected, mobile-data/VPN, and direct-IP cues legible without
    crowding the QR.
+7. On the `client_attached` repaint, confirm the panel shows ONE code (the
+   portal address, not the WIFI: payload), the "Finish setup on your phone"
+   heading, and a recovery block that keeps scan-again, mobile-data/VPN,
+   direct-IP, Wi-Fi name, password, and keep-connected cues legible.
 
 Report the pass (viewports checked, anything off) in the PR body; review
 agents treat its absence as a missing-verification finding.

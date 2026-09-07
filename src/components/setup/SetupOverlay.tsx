@@ -51,6 +51,10 @@ function escapeWifiField(value: string): string {
  * `P:` field when there's no password, since an empty `P:` after `T:WPA`
  * makes phones attempt (and fail) WPA auth with an empty key.
  */
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\/\S+$/i.test(value);
+}
+
 function softApQrValue(ssid: string, password: string | undefined): string {
   const escapedSsid = escapeWifiField(ssid);
   if (!password) {
@@ -90,7 +94,11 @@ function softApQrValue(ssid: string, password: string | undefined): string {
 function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   const ssid = display.ssid ?? '';
   const portalUrl = display.portal_url?.trim();
-  if (display.client_attached === true && portalUrl) {
+  // The swap makes portal_url the only scannable target, so it must be a
+  // link a camera app will offer to open: a bare address or a stray value
+  // would leave one inert code and no join code. Anything else stays on the
+  // join phase, where the address is a typed fallback and harmless.
+  if (display.client_attached === true && portalUrl && isHttpUrl(portalUrl)) {
     return (
       <SoftApPortalQrPanel
         ssid={ssid}
@@ -134,17 +142,15 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
 }
 
 /**
- * Pre-hotspot scan: `feral-controld` completes a full Wi-Fi scan before it
- * raises the setup hotspot (the single radio cannot scan once the AP holds
- * it), so this is the first thing a factory-fresh device shows. Rendering it
- * — rather than a black screen — is what tells the user the frame is alive
- * and the QR screen is coming.
- */
-/**
  * Attached phase of the soft-AP step (see SoftApQrPanel). The QR is the
- * portal address; the subtitle keeps the typed-address path for a phone
- * whose camera has moved on, and the hotspot credentials for a second
- * device — the AP is still up and this panel is the only place they show.
+ * portal address; the title reads as the phone-side instruction because the
+ * swap fires on the hotspot's FIRST request from the phone — its captive
+ * probe — which also happens on phones where the sheet did open, so the
+ * screen must not send a user already typing in the portal back to scan.
+ * The subtitle carries the scan and typed-address recovery, the hotspot
+ * credentials for a second device, and the keep-connected cue: the phone
+ * is on a no-internet SSID its OS offers to abandon, and the address on the
+ * code is unroutable anywhere else.
  */
 function SoftApPortalQrPanel({
   ssid,
@@ -158,27 +164,34 @@ function SoftApPortalQrPanel({
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>
-          Phone connected. Scan the code again to open setup
-        </p>
+        <p className={styles.title}>Finish setup on your phone</p>
         <div className={styles.qrFrame}>
           <QRCodeSVG value={portalUrl} size={qrSize} marginSize={2} />
         </div>
         <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          Nothing opened? Mobile data/VPN off → <strong>{portalUrl}</strong>
+          Nothing opened? Scan the code, or mobile data/VPN off →{' '}
+          <strong>{portalUrl}</strong>
           <br /> Wi-Fi <strong>{ssid}</strong>
           {password ? (
             <>
               {' '}
               · Password <strong>{password}</strong>
             </>
-          ) : null}
+          ) : null}{' '}
+          · Keep connected
         </p>
       </div>
     </section>
   );
 }
 
+/**
+ * Pre-hotspot scan: `feral-controld` completes a full Wi-Fi scan before it
+ * raises the setup hotspot (the single radio cannot scan once the AP holds
+ * it), so this is the first thing a factory-fresh device shows. Rendering it
+ * — rather than a black screen — is what tells the user the frame is alive
+ * and the QR screen is coming.
+ */
 function ScanningPanel() {
   return (
     <section className={styles.overlay} aria-live="polite">
@@ -364,12 +377,7 @@ function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
             name routes both. */}
         <p className={styles.subtitle}>
           Open the app on a phone on the same Wi-Fi and look for{' '}
-          {frameName ? (
-            <strong>{frameName}</strong>
-          ) : (
-            'this Art Computer'
-          )}
-          .
+          {frameName ? <strong>{frameName}</strong> : 'this Art Computer'}.
         </p>
         {display.url ? (
           <>
@@ -472,8 +480,7 @@ export function renderSetupPanel(
  * hard-cutting off screen; it unmounts itself once that fade completes.
  */
 export default function SetupOverlay() {
-  const [display, setDisplay] =
-    useState<SetupDisplayDetail>(hiddenDisplay);
+  const [display, setDisplay] = useState<SetupDisplayDetail>(hiddenDisplay);
 
   useEffect(() => {
     const handleDisplay = (event: Event) => {
