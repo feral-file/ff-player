@@ -60,14 +60,25 @@ function softApQrValue(ssid: string, password: string | undefined): string {
 }
 
 /**
- * One join QR plus a direct on-link portal address, not a second "open the
- * portal" QR: the auto-opening captive sheet cannot be relied on across
- * phones, but a second code reads as a competing entry point. controld gets
- * the address NetworkManager actually assigned to the active hotspot and
+ * One QR on screen at a time, in two phases. The join phase shows the WIFI:
+ * code plus a direct on-link portal address as text — never a second "open
+ * the portal" code beside it, which read as a competing entry point. controld
+ * gets the address NetworkManager actually assigned to the active hotspot and
  * sends it as portal_url. Once the user accepts the no-internet setup Wi-Fi,
  * a literal on-link IP bypasses Private DNS and cellular DNS entirely.
  * Older controllers omit the optional field, and this player then omits the
  * manual-address instruction rather than presenting an unreliable DNS name.
+ *
+ * The attached phase (client_attached, sent once the hotspot's portal sees
+ * the phone's first request) REPLACES the join code with a QR encoding that
+ * same portal_url. iOS decides on its own whether to present the captive
+ * sheet: it does so only while a "Wi-Fi app" (Settings, Safari) is in front,
+ * and a phone that joined from the Camera app's scan logs `waiting for UI`
+ * until the user switches apps (feral-file#3515). The camera is still aimed
+ * at this screen, so the swapped code surfaces a browser link where the join
+ * prompt was; opening it loads the setup page and, as a side effect, brings a
+ * Wi-Fi app forward. Without a portal_url there is nothing to encode, so the
+ * join phase stays up.
  */
 /*
  * Scanning a WIFI: code only proposes the hotspot; the phone owns the prompt
@@ -79,6 +90,15 @@ function softApQrValue(ssid: string, password: string | undefined): string {
 function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   const ssid = display.ssid ?? '';
   const portalUrl = display.portal_url?.trim();
+  if (display.client_attached === true && portalUrl) {
+    return (
+      <SoftApPortalQrPanel
+        ssid={ssid}
+        password={display.password}
+        portalUrl={portalUrl}
+      />
+    );
+  }
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
@@ -120,6 +140,45 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
  * — rather than a black screen — is what tells the user the frame is alive
  * and the QR screen is coming.
  */
+/**
+ * Attached phase of the soft-AP step (see SoftApQrPanel). The QR is the
+ * portal address; the subtitle keeps the typed-address path for a phone
+ * whose camera has moved on, and the hotspot credentials for a second
+ * device — the AP is still up and this panel is the only place they show.
+ */
+function SoftApPortalQrPanel({
+  ssid,
+  password,
+  portalUrl,
+}: {
+  ssid: string;
+  password: string | undefined;
+  portalUrl: string;
+}) {
+  return (
+    <section className={styles.overlay} aria-live="polite">
+      <div className={styles.panel}>
+        <p className={styles.title}>
+          Phone connected. Scan the code again to open setup
+        </p>
+        <div className={styles.qrFrame}>
+          <QRCodeSVG value={portalUrl} size={qrSize} marginSize={2} />
+        </div>
+        <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
+          Nothing opened? Mobile data/VPN off → <strong>{portalUrl}</strong>
+          <br /> Wi-Fi <strong>{ssid}</strong>
+          {password ? (
+            <>
+              {' '}
+              · Password <strong>{password}</strong>
+            </>
+          ) : null}
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function ScanningPanel() {
   return (
     <section className={styles.overlay} aria-live="polite">

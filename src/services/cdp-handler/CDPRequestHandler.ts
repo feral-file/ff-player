@@ -325,6 +325,12 @@ function isSetupDisplayDetail(request: unknown): request is SetupDisplayDetail {
       ) {
         return false;
       }
+      if (
+        detail.client_attached !== undefined &&
+        typeof detail.client_attached !== 'boolean'
+      ) {
+        return false;
+      }
       break;
     }
 

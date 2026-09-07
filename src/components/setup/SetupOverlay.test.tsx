@@ -18,7 +18,9 @@ vi.mock('qrcode.react', () => ({
 }));
 
 function displaySetup(detail: Record<string, unknown>) {
-  window.dispatchEvent(new CustomEvent(CustomEventName.SetupDisplay, { detail }));
+  window.dispatchEvent(
+    new CustomEvent(CustomEventName.SetupDisplay, { detail })
+  );
 }
 
 function qrValue(container: HTMLElement): string | null {
@@ -155,7 +157,9 @@ describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
     await screen.findByText(
       "Scan the QR code, then follow your phone's prompt to connect"
     );
-    expect(qrValue(container)).toBe('WIFI:T:WPA;S:FF1-Setup-ABCD;P:correct-horse;;');
+    expect(qrValue(container)).toBe(
+      'WIFI:T:WPA;S:FF1-Setup-ABCD;P:correct-horse;;'
+    );
   });
 
   it('encodes a nopass QR payload with no P: field when there is no password', async () => {
@@ -231,7 +235,7 @@ describe('SetupOverlay known states (updating progress)', () => {
 
   it.each([NaN, Infinity, -Infinity])(
     'renders no percentage line for non-finite progress (%s)',
-    async (progress) => {
+    async progress => {
       render(<SetupOverlay />);
 
       displaySetup({ state: SetupDisplayState.Updating, progress });
@@ -244,18 +248,14 @@ describe('SetupOverlay known states (updating progress)', () => {
   it.each([
     [150, '100%'],
     [-10, '0%'],
-  ])(
-    'clamps out-of-range progress %s to %s',
-    async (progress, expected) => {
-      render(<SetupOverlay />);
+  ])('clamps out-of-range progress %s to %s', async (progress, expected) => {
+    render(<SetupOverlay />);
 
-      displaySetup({ state: SetupDisplayState.Updating, progress });
+    displaySetup({ state: SetupDisplayState.Updating, progress });
 
-      expect(await screen.findByText('Updating software')).toBeTruthy();
-      expect(screen.getByText(expected)).toBeTruthy();
-    }
-  );
-
+    expect(await screen.findByText('Updating software')).toBeTruthy();
+    expect(screen.getByText(expected)).toBeTruthy();
+  });
 });
 
 // Split from the updating-progress describe above only to satisfy the
@@ -275,7 +275,9 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
       device_name: 'FF1-8EVTK3RE',
     });
 
-    expect(await screen.findByText('Pair with the Feral File app')).toBeTruthy();
+    expect(
+      await screen.findByText('Pair with the Feral File app')
+    ).toBeTruthy();
     // Primary path: open the app on the same Wi-Fi and look for the frame
     // by name — covers both the auto-prompt and manual-add cases.
     expect(screen.getByText('FF1-8EVTK3RE')).toBeTruthy();
@@ -302,7 +304,9 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
       url: 'https://feralfile.com/device_connect?token=abc',
     });
 
-    expect(await screen.findByText('Pair with the Feral File app')).toBeTruthy();
+    expect(
+      await screen.findByText('Pair with the Feral File app')
+    ).toBeTruthy();
     expect(screen.getByText(/look for\s+this Art Computer/)).toBeTruthy();
     expect(container.querySelector('svg')).not.toBeNull();
   });
@@ -325,7 +329,9 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
 
     expect(await screen.findByText('Wi-Fi connected')).toBeTruthy();
     expect(
-      screen.getByText(/Getting your Art Computer ready\. This can take a minute\./)
+      screen.getByText(
+        /Getting your Art Computer ready\. This can take a minute\./
+      )
     ).toBeTruthy();
   });
 
@@ -376,9 +382,7 @@ describe('SetupOverlay hide and unknown-state behavior', () => {
 
     displaySetup({ state: SetupDisplayState.Ready });
     await waitFor(() => {
-      expect(
-        screen.queryByText('Resetting to factory settings')
-      ).toBeNull();
+      expect(screen.queryByText('Resetting to factory settings')).toBeNull();
     });
 
     displaySetup({ state: SetupDisplayState.FactoryReset });
@@ -388,9 +392,7 @@ describe('SetupOverlay hide and unknown-state behavior', () => {
 
     displaySetup({ state: SetupDisplayState.Hidden });
     await waitFor(() => {
-      expect(
-        screen.queryByText('Resetting to factory settings')
-      ).toBeNull();
+      expect(screen.queryByText('Resetting to factory settings')).toBeNull();
     });
   });
 
@@ -639,8 +641,12 @@ describe('SetupOverlay arbitration with mintPairingDisplay', () => {
     // them together so they cannot drift.
     for (const state of Object.values(SetupDisplayState)) {
       const rendersPanel =
-        renderSetupPanel({ state, ssid: 'x', url: 'https://x', progress: 1 }) !==
-        null;
+        renderSetupPanel({
+          state,
+          ssid: 'x',
+          url: 'https://x',
+          progress: 1,
+        }) !== null;
       expect(
         isRenderableSetupDisplayState(state),
         `state ${state} renderable mismatch`

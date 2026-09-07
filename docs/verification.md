@@ -72,6 +72,7 @@ procedure, runnable entirely in a browser:
    setup('scanning');
    setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1'});
    setup('softap_qr', {ssid:'FF1-DEMO4242'});               // open network
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', client_attached:true}); // phone joined: portal-address QR
    setup('joining');
    setup('join_failed', {reason:'Wrong Wi-Fi password. Please check it and try again.'});
    // Provisioned-device boot/offline narration (not part of the OOBE story):

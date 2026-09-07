@@ -138,6 +138,13 @@ export interface SetupDisplayDetail {
   // softap_qr only: direct HTTP address on the active setup hotspot's own
   // subnet. Optional for compatibility with older controllers.
   portal_url?: string;
+  // softap_qr only: the controller's repaint once a phone has joined the
+  // hotspot (the portal saw its first request). With `portal_url` present the
+  // panel swaps the Wi-Fi join QR for one encoding that address, so the
+  // phone's still-open camera gets a browser link — iOS keeps the native
+  // captive sheet hidden while Camera stays in front (feral-file#3515).
+  // Optional; absent or false is the join phase.
+  client_attached?: boolean;
   reason?: string;
   progress?: number;
   url?: string;
