@@ -51,8 +51,22 @@ function escapeWifiField(value: string): string {
  * `P:` field when there's no password, since an empty `P:` after `T:WPA`
  * makes phones attempt (and fail) WPA auth with an empty key.
  */
+/**
+ * True only for a value the standard URL parser accepts with an http(s)
+ * scheme and a host. The swap makes portal_url the only scannable target,
+ * so a merely HTTP-shaped string (`http://?`, `http:///`, an out-of-range
+ * port) must keep the join QR rather than paint an inert code.
+ */
 function isHttpUrl(value: string): boolean {
-  return /^https?:\/\/\S+$/i.test(value);
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      url.hostname !== ''
+    );
+  } catch {
+    return false;
+  }
 }
 
 function softApQrValue(ssid: string, password: string | undefined): string {

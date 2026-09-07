@@ -94,6 +94,27 @@ describe('SetupOverlay softap_qr attached phase', () => {
     expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
   });
 
+  it.each([
+    'http://?',
+    'http:///',
+    'https://#missing-host',
+    'http://:80',
+    'http://10.42.0.1:99999',
+  ])(
+    'keeps the join QR for the HTTP-shaped but unparseable portal_url %s',
+    async portalUrl => {
+      const { container } = render(<SetupOverlay />);
+      displaySetup({
+        state: SetupDisplayState.SoftApQr,
+        ssid: 'FF1-Setup-ABCD',
+        portal_url: portalUrl,
+        client_attached: true,
+      });
+      expect(await screen.findByText(/follow your phone/)).toBeTruthy();
+      expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
+    }
+  );
+
   it('keeps the join QR when the portal_url is not an http(s) link', async () => {
     // A bare address would render as an inert plain-text code with no join
     // code left on screen; the swap is gated on a scannable link.
