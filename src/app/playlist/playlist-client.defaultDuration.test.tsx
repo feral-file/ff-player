@@ -13,6 +13,9 @@ import DeviceManager from '@/utils/DeviceManager';
 import { render } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { prepareContentPolicy } from '@/services/contentPolicy.testkit';
+
+beforeEach(prepareContentPolicy);
 import {
   PlaylistHarness,
   advanceMs,

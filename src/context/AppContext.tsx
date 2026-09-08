@@ -33,6 +33,7 @@ import {
 } from '@/models/custom_event';
 import { normalizePlaylistIndex } from '@/utils/playlist';
 import { stripEphemeralCastInfoFields } from '@/utils/castInfo';
+import { contentPolicyStore } from '@/services/ContentPolicyStore';
 import { useRouter } from 'next/navigation';
 
 interface AppContextProps {
@@ -223,6 +224,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
         console.log('Error init display settings', error);
       }
       try {
+        await contentPolicyStore.initialize();
         await initCastInfo();
       } catch (error) {
         bootHydrationOutcome = 'failed';
@@ -399,7 +401,9 @@ export const AppProvider = ({ children }: AppContextProps) => {
       const cleanCastInfo = stripEphemeralCastInfoFields(castInfo);
       canvasService.setCastInfo(cleanCastInfo, false);
       if (!halted) {
-        setCastInfo(cleanCastInfo);
+        // The service reapplies current policy to old recovery snapshots.
+        // Publishing the pre-filter copy would bypass that boot boundary.
+        setCastInfo(canvasService.getCastInfo());
         navigateToHomePage();
       }
     } else if (!halted) {

@@ -1,4 +1,5 @@
 import { canvasService } from '../CanvasService';
+import { contentPolicyCommand } from './contentPolicyCommand';
 import { noteDaemonConnectivity } from '../DaemonConnectivity';
 import { WebSocketMessage } from '@/models';
 import {
@@ -79,7 +80,7 @@ export class CDPRequestHandler {
 
   private handleCDPRequest(
     event: WebSocketMessage | Record<string, unknown>
-  ): string {
+  ): string | Promise<string> {
     try {
       let wsMessage: Record<string, unknown>;
 
@@ -129,6 +130,9 @@ export class CDPRequestHandler {
   ) {
     console.log('[CDP Handler] Command request received');
     const command = wsMessage.command as string;
+    if (command === 'getContentPolicy' || command === 'setContentPolicy') {
+      return contentPolicyCommand(command, wsMessage.request, messageID);
+    }
     let reply: WebSocketMessage | null = null;
     switch (command) {
       case pingCommand: {

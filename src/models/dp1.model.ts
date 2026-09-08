@@ -49,6 +49,9 @@ export interface DP1Item {
   license: DP1License;
   ref?: string; // URL ipfs:// or https://... (content-addressed preferred)
   refHash?: string; // When "ref" uses HTTPS, the "refHash" field is required for integrity.
+  // Curator judgments carried by the signed item, never manifest defaults.
+  contentRating?: 'general' | 'mature';
+  contentReasons?: string[];
   override?: {
     duration?: number;
     display?: DP1DisplayPreference;

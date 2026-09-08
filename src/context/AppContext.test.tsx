@@ -132,6 +132,9 @@ beforeEach(() => {
     Promise.resolve(true)
   );
   canvasServiceMocks.getCastInfo.mockImplementation(() => null);
+  canvasServiceMocks.setCastInfo.mockImplementation(castInfo => {
+    canvasServiceMocks.getCastInfo.mockImplementation(() => castInfo);
+  });
   canvasServiceMocks.requestArtworkRefresh.mockImplementation(() => true);
   canvasServiceMocks.wasHaltedDuringBootHydration.mockImplementation(
     () => false

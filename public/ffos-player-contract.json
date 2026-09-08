@@ -1,5 +1,10 @@
 {
   "contracts": {
+    "contentPolicy": {
+      "version": 1,
+      "commands": ["getContentPolicy", "setContentPolicy"],
+      "notes": "These two commands return a Promise of the ordinary JSON-string reply envelope. Runtime.evaluate must use awaitPromise:true and returnByValue:true. Active is reported only after the policy mirror is hydrated or durably persisted. blockUnratedCurated is an operator audit gate, not a controller setting. Missing cast contentContext means curated. This is a convenience viewing default, not tamper-resistant parental control."
+    },
     "mintPairingDisplay": {
       "version": 1,
       "requestKey": "request",

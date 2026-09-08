@@ -68,6 +68,8 @@ import { coerceLoopMode } from '@/utils/loopMode';
 import { coerceTombstoneMode } from '@/utils/tombstoneMode';
 import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
+import { contentPolicyStore } from './ContentPolicyStore';
+import { allowsContent, ContentContext, filterContent, hasValidContentLabels, parseContentContext } from './contentPolicy';
 
 const PLAYLIST_SOURCE_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
 const ARTWORK_SOURCE_RESOLVE_BASE = 'https://ff-player.local/';
@@ -266,6 +268,9 @@ class CanvasService {
   private bootHydrationFailed = false;
 
   private constructor() {
+    // One subscription for the document-lifetime singleton. Tightening policy
+    // invalidates queued old snapshots as well as the currently selected work.
+    contentPolicyStore.subscribe(() => { this.reconcileContentPolicy(); });
     // Latch any deliberate-stop notification that lands before boot
     // hydration settles. The PlaybackHalted event is the one contract every
     // halt source already honors (disconnect and sleep in this class, error
@@ -446,6 +451,12 @@ class CanvasService {
 
   public setCastInfo(castInfo: CastInfo | null, notify = true) {
     console.log('[CanvasService] Setting castInfo:', notify);
+    if (castInfo?.playlist?.items?.length && contentPolicyStore.getSnapshot().active) {
+      const filtered = filterContent(castInfo.playlist,
+        contentPolicyStore.getSnapshot().policy,
+        parseContentContext(castInfo.contentContext), castInfo.index ?? 0);
+      castInfo = filtered.playlist ? { ...castInfo, playlist: filtered.playlist, index: filtered.index } : null;
+    }
     if (castInfo === null) {
       this.queuedPlaylistPending = false;
       this.setDeferredRefreshPlaylist(null);
@@ -485,6 +496,16 @@ class CanvasService {
     }
     if (notify) {
       this.onCastInfoChange?.(this.castInfo);
+    }
+  }
+
+  /** Retire blocked recovery/queued snapshots when a durable policy changes. */
+  private reconcileContentPolicy(): void {
+    this.originalPlaylistItems = null;
+    this.queuedPlaylistPending = false;
+    this.setDeferredRefreshPlaylist(null);
+    if (this.castInfo) {
+      this.setCastInfo({ ...this.castInfo, castCommand: CastCommand.displayPlaylist });
     }
   }
 
@@ -604,12 +625,12 @@ class CanvasService {
     });
   }
 
-  public executeScheduledDP1Task(dp1CallData: DP1Call): void {
+  public executeScheduledDP1Task(dp1CallData: DP1Call, contentContext?: ContentContext): void {
     console.log('[CanvasService] Executing scheduled DP1 task with data');
     // Scheduled tasks are persisted recovery snapshots. Their source passed
     // validation when initially accepted (or predates this guard), so do not
     // reinterpret it as a new live cast when its timer fires after an upgrade.
-    this.nowDisplayPlaylist({ dp1CallData }, false);
+    this.nowDisplayPlaylist({ dp1CallData, contentContext }, false);
   }
 
   /**
@@ -807,6 +828,7 @@ class CanvasService {
       return {
         ok: true,
         castCommand: DeviceManager.getCachedCastInfo()?.castCommand,
+        contentContext: activeCastInfo?.contentContext,
 
         playlist: activeCastInfo?.playlist,
         playlistUrl: activeCastInfo?.playlistUrl,
@@ -1137,6 +1159,13 @@ class CanvasService {
     const dp1CallData = request.dp1_call;
     const playlistUrl = request.playlistUrl;
     const action = dp1Intent?.action;
+    if (action === DP1Action.GetCurrentPlaylist) {return this.getStatus();}
+    if (!dp1CallData) {return { ok: false, error: 'playlistInvalid' };}
+    const contentContext = parseContentContext('contentContext' in request
+      ? request.contentContext : (request.refresh ? this.castInfo?.contentContext : undefined));
+    if (dp1CallData.items?.some(item => !hasValidContentLabels(item))) {
+      return { ok: false, error: 'playlistInvalid' };
+    }
 
     console.log('[CanvasService] display playlist: ', action);
     Sentry.addBreadcrumb({
@@ -1146,7 +1175,24 @@ class CanvasService {
     });
 
     if (request.refresh) {
-      return this.refreshPlaylist(dp1CallData.items);
+      const policy = contentPolicyStore.getSnapshot().policy;
+      const currentItems = this.castInfo?.playlist?.items ?? [];
+      const currentItem = currentItems.at(normalizePlaylistIndex(this.castInfo?.index ?? 0, currentItems.length));
+      const updatedCurrent = currentItem && dp1CallData.items?.find(item => item.id === currentItem.id);
+      const retireCurrent = updatedCurrent && !allowsContent(updatedCurrent, policy, contentContext);
+      const filtered = filterContent(dp1CallData, policy, contentContext);
+      if (retireCurrent || request.retireBlockedCurrent === true) {
+        // Ordinary refresh can defer removal until the current work ends. A
+        // newly blocked work cannot use that path or its outgoing crossfade.
+        const currentPlaylistUrl = this.castInfo?.playlistUrl;
+        this.setCastInfo(null);
+        const reply = filtered.playlist ? this.nowDisplayPlaylist({ dp1CallData: filtered.playlist,
+          contentContext, playlistUrl: currentPlaylistUrl }) : { ok: true };
+        contentPolicyStore.retireRendering();
+        return reply;
+      }
+      if (!filtered.playlist) {return { ok: false, error: 'contentBlocked' };}
+      return this.refreshPlaylist(filtered.playlist.items);
     }
 
     let reply: Reply;
@@ -1155,6 +1201,7 @@ class CanvasService {
         return this.nowDisplayPlaylist({
           dp1CallData,
           playlistUrl,
+          contentContext,
         });
       }
 
@@ -1162,12 +1209,8 @@ class CanvasService {
         return this.schedulePlaylist({
           dp1CallData,
           scheduleTime: dp1Intent?.schedule_time,
+          contentContext,
         });
-      }
-
-      case DP1Action.GetCurrentPlaylist: {
-        reply = this.getStatus();
-        break;
       }
 
       case DP1Action.DisplayAtBoot: {
@@ -1205,6 +1248,15 @@ class CanvasService {
       console.error('[CanvasService] No items to display');
       return { ok: false };
     }
+    if (request.dp1CallData.items.some(item => !hasValidContentLabels(item))) {
+      return { ok: false, error: 'playlistInvalid' };
+    }
+    const contentContext = parseContentContext(request.contentContext);
+    const filtered = filterContent(request.dp1CallData,
+      contentPolicyStore.getSnapshot().policy, contentContext);
+    if (!filtered.playlist) {return { ok: false, error: 'contentBlocked' };}
+    request = { ...request, dp1CallData: filtered.playlist };
+    const playableItems = filtered.playlist.items ?? [];
     // Live casts validate; persisted scheduled/boot recovery may skip so an
     // upgrade does not strand a previously accepted playlist (see
     // executeScheduledDP1Task). Do not add a second unconditional check here.
@@ -1238,7 +1290,7 @@ class CanvasService {
     if (
       !isSameSelectedArtworkIdentity(
         currentSelectedItem,
-        request.dp1CallData.items[0]
+        playableItems[0]
       )
     ) {
       this.setRenderStatus(RenderStatus.pending);
@@ -1249,9 +1301,10 @@ class CanvasService {
     // shuffle / loop toggles from the previous playlist on the same device tab.
     this.setCastInfo({
       castCommand: CastCommand.displayPlaylist,
+      contentContext,
       playlist: {
         ...request.dp1CallData,
-        items: request.dp1CallData.items.map(item => ({
+        items: playableItems.map(item => ({
           ...item,
           duration: item.duration ?? NO_DURATION_VALUE,
         })),
@@ -1302,7 +1355,8 @@ class CanvasService {
     console.log('[CanvasService] Schedule playlist');
     DP1ScheduleService.storeScheduledTask(
       request.dp1CallData,
-      request.scheduleTime.replace('Z', '')
+      request.scheduleTime.replace('Z', ''),
+      request.contentContext,
     ).catch((error: unknown) => {
       console.error('[CanvasService] Error storing scheduled task:', error);
     });

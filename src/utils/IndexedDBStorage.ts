@@ -1,13 +1,16 @@
 /**
  * IndexedDB Storage Utility
- * Provides a localStorage-like API using IndexedDB for larger storage capacity
+ * Provides a localStorage-like API using IndexedDB for larger storage capacity.
  */
 
 const DB_NAME = 'FeralFileDisplayDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'keyValueStore';
 
-class IndexedDBStorage {
+/**
+ *
+ */
+export class IndexedDBStorage {
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
 
@@ -62,12 +65,47 @@ class IndexedDBStorage {
     }
   }
 
+  /** Read without collapsing a storage failure into a missing policy/history. */
+  async getItemStrict(key: string): Promise<string | null> {
+    await this.init();
+    if (!this.db) {throw new Error('IndexedDB unavailable');}
+    const db = this.db;
+    return new Promise<string | null>((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], 'readonly');
+      const request = transaction.objectStore(STORE_NAME).get(key);
+      transaction.onabort = () => { reject(transaction.error ?? new Error('IndexedDB read aborted')); };
+      transaction.onerror = () => { reject(transaction.error ?? new Error('IndexedDB read failed')); };
+      transaction.oncomplete = () => {
+        const result: unknown = request.result;
+        if (result === undefined || result === null) {resolve(null);}
+        else if (typeof result === 'string') {resolve(result);}
+        else {reject(new Error('Invalid IndexedDB record'));}
+      };
+    });
+  }
+
   /**
-   * Get a value from IndexedDB
+   * A strict durable write: only transaction completion acknowledges success.
+   * Abort/quota failures leave the previous record intact; never delete it as
+   * "cleanup" for policy or history, where missing means a different state.
    */
+  async setItemStrict(key: string, value: string): Promise<void> {
+    await this.init();
+    if (!this.db) {throw new Error('IndexedDB unavailable');}
+    const db = this.db;
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], 'readwrite');
+      transaction.oncomplete = () => { resolve(); };
+      transaction.onabort = () => { reject(transaction.error ?? new Error('IndexedDB write aborted')); };
+      transaction.onerror = () => { reject(transaction.error ?? new Error('IndexedDB write failed')); };
+      transaction.objectStore(STORE_NAME).put(value, key);
+    });
+  }
+
+  /** Get a best-effort legacy value; new policy/history code uses strict reads. */
   async getItem(key: string): Promise<string | null> {
     try {
-      if (!this.isSupported()) return null;
+      if (!this.isSupported()) {return null;}
       await this.init();
       if (!this.db) {
         return null;
@@ -106,11 +144,11 @@ class IndexedDBStorage {
   }
 
   /**
-   * Set a value in IndexedDB
+   * Set a value in IndexedDB.
    */
   async setItem(key: string, value: string): Promise<void> {
     try {
-      if (!this.isSupported()) return;
+      if (!this.isSupported()) {return;}
       await this.init();
       if (!this.db) {
         throw new Error('Database not initialized');
@@ -166,11 +204,11 @@ class IndexedDBStorage {
   }
 
   /**
-   * Remove a value from IndexedDB
+   * Remove a value from IndexedDB.
    */
   async removeItem(key: string): Promise<void> {
     try {
-      if (!this.isSupported()) return;
+      if (!this.isSupported()) {return;}
       await this.init();
       if (!this.db) {
         return;
@@ -207,11 +245,11 @@ class IndexedDBStorage {
   }
 
   /**
-   * Clear all values from IndexedDB
+   * Clear all values from IndexedDB.
    */
   async clear(): Promise<void> {
     try {
-      if (!this.isSupported()) return;
+      if (!this.isSupported()) {return;}
       await this.init();
       if (!this.db) {
         return;

@@ -15,6 +15,9 @@ import { canvasService } from '@/services/CanvasService';
 import { act, render } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { prepareContentPolicy } from '@/services/contentPolicy.testkit';
+
+beforeEach(prepareContentPolicy);
 
 import {
   advanceMs,

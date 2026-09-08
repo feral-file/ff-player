@@ -1,5 +1,6 @@
 import { DP1Call } from './dp1.model';
 import { RenderStatus } from './render_status.model';
+import type { ContentContext } from '@/services/contentPolicy';
 
 export enum LoopMode {
   none = 'none',
@@ -27,6 +28,8 @@ export enum CastCommand {
 }
 
 export interface CastInfo {
+  // Unsigned origin metadata; retained through recovery and history replay.
+  contentContext?: ContentContext;
   castCommand?: CastCommand;
 
   // Cast list artwork

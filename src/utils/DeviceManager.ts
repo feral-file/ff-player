@@ -229,6 +229,16 @@ class DeviceManager {
     return await this.fetchAndCache(key);
   }
 
+  /** Policy reads are strict: a storage failure is not an absent/default record. */
+  public async getContentPolicyRecord(): Promise<string | null> {
+    return indexedDBStorage.getItemStrict('contentPolicy');
+  }
+
+  /** Persist the mirror before any caller reports a new policy as active. */
+  public async setContentPolicyRecord(value: string): Promise<void> {
+    await indexedDBStorage.setItemStrict('contentPolicy', value);
+  }
+
   public async setItem(key: string, value: string): Promise<void> {
     await this.ensureInitialized();
     this.cache.set(key, value);
