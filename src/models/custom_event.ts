@@ -145,6 +145,10 @@ export interface SetupDisplayDetail {
   // captive sheet hidden while Camera stays in front (feral-file#3515).
   // Optional; absent or false is the join phase.
   client_attached?: boolean;
+  // softap_qr also accepts `reason` (declared below with the other prose
+  // states): the failed join's user-facing message, sent with the join QR
+  // that comes back after a wrong password so the screen says why. The
+  // join_failed paint that precedes it is overwritten within a millisecond.
   reason?: string;
   progress?: number;
   url?: string;

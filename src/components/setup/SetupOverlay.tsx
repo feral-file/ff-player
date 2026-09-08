@@ -121,12 +121,18 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
       />
     );
   }
+  // After a failed join the daemon sends the join QR back WITH the failure's
+  // message; the join_failed panel it replaces is on screen for a
+  // millisecond, so this line is the only place the reason is visible on
+  // the device (the phone's picker carries its own banner).
+  const joinFailure = proseReason(display);
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
         <p className={styles.title}>
           Scan the QR code, then follow your phone&apos;s prompt to connect
         </p>
+        {joinFailure ? <p className={styles.subtitle}>{joinFailure}</p> : null}
         <div className={styles.qrFrame}>
           <QRCodeSVG
             value={softApQrValue(ssid, display.password)}

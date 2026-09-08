@@ -135,3 +135,40 @@ describe('SetupOverlay softap_qr attached phase: unusable portal_url', () => {
     expect(qrValue(container)).toBe('WIFI:T:nopass;S:FF1-Setup-ABCD;;');
   });
 });
+
+describe('SetupOverlay softap_qr after a failed join', () => {
+  afterEach(cleanup);
+
+  it('shows the failure reason under the join title', async () => {
+    const { container } = render(<SetupOverlay />);
+    displaySetup({
+      state: SetupDisplayState.SoftApQr,
+      ssid: 'FF1-Setup-ABCD',
+      password: 'correct-horse',
+      portal_url: 'http://10.42.0.1',
+      reason: 'Wrong Wi-Fi password. Please check it and try again.',
+    });
+    expect(
+      await screen.findByText(
+        "Scan the QR code, then follow your phone's prompt to connect"
+      )
+    ).toBeTruthy();
+    expect(
+      screen.getByText('Wrong Wi-Fi password. Please check it and try again.')
+    ).toBeTruthy();
+    expect(qrValue(container)).toBe(
+      'WIFI:T:WPA;S:FF1-Setup-ABCD;P:correct-horse;;'
+    );
+  });
+
+  it('renders no failure line for a blank reason', async () => {
+    render(<SetupOverlay />);
+    displaySetup({
+      state: SetupDisplayState.SoftApQr,
+      ssid: 'FF1-Setup-ABCD',
+      reason: '   ',
+    });
+    expect(await screen.findByText(/follow your phone/)).toBeTruthy();
+    expect(screen.queryByText(/password\. Please/)).toBeNull();
+  });
+});
