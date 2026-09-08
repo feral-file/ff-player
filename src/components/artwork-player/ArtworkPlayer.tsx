@@ -115,6 +115,7 @@ const ArtworkPlayer = ({
   onRegisterArtworkReload,
   onSourceEnded,
   onItemCommitted,
+  onItemPlayed,
 }: {
   previewURL: string;
   isCustomView?: boolean;
@@ -147,6 +148,9 @@ const ArtworkPlayer = ({
   // wall" (the tombstone label, feral-file#3452) must key off this commit,
   // never off selection.
   onItemCommitted?: (itemIdentity: string) => void;
+  // Unlike onItemCommitted, this is never called for a failed transition.
+  // Playback history uses it; tombstone keeps the established transition hook.
+  onItemPlayed?: (itemIdentity: string) => void;
 }) => {
   const FADE_IN_OUT_DURATION_MS = 650;
   const { context } = useAppContext();
@@ -841,6 +845,9 @@ const ArtworkPlayer = ({
       setTopSlotIndex(null);
       markArtworkReady();
       onItemCommitted?.(incomingLayer.itemIdentity);
+      if (renderStatusRef.current !== RenderStatus.failed) {
+        onItemPlayed?.(incomingLayer.itemIdentity);
+      }
       return;
     }
 
@@ -894,6 +901,9 @@ const ArtworkPlayer = ({
         setTopSlotIndex(null);
         markArtworkReady();
         onItemCommitted?.(incomingLayer.itemIdentity);
+        if (renderStatusRef.current !== RenderStatus.failed) {
+          onItemPlayed?.(incomingLayer.itemIdentity);
+        }
       }, FADE_IN_OUT_DURATION_MS);
       return;
     }
@@ -908,6 +918,9 @@ const ArtworkPlayer = ({
     // the viewer-truth commit even though slot bookkeeping settles at fade
     // end in the timeout below.
     onItemCommitted?.(incomingLayer.itemIdentity);
+    if (renderStatusRef.current !== RenderStatus.failed) {
+      onItemPlayed?.(incomingLayer.itemIdentity);
+    }
     transitionTimeoutRef.current = setTimeout(() => {
       if (token !== transitionTokenRef.current) {return;}
       setSlots(prev => {

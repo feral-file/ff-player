@@ -19,6 +19,43 @@ export class IndexedDBStorage {
     return typeof indexedDB !== 'undefined';
   }
 
+  /** Strict read: a storage failure is never collapsed into an absent record. */
+  async getItemStrict(key: string): Promise<string | null> {
+    await this.init();
+    if (!this.db) {
+      throw new Error('IndexedDB unavailable');
+    }
+    const db = this.db;
+    return await new Promise<string | null>((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], 'readonly');
+      const request = transaction.objectStore(STORE_NAME).get(key);
+      transaction.onabort = () => { reject(transaction.error ?? new Error('IndexedDB read aborted')); };
+      transaction.onerror = () => { reject(transaction.error ?? new Error('IndexedDB read failed')); };
+      transaction.oncomplete = () => {
+        const result: unknown = request.result;
+        if (result === undefined || result === null) {resolve(null);}
+        else if (typeof result === 'string') {resolve(result);}
+        else {reject(new Error('Invalid IndexedDB record'));}
+      };
+    });
+  }
+
+  /** Strict write: success means the IndexedDB transaction completed. */
+  async setItemStrict(key: string, value: string): Promise<void> {
+    await this.init();
+    if (!this.db) {
+      throw new Error('IndexedDB unavailable');
+    }
+    const db = this.db;
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], 'readwrite');
+      transaction.oncomplete = () => { resolve(); };
+      transaction.onabort = () => { reject(transaction.error ?? new Error('IndexedDB write aborted')); };
+      transaction.onerror = () => { reject(transaction.error ?? new Error('IndexedDB write failed')); };
+      transaction.objectStore(STORE_NAME).put(value, key);
+    });
+  }
+
   private async init(): Promise<void> {
     if (!this.isSupported()) {
       // No-op on unsupported environments (e.g., Node/SSR); behave as empty storage.
@@ -63,43 +100,6 @@ export class IndexedDBStorage {
       this.initPromise = null;
       throw error;
     }
-  }
-
-  /** Read without collapsing a storage failure into a missing policy/history. */
-  async getItemStrict(key: string): Promise<string | null> {
-    await this.init();
-    if (!this.db) {throw new Error('IndexedDB unavailable');}
-    const db = this.db;
-    return new Promise<string | null>((resolve, reject) => {
-      const transaction = db.transaction([STORE_NAME], 'readonly');
-      const request = transaction.objectStore(STORE_NAME).get(key);
-      transaction.onabort = () => { reject(transaction.error ?? new Error('IndexedDB read aborted')); };
-      transaction.onerror = () => { reject(transaction.error ?? new Error('IndexedDB read failed')); };
-      transaction.oncomplete = () => {
-        const result: unknown = request.result;
-        if (result === undefined || result === null) {resolve(null);}
-        else if (typeof result === 'string') {resolve(result);}
-        else {reject(new Error('Invalid IndexedDB record'));}
-      };
-    });
-  }
-
-  /**
-   * A strict durable write: only transaction completion acknowledges success.
-   * Abort/quota failures leave the previous record intact; never delete it as
-   * "cleanup" for policy or history, where missing means a different state.
-   */
-  async setItemStrict(key: string, value: string): Promise<void> {
-    await this.init();
-    if (!this.db) {throw new Error('IndexedDB unavailable');}
-    const db = this.db;
-    await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction([STORE_NAME], 'readwrite');
-      transaction.oncomplete = () => { resolve(); };
-      transaction.onabort = () => { reject(transaction.error ?? new Error('IndexedDB write aborted')); };
-      transaction.onerror = () => { reject(transaction.error ?? new Error('IndexedDB write failed')); };
-      transaction.objectStore(STORE_NAME).put(value, key);
-    });
   }
 
   /** Get a best-effort legacy value; new policy/history code uses strict reads. */

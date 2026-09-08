@@ -25,6 +25,11 @@ export enum CastCommand {
   setLoop = 'setLoop',
   displayDefaultPlaylist = 'displayDefaultPlaylist',
   updateDefaultDuration = 'updateDefaultDuration',
+  // The public list contains only bounded display metadata. Resolving a
+  // record's castable DP-1 item is an internal controld step immediately
+  // before it enters the ordinary displayPlaylist path.
+  getRecentlyPlayed = 'getRecentlyPlayed',
+  resolveRecentlyPlayed = 'resolveRecentlyPlayed',
 }
 
 export interface CastInfo {

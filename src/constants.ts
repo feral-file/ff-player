@@ -7,6 +7,11 @@ export enum LocalStorageItem {
   bootPlaylist = 'boot_playlist',
   versionUpdateReload = 'versionUpdateReload',
   defaultItemDuration = 'defaultItemDuration',
+  // Bounded device-local evidence of artworks that reached the viewer's
+  // visual commit boundary. This is deliberately independent from castInfo:
+  // castInfo is recovery state for one current cast, not a playback timeline.
+  recentlyPlayed = 'recentlyPlayed',
+  recentlyPlayedIncomplete = 'recentlyPlayedIncomplete',
 }
 
 export const AppSettings = {

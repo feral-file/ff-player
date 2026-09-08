@@ -40,7 +40,13 @@ import {
   stripLegacyCastPlaybackTimeline,
 } from '@/utils/castInfo';
 import { LoopMode } from '@/models/cast_info.model';
-import { DP1Item } from '@/models/dp1.model';
+import { DP1Defaults, DP1Item } from '@/models/dp1.model';
+import {
+  appendRecentlyPlayed,
+  recentlyPlayedMetadata,
+  recentlyPlayedReplay,
+  RecentlyPlayedRecord,
+} from './recentPlaybackHistory';
 import {
   CustomEventName,
   NavigateEventDetail,
@@ -374,6 +380,148 @@ class CanvasService {
     isSaveToDevice: boolean,
     displaySettings: DP1DisplayPreference
   ) => void)[] = [];
+
+  // Separate from castInfo: castInfo is recovery state for one current cast,
+  // while these are device-local, visual-commit playback evidence. Writes are
+  // serialized so two quick automatic advances cannot append to one stale
+  // IndexedDB snapshot.
+  private recentlyPlayedRecords: RecentlyPlayedRecord[] | null = null;
+  private recentlyPlayedIncomplete: boolean | null = null;
+  private recentlyPlayedLoad: Promise<RecentlyPlayedRecord[]> | null = null;
+  private recentlyPlayedPersistenceError: string | null = null;
+  // This is intentionally session-only. After a player restart it is unknown
+  // until the current successful commit is observed; guessing by item id
+  // would suppress prior repeats from the reverse-chronological history.
+  private activeRecentlyPlayedRecordId: string | null = null;
+  private recentlyPlayedWrite: Promise<void> = Promise.resolve();
+  private recentlyPlayedSequence = 0;
+
+  private async loadRecentlyPlayed(): Promise<RecentlyPlayedRecord[]> {
+    if (this.recentlyPlayedRecords !== null) {
+      return this.recentlyPlayedRecords;
+    }
+    if (this.recentlyPlayedLoad) {
+      return this.recentlyPlayedLoad;
+    }
+    const load = Promise.all([
+      DeviceManager.getRecentlyPlayed(),
+      DeviceManager.getRecentlyPlayedIncomplete(),
+    ]).then(([records, incomplete]) => {
+      this.recentlyPlayedRecords = records;
+      this.recentlyPlayedIncomplete = incomplete;
+      return records;
+    });
+    this.recentlyPlayedLoad = load;
+    void load.finally(() => {
+      if (this.recentlyPlayedLoad === load) {
+        this.recentlyPlayedLoad = null;
+      }
+    });
+    return load;
+  }
+
+  /** Called only from ArtworkPlayer's visual-commit callback. */
+  public recordRecentlyPlayed(
+    item: DP1Item,
+    defaults: DP1Defaults | null = null,
+    contentContext: ContentContext = 'curated'
+  ): void {
+    this.recentlyPlayedWrite = this.recentlyPlayedWrite
+      .then(async () => {
+        const next = appendRecentlyPlayed(
+          await this.loadRecentlyPlayed(),
+          item,
+          {
+            nowMs: Date.now(),
+            nextSequence: Date.now() * 1000 + ++this.recentlyPlayedSequence,
+            defaults,
+            contentContext,
+          }
+        );
+        if (next === null) {
+          console.warn('[CanvasService] Recently played record exceeds byte budget');
+          await DeviceManager.setRecentlyPlayedIncomplete(true);
+          this.recentlyPlayedIncomplete = true;
+          return;
+        }
+        await DeviceManager.setRecentlyPlayed(next);
+        // Do not expose an entry before the durable transaction completes.
+        this.recentlyPlayedRecords = next;
+        this.activeRecentlyPlayedRecordId = next[0]?.recordId ?? null;
+      })
+      .catch((error: unknown) => {
+        // Do not make a persistence failure break wall playback. Retain the
+        // last known durable snapshot but make the dropped commit explicit;
+        // reloading old records as complete would hide a timeline gap.
+        this.recentlyPlayedIncomplete = true;
+        this.recentlyPlayedPersistenceError = 'Recently played could not persist a committed work';
+        console.error('[CanvasService] Failed to persist recently played history', error);
+      });
+  }
+
+  private getRecentlyPlayed(): Reply & {
+    status?: string;
+    records?: unknown[];
+    incomplete?: boolean;
+    activeOccurrenceKnown?: boolean;
+  } {
+    if (this.recentlyPlayedRecords === null || this.recentlyPlayedIncomplete === null) {
+      void this.loadRecentlyPlayed().catch((error: unknown) => {
+        console.error('[CanvasService] Failed to load recently played history', error);
+      });
+      return { ok: false, status: 'error', error: 'Recently played is still loading' };
+    }
+    if (this.recentlyPlayedPersistenceError) {
+      return {
+        ok: false,
+        status: 'error',
+        error: this.recentlyPlayedPersistenceError,
+        incomplete: true,
+      };
+    }
+    const records = recentlyPlayedMetadata(
+      this.recentlyPlayedRecords,
+      this.activeRecentlyPlayedRecordId
+    );
+    return {
+      ok: true,
+      status: records.length === 0 ? 'empty' : 'ok',
+      records,
+      incomplete: this.recentlyPlayedIncomplete,
+      activeOccurrenceKnown: this.activeRecentlyPlayedRecordId !== null,
+    };
+  }
+
+  private resolveRecentlyPlayed(
+    request: unknown
+  ): Reply & {
+    item?: DP1Item;
+    defaults?: DP1Defaults;
+    contentContext?: ContentContext;
+    status?: string;
+  } {
+    const recordId =
+      typeof request === 'object' && request !== null &&
+      typeof (request as { recordId?: unknown }).recordId === 'string'
+        ? (request as { recordId: string }).recordId
+        : '';
+    if (!recordId) {
+      return { ok: false, status: 'error', error: 'recordId is required' };
+    }
+    if (this.recentlyPlayedRecords === null || this.recentlyPlayedIncomplete === null) {
+      void this.loadRecentlyPlayed().catch((error: unknown) => {
+        console.error('[CanvasService] Failed to load recently played history', error);
+      });
+      return { ok: false, status: 'error', error: 'Recently played is still loading' };
+    }
+    if (this.recentlyPlayedPersistenceError) {
+      return { ok: false, status: 'error', error: this.recentlyPlayedPersistenceError };
+    }
+    const replay = recentlyPlayedReplay(this.recentlyPlayedRecords, recordId);
+    return replay
+      ? { ok: true, status: 'ok', ...replay }
+      : { ok: false, status: 'empty', error: 'Recently played record is unavailable' };
+  }
 
   public addDisplaySettingsChangedListener(
     callback: (
@@ -788,6 +936,10 @@ class CanvasService {
           return this.updateDefaultDuration(
             requestJson as UpdateDefaultDurationRequest
           );
+        case CastCommand.getRecentlyPlayed:
+          return this.getRecentlyPlayed();
+        case CastCommand.resolveRecentlyPlayed:
+          return this.resolveRecentlyPlayed(requestJson);
         default:
           console.error(`[CAST] Unknown command: ${command}`);
           return { ok: false };

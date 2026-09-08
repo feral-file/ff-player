@@ -112,7 +112,8 @@ vi.mock('@sentry/nextjs', () => ({
 
 function renderArtworkPlayer(
   itemIdentity = 'hls-error-item',
-  onItemCommitted?: (identity: string) => void
+  onItemCommitted?: (identity: string) => void,
+  onItemPlayed?: (identity: string) => void
 ) {
   const value = {
     context: {
@@ -132,6 +133,7 @@ function renderArtworkPlayer(
         displayPreferences={defaultDP1DisplayPreference}
         itemIdentity={itemIdentity}
         onItemCommitted={onItemCommitted}
+        onItemPlayed={onItemPlayed}
       />
     </AppContext.Provider>
   );
@@ -308,7 +310,8 @@ describe('ArtworkPlayer — current-slot fatal HLS failures', () => {
     'publishes failed for a current-slot fatal HLS %s',
     async (type, details) => {
       const onItemCommitted = vi.fn();
-      render(renderArtworkPlayer('hls-fatal-item', onItemCommitted));
+      const onItemPlayed = vi.fn();
+      render(renderArtworkPlayer('hls-fatal-item', onItemCommitted, onItemPlayed));
 
       await waitFor(() => {
         expect(hlsTest.errorHandlers.length).toBeGreaterThan(0);
@@ -339,6 +342,7 @@ describe('ArtworkPlayer — current-slot fatal HLS failures', () => {
       await waitFor(() => {
         expect(onItemCommitted).toHaveBeenCalledWith('hls-fatal-item');
       });
+      expect(onItemPlayed).not.toHaveBeenCalled();
     }
   );
 });

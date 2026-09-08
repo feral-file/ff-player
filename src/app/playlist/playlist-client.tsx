@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- playback orchestration is intentionally co-located. */
 'use client';
 
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
@@ -31,6 +32,7 @@ import { coerceLoopMode } from '@/utils/loopMode';
 import { useCurrentItemIdentity, useShowingKey } from './useCurrentItemIdentity';
 import { useMergeLandedRearm } from './useMergeLandedRearm';
 import { usePlaylistItemDisplayPreference } from './usePlaylistItemDisplayPreference';
+import { useRecentlyPlayedCommit } from './useRecentlyPlayedCommit';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 // 'sourceEnd' means the media just ended (display.loop=false) and needs a
@@ -609,6 +611,12 @@ export default function PlaylistClient() {
     toastText: tombstoneToast,
   } = useTombstone(playlist, deviceDisplaySettings);
 
+  const handleArtworkCommitted = useRecentlyPlayedCommit(
+    playlist,
+    playlistDefaultsSettings,
+    contentContext
+  );
+
   return (
     <>
       <div style={{ width: '100%', height: '100%' }}>
@@ -622,6 +630,7 @@ export default function PlaylistClient() {
             onRegisterArtworkReload={registerArtworkReload}
             onSourceEnded={handleSourceEnded}
             onItemCommitted={handleItemCommitted}
+            onItemPlayed={handleArtworkCommitted}
           />
         )}
         {permitted && <TombstoneOverlay

@@ -2,6 +2,10 @@ import { LocalStorageItem } from '@/constants';
 import { DisplaySettings } from '@/models/display_settings.model';
 import { CastInfo, ViewMode } from '@/models';
 import { DP1Call } from '@/models/dp1.model';
+import {
+  parseRecentlyPlayed,
+  RecentlyPlayedRecord,
+} from '@/services/recentPlaybackHistory';
 import { stripEphemeralCastInfoFields } from './castInfo';
 import indexedDBStorage from './IndexedDBStorage';
 
@@ -13,6 +17,8 @@ const PRELOAD_KEYS: string[] = [
   LocalStorageItem.dp1ScheduledTask,
   LocalStorageItem.bootPlaylist,
   LocalStorageItem.defaultItemDuration,
+  LocalStorageItem.recentlyPlayed,
+  LocalStorageItem.recentlyPlayedIncomplete,
 ];
 
 /**
@@ -222,6 +228,37 @@ class DeviceManager {
     const serialized = JSON.stringify(bootPlaylist);
     this.cache.set(LocalStorageItem.bootPlaylist, serialized);
     await indexedDBStorage.setItem(LocalStorageItem.bootPlaylist, serialized);
+  }
+
+  /**
+   * Recent-playback history is a separate, bounded device-local record. It
+   * never reuses castInfo: restoring a current cast after a reboot must not
+   * fabricate a timeline entry, and replacing a cast must not erase history.
+   */
+  public async getRecentlyPlayed(): Promise<RecentlyPlayedRecord[]> {
+    const raw = await indexedDBStorage.getItemStrict(LocalStorageItem.recentlyPlayed);
+    if (!raw) {
+      return [];
+    }
+    return parseRecentlyPlayed(raw);
+  }
+
+  public async setRecentlyPlayed(records: RecentlyPlayedRecord[]): Promise<void> {
+    const serialized = JSON.stringify(records);
+    await indexedDBStorage.setItemStrict(LocalStorageItem.recentlyPlayed, serialized);
+    this.cache.set(LocalStorageItem.recentlyPlayed, serialized);
+  }
+
+  public async getRecentlyPlayedIncomplete(): Promise<boolean> {
+    return (await indexedDBStorage.getItemStrict(LocalStorageItem.recentlyPlayedIncomplete)) === 'true';
+  }
+
+  public async setRecentlyPlayedIncomplete(incomplete: boolean): Promise<void> {
+    await indexedDBStorage.setItemStrict(
+      LocalStorageItem.recentlyPlayedIncomplete,
+      String(incomplete)
+    );
+    this.cache.set(LocalStorageItem.recentlyPlayedIncomplete, String(incomplete));
   }
 
   public async getItem(key: string): Promise<string | null> {
