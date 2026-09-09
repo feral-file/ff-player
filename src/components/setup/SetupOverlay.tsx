@@ -121,10 +121,14 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
       />
     );
   }
-  // After a failed join the daemon sends the join QR back WITH the failure's
-  // message; the join_failed panel it replaces is on screen for a
-  // millisecond, so this line is the only place the reason is visible on
-  // the device (the phone's picker carries its own banner).
+  // After a failed join (or once the attached phone left the hotspot) the
+  // daemon sends the join QR back WITH a reason; the join_failed panel it
+  // replaces is on screen for a millisecond, so this line is the only place
+  // the reason is visible on the device (the phone's picker carries its own
+  // banner). It renders at the panel's compact scale, not the shared
+  // .subtitle scale: at 1080p the full-size line wrapped to two rows and
+  // pushed the last recovery cue below the bottom edge (visual smoke
+  // 2026-09-08), and the join panel is the densest setup layout.
   const joinFailure = proseReason(display);
   return (
     <section className={styles.overlay} aria-live="polite">
@@ -132,7 +136,11 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
         <p className={styles.title}>
           Scan the QR code, then follow your phone&apos;s prompt to connect
         </p>
-        {joinFailure ? <p className={styles.subtitle}>{joinFailure}</p> : null}
+        {joinFailure ? (
+          <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
+            {joinFailure}
+          </p>
+        ) : null}
         <div className={styles.qrFrame}>
           <QRCodeSVG
             value={softApQrValue(ssid, display.password)}

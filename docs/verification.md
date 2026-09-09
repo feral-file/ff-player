@@ -75,6 +75,8 @@ procedure, runnable entirely in a browser:
    setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', client_attached:true}); // phone joined: portal-address QR
    setup('joining');
    setup('join_failed', {reason:'Wrong Wi-Fi password. Please check it and try again.'});
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', reason:'Wrong Wi-Fi password. Please check it and try again.'}); // re-raised join QR with the failure line under the title
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', reason:'Your phone left the setup Wi-Fi. Scan the code to join again.'}); // join QR back after the attached phone dropped off the hotspot
    // Provisioned-device boot/offline narration (not part of the OOBE story):
    // neutral title, prose body from controld.
    setup('connecting', {reason:'Looking for your Wi-Fi network… Setup mode will start in a few minutes if the connection does not return.'});
@@ -113,7 +115,11 @@ procedure, runnable entirely in a browser:
    happy path and the single recovery block keeps the code-changes wait cue,
    Wi-Fi Settings, password, keep-connected, mobile-data/VPN, and direct-IP
    cues legible without crowding the QR.
-7. On the `client_attached` repaint, confirm the panel shows ONE code (the
+7. On the re-raised `softap_qr` variants carrying `reason`, confirm the line
+   sits under the title at its own size, the QR is not pushed off the
+   panel, and the recovery block below stays legible — this is the densest
+   join-phase layout.
+8. On the `client_attached` repaint, confirm the panel shows ONE code (the
    portal address, not the WIFI: payload), the "Finish setup on your phone"
    heading, and a recovery block that keeps scan-again, mobile-data/VPN,
    direct-IP, Wi-Fi name, password, and keep-connected cues legible.
