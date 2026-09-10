@@ -144,8 +144,8 @@ export interface UpdateDisplaySettingsRequest extends TokenDisplaySettings {
   // framing margins on TokenDisplaySettings.
   margin?: number | string;
   background?: string;
-  // Echo the observed showing UUID for ephemeral writes. Mismatches reject the
-  // command, so a delayed request cannot change a subsequent artwork.
+  // Required for ephemeral writes; device defaults omit it. Missing or stale
+  // targets are rejected so a delayed request cannot change a subsequent work.
   showingKey?: string;
 }
 

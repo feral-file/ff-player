@@ -272,3 +272,7 @@ of the transition contract, not a separate concern.
   `showLoadingOverlay={showRenderLoadingOverlay && showLoading}`, so the model
   overlay honours both the kill switch and the same `RENDER_LOADING_DELAY_MS`
   gate as every other type — one timer owns both surfaces.
+
+## Showing identity
+
+The slot identity also carries the current showing key (`sessionKey`, with item/source fallback). A new showing starts a fresh slot transition even when the work ID and source URL are unchanged. Media readiness and ended-event guards check this showing key; ended callbacks still carry the original work identity. Composition and session adjustments cannot move to the next showing before its renderer commit.

@@ -1176,7 +1176,7 @@ class CanvasService {
       !request.isSaved &&
       (!composition ||
         composition.acceptsUpdates === false ||
-        (showingKey !== undefined && showingKey !== this.committedShowing?.id))
+        (!showingKey || showingKey !== this.committedShowing?.id))
     ) {
       return { ok: false, error: 'The showing changed or is still loading.' };
     }

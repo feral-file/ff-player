@@ -16,11 +16,14 @@ composition until the stage commits. Controllers must not infer this boundary
 from work ID alone; consecutive slots may share an ID.
 
 Before the first renderer commit there is no reportable composition or revision.
-Ephemeral `updateDisplaySettings` requests echo the observed UUID as `showingKey`.
-The player rejects mismatched targets and all ephemeral writes while no showing
-is committed or the selected settings hook belongs to an incoming showing.
-Unqualified requests from other controllers apply only to a committed, idle
-showing. Persistent device-default writes remain device-scoped.
+Ephemeral `updateDisplaySettings` requests must echo the observed UUID as
+`showingKey`. The player rejects missing or mismatched targets and all ephemeral
+writes while no showing is committed or the selected settings hook belongs to
+an incoming showing. Persistent device-default writes remain device-scoped.
+
+Adjacent playlist slots get distinct renderer transitions even when their work
+ID and source match. Session adjustments are ignored on the first render of a
+different showing, before the passive reset runs.
 
 `compositionRevision` increments when a composition is committed, including
 changes that return to the last polled values. This prevents controld's status

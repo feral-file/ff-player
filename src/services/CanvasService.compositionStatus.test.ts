@@ -88,6 +88,7 @@ describe('CanvasService display settings target', () => {
       acceptsUpdates,
     }), owner);
     const showingKey = canvasService.getStatus().deviceSettings?.showingKey;
+    expect(canvasService.updateDisplaySettings(request).ok).toBe(false);
     expect(
       canvasService.updateDisplaySettings({ ...request, showingKey }).ok
     ).toBe(true);

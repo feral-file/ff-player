@@ -31,7 +31,7 @@ function sendDisplaySettings(
 ) {
   act(() => {
     canvasService.updateDisplaySettings(
-      request as UpdateDisplaySettingsRequest
+      { ...request, showingKey: canvasService.getStatus().deviceSettings?.showingKey } as UpdateDisplaySettingsRequest
     );
   });
 }
@@ -60,9 +60,13 @@ describe('useArtworkSettings', () => {
 
   it('applies a session write on top and forgets it when the work changes', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const renders: { identity: string; scaling: Scaling | undefined }[] = [];
     const { result, rerender } = renderHook(
-      ({ identity }: { identity: string }) =>
-        useArtworkSettings(fillPreference, identity),
+      ({ identity }: { identity: string }) => {
+        const value = useArtworkSettings(fillPreference, identity);
+        renders.push({ identity, scaling: value.displaySettings?.scaling });
+        return value;
+      },
       { initialProps: { identity: 'A' } }
     );
 
@@ -72,6 +76,7 @@ describe('useArtworkSettings', () => {
 
     // Next work: its own merged preference replaces the whole stack.
     rerender({ identity: 'B' });
+    expect(renders.find(render => render.identity === 'B')?.scaling).toBe(Scaling.Fill);
     expect(result.current.displaySettings?.scaling).toBe(Scaling.Fill);
     expect(result.current.displaySettings?.changed).toBeUndefined();
   });

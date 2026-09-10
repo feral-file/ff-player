@@ -105,6 +105,7 @@ function playerEl(props: {
   previewURL: string;
   mime: string;
   itemIdentity: string;
+  sessionKey?: string;
   preference?: Partial<DP1DisplayPreference>;
 }): React.ReactElement {
   return (
@@ -113,6 +114,7 @@ function playerEl(props: {
         previewURL={props.previewURL}
         artworkPreviewMIMEType={props.mime}
         itemIdentity={props.itemIdentity}
+        sessionKey={props.sessionKey}
         displayPreferences={{
           ...defaultDP1DisplayPreference,
           ...props.preference,
@@ -140,7 +142,7 @@ function fireAllImageLoads(container: HTMLElement): void {
 }
 
 /** Render item A and wait for its ready-commit (stage shows A's background). */
-async function renderCommittedImageA(background: string): Promise<{
+async function renderCommittedImageA(background: string, sessionKey?: string): Promise<{
   container: HTMLElement;
   rerender: (ui: React.ReactElement) => void;
 }> {
@@ -149,6 +151,7 @@ async function renderCommittedImageA(background: string): Promise<{
       previewURL: IMAGE_URL_A,
       mime: 'image/png',
       itemIdentity: 'item-a',
+      sessionKey,
       preference: { background },
     })
   );
@@ -193,6 +196,35 @@ afterEach(() => {
   pauseSpy.mockRestore();
   delete (HTMLImageElement.prototype as { decode?: unknown }).decode;
   cleanup();
+});
+
+describe('ArtworkPlayer — showing identity', () => {
+  it('transitions adjacent same-work slots without carrying session settings', async () => {
+    const { container, rerender } = await renderCommittedImageA('#111111', 'slot-0');
+    const previousKey = canvasService.getStatus().deviceSettings?.showingKey;
+    act(() => {
+      expect(canvasService.updateDisplaySettings({
+        isSaved: false, showingKey: previousKey, margin: '10%', scaling: Scaling.Fill,
+      }).ok).toBe(true);
+    });
+    await waitFor(() => {
+      expect(canvasService.getStatus().deviceSettings?.margin).toBe('10%');
+    });
+    rerender(playerEl({
+      previewURL: IMAGE_URL_A, mime: 'image/png', itemIdentity: 'item-a',
+      sessionKey: 'slot-1', preference: { background: '#111111', margin: '3%', scaling: Scaling.Fit },
+    }));
+    expect(canvasService.getStatus().deviceSettings?.showingKey).toBe(previousKey);
+    await waitFor(() => { expect(container.querySelectorAll('img')).toHaveLength(2); });
+    expect(canvasService.getStatus().deviceSettings?.margin).toBe('10%');
+    fireAllImageLoads(container);
+    await waitFor(() => {
+      const current = canvasService.getStatus().deviceSettings;
+      expect(current?.showingKey).not.toBe(previousKey);
+      expect(current).toMatchObject({ margin: '3%', scaling: Scaling.Fit });
+    }, { timeout: TRANSITION_WAIT_MS });
+  });
+
 });
 
 describe('ArtworkPlayer — background latch across item advance', () => {
