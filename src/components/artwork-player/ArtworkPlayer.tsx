@@ -321,12 +321,16 @@ const ArtworkPlayer = ({
   // at partial opacity) and strictly less visible than the old behavior —
   // the fully-visible outgoing artwork restyling seconds before the swap.
   const showingKey = sessionKey ?? itemIdentity ?? previewURL;
-  const [committedComposition, setCommittedComposition] = useState({
+  const compositionOwner = useRef({});
+  const displaySettingsRef = useRef({
     showingKey,
     settings: displaySettings,
   });
-  const committedVisualSettings = committedComposition.settings;
-  const displaySettingsRef = useRef(committedComposition);
+  const [committedComposition, setCommittedComposition] =
+    useState<typeof displaySettingsRef.current>();
+  const committedVisualSettings = committedComposition
+    ? committedComposition.settings
+    : displaySettings;
   useLayoutEffect(() => {
     displaySettingsRef.current = { showingKey, settings: displaySettings };
   }, [displaySettings, showingKey]);
@@ -335,11 +339,19 @@ const ArtworkPlayer = ({
   }, []);
   // Status follows the same latch as the pixels. Incoming preferences and
   // identity must not reach another controller while the old work is visible.
-  useLayoutEffect(
-    () =>
-      canvasService.registerDisplaySettingsReporter(() => committedComposition),
-    [committedComposition]
-  );
+  useLayoutEffect(() => {
+    if (!committedComposition) {return;}
+    return canvasService.registerDisplaySettingsReporter(
+      () => ({
+        ...committedComposition,
+        // The settings hook already follows the selected incoming work. Reject
+        // writes while it differs from the committed showing a controller saw.
+        acceptsUpdates:
+          displaySettingsRef.current.showingKey === committedComposition.showingKey,
+      }),
+      compositionOwner.current
+    );
+  }, [committedComposition]);
   useEffect(() => {
     const activeLayer = slotsRef.current[activeSlotRef.current];
     const transitionPending =
@@ -347,10 +359,10 @@ const ArtworkPlayer = ({
       (activeLayer !== null &&
         (activeLayer.previewURL !== previewURL ||
           activeLayer.itemIdentity !== (itemIdentity ?? '')));
-    if (!transitionPending) {
+    if (committedComposition && !transitionPending) {
       setCommittedComposition(displaySettingsRef.current);
     }
-  }, [displaySettings, showingKey, previewURL, itemIdentity]);
+  }, [displaySettings, showingKey, previewURL, itemIdentity, committedComposition]);
 
   const clearLoadingDelay = useCallback(() => {
     if (!loadingDelayRef.current) {

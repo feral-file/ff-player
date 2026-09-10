@@ -68,6 +68,7 @@ import { coerceLoopMode } from '@/utils/loopMode';
 import { coerceTombstoneMode } from '@/utils/tombstoneMode';
 import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
+import { v4 as uuidv4 } from 'uuid';
 
 const PLAYLIST_SOURCE_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
 const ARTWORK_SOURCE_RESOLVE_BASE = 'https://ff-player.local/';
@@ -210,9 +211,11 @@ class CanvasService {
   private castInfo: CastInfo | null = null;
   private renderStatus: RenderStatus | undefined;
   private compositionRevision = 0;
+  private committedShowing?: { identity: string; id: string; owner: object };
   private displaySettingsReporter?: () => {
     showingKey: string;
     settings: DP1DisplayPreference | undefined;
+    acceptsUpdates?: boolean;
   };
   private static instance: CanvasService | null;
   private originalPlaylistItems: DP1Item[] | null = null;
@@ -787,8 +790,21 @@ class CanvasService {
 
   /** The mounted stage owns composition truth; never persist this snapshot. */
   public registerDisplaySettingsReporter(
-    reporter: NonNullable<CanvasService['displaySettingsReporter']>
+    reporter: NonNullable<CanvasService['displaySettingsReporter']>,
+    owner: object
   ): () => void {
+    const { showingKey } = reporter();
+    // The renderer's identity contains the source URL, which can carry signed
+    // credentials. Export only a random ID. Keep it through effect cleanup and
+    // settings-only commits so controllers do not discard their pending writes.
+    // The owner marks one mounted stage. Waking/remounting the same source is
+    // a new showing, while replacing that stage's layout effect is not.
+    if (
+      this.committedShowing?.identity !== showingKey ||
+      this.committedShowing.owner !== owner
+    ) {
+      this.committedShowing = { identity: showingKey, id: uuidv4(), owner };
+    }
     this.displaySettingsReporter = reporter;
     this.compositionRevision++;
     return () => {
@@ -853,7 +869,7 @@ class CanvasService {
           '',
 
         deviceSettings: {
-          showingKey: composition?.showingKey,
+          showingKey: composition ? this.committedShowing?.id : undefined,
           compositionRevision: composition
             ? this.compositionRevision
             : undefined,
@@ -1151,12 +1167,25 @@ class CanvasService {
   }
 
   public updateDisplaySettings(request: UpdateDisplaySettingsRequest): Reply {
+    const { showingKey, ...settings } = request;
+    const composition = this.displaySettingsReporter?.();
+    // Ephemeral writes belong to the showing the controller observed. During
+    // a transition the hook follows the incoming selection before it is visible;
+    // do not apply an outgoing or delayed command to that different showing.
+    if (
+      !request.isSaved &&
+      (!composition ||
+        composition.acceptsUpdates === false ||
+        (showingKey !== undefined && showingKey !== this.committedShowing?.id))
+    ) {
+      return { ok: false, error: 'The showing changed or is still loading.' };
+    }
     console.log(
       '[CanvasService] updateDisplaySettings: ',
       JSON.stringify(request)
     );
 
-    this.notifyDisplaySettingsChanged(request.isSaved, request);
+    this.notifyDisplaySettingsChanged(request.isSaved, settings);
     return { ok: true };
   }
 

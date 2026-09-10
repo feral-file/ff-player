@@ -159,9 +159,11 @@ async function renderCommittedImageA(background: string): Promise<{
   await waitFor(() => {
     expect(stageOf(container).style.backgroundColor).toBe('rgb(17, 17, 17)');
     expect(canvasService.getStatus().deviceSettings).toMatchObject({
-      showingKey: 'item-a',
       background: '#111111',
     });
+    expect(canvasService.getStatus().deviceSettings?.showingKey).toBeTypeOf(
+      'string'
+    );
   });
   return { container, rerender };
 }
@@ -194,8 +196,31 @@ afterEach(() => {
 });
 
 describe('ArtworkPlayer — background latch across item advance', () => {
+  it('withholds composition until the first image commits', async () => {
+    const { container } = render(
+      playerEl({
+        previewURL: IMAGE_URL_A,
+        mime: 'image/png',
+        itemIdentity: 'item-a',
+        preference: { background: '#111111', margin: '10%' },
+      })
+    );
+    await waitFor(() => { expect(container.querySelector('img')).toBeTruthy(); });
+    const pending = canvasService.getStatus().deviceSettings;
+    expect(pending?.showingKey).toBeUndefined();
+    expect(pending?.compositionRevision).toBeUndefined();
+    expect(pending?.margin).toBeUndefined();
+    fireAllImageLoads(container);
+    await waitFor(() => {
+      expect(canvasService.getStatus().deviceSettings?.showingKey).toBeTypeOf(
+        'string'
+      );
+    });
+  });
+
   it('keeps the outgoing item background until the transition commits', async () => {
     const { container, rerender } = await renderCommittedImageA('#111111');
+    const initialShowing = canvasService.getStatus().deviceSettings?.showingKey;
 
     rerender(
       playerEl({
@@ -212,6 +237,16 @@ describe('ArtworkPlayer — background latch across item advance', () => {
       expect(container.querySelectorAll('img')).toHaveLength(2);
     });
     expect(stageOf(container).style.backgroundColor).toBe('rgb(17, 17, 17)');
+    expect(canvasService.getStatus().deviceSettings?.showingKey).toBe(
+      initialShowing
+    );
+    expect(
+      canvasService.updateDisplaySettings({
+        isSaved: false,
+        showingKey: initialShowing,
+        background: '#ffffff',
+      }).ok
+    ).toBe(false);
 
     // Item B ready -> crossfade -> commit swaps the stage to B's background.
     fireAllImageLoads(container);
@@ -225,9 +260,19 @@ describe('ArtworkPlayer — background latch across item advance', () => {
     );
     // Outgoing slot layer is gone after commit.
     expect(canvasService.getStatus().deviceSettings).toMatchObject({
-      showingKey: 'item-b',
       background: '#222222',
     });
+    expect(canvasService.getStatus().deviceSettings?.showingKey).not.toBe(
+      initialShowing
+    );
+    // A delayed request for A must not land on B after the transition either.
+    expect(
+      canvasService.updateDisplaySettings({
+        isSaved: false,
+        showingKey: initialShowing,
+        background: '#ffffff',
+      }).ok
+    ).toBe(false);
     await waitFor(() => {
       expect(container.querySelectorAll('img')).toHaveLength(1);
     });
@@ -240,6 +285,7 @@ describe('ArtworkPlayer — live settings pass-through', () => {
 
     const initialRevision =
       canvasService.getStatus().deviceSettings?.compositionRevision;
+    const initialShowing = canvasService.getStatus().deviceSettings?.showingKey;
     // Same item, new background (app-driven adjustment): no transition is
     // pending, so the latch must pass it straight through.
     rerender(
@@ -259,7 +305,7 @@ describe('ArtworkPlayer — live settings pass-through', () => {
       expect(stageOf(container).style.backgroundColor).toBe('rgb(51, 51, 51)');
     });
     expect(canvasService.getStatus().deviceSettings).toMatchObject({
-      showingKey: 'item-a',
+      showingKey: initialShowing,
       background: '#333333',
       margin: '12%',
       scaling: Scaling.Fill,

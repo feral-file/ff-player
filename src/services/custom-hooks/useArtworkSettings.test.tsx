@@ -11,7 +11,7 @@ import type { DP1DisplayPreference } from '@/models/dp1.model';
 import type { UpdateDisplaySettingsRequest } from '@/models/cast_request_reply.model';
 import { canvasService } from '@/services/CanvasService';
 import { act, cleanup, renderHook } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useArtworkSettings } from './useArtworkSettings';
 
 vi.mock('@sentry/nextjs', () => ({
@@ -36,7 +36,17 @@ function sendDisplaySettings(
   });
 }
 
+let removeComposition: () => void;
+beforeEach(() => {
+  // These hook-only tests stand in for the committed ArtworkPlayer stage.
+  removeComposition = canvasService.registerDisplaySettingsReporter(() => ({
+    showingKey: 'hook-harness',
+    settings: fillPreference,
+  }), {});
+});
+
 afterEach(() => {
+  removeComposition();
   cleanup();
   vi.restoreAllMocks();
 });

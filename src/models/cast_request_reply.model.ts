@@ -78,6 +78,7 @@ export interface CheckDeviceStatusReply extends Reply {
   deviceSettings?: {
     // Composition describes the committed on-screen showing, after DP-1
     // merging and session adjustments. It is not the saved machine default.
+    // Random showing UUID; never the renderer's source-bearing private key.
     showingKey?: string;
     // Changes even if several adjustments return to the last polled values.
     // Controld deduplicates notifications by status payload.
@@ -139,6 +140,13 @@ export interface UpdateArtFramingRequest extends Request {
 export interface UpdateDisplaySettingsRequest extends TokenDisplaySettings {
   tokenId?: string;
   isSaved: boolean;
+  // DP-1 composition fields used by the renderer, distinct from legacy per-side
+  // framing margins on TokenDisplaySettings.
+  margin?: number | string;
+  background?: string;
+  // Echo the observed showing UUID for ephemeral writes. Mismatches reject the
+  // command, so a delayed request cannot change a subsequent artwork.
+  showingKey?: string;
 }
 
 export interface UpdateCursorPositionsRequest extends Request {
