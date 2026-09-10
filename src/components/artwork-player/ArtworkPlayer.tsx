@@ -1947,7 +1947,13 @@ const ArtworkPlayer = ({
         }}>
         <CursorLayer ref={cursorRef} />
         {showSlowLoadingSpinner() && <Loading />}
-        {SLOT_INDICES.map(i => renderSlot(i))}
+        {/* Absolute slots must fill the content area inside the matte. If
+            the padded stage is their containing block, inset: 0 covers its
+            padding and the artwork never shrinks. Keep screen overlays on
+            the outer stage and both crossfade slots in this viewport. */}
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+          {SLOT_INDICES.map(i => renderSlot(i))}
+        </div>
       </div>
       {showMessageModal && (
         <MessageModal

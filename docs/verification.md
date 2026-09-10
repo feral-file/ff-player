@@ -46,6 +46,25 @@ By default, `npm run verify` lints changed files against `origin/main`. To verif
 - If the change touches playback, cast recovery, display settings, or route behavior, pair verification with a manual smoke pass for the affected flow.
 - **Playlist route / repeat-off hold:** With loop `none`, advance to the last timed slot so playback holds on the final artwork; confirm a queued shuffle or refresh **promotes the new playlist on cast** only in that hold (not when the final item has no finite slot timer); leaving `none` via `setLoop` should resume the slot timer from the held frame. Expect the current artwork to stay selected after shuffle (anchor at index `0`) until its slot timer completes before advancing.
 
+## Manual visual smoke: matting and Fit/Fill
+
+Use the real player in Chromium or on an FF1; jsdom cannot verify layout.
+
+1. Display a static image with the panel's aspect ratio so letterboxing cannot
+   be mistaken for matting. Send `updateDisplaySettings` with
+   `{margin: "10%", background: "#ffffff", isSaved: false}`. Confirm a visible
+   inset on all four sides and an artwork viewport 80% of the screen's width
+   and height. At 0%, the artwork must reach the original bounds again.
+2. Display a non-square static image. Select Fill, then Fit, with the matte
+   active. Confirm cropping changes within the same inset viewport. Repeat
+   after a saved machine default of Fill to cover the precedence fix (#290).
+3. Advance between images with different margins and background colors. The
+   outgoing work must retain its settings until the transition commits, and
+   the two fade layers must occupy the same inner viewport.
+4. Check a video and a responsive iframe with a nonzero margin. Their bounds
+   must respect the same inset. A slow load's global overlay and the cursor
+   must continue using the full screen.
+
 ## Manual visual smoke: setup and pairing overlays
 
 Copy or layout changes to `SetupOverlay` / `MintPairingOverlay` cannot be
