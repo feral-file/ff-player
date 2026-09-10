@@ -28,4 +28,17 @@ describe('ffos-player-contract.json setupDisplay manifest', () => {
     const fields = contract.contracts.setupDisplay.stateFields;
     expect(fields.softap_qr.optional).toContain('portal_url');
   });
+
+  it('declares the failure line carried by the re-raised softap_qr', () => {
+    const fields = contract.contracts.setupDisplay.stateFields;
+    expect(fields.softap_qr.optional).toContain('reason');
+  });
+
+  it('declares the attached-phase flag carried by softap_qr', () => {
+    // Capability gate: dropping this from the manifest would make controld
+    // treat the build as pre-swap and never send the attach repaint, with
+    // every test still green.
+    const fields = contract.contracts.setupDisplay.stateFields;
+    expect(fields.softap_qr.optional).toContain('client_attached');
+  });
 });
