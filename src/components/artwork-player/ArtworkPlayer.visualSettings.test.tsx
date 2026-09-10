@@ -18,6 +18,8 @@ import { act, cleanup, render, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
+import { canvasService } from '@/services/CanvasService';
+import { Scaling } from '@/models/dp1.model';
 
 vi.mock('@sentry/nextjs', () => ({
   captureException: vi.fn(),
@@ -156,6 +158,10 @@ async function renderCommittedImageA(background: string): Promise<{
   fireAllImageLoads(container);
   await waitFor(() => {
     expect(stageOf(container).style.backgroundColor).toBe('rgb(17, 17, 17)');
+    expect(canvasService.getStatus().deviceSettings).toMatchObject({
+      showingKey: 'item-a',
+      background: '#111111',
+    });
   });
   return { container, rerender };
 }
@@ -218,6 +224,10 @@ describe('ArtworkPlayer — background latch across item advance', () => {
       { timeout: TRANSITION_WAIT_MS }
     );
     // Outgoing slot layer is gone after commit.
+    expect(canvasService.getStatus().deviceSettings).toMatchObject({
+      showingKey: 'item-b',
+      background: '#222222',
+    });
     await waitFor(() => {
       expect(container.querySelectorAll('img')).toHaveLength(1);
     });
@@ -228,6 +238,8 @@ describe('ArtworkPlayer — live settings pass-through', () => {
   it('applies settings changes immediately when no transition is pending', async () => {
     const { container, rerender } = await renderCommittedImageA('#111111');
 
+    const initialRevision =
+      canvasService.getStatus().deviceSettings?.compositionRevision;
     // Same item, new background (app-driven adjustment): no transition is
     // pending, so the latch must pass it straight through.
     rerender(
@@ -235,13 +247,43 @@ describe('ArtworkPlayer — live settings pass-through', () => {
         previewURL: IMAGE_URL_A,
         mime: 'image/png',
         itemIdentity: 'item-a',
-        preference: { background: '#333333' },
+        preference: {
+          background: '#333333',
+          margin: '12%',
+          scaling: Scaling.Fill,
+        },
       })
     );
 
     await waitFor(() => {
       expect(stageOf(container).style.backgroundColor).toBe('rgb(51, 51, 51)');
     });
+    expect(canvasService.getStatus().deviceSettings).toMatchObject({
+      showingKey: 'item-a',
+      background: '#333333',
+      margin: '12%',
+      scaling: Scaling.Fill,
+    });
+    // A -> B -> A between polls must still change the wire payload, or
+    // controld's dedup could suppress another controller's legitimate revert.
+    rerender(
+      playerEl({
+        previewURL: IMAGE_URL_A,
+        mime: 'image/png',
+        itemIdentity: 'item-a',
+        preference: { background: '#111111' },
+      })
+    );
+    await waitFor(() => {
+      const report = canvasService.getStatus().deviceSettings;
+      expect(report?.background).toBe('#111111');
+      expect(report?.compositionRevision).toBeGreaterThan(initialRevision ?? 0);
+    });
+    cleanup();
+    expect(
+      canvasService.getStatus().deviceSettings?.showingKey
+    ).toBeUndefined();
+    expect(canvasService.getStatus().deviceSettings?.margin).toBeUndefined();
   });
 });
 

@@ -1,0 +1,30 @@
+# Current composition in player status
+
+`checkStatus.deviceSettings` reports the committed stage's `scaling`, `margin`
+and `background`, after the DP-1 preference merge and current-showing Control
+Center adjustments. These fields describe the screen, not the saved machine
+default. `orientation`, `defaultDuration` and `tombstone` remain device settings.
+
+`showingKey` is opaque to controllers. It changes at the same slot/work/source
+boundary that resets `useArtworkSettings`. It is latched with the visual
+settings: while an incoming work loads or crossfades, status keeps the outgoing
+composition until the stage commits. Controllers must not infer this boundary
+from work ID alone; consecutive slots may share an ID.
+
+`compositionRevision` increments when a composition is committed, including
+changes that return to the last polled values. This prevents controld's status
+deduplication from hiding a second controller's quick revert. It is a change
+marker, not a durable sequence across player restarts.
+
+Margin retains its DP-1 representation: numbers are pixels, percent strings
+are a percentage of each viewport dimension, and other CSS strings stay strings.
+Background retains its CSS color representation. No mounted stage means no
+composition identity, margin or background report; scaling then retains the
+existing saved/default fallback. Composition snapshots are never persisted.
+
+`feral-controld` must preserve all five composition fields in
+its typed `PlayerStatus` decode and lightweight notification marshal. The app
+seeds controls from status, keeps local optimism while commands settle, rolls
+back rejected intents, and accepts fresh idle reports (including external
+reverts). Each partial write changes only its named field and remains
+`isSaved: false` in Control Center.

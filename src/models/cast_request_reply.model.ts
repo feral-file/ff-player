@@ -76,7 +76,15 @@ export interface CheckDeviceStatusReply extends Reply {
   stamp?: string;
 
   deviceSettings?: {
+    // Composition describes the committed on-screen showing, after DP-1
+    // merging and session adjustments. It is not the saved machine default.
+    showingKey?: string;
+    // Changes even if several adjustments return to the last polled values.
+    // Controld deduplicates notifications by status payload.
+    compositionRevision?: number;
     scaling?: Scaling;
+    margin?: number | string;
+    background?: string;
     orientation?: ViewMode;
     // Device-level default item duration in seconds; absent means "auto"
     // (no device override, the playlist's duration cascade stands).

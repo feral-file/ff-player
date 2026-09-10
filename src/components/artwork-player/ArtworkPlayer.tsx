@@ -45,9 +45,7 @@ import {
   ContentTypeDetectionError,
 } from '@/utils/helper';
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
-import {
-  RenderStatus,
-} from '@/models';
+import { RenderStatus } from '@/models';
 import { useArtworkSettings } from '@/services/custom-hooks/useArtworkSettings';
 import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
 import ModelViewerScreen from '../model-viewer/ModelViewerScreen';
@@ -322,24 +320,37 @@ const ArtworkPlayer = ({
   // the outgoing item's scaling. That is bounded (FADE_IN_OUT_DURATION_MS,
   // at partial opacity) and strictly less visible than the old behavior —
   // the fully-visible outgoing artwork restyling seconds before the swap.
-  const [committedVisualSettings, setCommittedVisualSettings] =
-    useState(displaySettings);
-  const displaySettingsRef = useRef(displaySettings);
+  const showingKey = sessionKey ?? itemIdentity ?? previewURL;
+  const [committedComposition, setCommittedComposition] = useState({
+    showingKey,
+    settings: displaySettings,
+  });
+  const committedVisualSettings = committedComposition.settings;
+  const displaySettingsRef = useRef(committedComposition);
   useLayoutEffect(() => {
-    displaySettingsRef.current = displaySettings;
-  }, [displaySettings]);
+    displaySettingsRef.current = { showingKey, settings: displaySettings };
+  }, [displaySettings, showingKey]);
   const commitVisualSettings = useCallback(() => {
-    setCommittedVisualSettings(displaySettingsRef.current);
+    setCommittedComposition(displaySettingsRef.current);
   }, []);
+  // Status follows the same latch as the pixels. Incoming preferences and
+  // identity must not reach another controller while the old work is visible.
+  useLayoutEffect(
+    () =>
+      canvasService.registerDisplaySettingsReporter(() => committedComposition),
+    [committedComposition]
+  );
   useEffect(() => {
     const activeLayer = slotsRef.current[activeSlotRef.current];
     const transitionPending =
       incomingSlotRef.current !== null ||
-      (activeLayer !== null && activeLayer.previewURL !== previewURLRef.current);
+      (activeLayer !== null &&
+        (activeLayer.previewURL !== previewURL ||
+          activeLayer.itemIdentity !== (itemIdentity ?? '')));
     if (!transitionPending) {
-      setCommittedVisualSettings(displaySettings);
+      setCommittedComposition(displaySettingsRef.current);
     }
-  }, [displaySettings]);
+  }, [displaySettings, showingKey, previewURL, itemIdentity]);
 
   const clearLoadingDelay = useCallback(() => {
     if (!loadingDelayRef.current) {
@@ -609,7 +620,9 @@ const ArtworkPlayer = ({
     (slotIndex: SlotIndex, patch: Partial<SlotLayer>) => {
       setSlots(prev => {
         const cur = prev[slotIndex];
-        if (!cur) {return prev;}
+        if (!cur) {
+          return prev;
+        }
         const next = [...prev] as [SlotLayer | null, SlotLayer | null];
         next[slotIndex] = { ...cur, ...patch };
         return next;
@@ -624,7 +637,9 @@ const ArtworkPlayer = ({
       pendingReadySlotRef.current = slotIndex;
       setSlots(prev => {
         const layer = prev[slotIndex];
-        if (layer?.previewURL !== currentURL || !layer.loading) {return prev;}
+        if (layer?.previewURL !== currentURL || !layer.loading) {
+          return prev;
+        }
         const next = [...prev] as [SlotLayer | null, SlotLayer | null];
         next[slotIndex] = { ...layer, loading: false };
         return next;
@@ -808,7 +823,9 @@ const ArtworkPlayer = ({
 
   useLayoutEffect(() => {
     const readySlot = pendingReadySlotRef.current;
-    if (readySlot === null) {return;}
+    if (readySlot === null) {
+      return;
+    }
 
     const currentURL = previewURLRef.current;
     const incomingLayer = slots[readySlot];
@@ -816,7 +833,9 @@ const ArtworkPlayer = ({
       pendingReadySlotRef.current = null;
       return;
     }
-    if (incomingLayer.loading) {return;}
+    if (incomingLayer.loading) {
+      return;
+    }
 
     pendingReadySlotRef.current = null;
     // Disarm the slow-load timer the moment the incoming slot commits, not at
@@ -850,7 +869,9 @@ const ArtworkPlayer = ({
 
     const outgoing = activeSlotRef.current;
     const incoming = readySlot;
-    if (outgoing === incoming) {return;}
+    if (outgoing === incoming) {
+      return;
+    }
 
     const outLayer = slots[outgoing];
     const outgoingType = outLayer?.previewType ?? null;
@@ -860,8 +881,9 @@ const ArtworkPlayer = ({
 
     transitionTokenRef.current += 1;
     const token = transitionTokenRef.current;
-    if (transitionTimeoutRef.current)
-      {clearTimeout(transitionTimeoutRef.current);}
+    if (transitionTimeoutRef.current) {
+      clearTimeout(transitionTimeoutRef.current);
+    }
 
     // Pause-only here (not pauseAndTeardownSlot): the sync Hls.destroy()
     // used to run in this pre-paint phase and jank the fade's first frames.
@@ -878,7 +900,9 @@ const ArtworkPlayer = ({
         return op;
       });
       transitionTimeoutRef.current = setTimeout(() => {
-        if (token !== transitionTokenRef.current) {return;}
+        if (token !== transitionTokenRef.current) {
+          return;
+        }
         setSlots(prev => {
           const next = [...prev] as [SlotLayer | null, SlotLayer | null];
           next[outgoing] = null;
@@ -909,7 +933,9 @@ const ArtworkPlayer = ({
     // end in the timeout below.
     onItemCommitted?.(incomingLayer.itemIdentity);
     transitionTimeoutRef.current = setTimeout(() => {
-      if (token !== transitionTokenRef.current) {return;}
+      if (token !== transitionTokenRef.current) {
+        return;
+      }
       setSlots(prev => {
         const next = [...prev] as [SlotLayer | null, SlotLayer | null];
         next[outgoing] = null;
@@ -1002,7 +1028,9 @@ const ArtworkPlayer = ({
   useEffect(() => {
     let cancelled = false;
     const url = previewURL;
-    if (!url) {return;}
+    if (!url) {
+      return;
+    }
 
     // Cancel any in-flight transition and collapse to a single active layer.
     // This prevents stale overlays from previous tokens blocking the next artwork.
@@ -1018,7 +1046,9 @@ const ArtworkPlayer = ({
     pauseAndTeardownSlot(staleSlot);
     setSlotOpacity(currentActive === 0 ? [1, 0] : [0, 1]);
     setSlots(prev => {
-      if (!prev[staleSlot]) {return prev;}
+      if (!prev[staleSlot]) {
+        return prev;
+      }
       const next = [...prev] as [SlotLayer | null, SlotLayer | null];
       next[staleSlot] = null;
       return next;
@@ -1091,12 +1121,18 @@ const ArtworkPlayer = ({
 
     detectPreviewType()
       .then(cfg => {
-        if (cancelled || previewURLRef.current !== url) {return;}
+        if (cancelled || previewURLRef.current !== url) {
+          return;
+        }
         const incoming = incomingSlotRef.current;
         setSlots(prev => {
-          if (incoming === null) {return prev;}
+          if (incoming === null) {
+            return prev;
+          }
           const layer = prev[incoming];
-          if (layer?.previewURL !== url) {return prev;}
+          if (layer?.previewURL !== url) {
+            return prev;
+          }
           const next = [...prev] as [SlotLayer | null, SlotLayer | null];
           next[incoming] = {
             ...layer,
@@ -1110,7 +1146,9 @@ const ArtworkPlayer = ({
         });
       })
       .catch((error: unknown) => {
-        if (cancelled || previewURLRef.current !== url) {return;}
+        if (cancelled || previewURLRef.current !== url) {
+          return;
+        }
         Sentry.captureException(error);
         // Detection failure is a first-class outcome, not just a typing
         // guess: getContentTypeFromURL's HEAD dies offline (or on any other
@@ -1170,9 +1208,13 @@ const ArtworkPlayer = ({
         }
         setSlots(prev => {
           const incoming = incomingSlotRef.current;
-          if (incoming === null) {return prev;}
+          if (incoming === null) {
+            return prev;
+          }
           const layer = prev[incoming];
-          if (layer?.previewURL !== url) {return prev;}
+          if (layer?.previewURL !== url) {
+            return prev;
+          }
           const next = [...prev] as [SlotLayer | null, SlotLayer | null];
           next[incoming] = {
             ...layer,
@@ -1188,7 +1230,9 @@ const ArtworkPlayer = ({
 
     return () => {
       cancelled = true;
-      if (loadingDelayRef.current) {clearTimeout(loadingDelayRef.current);}
+      if (loadingDelayRef.current) {
+        clearTimeout(loadingDelayRef.current);
+      }
     };
     // itemIdentity is in the deps so adjacent playlist items that share the
     // same previewURL still trigger a fresh slot setup. Without this, the
@@ -1239,7 +1283,9 @@ const ArtworkPlayer = ({
    */
   const setupMediaForSlot = useCallback(
     (slotIndex: SlotIndex, layer: SlotLayer | null) => {
-      if (!layer?.displayPreviewURL) {return undefined;}
+      if (!layer?.displayPreviewURL) {
+        return undefined;
+      }
 
       let isCancelled = false;
       const abortController = new AbortController();
@@ -1277,7 +1323,9 @@ const ArtworkPlayer = ({
         };
 
       const loadMedia = async () => {
-        if (isCancelled) {return;}
+        if (isCancelled) {
+          return;
+        }
         if (
           layer.previewType === PreviewHTMLTag.image &&
           imageRefs[slotIndex].current
@@ -1287,7 +1335,9 @@ const ArtworkPlayer = ({
             let decoded: Promise<unknown>;
             try {
               decoded =
-                typeof el.decode === 'function' ? el.decode() : Promise.resolve();
+                typeof el.decode === 'function'
+                  ? el.decode()
+                  : Promise.resolve();
             } catch {
               decoded = Promise.resolve();
             }
@@ -1467,7 +1517,8 @@ const ArtworkPlayer = ({
       // Non-streaming video failures are already surfaced through the
       // element's own `onerror` -> `handleMediaError('video')` path, so we
       // don't need a connectivity-based pre-emptive pause for it here.
-      const blockedByConnectivity = Boolean(layer?.isStreaming) && !context.isOnline;
+      const blockedByConnectivity =
+        Boolean(layer?.isStreaming) && !context.isOnline;
       const shouldPlay =
         isVideoLayer &&
         video &&
@@ -1492,13 +1543,17 @@ const ArtworkPlayer = ({
   }, [context.isOnline, slots, slotOpacity, topSlotIndex]);
 
   useEffect(() => {
-    if (!displaySettings || !context.deviceRotation?.viewMode) {return;}
+    if (!displaySettings || !context.deviceRotation?.viewMode) {
+      return;
+    }
     setSlots(prev => {
       const next = [...prev] as [SlotLayer | null, SlotLayer | null];
       let changedCount = 0;
       SLOT_INDICES.forEach(i => {
         const slot = next[i];
-        if (!slot?.displayPreviewURL) {return;}
+        if (!slot?.displayPreviewURL) {
+          return;
+        }
         let softwareURL = slot.displayPreviewURL;
         if (
           slot.previewType === PreviewHTMLTag.iframe &&
@@ -1540,7 +1595,9 @@ const ArtworkPlayer = ({
           changedCount += 1;
         }
       });
-      if (changedCount === 0) {return prev;}
+      if (changedCount === 0) {
+        return prev;
+      }
       return next;
     });
   }, [
@@ -1567,7 +1624,9 @@ const ArtworkPlayer = ({
   const reloadIframe = (slotIndex: SlotIndex) => {
     setSlots(prev => {
       const slot = prev[slotIndex];
-      if (!slot) {return prev;}
+      if (!slot) {
+        return prev;
+      }
       const next = [...prev] as [SlotLayer | null, SlotLayer | null];
       next[slotIndex] = {
         ...slot,
