@@ -41,7 +41,7 @@ export function useArtworkSettings(
   sessionKey = ''
 ) {
   const [sessionAdjustment, setSessionAdjustment] =
-    useState<Partial<DP1DisplayPreference> | null>(null);
+    useState<{ key: string; settings: Partial<DP1DisplayPreference> } | null>(null);
 
   // A new showing replaces the whole stack, including any adjustment made
   // to the previous one.
@@ -62,22 +62,30 @@ export function useArtworkSettings(
       }
 
       console.log('[useArtworkSettings] Updating artist settings', newSettings);
-      setSessionAdjustment(prev => ({ ...prev, ...newSettings }));
+      setSessionAdjustment(prev => ({
+        key: sessionKey,
+        settings: {
+          ...(prev?.key === sessionKey ? prev.settings : undefined),
+          ...newSettings,
+        },
+      }));
     };
     canvasService.addDisplaySettingsChangedListener(onSettingsChanged);
     return () => {
       canvasService.removeDisplaySettingsChangedListener(onSettingsChanged);
     };
-  }, []);
+  }, [sessionKey]);
 
   const displaySettings = useMemo(():
     | TokenDisplaySettingWithChanged
     | undefined => {
-    if (!sessionAdjustment) {
+    // Ignore the old slot's adjustment during the first render of a new
+    // showing, before the passive reset above has run.
+    if (sessionAdjustment?.key !== sessionKey) {
       return displayPreferences;
     }
-    return { ...displayPreferences, ...sessionAdjustment, changed: true };
-  }, [displayPreferences, sessionAdjustment]);
+    return { ...displayPreferences, ...sessionAdjustment.settings, changed: true };
+  }, [displayPreferences, sessionAdjustment, sessionKey]);
 
   return {
     displaySettings,

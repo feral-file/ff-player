@@ -69,12 +69,14 @@ interface SlotLayer {
   // them); itemIdentity discriminates so the onEnded gate can reject events
   // from the previous item even when previewURL alone cannot.
   itemIdentity: string;
+  // Distinguishes adjacent slots even when their work ID and source match.
+  showingKey: string;
 }
 
 function createSlotLayer(
   previewURL: string,
   iframeKey: number,
-  itemIdentity: string
+  identity: Pick<SlotLayer, 'itemIdentity' | 'showingKey'>
 ): SlotLayer {
   return {
     previewURL,
@@ -85,7 +87,7 @@ function createSlotLayer(
     isStreaming: false,
     loading: true,
     iframeKey,
-    itemIdentity,
+    ...identity,
   };
 }
 
@@ -150,6 +152,7 @@ const ArtworkPlayer = ({
   onItemPlayed?: (itemIdentity: string) => void;
 }) => {
   const FADE_IN_OUT_DURATION_MS = 650;
+  const showingKey = sessionKey ?? itemIdentity ?? previewURL;
   const { context } = useAppContext();
   const [artworkReloadTick, setArtworkReloadTick] = useState(0);
   const performArtworkReload = useCallback(() => {
@@ -216,7 +219,7 @@ const ArtworkPlayer = ({
 
   const { displaySettings } = useArtworkSettings(
     displayPreferences,
-    sessionKey ?? itemIdentity
+    showingKey
   );
   const showRenderLoadingOverlay =
     context.appRemoteConfig.showRenderLoadingOverlay ?? true;
@@ -331,7 +334,6 @@ const ArtworkPlayer = ({
   // the outgoing item's scaling. That is bounded (FADE_IN_OUT_DURATION_MS,
   // at partial opacity) and strictly less visible than the old behavior —
   // the fully-visible outgoing artwork restyling seconds before the swap.
-  const showingKey = sessionKey ?? itemIdentity ?? previewURL;
   const compositionOwner = useRef({});
   const displaySettingsRef = useRef({
     showingKey,
@@ -369,6 +371,7 @@ const ArtworkPlayer = ({
       incomingSlotRef.current !== null ||
       (activeLayer !== null &&
         (activeLayer.previewURL !== previewURL ||
+          activeLayer.showingKey !== showingKey ||
           activeLayer.itemIdentity !== (itemIdentity ?? '')));
     if (committedComposition && !transitionPending) {
       setCommittedComposition(displaySettingsRef.current);
@@ -470,6 +473,7 @@ const ArtworkPlayer = ({
         expectedLayer &&
         (slot.previewURL !== expectedLayer.previewURL ||
           slot.itemIdentity !== expectedLayer.itemIdentity ||
+          slot.showingKey !== expectedLayer.showingKey ||
           slot.iframeKey !== expectedLayer.iframeKey)
       ) {
         return false;
@@ -480,12 +484,16 @@ const ArtworkPlayer = ({
       if (slot.itemIdentity !== itemIdentityRef.current) {
         return false;
       }
+      if (slot.showingKey !== displaySettingsRef.current.showingKey) {
+        return false;
+      }
 
       const currentIncoming = incomingSlotRef.current;
       if (currentIncoming !== null && currentIncoming !== slotIndex) {
         const incomingLayer = slotsRef.current[currentIncoming];
         if (
           incomingLayer?.previewURL === currentURL &&
+          incomingLayer.showingKey === displaySettingsRef.current.showingKey &&
           incomingLayer.itemIdentity === itemIdentityRef.current
         ) {
           return false;
@@ -1098,7 +1106,7 @@ const ArtworkPlayer = ({
       }
     }, RENDER_LOADING_DELAY_MS);
 
-    const identity = itemIdentityRef.current;
+    const identity = { itemIdentity: itemIdentityRef.current, showingKey };
     // Derived from activeSlotRef/slotsRef, not from the setSlots updater's
     // `prev` — the updater must stay a pure function of its argument, and
     // `incomingSlotRef`/`mountFailedRef` are refs, not state, so writing
@@ -1252,11 +1260,10 @@ const ArtworkPlayer = ({
         clearTimeout(loadingDelayRef.current);
       }
     };
-    // itemIdentity is in the deps so adjacent playlist items that share the
-    // same previewURL still trigger a fresh slot setup. Without this, the
-    // effect would short-circuit on equal previewURL and the second item
-    // would inherit the prior item's paused-at-end media frame.
-  }, [previewURL, artworkPreviewMIMEType, artworkReloadTick, itemIdentity]);
+    // showingKey distinguishes adjacent slots even when both the work ID and
+    // source match. Each slot needs fresh media and session settings; work
+    // identity alone would retain the previous slot's frame and adjustments.
+  }, [previewURL, artworkPreviewMIMEType, artworkReloadTick, itemIdentity, showingKey]);
 
   useEffect(() => {
     const layer = slots[activeSlot];
@@ -1495,6 +1502,7 @@ const ArtworkPlayer = ({
     slots[0]?.previewType,
     slots[0]?.isStreaming,
     slots[0]?.itemIdentity,
+    slots[0]?.showingKey,
     setupMediaForSlot,
   ]);
 
@@ -1505,6 +1513,7 @@ const ArtworkPlayer = ({
     slots[1]?.previewType,
     slots[1]?.isStreaming,
     slots[1]?.itemIdentity,
+    slots[1]?.showingKey,
     setupMediaForSlot,
   ]);
 
@@ -1936,6 +1945,7 @@ const ArtworkPlayer = ({
                 slot &&
                 slot.itemIdentity.length > 0 &&
                 slot.itemIdentity === itemIdentityRef.current &&
+                slot.showingKey === displaySettingsRef.current.showingKey &&
                 slot.previewURL === previewURLRef.current
               ) {
                 onSourceEnded?.(slot.itemIdentity);
@@ -1955,6 +1965,7 @@ const ArtworkPlayer = ({
                 slot &&
                 slot.itemIdentity.length > 0 &&
                 slot.itemIdentity === itemIdentityRef.current &&
+                slot.showingKey === displaySettingsRef.current.showingKey &&
                 slot.previewURL === previewURLRef.current
               ) {
                 onSourceEnded?.(slot.itemIdentity);
