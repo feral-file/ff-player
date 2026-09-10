@@ -5,11 +5,22 @@ and `background`, after the DP-1 preference merge and current-showing Control
 Center adjustments. These fields describe the screen, not the saved machine
 default. `orientation`, `defaultDuration` and `tombstone` remain device settings.
 
-`showingKey` is opaque to controllers. It changes at the same slot/work/source
-boundary that resets `useArtworkSettings`. It is latched with the visual
+`showingKey` is a random UUID generated for the committed showing. The renderer's
+slot/work/source identity stays private: source URLs may contain signed access
+credentials and must not enter composition status. The UUID changes at the same
+slot/work/source boundary that resets `useArtworkSettings`, including a return
+to a previous showing between polls, and stays stable for settings-only commits.
+It is latched with the visual
 settings: while an incoming work loads or crossfades, status keeps the outgoing
 composition until the stage commits. Controllers must not infer this boundary
 from work ID alone; consecutive slots may share an ID.
+
+Before the first renderer commit there is no reportable composition or revision.
+Ephemeral `updateDisplaySettings` requests echo the observed UUID as `showingKey`.
+The player rejects mismatched targets and all ephemeral writes while no showing
+is committed or the selected settings hook belongs to an incoming showing.
+Unqualified requests from other controllers apply only to a committed, idle
+showing. Persistent device-default writes remain device-scoped.
 
 `compositionRevision` increments when a composition is committed, including
 changes that return to the last polled values. This prevents controld's status
