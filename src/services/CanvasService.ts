@@ -99,8 +99,11 @@ function isValidDataUrl(url: URL): boolean {
   }
 
   try {
-    const base64Payload = decodeURIComponent(payload).replace(/[\t\n\f\r ]/g, '');
-    const paddingLength = (/=+$/.exec(base64Payload))?.[0].length ?? 0;
+    const base64Payload = decodeURIComponent(payload).replace(
+      /[\t\n\f\r ]/g,
+      ''
+    );
+    const paddingLength = /=+$/.exec(base64Payload)?.[0].length ?? 0;
     const unpaddedLength = base64Payload.length - paddingLength;
     return (
       /^[A-Za-z0-9+/]*={0,2}$/.test(base64Payload) &&
@@ -224,6 +227,11 @@ class CanvasService {
   // cast on each status poll while still retrying when persistence changes.
   private rejectedCachedCastFingerprint: string | null = null;
   private rejectedCachedCastEpoch: number | null = null;
+  private compositionRevision = 0;
+  private displaySettingsReporter?: () => {
+    showingKey: string;
+    settings: DP1DisplayPreference | undefined;
+  };
   private static instance: CanvasService | null;
   private originalPlaylistItems: DP1Item[] | null = null;
   private queuedPlaylistPending = false;
@@ -1230,6 +1238,20 @@ class CanvasService {
     }
   }
 
+  /** The mounted stage owns composition truth; never persist this snapshot. */
+  public registerDisplaySettingsReporter(
+    reporter: NonNullable<CanvasService['displaySettingsReporter']>
+  ): () => void {
+    this.displaySettingsReporter = reporter;
+    this.compositionRevision++;
+    return () => {
+      // A retiring stage must not clear its replacement's report.
+      if (this.displaySettingsReporter === reporter) {
+        this.displaySettingsReporter = undefined;
+      }
+    };
+  }
+
   public getStatus(): CheckDeviceStatusReply {
     try {
       const criticalTempValue = DeviceManager.getCachedItem(
@@ -1273,6 +1295,7 @@ class CanvasService {
       // be told is active. A null result here IS the answer, and so is the
       // unavailable-policy case renderableCastInfo covers.
       const activeCastInfo = this.renderableCastInfo();
+      const composition = this.displaySettingsReporter?.();
 
       return {
         ok: true,
@@ -1305,9 +1328,18 @@ class CanvasService {
           '',
 
         deviceSettings: {
-          scaling:
-            DeviceManager.getCachedDeviceDisplaySettings()?.scaling ??
-            DisplaySettings.defaultScaling,
+          showingKey: composition?.showingKey,
+          compositionRevision: composition
+            ? this.compositionRevision
+            : undefined,
+          scaling: composition
+            ? (composition.settings?.scaling ?? Scaling.Fit)
+            : (DeviceManager.getCachedDeviceDisplaySettings()?.scaling ??
+              DisplaySettings.defaultScaling),
+          margin: composition ? (composition.settings?.margin ?? 0) : undefined,
+          background: composition
+            ? (composition.settings?.background ?? '#000000')
+            : undefined,
           orientation: DeviceManager.getCachedViewMode() ?? ViewMode.landscape,
           defaultDuration:
             DeviceManager.getCachedDefaultItemDurationSeconds() ?? undefined,
@@ -2159,14 +2191,12 @@ class CanvasService {
     }
 
     console.log('[CanvasService] updateDefaultDuration', raw);
-    DeviceManager.setDefaultItemDurationSeconds(raw).catch(
-      (error: unknown) => {
-        console.error(
-          '[CanvasService] Error persisting default duration:',
-          error
-        );
-      }
-    );
+    DeviceManager.setDefaultItemDurationSeconds(raw).catch((error: unknown) => {
+      console.error(
+        '[CanvasService] Error persisting default duration:',
+        error
+      );
+    });
 
     if (this.castInfo) {
       this.setCastInfo({
