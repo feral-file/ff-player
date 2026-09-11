@@ -4,8 +4,11 @@
  * must not survive — including ones useCurrentItemIdentity cannot see —
  * and stay stable across a same-slot re-render.
  */
-import type { DP1Item } from '@/models/dp1.model';
-import { renderHook } from '@testing-library/react';
+import { defaultDP1DisplayPreference, type DP1Item } from '@/models/dp1.model';
+import { canvasService } from '@/services/CanvasService';
+import { useArtworkSettings } from '@/services/custom-hooks/useArtworkSettings';
+import { act, renderHook } from '@testing-library/react';
+import { useLayoutEffect } from 'react';
 import { describe, expect, it } from 'vitest';
 import { useCurrentItemIdentity, useShowingKey } from './useCurrentItemIdentity';
 
@@ -45,5 +48,39 @@ describe('useShowingKey', () => {
     const first = result.current;
     rerender();
     expect(result.current).toBe(first);
+  });
+
+  it('renews the UUID and rejects stale writes for delimiter-colliding works', () => {
+    const owner = {};
+    const first = work('a|data:text/plain,one', 'data:text/plain,two');
+    const second = work('a', 'data:text/plain,one|data:text/plain,two');
+    const { result, rerender, unmount } = renderHook(
+      ({ item }: { item: DP1Item }) => {
+        const showingKey = useShowingKey([item], 0);
+        const { displaySettings } = useArtworkSettings(
+          defaultDP1DisplayPreference,
+          showingKey
+        );
+        useLayoutEffect(() => canvasService.registerDisplaySettingsReporter(
+          () => ({ showingKey, settings: displaySettings }), owner
+        ), [showingKey, displaySettings]);
+        return displaySettings;
+      },
+      { initialProps: { item: first } }
+    );
+    const showingKey = canvasService.getStatus().deviceSettings?.showingKey;
+    act(() => {
+      expect(canvasService.updateDisplaySettings({
+        isSaved: false, showingKey, margin: '10%',
+      }).ok).toBe(true);
+    });
+    expect(result.current?.margin).toBe('10%');
+    rerender({ item: second });
+    expect(canvasService.getStatus().deviceSettings?.showingKey).not.toBe(showingKey);
+    expect(result.current?.margin).toBe(defaultDP1DisplayPreference.margin);
+    expect(canvasService.updateDisplaySettings({
+      isSaved: false, showingKey, margin: '20%',
+    }).ok).toBe(false);
+    unmount();
   });
 });

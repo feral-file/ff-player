@@ -276,3 +276,5 @@ of the transition contract, not a separate concern.
 ## Showing identity
 
 The slot identity also carries the current showing key (`sessionKey`, with item/source fallback). A new showing starts a fresh slot transition even when the work ID and source URL are unchanged. Media readiness and ended-event guards check this showing key; ended callbacks still carry the original work identity. Composition and session adjustments cannot move to the next showing before its renderer commit.
+
+The playlist's internal showing identity encodes `[slot index, item identity, source]` as a JSON tuple. IDs and URLs can contain delimiters, so concatenation must not make different works share a showing. This internal value stays inside the player; controllers receive an opaque UUID that renews when the committed showing changes.
