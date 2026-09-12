@@ -30,6 +30,17 @@ changes that return to the last polled values. This prevents controld's status
 deduplication from hiding a second controller's quick revert. It is a change
 marker, not a durable sequence across player restarts.
 
+An accepted ephemeral `updateDisplaySettings` reply includes
+`acceptedCompositionRevision`: the newest composition already committed when
+the player accepted the command. A controller waits for a status revision above
+that floor before settling its optimistic field. This distinguishes the
+command's result (or a later external change) from a delayed report caused by a
+different field before the command arrived. Persistent device-default replies
+omit the field because they do not reconcile against the current composition.
+Same-showing settings finish latching in React's layout phase, so an older
+pending snapshot cannot receive a revision above a later command's returned
+floor. Commands accepted within one browser task are committed together.
+
 Margin retains its DP-1 representation: numbers are pixels, percent strings
 are a percentage of each viewport dimension, and other CSS strings stay strings.
 Background retains its CSS color representation. No mounted stage means no
