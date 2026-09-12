@@ -16,8 +16,11 @@ import {
 } from '@/models/dp1.model';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import * as React from 'react';
+import { flushSync } from 'react-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
+import { canvasService } from '@/services/CanvasService';
+import { Scaling } from '@/models/dp1.model';
 
 vi.mock('@sentry/nextjs', () => ({
   captureException: vi.fn(),
@@ -103,6 +106,7 @@ function playerEl(props: {
   previewURL: string;
   mime: string;
   itemIdentity: string;
+  sessionKey?: string;
   preference?: Partial<DP1DisplayPreference>;
 }): React.ReactElement {
   return (
@@ -111,6 +115,7 @@ function playerEl(props: {
         previewURL={props.previewURL}
         artworkPreviewMIMEType={props.mime}
         itemIdentity={props.itemIdentity}
+        sessionKey={props.sessionKey}
         displayPreferences={{
           ...defaultDP1DisplayPreference,
           ...props.preference,
@@ -138,7 +143,7 @@ function fireAllImageLoads(container: HTMLElement): void {
 }
 
 /** Render item A and wait for its ready-commit (stage shows A's background). */
-async function renderCommittedImageA(background: string): Promise<{
+async function renderCommittedImageA(background: string, sessionKey?: string): Promise<{
   container: HTMLElement;
   rerender: (ui: React.ReactElement) => void;
 }> {
@@ -147,6 +152,7 @@ async function renderCommittedImageA(background: string): Promise<{
       previewURL: IMAGE_URL_A,
       mime: 'image/png',
       itemIdentity: 'item-a',
+      sessionKey,
       preference: { background },
     })
   );
@@ -156,6 +162,12 @@ async function renderCommittedImageA(background: string): Promise<{
   fireAllImageLoads(container);
   await waitFor(() => {
     expect(stageOf(container).style.backgroundColor).toBe('rgb(17, 17, 17)');
+    expect(canvasService.getStatus().deviceSettings).toMatchObject({
+      background: '#111111',
+    });
+    expect(canvasService.getStatus().deviceSettings?.showingKey).toBeTypeOf(
+      'string'
+    );
   });
   return { container, rerender };
 }
@@ -187,9 +199,61 @@ afterEach(() => {
   cleanup();
 });
 
+describe('ArtworkPlayer — showing identity', () => {
+  it('transitions adjacent same-work slots without carrying session settings', async () => {
+    const { container, rerender } = await renderCommittedImageA('#111111', 'slot-0');
+    const previousKey = canvasService.getStatus().deviceSettings?.showingKey;
+    act(() => {
+      expect(canvasService.updateDisplaySettings({
+        isSaved: false, showingKey: previousKey, margin: '10%', scaling: Scaling.Fill,
+      }).ok).toBe(true);
+    });
+    await waitFor(() => {
+      expect(canvasService.getStatus().deviceSettings?.margin).toBe('10%');
+    });
+    rerender(playerEl({
+      previewURL: IMAGE_URL_A, mime: 'image/png', itemIdentity: 'item-a',
+      sessionKey: 'slot-1', preference: { background: '#111111', margin: '3%', scaling: Scaling.Fit },
+    }));
+    expect(canvasService.getStatus().deviceSettings?.showingKey).toBe(previousKey);
+    await waitFor(() => { expect(container.querySelectorAll('img')).toHaveLength(2); });
+    expect(canvasService.getStatus().deviceSettings?.margin).toBe('10%');
+    fireAllImageLoads(container);
+    await waitFor(() => {
+      const current = canvasService.getStatus().deviceSettings;
+      expect(current?.showingKey).not.toBe(previousKey);
+      expect(current).toMatchObject({ margin: '3%', scaling: Scaling.Fit });
+    }, { timeout: TRANSITION_WAIT_MS });
+  });
+
+});
+
 describe('ArtworkPlayer — background latch across item advance', () => {
+  it('withholds composition until the first image commits', async () => {
+    const { container } = render(
+      playerEl({
+        previewURL: IMAGE_URL_A,
+        mime: 'image/png',
+        itemIdentity: 'item-a',
+        preference: { background: '#111111', margin: '10%' },
+      })
+    );
+    await waitFor(() => { expect(container.querySelector('img')).toBeTruthy(); });
+    const pending = canvasService.getStatus().deviceSettings;
+    expect(pending?.showingKey).toBeUndefined();
+    expect(pending?.compositionRevision).toBeUndefined();
+    expect(pending?.margin).toBeUndefined();
+    fireAllImageLoads(container);
+    await waitFor(() => {
+      expect(canvasService.getStatus().deviceSettings?.showingKey).toBeTypeOf(
+        'string'
+      );
+    });
+  });
+
   it('keeps the outgoing item background until the transition commits', async () => {
     const { container, rerender } = await renderCommittedImageA('#111111');
+    const initialShowing = canvasService.getStatus().deviceSettings?.showingKey;
 
     rerender(
       playerEl({
@@ -206,6 +270,16 @@ describe('ArtworkPlayer — background latch across item advance', () => {
       expect(container.querySelectorAll('img')).toHaveLength(2);
     });
     expect(stageOf(container).style.backgroundColor).toBe('rgb(17, 17, 17)');
+    expect(canvasService.getStatus().deviceSettings?.showingKey).toBe(
+      initialShowing
+    );
+    expect(
+      canvasService.updateDisplaySettings({
+        isSaved: false,
+        showingKey: initialShowing,
+        background: '#ffffff',
+      }).ok
+    ).toBe(false);
 
     // Item B ready -> crossfade -> commit swaps the stage to B's background.
     fireAllImageLoads(container);
@@ -218,9 +292,68 @@ describe('ArtworkPlayer — background latch across item advance', () => {
       { timeout: TRANSITION_WAIT_MS }
     );
     // Outgoing slot layer is gone after commit.
+    expect(canvasService.getStatus().deviceSettings).toMatchObject({
+      background: '#222222',
+    });
+    expect(canvasService.getStatus().deviceSettings?.showingKey).not.toBe(
+      initialShowing
+    );
+    // A delayed request for A must not land on B after the transition either.
+    expect(
+      canvasService.updateDisplaySettings({
+        isSaved: false,
+        showingKey: initialShowing,
+        background: '#ffffff',
+      }).ok
+    ).toBe(false);
     await waitFor(() => {
       expect(container.querySelectorAll('img')).toHaveLength(1);
     });
+  });
+});
+
+describe('ArtworkPlayer — composition acceptance ordering', () => {
+  it('commits one field before accepting the next field', async () => {
+    await renderCommittedImageA('#111111');
+    const showingKey = canvasService.getStatus().deviceSettings?.showingKey;
+
+    let marginReply:
+      | ReturnType<typeof canvasService.updateDisplaySettings>
+      | undefined;
+    flushSync(() => {
+      marginReply = canvasService.updateDisplaySettings({
+        isSaved: false,
+        showingKey,
+        margin: '10%',
+      });
+    });
+    const marginStatus = canvasService.getStatus().deviceSettings;
+    expect(marginStatus).toMatchObject({ margin: '10%' });
+    expect(marginStatus?.compositionRevision).toBeGreaterThan(
+      marginReply?.acceptedCompositionRevision ?? Number.MAX_SAFE_INTEGER
+    );
+
+    let colorReply:
+      | ReturnType<typeof canvasService.updateDisplaySettings>
+      | undefined;
+    flushSync(() => {
+      colorReply = canvasService.updateDisplaySettings({
+        isSaved: false,
+        showingKey,
+        background: '#ffffff',
+      });
+    });
+    expect(colorReply?.acceptedCompositionRevision).toBe(
+      marginStatus?.compositionRevision
+    );
+    const colorStatus = canvasService.getStatus().deviceSettings;
+    expect(colorStatus).toMatchObject({
+      margin: '10%',
+      background: '#ffffff',
+    });
+    expect(colorStatus?.compositionRevision).toBeGreaterThan(
+      colorReply?.acceptedCompositionRevision ?? Number.MAX_SAFE_INTEGER
+    );
   });
 });
 
@@ -228,6 +361,9 @@ describe('ArtworkPlayer — live settings pass-through', () => {
   it('applies settings changes immediately when no transition is pending', async () => {
     const { container, rerender } = await renderCommittedImageA('#111111');
 
+    const initialRevision =
+      canvasService.getStatus().deviceSettings?.compositionRevision;
+    const initialShowing = canvasService.getStatus().deviceSettings?.showingKey;
     // Same item, new background (app-driven adjustment): no transition is
     // pending, so the latch must pass it straight through.
     rerender(
@@ -235,13 +371,43 @@ describe('ArtworkPlayer — live settings pass-through', () => {
         previewURL: IMAGE_URL_A,
         mime: 'image/png',
         itemIdentity: 'item-a',
-        preference: { background: '#333333' },
+        preference: {
+          background: '#333333',
+          margin: '12%',
+          scaling: Scaling.Fill,
+        },
       })
     );
 
     await waitFor(() => {
       expect(stageOf(container).style.backgroundColor).toBe('rgb(51, 51, 51)');
     });
+    expect(canvasService.getStatus().deviceSettings).toMatchObject({
+      showingKey: initialShowing,
+      background: '#333333',
+      margin: '12%',
+      scaling: Scaling.Fill,
+    });
+    // A -> B -> A between polls must still change the wire payload, or
+    // controld's dedup could suppress another controller's legitimate revert.
+    rerender(
+      playerEl({
+        previewURL: IMAGE_URL_A,
+        mime: 'image/png',
+        itemIdentity: 'item-a',
+        preference: { background: '#111111' },
+      })
+    );
+    await waitFor(() => {
+      const report = canvasService.getStatus().deviceSettings;
+      expect(report?.background).toBe('#111111');
+      expect(report?.compositionRevision).toBeGreaterThan(initialRevision ?? 0);
+    });
+    cleanup();
+    expect(
+      canvasService.getStatus().deviceSettings?.showingKey
+    ).toBeUndefined();
+    expect(canvasService.getStatus().deviceSettings?.margin).toBeUndefined();
   });
 });
 

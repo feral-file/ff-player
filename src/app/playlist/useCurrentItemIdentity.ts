@@ -33,7 +33,8 @@ export function useCurrentItemIdentity(
  * scaling record landing late, must not reset the session) and finer than
  * useCurrentItemIdentity (adjacent slots may share an id while carrying
  * different display preferences, and a new cast may reuse an id for a
- * different source): normalized slot index, item identity, and source.
+ * different source): normalized slot index, item identity, and source. Encode
+ * the tuple without delimiters that can also occur inside an id or URL.
  */
 export function useShowingKey(playlist: DP1Item[], currentIndex: number): string {
   return useMemo(() => {
@@ -42,6 +43,6 @@ export function useShowingKey(playlist: DP1Item[], currentIndex: number): string
     }
     const index = normalizePlaylistIndex(currentIndex, playlist.length);
     const source = playlist[index]?.source ?? '';
-    return `${String(index)}|${itemIdentityFor(playlist, index)}|${source}`;
+    return JSON.stringify([index, itemIdentityFor(playlist, index), source]);
   }, [currentIndex, playlist]);
 }

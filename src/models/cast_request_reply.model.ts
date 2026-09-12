@@ -76,7 +76,16 @@ export interface CheckDeviceStatusReply extends Reply {
   stamp?: string;
 
   deviceSettings?: {
+    // Composition describes the committed on-screen showing, after DP-1
+    // merging and session adjustments. It is not the saved machine default.
+    // Random showing UUID; never the renderer's source-bearing private key.
+    showingKey?: string;
+    // Changes even if several adjustments return to the last polled values.
+    // Controld deduplicates notifications by status payload.
+    compositionRevision?: number;
     scaling?: Scaling;
+    margin?: number | string;
+    background?: string;
     orientation?: ViewMode;
     // Device-level default item duration in seconds; absent means "auto"
     // (no device override, the playlist's duration cascade stands).
@@ -131,6 +140,21 @@ export interface UpdateArtFramingRequest extends Request {
 export interface UpdateDisplaySettingsRequest extends TokenDisplaySettings {
   tokenId?: string;
   isSaved: boolean;
+  // DP-1 composition fields used by the renderer, distinct from legacy per-side
+  // framing margins on TokenDisplaySettings.
+  margin?: number | string;
+  background?: string;
+  // Required for ephemeral writes; device defaults omit it. Missing or stale
+  // targets are rejected so a delayed request cannot change a subsequent work.
+  showingKey?: string;
+}
+
+/** Acceptance proof for a showing-scoped display-settings command. */
+export interface UpdateDisplaySettingsReply extends Reply {
+  // The last composition already committed when the player accepted this
+  // command. A controller must wait for a status revision greater than this
+  // value; an earlier report can belong to an unrelated prior field update.
+  acceptedCompositionRevision?: number;
 }
 
 export interface UpdateCursorPositionsRequest extends Request {

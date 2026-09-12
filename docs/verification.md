@@ -52,7 +52,8 @@ Use the real player in Chromium or on an FF1; jsdom cannot verify layout.
 
 1. Display a static image with the panel's aspect ratio so letterboxing cannot
    be mistaken for matting. Send `updateDisplaySettings` with
-   `{margin: "10%", background: "#ffffff", isSaved: false}`. Confirm a visible
+   `{margin: "10%", background: "#ffffff", isSaved: false, showingKey}` using
+   the UUID from the latest `checkStatus.deviceSettings.showingKey`. Confirm a visible
    inset on all four sides and an artwork viewport 80% of the screen's width
    and height. At 0%, the artwork must reach the original bounds again.
 2. Display a non-square static image. Select Fill, then Fit, with the matte
