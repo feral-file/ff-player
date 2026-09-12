@@ -119,6 +119,17 @@ procedure, runnable entirely in a browser:
    mint('hidden');
    ```
 
+   Then the daemon-driven toast (the `playerToast` CDP contract; it listens
+   for the same-named window event with `{notice, seq}`):
+
+   ```js
+   const toast = (notice, seq=Date.now()) => window.dispatchEvent(
+     new CustomEvent('playerToast', {detail:{notice, seq}}));
+   toast('signature_unsigned');   // black pill, bottom-center, gone after 5s
+   toast('signature_invalid');
+   toast('signature_rejected');   // the longest copy: must stay one line
+   ```
+
 4. Check each panel at three viewports (devtools responsive mode):
    - **3840x2160** — the shipping 4K mode. Text must respect the px caps
      (setup and pairing titles render the same size; see the cap rationale

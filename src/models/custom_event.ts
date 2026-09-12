@@ -38,8 +38,36 @@ export enum CustomEventName {
   PlaybackHalted = 'playbackHalted',
   MintPairingDisplay = 'mintPairingDisplay',
   Navigate = 'navigate',
+  // CDPRequestHandler → PlayerToast: feral-controld asks for a transient,
+  // self-dismissing notice over whatever is on screen (the `playerToast` CDP
+  // command). No overlay arbitration: a toast never owns the screen.
+  PlayerToast = 'playerToast',
   SetupDisplay = 'setupDisplay',
   WatchdogEvent = 'watchdogEvent',
+}
+
+/**
+ * Notices the `playerToast` CDP command may name. A closed set on purpose:
+ * the daemon sends an identifier, never free text, so every string the wall
+ * shows is authored here, passes the copy lint, and can be localized later.
+ * `feral-controld` reads `contracts.playerToast.states` in
+ * `public/ffos-player-contract.json` as its capability gate and must never
+ * send a notice that list does not carry — the manifest test pins the two
+ * together. Current notices are DP-1 signature-verification verdicts
+ * (feral-file/ffos-user#307); the command itself is generic.
+ */
+export enum PlayerToastNotice {
+  SignatureInvalid = 'signature_invalid',
+  SignatureUnsigned = 'signature_unsigned',
+  SignatureRejected = 'signature_rejected',
+}
+
+export interface PlayerToastDetail {
+  notice: PlayerToastNotice;
+  // Monotonic per page, assigned by CDPRequestHandler: the toast keys its
+  // display window on it so a repeated identical notice still restarts the
+  // timer (a plain `notice` value would not re-trigger React's effect).
+  seq: number;
 }
 
 export interface PlaybackHaltedDetail {
