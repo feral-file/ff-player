@@ -39,6 +39,14 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 - In `request_received`, the player instructs the user to open the Feral File app, go to Settings > Art Computer, and approve the browser session.
 - The device-local static export ships `ffos-player-contract.json` at the bundle root. `feral-controld` and `feral-player.service` use that manifest to verify the deployed player supports this CDP contract before enabling mint pairing.
 
+## Player toast (`playerToast`)
+
+- `feral-controld` shows a transient notice over whatever is on screen through the CDP command `playerToast`.
+- The command payload is `{ command: "playerToast", request: { notice } }`, where `notice` is one of `signature_invalid`, `signature_unsigned`, `signature_rejected` (`PlayerToastNotice` in `src/models/custom_event.ts`). The copy for each notice is owned by the player (`PLAYER_TOAST_COPY` in `src/components/toast/PlayerToast.tsx`) so it goes through the copy lint and can be localized; the daemon never sends free text.
+- An unknown notice is rejected with `{ok:false}`. `contracts.playerToast.states` in `ffos-player-contract.json` lists exactly the accepted notices and is the daemon's capability fuse: controld checks a notice is listed before sending, and an older bundle without the entry simply gets no toast.
+- The toast reuses `TombstoneToast`'s exported style — a black bottom-center pill sized by `designPx` (vmin, per `docs/TOMBSTONE_SIZING_CONTRACT.md`) — auto-dismisses after 5 s, restarts its window on every accepted command (a repeated identical notice included), and replaces its text immediately on a different notice. `PlayerToast.sizing.test.ts` pins that the longest notice stays one line inside the 80% cap at the documented landscape and portrait viewports. It is mounted app-wide in `AppWrapper`, so it appears on every route and during boot; it claims no overlay ownership and sits under the full-screen setup/pairing panels, which therefore cover it.
+- Current notices report DP-1 playlist signature verdicts (feral-file/ffos-user#307); the command is generic and later notices are additive.
+
 ## Artwork render status (`renderStatus`)
 
 - Status polls expose an optional numeric `renderStatus` on the device-status reply: `0` pending, `1` loading, `2` ready, `3` failed (`RenderStatus` in `src/models/render_status.model.ts`).

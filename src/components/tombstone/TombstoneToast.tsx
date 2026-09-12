@@ -19,7 +19,15 @@ export const TOMBSTONE_TOAST_DURATION_MS = 3000;
 // Type is 16px-at-720 to match the label in TombstoneOverlay. A 12px line is
 // below TV-distance legibility on a 1080p wall, and contrast does not fix a
 // size problem.
-const toastStyle: CSSProperties = {
+//
+// Exported: the daemon-driven notice (src/components/toast/PlayerToast) uses
+// this exact style so the two toasts are one visual system. It stays in this
+// directory on purpose — sizingContract.test.ts scans it, so every dimension
+// keeps to designPx (vmin) and the 80% cap stays the allowlisted inert net.
+// PlayerToast's longest notice is ~26 em, which at vmin type fits inside that
+// cap on every documented viewport (PlayerToast.sizing.test.ts pins the
+// budget); a vh-scaled variant would not on a portrait wall.
+export const toastStyle: CSSProperties = {
   position: 'absolute',
   left: '50%',
   bottom: designPx(40),

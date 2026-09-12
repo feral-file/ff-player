@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import contract from '../../public/ffos-player-contract.json';
-import { SetupDisplayState } from './custom_event';
+import { PlayerToastNotice, SetupDisplayState } from './custom_event';
 
 /*
  * The manifest's setupDisplay.states array is no longer descriptive-only:
@@ -40,5 +40,22 @@ describe('ffos-player-contract.json setupDisplay manifest', () => {
     // every test still green.
     const fields = contract.contracts.setupDisplay.stateFields;
     expect(fields.softap_qr.optional).toContain('client_attached');
+  });
+});
+
+/*
+ * Same fuse for playerToast: feral-controld sends only notices the manifest
+ * lists, and the handler accepts only notices the enum lists. The two sets
+ * must be identical or a notice is either never sent or always rejected.
+ */
+describe('ffos-player-contract.json playerToast manifest', () => {
+  it('lists exactly the PlayerToastNotice values, version 1', () => {
+    const entry = contract.contracts.playerToast;
+    expect(entry.version).toBe(1);
+    expect(entry.requestKey).toBe('request');
+    expect([...entry.states].sort()).toEqual(
+      Object.values(PlayerToastNotice).sort()
+    );
+    expect(entry.acceptedResponse).toEqual({ ok: true });
   });
 });
