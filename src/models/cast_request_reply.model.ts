@@ -149,6 +149,14 @@ export interface UpdateDisplaySettingsRequest extends TokenDisplaySettings {
   showingKey?: string;
 }
 
+/** Acceptance proof for a showing-scoped display-settings command. */
+export interface UpdateDisplaySettingsReply extends Reply {
+  // The last composition already committed when the player accepted this
+  // command. A controller must wait for a status revision greater than this
+  // value; an earlier report can belong to an unrelated prior field update.
+  acceptedCompositionRevision?: number;
+}
+
 export interface UpdateCursorPositionsRequest extends Request {
   positions: CursorPosition[];
 }

@@ -354,7 +354,13 @@ const ArtworkPlayer = ({
       compositionOwner.current
     );
   }, [committedComposition]);
-  useEffect(() => {
+  // Same-showing settings must finish latching in the layout phase. A later
+  // command can otherwise be accepted while this composition is still waiting
+  // in a passive effect, allowing the older composition to receive a revision
+  // above that command's acceptance floor. Layout effects and their state
+  // updates finish before the browser can deliver the next command; commands
+  // accepted in one task are batched into the same committed composition.
+  useLayoutEffect(() => {
     const activeLayer = slotsRef.current[activeSlotRef.current];
     const transitionPending =
       incomingSlotRef.current !== null ||

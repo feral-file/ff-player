@@ -18,6 +18,7 @@ import {
   UpdateArtFramingRequest,
   UpdateCursorPositionsRequest,
   UpdateDisplaySettingsRequest,
+  UpdateDisplaySettingsReply,
   UpdateCursorPositionsReply,
   TokenDisplaySettings,
   DisplayPlaylistRequest,
@@ -1166,7 +1167,9 @@ class CanvasService {
     return { ok: true };
   }
 
-  public updateDisplaySettings(request: UpdateDisplaySettingsRequest): Reply {
+  public updateDisplaySettings(
+    request: UpdateDisplaySettingsRequest
+  ): UpdateDisplaySettingsReply {
     const { showingKey, ...settings } = request;
     const composition = this.displaySettingsReporter?.();
     // Ephemeral writes belong to the showing the controller observed. During
@@ -1185,8 +1188,19 @@ class CanvasService {
       JSON.stringify(request)
     );
 
+    // Capture before notifying React. This is the causal floor for the command:
+    // a status at or below it was already committed before this write and
+    // cannot confirm the requested field, even if the controller saw it later.
+    const acceptedCompositionRevision = request.isSaved
+      ? undefined
+      : this.compositionRevision;
     this.notifyDisplaySettingsChanged(request.isSaved, settings);
-    return { ok: true };
+    return {
+      ok: true,
+      ...(acceptedCompositionRevision === undefined
+        ? {}
+        : { acceptedCompositionRevision }),
+    };
   }
 
   // DP1 Handlers

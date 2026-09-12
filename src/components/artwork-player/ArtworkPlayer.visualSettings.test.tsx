@@ -16,6 +16,7 @@ import {
 } from '@/models/dp1.model';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import * as React from 'react';
+import { flushSync } from 'react-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
 import { canvasService } from '@/services/CanvasService';
@@ -308,6 +309,51 @@ describe('ArtworkPlayer — background latch across item advance', () => {
     await waitFor(() => {
       expect(container.querySelectorAll('img')).toHaveLength(1);
     });
+  });
+});
+
+describe('ArtworkPlayer — composition acceptance ordering', () => {
+  it('commits one field before accepting the next field', async () => {
+    await renderCommittedImageA('#111111');
+    const showingKey = canvasService.getStatus().deviceSettings?.showingKey;
+
+    let marginReply:
+      | ReturnType<typeof canvasService.updateDisplaySettings>
+      | undefined;
+    flushSync(() => {
+      marginReply = canvasService.updateDisplaySettings({
+        isSaved: false,
+        showingKey,
+        margin: '10%',
+      });
+    });
+    const marginStatus = canvasService.getStatus().deviceSettings;
+    expect(marginStatus).toMatchObject({ margin: '10%' });
+    expect(marginStatus?.compositionRevision).toBeGreaterThan(
+      marginReply?.acceptedCompositionRevision ?? Number.MAX_SAFE_INTEGER
+    );
+
+    let colorReply:
+      | ReturnType<typeof canvasService.updateDisplaySettings>
+      | undefined;
+    flushSync(() => {
+      colorReply = canvasService.updateDisplaySettings({
+        isSaved: false,
+        showingKey,
+        background: '#ffffff',
+      });
+    });
+    expect(colorReply?.acceptedCompositionRevision).toBe(
+      marginStatus?.compositionRevision
+    );
+    const colorStatus = canvasService.getStatus().deviceSettings;
+    expect(colorStatus).toMatchObject({
+      margin: '10%',
+      background: '#ffffff',
+    });
+    expect(colorStatus?.compositionRevision).toBeGreaterThan(
+      colorReply?.acceptedCompositionRevision ?? Number.MAX_SAFE_INTEGER
+    );
   });
 });
 
