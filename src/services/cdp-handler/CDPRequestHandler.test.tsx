@@ -88,7 +88,7 @@ describe('CDPRequestHandler mint pairing display command', () => {
 
   it.each(['', '   '])(
     'rejects pairing code requests with a blank pairing code',
-    (pairingCode) => {
+    pairingCode => {
       expectInvalidMintPairingRequest({
         state: MintPairingDisplayState.PairingCode,
         pairingCode,
@@ -106,7 +106,7 @@ describe('CDPRequestHandler mint pairing display command', () => {
   it.each([
     MintPairingDisplayState.RequestReceived,
     MintPairingDisplayState.CreatingToken,
-  ])('rejects %s requests with a non-string browser name', (state) => {
+  ])('rejects %s requests with a non-string browser name', state => {
     expectInvalidMintPairingRequest({
       state,
       browserName: 123,
@@ -192,7 +192,7 @@ describe('CDPRequestHandler setup display command (accepted requests)', () => {
     window.removeEventListener(CustomEventName.SetupDisplay, listener);
   });
 
-  it.each(bareAcceptedStates)('dispatches a bare %s request', (state) => {
+  it.each(bareAcceptedStates)('dispatches a bare %s request', state => {
     const listener = vi.fn();
     window.addEventListener(CustomEventName.SetupDisplay, listener);
 
@@ -270,7 +270,7 @@ describe('CDPRequestHandler setup display command (rejected requests)', () => {
     expectInvalidSetupDisplayRequest({ ssid: 'FF1-Setup-ABCD' });
   });
 
-  it.each(['', '   '])('rejects requests with a blank state %j', (state) => {
+  it.each(['', '   '])('rejects requests with a blank state %j', state => {
     expectInvalidSetupDisplayRequest({ state });
   });
 
@@ -307,7 +307,7 @@ describe('CDPRequestHandler setup display command (rejected requests)', () => {
 
   it.each([NaN, Infinity, -Infinity])(
     'rejects updating requests with non-finite progress (%s)',
-    (progress) => {
+    progress => {
       expectInvalidSetupDisplayRequest({
         state: SetupDisplayState.Updating,
         progress,
@@ -374,6 +374,46 @@ const freshHandlerAndService = async () => {
   return { handler: FreshHandler.getInstance(), canvas: freshCanvas };
 };
 
+describe('CDPRequestHandler setup display command (softap_qr client_attached)', () => {
+  beforeEach(() => {
+    CDPRequestHandler.getInstance().initialize();
+  });
+
+  afterEach(() => {
+    CDPRequestHandler.getInstance().cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('dispatches a softap_qr request carrying the client_attached flag', () => {
+    const listener = vi.fn();
+    window.addEventListener(CustomEventName.SetupDisplay, listener);
+
+    const response = handleSetupDisplay({
+      state: SetupDisplayState.SoftApQr,
+      ssid: 'FF1-Setup-ABCD',
+      portal_url: 'http://10.42.0.1',
+      client_attached: true,
+    });
+
+    expect(JSON.parse(response)).toEqual({ message: { ok: true } });
+    const dispatchedEvent = listener.mock.calls[0]?.[0] as
+      | CustomEvent<SetupDisplayDetail>
+      | undefined;
+    expect(dispatchedEvent?.detail.client_attached).toBe(true);
+
+    window.removeEventListener(CustomEventName.SetupDisplay, listener);
+  });
+
+  it('rejects softap_qr requests with a non-boolean client_attached', () => {
+    expectInvalidSetupDisplayRequest({
+      state: SetupDisplayState.SoftApQr,
+      ssid: 'FF1-Setup-ABCD',
+      portal_url: 'http://10.42.0.1',
+      client_attached: 'yes',
+    });
+  });
+});
+
 describe('CDPRequestHandler __ffosPlayerStatus', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -432,7 +472,7 @@ describe('CDPRequestHandler __ffosPlayerStatus', () => {
     handler.cleanup();
   });
 
-  it('reports failed when initCastInfo\'s outcome was recorded as failed', async () => {
+  it("reports failed when initCastInfo's outcome was recorded as failed", async () => {
     const { handler, canvas } = await freshHandlerAndService();
     handler.initialize();
 

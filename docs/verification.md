@@ -46,6 +46,25 @@ By default, `npm run verify` lints changed files against `origin/main`. To verif
 - If the change touches playback, cast recovery, display settings, or route behavior, pair verification with a manual smoke pass for the affected flow.
 - **Playlist route / repeat-off hold:** With loop `none`, advance to the last timed slot so playback holds on the final artwork; confirm a queued shuffle or refresh **promotes the new playlist on cast** only in that hold (not when the final item has no finite slot timer); leaving `none` via `setLoop` should resume the slot timer from the held frame. Expect the current artwork to stay selected after shuffle (anchor at index `0`) until its slot timer completes before advancing.
 
+## Manual visual smoke: matting and Fit/Fill
+
+Use the real player in Chromium or on an FF1; jsdom cannot verify layout.
+
+1. Display a static image with the panel's aspect ratio so letterboxing cannot
+   be mistaken for matting. Send `updateDisplaySettings` with
+   `{margin: "10%", background: "#ffffff", isSaved: false}`. Confirm a visible
+   inset on all four sides and an artwork viewport 80% of the screen's width
+   and height. At 0%, the artwork must reach the original bounds again.
+2. Display a non-square static image. Select Fill, then Fit, with the matte
+   active. Confirm cropping changes within the same inset viewport. Repeat
+   after a saved machine default of Fill to cover the precedence fix (#290).
+3. Advance between images with different margins and background colors. The
+   outgoing work must retain its settings until the transition commits, and
+   the two fade layers must occupy the same inner viewport.
+4. Check a video and a responsive iframe with a nonzero margin. Their bounds
+   must respect the same inset. A slow load's global overlay and the cursor
+   must continue using the full screen.
+
 ## Manual visual smoke: setup and pairing overlays
 
 Copy or layout changes to `SetupOverlay` / `MintPairingOverlay` cannot be
@@ -72,8 +91,11 @@ procedure, runnable entirely in a browser:
    setup('scanning');
    setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1'});
    setup('softap_qr', {ssid:'FF1-DEMO4242'});               // open network
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', client_attached:true}); // phone joined: portal-address QR
    setup('joining');
    setup('join_failed', {reason:'Wrong Wi-Fi password. Please check it and try again.'});
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', reason:'Wrong Wi-Fi password. Please check it and try again.'}); // re-raised join QR with the failure line under the title
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', reason:'Your phone left the setup Wi-Fi. Scan the code to join again.'}); // join QR back after the attached phone dropped off the hotspot
    // Provisioned-device boot/offline narration (not part of the OOBE story):
    // neutral title, prose body from controld.
    setup('connecting', {reason:'Looking for your Wi-Fi network… Setup mode will start in a few minutes if the connection does not return.'});
@@ -109,9 +131,17 @@ procedure, runnable entirely in a browser:
    name): they must render the real PPMori-Bold face, not a synthesized
    smear — compare stroke weight against the pairing-code digits.
 6. On `softap_qr`, confirm the platform-neutral heading carries the complete
-   happy path and the single recovery block keeps Wi-Fi Settings, password,
-   keep-connected, mobile-data/VPN, and direct-IP cues legible without
-   crowding the QR.
+   happy path and the single recovery block keeps the code-changes wait cue,
+   Wi-Fi Settings, password, keep-connected, mobile-data/VPN, and direct-IP
+   cues legible without crowding the QR.
+7. On the re-raised `softap_qr` variants carrying `reason`, confirm the line
+   sits under the title at its own size, the QR is not pushed off the
+   panel, and the recovery block below stays legible — this is the densest
+   join-phase layout.
+8. On the `client_attached` repaint, confirm the panel shows ONE code (the
+   portal address, not the WIFI: payload), the "Finish setup on your phone"
+   heading, and a recovery block that keeps scan-again, mobile-data/VPN,
+   direct-IP, Wi-Fi name, password, and keep-connected cues legible.
 
 Report the pass (viewports checked, anything off) in the PR body; review
 agents treat its absence as a missing-verification finding.

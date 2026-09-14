@@ -191,6 +191,13 @@ This is the main mechanism that prevents old transitions from reappearing.
 `displaySettings` (from `useArtworkSettings`) flips to the NEXT item's preferences the moment the playlist advances — but the incoming artwork only becomes visible after load + fade, often seconds later. The stage therefore renders from `committedVisualSettings`, a latched copy that swaps only when a transition commits (`setActiveSlot`):
 
 - Container `backgroundColor` and `padding` (margin) — latched. A `background-color 0.2s` transition softens the commit-time swap in letterbox/margin areas.
+- Both absolute artwork slots share a positioned, in-flow viewport inside the
+  stage's content area. The stage owns the matte padding; the inner viewport
+  makes that padding reduce the artwork bounds for every media type. Attaching
+  the slots directly to the padded stage makes `inset: 0` cover the padding,
+  silently disabling matting. Cursor and global loading overlays remain on the
+  full-screen stage. The wrapper does not introduce a stacking context or change
+  slot opacity, order, readiness, or transition timing.
 - Image/video `objectFit` (scaling) — latched. Trade-off: during the crossfade the incoming slot briefly renders with the outgoing item's scaling (bounded by `FADE_IN_OUT_DURATION_MS`, at partial opacity). This is deliberately preferred over the old behavior, where the fully-visible outgoing artwork restyled seconds before the swap.
 - Iframe `display_mode` URL rewriting — per-slot: only the slot currently claimed as the incoming transition target (`incomingSlotRef`) uses live settings; every other slot keeps committed settings. Otherwise the outgoing iframe's `displaySoftwareURL` changes at playlist-advance time and the iframe reloads (blanks) mid-display. The discriminator is deliberately `incomingSlotRef`, not a `previewURL` comparison, because adjacent playlist items can share the same URL while differing in scaling.
 - `loop` / `autoPlay` — intentionally LIVE, not latched. They are behavioral (end-of-stream gating per DP-1 §4.1), not visual staging, and must reflect the current item immediately.

@@ -26,7 +26,9 @@ const fillPreference: DP1DisplayPreference = {
 };
 
 /** Drive the same listener path the cast command handler uses. */
-function sendDisplaySettings(request: Partial<UpdateDisplaySettingsRequest>) {
+function sendDisplaySettings(
+  request: Partial<UpdateDisplaySettingsRequest> & DP1DisplayPreference
+) {
   act(() => {
     canvasService.updateDisplaySettings(
       request as UpdateDisplaySettingsRequest
@@ -87,5 +89,33 @@ describe('useArtworkSettings', () => {
 
     sendDisplaySettings({ scaling: Scaling.Fit, isSaved: true });
     expect(result.current.displaySettings?.scaling).toBe(Scaling.Fill);
+  });
+
+  it('keeps Fit while matting changes and clears both on the next showing', () => {
+    const { result, rerender } = renderHook(
+      ({ identity }: { identity: string }) =>
+        useArtworkSettings(fillPreference, identity),
+      { initialProps: { identity: 'A' } }
+    );
+
+    // The app sends separate partial commands for Fit, margin, and color.
+    sendDisplaySettings({ scaling: Scaling.Fit, isSaved: false });
+    sendDisplaySettings({ margin: '10%', isSaved: false });
+    sendDisplaySettings({ background: '#ffffff', isSaved: false });
+    expect(result.current.displaySettings).toMatchObject({
+      scaling: Scaling.Fit,
+      margin: '10%',
+      background: '#ffffff',
+    });
+
+    sendDisplaySettings({ margin: '0%', isSaved: false });
+    expect(result.current.displaySettings).toMatchObject({
+      scaling: Scaling.Fit,
+      margin: '0%',
+      background: '#ffffff',
+    });
+
+    rerender({ identity: 'B' });
+    expect(result.current.displaySettings).toEqual(fillPreference);
   });
 });
