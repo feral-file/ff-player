@@ -7,6 +7,12 @@ import {
   RecentlyPlayedRecord,
 } from '@/services/recentPlaybackHistory';
 import { ContentContext } from '@/services/contentPolicy';
+
+/** One stored value so the playlist and its origin can never disagree. */
+interface BootPlaylistRecord {
+  playlist: DP1Call;
+  contentContext: ContentContext;
+}
 import { stripEphemeralCastInfoFields } from './castInfo';
 import indexedDBStorage from './IndexedDBStorage';
 
@@ -216,27 +222,41 @@ class DeviceManager {
     await indexedDBStorage.setItem(LocalStorageItem.castInfo, serialized);
   }
 
-  public async getBootPlaylist(): Promise<DP1Call | null> {
+  /**
+   * The boot cast and the unsigned origin it was accepted under.
+   *
+   * Both travel in ONE stored value. Two keys would be two best-effort
+   * IndexedDB writes, and `setItem` swallows a failure, so a reboot between
+   * them could pair a new playlist with the previous cast's context — the
+   * worst possible outcome for a family-content filter. The context stays
+   * OUTSIDE the DP-1 document inside that envelope, so the signed playlist is
+   * still stored exactly as it was received.
+   *
+   * A record written before the envelope existed is a bare DP-1 document and
+   * reads as curated, which is the conservative default.
+   */
+  private async readBootRecord(): Promise<BootPlaylistRecord | null> {
     await this.ensureInitialized();
-    const bootPlaylist = await this.fetchAndCache(
-      LocalStorageItem.bootPlaylist
-    );
-    return bootPlaylist ? (JSON.parse(bootPlaylist) as DP1Call) : null;
+    const stored = await this.fetchAndCache(LocalStorageItem.bootPlaylist);
+    if (!stored) {
+      return null;
+    }
+    const parsed = JSON.parse(stored) as BootPlaylistRecord | DP1Call;
+    if ('playlist' in parsed) {
+      return {
+        playlist: parsed.playlist,
+        contentContext: parsed.contentContext === 'personal' ? 'personal' : 'curated',
+      };
+    }
+    return { playlist: parsed, contentContext: 'curated' };
   }
 
-  /**
-   * The boot cast's unsigned origin. Stored separately from the signed boot
-   * playlist so recovery can restore a personal boot cast as personal instead
-   * of silently downgrading it to curated, which would apply the curated
-   * filter to content the viewer cast themselves. A record written before this
-   * key existed has no value and reads as curated.
-   */
+  public async getBootPlaylist(): Promise<DP1Call | null> {
+    return (await this.readBootRecord())?.playlist ?? null;
+  }
+
   public async getBootPlaylistContentContext(): Promise<ContentContext> {
-    await this.ensureInitialized();
-    const stored = await this.fetchAndCache(
-      LocalStorageItem.bootPlaylistContentContext
-    );
-    return stored === 'personal' ? 'personal' : 'curated';
+    return (await this.readBootRecord())?.contentContext ?? 'curated';
   }
 
   public async setBootPlaylist(
@@ -244,14 +264,9 @@ class DeviceManager {
     contentContext: ContentContext = 'curated'
   ): Promise<void> {
     await this.ensureInitialized();
-    const serialized = JSON.stringify(bootPlaylist);
+    const serialized = JSON.stringify({ playlist: bootPlaylist, contentContext });
     this.cache.set(LocalStorageItem.bootPlaylist, serialized);
     await indexedDBStorage.setItem(LocalStorageItem.bootPlaylist, serialized);
-    this.cache.set(LocalStorageItem.bootPlaylistContentContext, contentContext);
-    await indexedDBStorage.setItem(
-      LocalStorageItem.bootPlaylistContentContext,
-      contentContext
-    );
   }
 
   /**

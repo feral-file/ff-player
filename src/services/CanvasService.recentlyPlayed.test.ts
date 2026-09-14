@@ -6,6 +6,7 @@ import { RECENTLY_PLAYED_MAX_RECORD_BYTES, type RecentlyPlayedRecord } from './r
 import DeviceManager from '@/utils/DeviceManager';
 import { CastCommand } from '@/models';
 import { DP1Item, DP1License } from '@/models/dp1.model';
+import { RenderStatus } from '@/models/render_status.model';
 
 const item = (id: string): DP1Item => ({
   id, source: `https://art.test/${id}`, license: DP1License.Open,
@@ -95,6 +96,28 @@ describe('recently played active occurrence follows the wall', () => {
     expect(history().activeOccurrenceKnown).toBe(false);
   });
 
+  it('stops claiming an active occurrence while the device is asleep', async () => {
+    canvasService.recordRecentlyPlayed(item('a'));
+    await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
+
+    // Sleep keeps castInfo, so the stop is invisible to setCastInfo(null).
+    canvasService.setSleepMode({ sleepMode: true });
+
+    expect(history().activeOccurrenceKnown).toBe(false);
+    expect(history().records?.length).toBeGreaterThan(0);
+  });
+
+  it('stops claiming an active occurrence when a render reports failed', async () => {
+    canvasService.recordRecentlyPlayed(item('a'));
+    await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
+
+    // A failed incoming slot still commits visually; only onItemPlayed is
+    // withheld, so nothing else would retire the previous work's record.
+    canvasService.setRenderStatus(RenderStatus.failed);
+
+    expect(history().activeOccurrenceKnown).toBe(false);
+  });
+
   it('leaves no stale active occurrence when an oversize record is omitted', async () => {
     canvasService.recordRecentlyPlayed(item('a'));
     await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
@@ -109,5 +132,21 @@ describe('recently played active occurrence follows the wall', () => {
     // The omitted work is the one on the wall. Reporting the previous record
     // as active would name the wrong work.
     expect(history().activeOccurrenceKnown).toBe(false);
+  });
+
+  // Runs last on purpose: a persistence failure latches for the life of the
+  // page by design — a timeline gap cannot be un-gapped — and CanvasService is
+  // a singleton, so this cannot be undone for a later test in this file.
+  it('persists the gap marker when a record cannot be written', async () => {
+    const marker = vi.spyOn(DeviceManager, 'setRecentlyPlayedIncomplete')
+      .mockResolvedValue(undefined);
+    setRecentlyPlayed.mockRejectedValueOnce(new Error('quota'));
+
+    canvasService.recordRecentlyPlayed(item('a'));
+
+    // In-memory `incomplete` alone would be lost on restart, and the next boot
+    // would report a timeline missing a committed work as complete.
+    await vi.waitFor(() => { expect(marker).toHaveBeenCalledWith(true); });
+    expect(history().incomplete).toBe(true);
   });
 });

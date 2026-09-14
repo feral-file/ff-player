@@ -496,13 +496,24 @@ class CanvasService {
           this.activeRecentlyPlayedRecordId = next[0]?.recordId ?? null;
         }
       })
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
         // Do not make a persistence failure break wall playback. Retain the
         // last known durable snapshot but make the dropped commit explicit;
         // reloading old records as complete would hide a timeline gap.
         this.recentlyPlayedIncomplete = true;
         this.recentlyPlayedPersistenceError = 'Recently played could not persist a committed work';
         console.error('[CanvasService] Failed to persist recently played history', error);
+        // Try to carry the gap across a restart too. Without this the next boot
+        // reloads the older records together with the previous `incomplete`
+        // value and reports a timeline that is missing a committed work as
+        // complete. The marker is a much smaller write than the record that
+        // just failed, so it can still succeed; if it does not, the in-memory
+        // flag above is all this page can honestly offer.
+        try {
+          await DeviceManager.setRecentlyPlayedIncomplete(true);
+        } catch (markerError: unknown) {
+          console.error('[CanvasService] Failed to persist the history gap marker', markerError);
+        }
       });
   }
 
@@ -716,6 +727,14 @@ class CanvasService {
    * ready/failed from a previous page.
    */
   public setRenderStatus(renderStatus: RenderStatus | undefined) {
+    // A failed render is the other way a work stops being what the wall is
+    // showing. ArtworkPlayer still commits a failed incoming slot visually (it
+    // calls onItemCommitted and deliberately withholds onItemPlayed), so
+    // without this the previous work's record would keep claiming to be active
+    // behind a replacement that never rendered.
+    if (renderStatus === RenderStatus.failed) {
+      this.retireActiveRecentlyPlayed();
+    }
     this.renderStatus = renderStatus;
     if (!this.castInfo) {
       return;
@@ -1180,6 +1199,13 @@ class CanvasService {
     console.log('[CanvasService] Set sleep mode', request.sleepMode);
     const path = request.sleepMode ? '/sleep' : '/playlist';
 
+    // Sleep keeps castInfo, so nothing else retires the active occurrence, but
+    // the wall has stopped showing the work. Outside the window guard below
+    // because this is a playback fact, not a DOM one.
+    if (request.sleepMode) {
+      this.retireActiveRecentlyPlayed();
+    }
+
     if (typeof window !== 'undefined') {
       if (!request.sleepMode) {
         const endsRealSleep = this.sleepModeEntered;
@@ -1470,7 +1496,7 @@ class CanvasService {
       return reply;
     }
     if (!filtered.playlist) {return { ok: false, error: 'contentBlocked' };}
-    return this.refreshPlaylist(filtered.playlist.items);
+    return this.refreshPlaylist(filtered.playlist.items, contentContext);
   }
 
   private nowDisplayPlaylist(
@@ -1709,9 +1735,19 @@ class CanvasService {
   // Keep deferred-refresh, shuffle restoration, and index remapping together
   // because they all amend the same compatibility-sensitive cast contract.
   // eslint-disable-next-line max-lines-per-function
-  private refreshPlaylist(newItems: DP1Item[] | undefined): Reply {
+  private refreshPlaylist(
+    newItems: DP1Item[] | undefined,
+    // The origin the caller actually filtered under. It must travel with the
+    // refreshed state: admission used this value, and setCastInfo re-applies
+    // policy from what is stored, so leaving the previous cast's context in
+    // place would let one origin choose the items and a different one judge
+    // them on the next policy change.
+    contentContext?: ContentContext
+  ): Reply {
     const currentPlaylist = this.castInfo?.playlist;
-    const prior = this.castInfo;
+    const prior = this.castInfo
+      ? { ...this.castInfo, ...(contentContext ? { contentContext } : {}) }
+      : this.castInfo;
     if (findInvalidArtworkSource(newItems)) {
       console.error('[CanvasService] Invalid artwork source');
       return { ok: false };

@@ -58,8 +58,9 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 
 - The device retains a bounded, reverse-chronological record of works that reached the visual-commit boundary (`RECENTLY_PLAYED_*` in `src/services/recentPlaybackHistory.ts`). It is a timeline, not current state: clearing the wall never deletes it, and restoring a cast after a reboot never fabricates an entry.
 - `activeOccurrenceKnown` answers one question only — does the device currently know which retained record is the work on the wall? It is `true` only while a committed record is still what is being displayed.
-- It returns to `false`, and no record is marked `isActive`, as soon as any of these happen: a newer work begins committing (until that work's own record is durable), an oversize record is omitted, or playback stops. Treat `false` as **pending**, never as "nothing has ever played" — the records list stands on its own.
+- It returns to `false`, and no record is marked `isActive`, as soon as any of these happen: a newer work begins committing (until that work's own record is durable), an oversize record is omitted, playback is cleared, the device sleeps, or a render reports `failed`. Sleep and a failed render both matter because neither clears `castInfo`: the work is off the wall while the cast is still the current one. Treat `false` as **pending**, never as "nothing has ever played" — the records list stands on its own.
 - A durable write that lands after the wall has moved on does not become the active occurrence. The record is still retained; it simply cannot claim to be what is showing. Without that rule a slow IndexedDB write could name a work that left the screen seconds earlier.
+- `incomplete: true` means a committed work is missing from the timeline. When an append fails, the player also tries to persist that marker, so a restart does not reload the older records and report them as a complete history. If even the marker cannot be written, the gap is only known for the life of that page.
 
 ## Setup overlay background artwork
 

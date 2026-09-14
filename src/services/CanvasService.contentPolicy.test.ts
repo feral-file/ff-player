@@ -103,6 +103,20 @@ describe('content policy at playback boundaries', () => {
     expect(boot).toHaveBeenCalledWith(mature, 'personal');
   });
 
+  it('stores the context a refresh was actually filtered under', async () => {
+    expect(cast(playlist(item('a', 'mature')), { contentContext: 'personal' })?.ok).toBe(true);
+
+    // A refresh that declares curated is filtered as curated; keeping the
+    // cast's old personal origin in storage would let one origin choose the
+    // items and a different one judge them on the next policy change.
+    expect(cast(playlist(item('a', 'general'), item('b', 'general')),
+      { refresh: true, contentContext: 'curated' })?.ok).toBe(true);
+    expect(canvasService.getCastInfo()?.contentContext).toBe('curated');
+
+    await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, strictPersonal: true });
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a', 'b']);
+  });
+
   it('does not attest a refreshed item list with the previous playlist signature', () => {
     const signed = { ...playlist(item('a'), item('b', 'general')), signature: 'ed25519:original' };
     expect(cast(signed)?.ok).toBe(true);

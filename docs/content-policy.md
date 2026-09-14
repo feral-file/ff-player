@@ -24,10 +24,13 @@ unrated escape hatch. Unknown content context is rejected.
 
 `displayPlaylist.request.contentContext` is `curated | personal`, outside the
 signed DP-1 body. Missing context and every device default are curated.
-Persisted cast, scheduled, refreshed and Recently played requests retain it,
-including a `display_at_boot` cast: its context is stored beside the boot
-playlist rather than inside the signed document, and a record written before
-that key existed reads as curated.
+Persisted cast, scheduled, refreshed and Recently played requests retain it. A
+refresh retains the context it was actually filtered under, not the one the
+previous cast carried. A `display_at_boot` cast stores its context and the
+signed playlist as one value: two keys would be two best-effort writes, and a
+reboot between them could pair a playlist with the wrong origin. The context
+sits beside the DP-1 document inside that value, never inside the document, and
+a bare document written before the envelope existed reads as curated.
 Filtering produces an internal playback projection, never a newly signed
 document; signatures of a modified projection must be removed. A source
 refresh is the same case — it replaces the item list, so the previous
