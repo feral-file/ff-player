@@ -24,9 +24,14 @@ unrated escape hatch. Unknown content context is rejected.
 
 `displayPlaylist.request.contentContext` is `curated | personal`, outside the
 signed DP-1 body. Missing context and every device default are curated.
-Persisted cast, scheduled, refreshed and Recently played requests retain it.
+Persisted cast, scheduled, refreshed and Recently played requests retain it,
+including a `display_at_boot` cast: its context is stored beside the boot
+playlist rather than inside the signed document, and a record written before
+that key existed reads as curated.
 Filtering produces an internal playback projection, never a newly signed
-document; signatures of a modified projection must be removed.
+document; signatures of a modified projection must be removed. A source
+refresh is the same case — it replaces the item list, so the previous
+playlist's signature cannot travel with it.
 
 The daemon owns authoritative policy state. The player's `setContentPolicy`
 CDP command receives the full policy, persists a device-local mirror, then
@@ -42,8 +47,14 @@ replacing the current work. Tightening settings is different: newly blocked
 current/queued work must immediately retire without an outgoing-art crossfade,
 and no stale timer, default fetch, persisted boot cast, or replay may restore
 it. Policy is applied before source probes, manifest resolution and rendering.
-The boot path hydrates the mirror before restoring any artwork. A corrupt
-mirror fails closed pending daemon reconciliation.
+The boot path hydrates the mirror before restoring any artwork. A cast that
+arrives while the mirror is still being read is admitted whole and reconciled
+by the hydration publish, which re-applies the real policy to the retained
+payload; filtering it against the built-in default instead would reject a cast
+the viewer opted into and leave nothing to reconcile. A corrupt mirror is the
+other case and fails closed: nothing will repair it on its own, so
+`displayPlaylist` refuses with `contentPolicyUnavailable` until the daemon
+reconciles it.
 
 For source refreshes, newly blocked current artwork retires immediately, even
 if no replacement remains. Controld sends the internal refresh-only

@@ -56,6 +56,29 @@ export function hasValidContentLabels(item: DP1Item): boolean {
 export interface FilteredContent { playlist: DP1Call | null; index: number; blocked: number }
 
 /**
+ * The no-op projection: the whole playlist, nothing blocked. Used when no
+ * policy is available to apply yet, so the caller holds the complete payload
+ * for later reconciliation instead of a guess at what should be hidden.
+ */
+export function admitUnfiltered(playlist: DP1Call): FilteredContent {
+  return { playlist, index: 0, blocked: 0 };
+}
+
+/**
+ * Drop the signature from a playlist whose item list no longer matches the
+ * signed document. A signature attests the exact bytes it was made over, so
+ * carrying it onto a changed list would let `checkStatus` publish an
+ * attestation for a playlist nobody signed. Every caller that rewrites `items`
+ * goes through here: policy filtering and source refresh both do.
+ */
+export function stripPlaylistSignature<T extends DP1Call>(playlist: T): T {
+  const projection: T & { signatures?: unknown } = { ...playlist };
+  delete projection.signature;
+  delete projection.signatures;
+  return projection;
+}
+
+/**
  * Filter before loading media. Never mutate the signed source or forward its
  * signature as if it signed a smaller playlist. Keep an allowed selected item
  * selected; otherwise start with the next allowed item, wrapping only at end.
@@ -68,9 +91,7 @@ export function filterContent(playlist: DP1Call, policy: ContentPolicy,
   const index = Math.max(0, positions.findIndex(position => position >= selectedIndex));
   if (!positions.length) {return { playlist: null, index: 0, blocked };}
   if (!blocked) {return { playlist, index, blocked: 0 };}
-  const projection: DP1Call & { signatures?: unknown } = { ...playlist,
-    items: positions.map(position => source[position]) };
-  delete projection.signature;
-  delete projection.signatures;
+  const projection = stripPlaylistSignature({ ...playlist,
+    items: positions.map(position => source[position]) });
   return { playlist: projection, index, blocked };
 }

@@ -75,7 +75,7 @@ import { coerceTombstoneMode } from '@/utils/tombstoneMode';
 import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
 import { contentPolicyStore } from './ContentPolicyStore';
-import { allowsContent, ContentContext, filterContent, hasValidContentLabels, parseContentContext } from './contentPolicy';
+import { admitUnfiltered, allowsContent, ContentContext, ContentPolicy, filterContent, hasValidContentLabels, parseContentContext, stripPlaylistSignature } from './contentPolicy';
 
 const PLAYLIST_SOURCE_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
 const ARTWORK_SOURCE_RESOLVE_BASE = 'https://ff-player.local/';
@@ -395,6 +395,40 @@ class CanvasService {
   private activeRecentlyPlayedRecordId: string | null = null;
   private recentlyPlayedWrite: Promise<void> = Promise.resolve();
   private recentlyPlayedSequence = 0;
+  // Bumped on every new commit and every hard stop. A queued durable write
+  // publishes its record as the active occurrence only while its generation is
+  // still current, so a write that lands after the wall moved on (or was
+  // cleared) cannot resurrect a work that is no longer displayed.
+  private playbackGeneration = 0;
+
+  /**
+   * The policy admission must apply, or `null` while the device's own mirror is
+   * still being read.
+   *
+   * `null` admits the cast whole and keeps the complete payload in castInfo.
+   * The hydration publish then runs `reconcileContentPolicy`, which re-applies
+   * the real policy to that payload and retires anything it blocks. Filtering
+   * against the built-in default during that window would do the opposite of
+   * what it looks like: it would reject a cast the viewer explicitly opted into
+   * and permanently drop items from a mixed playlist, leaving nothing for
+   * reconciliation to restore. An unreadable mirror is a different case and is
+   * refused at the command boundary — see `displayPlaylist`.
+   */
+  private admissionPolicy(): Readonly<ContentPolicy> | null {
+    const snapshot = contentPolicyStore.getSnapshot();
+    return snapshot.active ? snapshot.policy : null;
+  }
+
+  /**
+   * Retire the active occurrence. `getRecentlyPlayed` then reports
+   * `activeOccurrenceKnown: false`, which the app renders as pending rather
+   * than as a claim about what is on the wall. Called when a new work begins
+   * committing and when playback stops.
+   */
+  private retireActiveRecentlyPlayed(): void {
+    this.playbackGeneration += 1;
+    this.activeRecentlyPlayedRecordId = null;
+  }
 
   private async loadRecentlyPlayed(): Promise<RecentlyPlayedRecord[]> {
     if (this.recentlyPlayedRecords !== null) {
@@ -426,6 +460,14 @@ class CanvasService {
     defaults: DP1Defaults | null = null,
     contentContext: ContentContext = 'curated'
   ): void {
+    // A new work is committing, so the previous occurrence is no longer the
+    // active one. Retire it here, synchronously, rather than after the durable
+    // write: between the two, the honest answer is "not known yet", never the
+    // work that has already left the wall. This also covers the oversize path
+    // below, which records nothing and must not leave a stale active record
+    // standing behind the work now displayed.
+    this.retireActiveRecentlyPlayed();
+    const generation = this.playbackGeneration;
     this.recentlyPlayedWrite = this.recentlyPlayedWrite
       .then(async () => {
         const next = appendRecentlyPlayed(
@@ -447,7 +489,12 @@ class CanvasService {
         await DeviceManager.setRecentlyPlayed(next);
         // Do not expose an entry before the durable transaction completes.
         this.recentlyPlayedRecords = next;
-        this.activeRecentlyPlayedRecordId = next[0]?.recordId ?? null;
+        // The record is retained either way; it only becomes the ACTIVE
+        // occurrence if the wall still shows it. A stop or a newer commit
+        // during the write moved the generation on.
+        if (generation === this.playbackGeneration) {
+          this.activeRecentlyPlayedRecordId = next[0]?.recordId ?? null;
+        }
       })
       .catch((error: unknown) => {
         // Do not make a persistence failure break wall playback. Retain the
@@ -611,6 +658,9 @@ class CanvasService {
       this.pendingRefreshArtwork = false;
       this.renderStatus = undefined;
       this.castInfo = null;
+      // The wall is cleared. Retained history survives — it is a timeline, not
+      // current state — but nothing is playing, so no occurrence is active.
+      this.retireActiveRecentlyPlayed();
     } else {
       if (!this.isSamePlaylistContent(this.castInfo, castInfo)) {
         // A REAL cast-content change supersedes any refresh parked against
@@ -1313,6 +1363,12 @@ class CanvasService {
     const action = dp1Intent?.action;
     if (action === DP1Action.GetCurrentPlaylist) {return this.getStatus();}
     if (!dp1CallData) {return { ok: false, error: 'playlistInvalid' };}
+    // An unreadable mirror fails closed: the device cannot know what it is
+    // allowed to show, and unlike an unread mirror nothing will reconcile it
+    // until the daemon repairs it with setContentPolicy.
+    if (contentPolicyStore.getSnapshot().hydrationFailed) {
+      return { ok: false, error: 'contentPolicyUnavailable' };
+    }
     const contentContext = parseContentContext('contentContext' in request
       ? request.contentContext : (request.refresh ? this.castInfo?.contentContext : undefined));
     if (dp1CallData.items?.some(item => !hasValidContentLabels(item))) {
@@ -1327,24 +1383,7 @@ class CanvasService {
     });
 
     if (request.refresh) {
-      const policy = contentPolicyStore.getSnapshot().policy;
-      const currentItems = this.castInfo?.playlist?.items ?? [];
-      const currentItem = currentItems.at(normalizePlaylistIndex(this.castInfo?.index ?? 0, currentItems.length));
-      const updatedCurrent = currentItem && dp1CallData.items?.find(item => item.id === currentItem.id);
-      const retireCurrent = updatedCurrent && !allowsContent(updatedCurrent, policy, contentContext);
-      const filtered = filterContent(dp1CallData, policy, contentContext);
-      if (retireCurrent || request.retireBlockedCurrent === true) {
-        // Ordinary refresh can defer removal until the current work ends. A
-        // newly blocked work cannot use that path or its outgoing crossfade.
-        const currentPlaylistUrl = this.castInfo?.playlistUrl;
-        this.setCastInfo(null);
-        const reply = filtered.playlist ? this.nowDisplayPlaylist({ dp1CallData: filtered.playlist,
-          contentContext, playlistUrl: currentPlaylistUrl }) : { ok: true };
-        contentPolicyStore.retireRendering();
-        return reply;
-      }
-      if (!filtered.playlist) {return { ok: false, error: 'contentBlocked' };}
-      return this.refreshPlaylist(filtered.playlist.items);
+      return this.refreshUnderPolicy(request, dp1CallData, contentContext);
     }
 
     let reply: Reply;
@@ -1366,18 +1405,24 @@ class CanvasService {
       }
 
       case DP1Action.DisplayAtBoot: {
+        // The boot cast carries its origin like every other cast: dropping it
+        // here would filter a personal cast as curated now, and persisting it
+        // without the context would repeat that on every restart.
         reply = this.nowDisplayPlaylist({
           dp1CallData,
           playlistUrl,
+          contentContext,
         });
 
         if (reply.ok) {
-          DeviceManager.setBootPlaylist(dp1CallData).catch((error: unknown) => {
-            console.error(
-              '[CanvasService] Error setting boot playlist:',
-              error
-            );
-          });
+          DeviceManager.setBootPlaylist(dp1CallData, contentContext).catch(
+            (error: unknown) => {
+              console.error(
+                '[CanvasService] Error setting boot playlist:',
+                error
+              );
+            }
+          );
         }
         break;
       }
@@ -1392,6 +1437,42 @@ class CanvasService {
     return reply;
   }
 
+  /**
+   * A source refresh under the current policy.
+   *
+   * Two outcomes differ in timing, not in what they allow. An ordinary refresh
+   * hands the filtered item list to `refreshPlaylist`, which may defer the swap
+   * until the current work ends. A current work that the refreshed labels now
+   * block cannot use that path, or its outgoing crossfade: it retires
+   * immediately, which is also what the daemon asks for with
+   * `retireBlockedCurrent` when it has already dropped the blocked item from
+   * its own projection.
+   */
+  private refreshUnderPolicy(
+    request: DisplayPlaylistRequest,
+    dp1CallData: DP1Call,
+    contentContext: ContentContext
+  ): DisplayPlaylistReply {
+    const policy = this.admissionPolicy();
+    const currentItems = this.castInfo?.playlist?.items ?? [];
+    const currentItem = currentItems.at(normalizePlaylistIndex(this.castInfo?.index ?? 0, currentItems.length));
+    const updatedCurrent = currentItem && dp1CallData.items?.find(item => item.id === currentItem.id);
+    const retireCurrent = policy !== null && updatedCurrent &&
+      !allowsContent(updatedCurrent, policy, contentContext);
+    const filtered = policy === null ? admitUnfiltered(dp1CallData) :
+      filterContent(dp1CallData, policy, contentContext);
+    if (retireCurrent || request.retireBlockedCurrent === true) {
+      const currentPlaylistUrl = this.castInfo?.playlistUrl;
+      this.setCastInfo(null);
+      const reply = filtered.playlist ? this.nowDisplayPlaylist({ dp1CallData: filtered.playlist,
+        contentContext, playlistUrl: currentPlaylistUrl }) : { ok: true };
+      contentPolicyStore.retireRendering();
+      return reply;
+    }
+    if (!filtered.playlist) {return { ok: false, error: 'contentBlocked' };}
+    return this.refreshPlaylist(filtered.playlist.items);
+  }
+
   private nowDisplayPlaylist(
     request: NowDisplayRequest,
     validateSources = true
@@ -1404,8 +1485,9 @@ class CanvasService {
       return { ok: false, error: 'playlistInvalid' };
     }
     const contentContext = parseContentContext(request.contentContext);
-    const filtered = filterContent(request.dp1CallData,
-      contentPolicyStore.getSnapshot().policy, contentContext);
+    const admissionPolicy = this.admissionPolicy();
+    const filtered = admissionPolicy === null ? admitUnfiltered(request.dp1CallData) :
+      filterContent(request.dp1CallData, admissionPolicy, contentContext);
     if (!filtered.playlist) {return { ok: false, error: 'contentBlocked' };}
     request = { ...request, dp1CallData: filtered.playlist };
     const playableItems = filtered.playlist.items ?? [];
@@ -1687,10 +1769,10 @@ class CanvasService {
     }
     const prevItems = currentPlaylist.items;
     const prevIndex = prior.index;
-    const playlistForRefresh = {
+    const playlistForRefresh = stripPlaylistSignature({
       ...currentPlaylist,
       items: normalizedItems,
-    };
+    });
 
     let currentItemId: string | undefined;
     if (prevItems.length && prevIndex !== undefined) {

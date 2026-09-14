@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
-import { contentPolicyStore } from './ContentPolicyStore';
+import { contentPolicyStore, ContentPolicyStore } from './ContentPolicyStore';
 import { DEFAULT_CONTENT_POLICY } from './contentPolicy';
 import DeviceManager from '@/utils/DeviceManager';
 import { CastCommand } from '@/models';
@@ -88,5 +88,90 @@ describe('content policy at playback boundaries', () => {
     cast(playlist(item('a')));
     expect(cast(playlist(...items), { refresh: true, retireBlockedCurrent: true })?.ok).toBe(true);
     expect(canvasService.getCastInfo()?.playlist?.items?.some(value => value.id === 'a') ?? false).toBe(false);
+  });
+
+  it('carries the boot cast context into playback and into what it persists', () => {
+    const boot = vi.spyOn(DeviceManager, 'setBootPlaylist').mockResolvedValue(undefined);
+    const mature = playlist(item('b', 'mature'));
+
+    // Under the default policy a personal cast is unfiltered. Dropping the
+    // context here would reject the viewer's own boot cast as curated, and
+    // persisting it without the context would repeat that on every restart.
+    expect(cast(mature, { intent: { action: DP1Action.DisplayAtBoot },
+      contentContext: 'personal' })?.ok).toBe(true);
+    expect(canvasService.getCastInfo()?.contentContext).toBe('personal');
+    expect(boot).toHaveBeenCalledWith(mature, 'personal');
+  });
+
+  it('does not attest a refreshed item list with the previous playlist signature', () => {
+    const signed = { ...playlist(item('a'), item('b', 'general')), signature: 'ed25519:original' };
+    expect(cast(signed)?.ok).toBe(true);
+    expect(canvasService.getCastInfo()?.playlist?.signature).toBe('ed25519:original');
+
+    expect(cast(playlist(item('a'), item('c', 'general')), { refresh: true })?.ok).toBe(true);
+
+    // The item list changed, so the old attestation no longer describes it.
+    expect(canvasService.getCastInfo()?.playlist?.signature).toBeUndefined();
+  });
+});
+
+describe('admission when the policy mirror is not yet readable', () => {
+  const store = (read: () => Promise<string | null>) =>
+    new ContentPolicyStore({ read, write: () => Promise.resolve() });
+
+  it('marks an unreadable mirror so admission can fail closed on it', async () => {
+    const failing = store(() => Promise.reject(new Error('unreadable')));
+
+    await failing.initialize();
+
+    expect(failing.getSnapshot().active).toBe(false);
+    expect(failing.getSnapshot().hydrationFailed).toBe(true);
+  });
+
+  it('clears the failure once the daemon repairs the mirror', async () => {
+    const failing = store(() => Promise.reject(new Error('unreadable')));
+    await failing.initialize();
+
+    await failing.set({ ...DEFAULT_CONTENT_POLICY, showMatureContent: true });
+
+    expect(failing.getSnapshot().hydrationFailed).toBe(false);
+    expect(failing.getSnapshot().active).toBe(true);
+  });
+
+  it('does not confuse an unreadable mirror with one still being read', () => {
+    // Both are inactive, but only the unread one resolves on its own, and
+    // admission relies on that difference.
+    const unread = store(() => new Promise(() => undefined));
+
+    expect(unread.getSnapshot().active).toBe(false);
+    expect(unread.getSnapshot().hydrationFailed).toBe(false);
+  });
+
+  it('refuses a cast outright when the mirror is unreadable', () => {
+    vi.spyOn(contentPolicyStore, 'getSnapshot').mockReturnValue({
+      policy: DEFAULT_CONTENT_POLICY, active: false, epoch: 1, hydrationFailed: true,
+    });
+
+    expect(cast(playlist(item('a', 'general'))))
+      .toEqual({ ok: false, error: 'contentPolicyUnavailable' });
+  });
+
+  it('admits a cast whole while the mirror is still being read, then reconciles it', async () => {
+    const snapshot = vi.spyOn(contentPolicyStore, 'getSnapshot').mockReturnValue({
+      policy: DEFAULT_CONTENT_POLICY, active: false, epoch: 1, hydrationFailed: false,
+    });
+
+    // Filtering against the built-in default here would reject this cast
+    // outright, with nothing left to reconcile once the real policy lands.
+    expect(cast(playlist(item('a', 'mature')))?.ok).toBe(true);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a']);
+
+    snapshot.mockRestore();
+    // Stand in for the hydration publish: any policy the store publishes
+    // notifies its subscribers, and CanvasService reconciles the retained cast.
+    await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, strictPersonal: true });
+
+    // The published policy is re-applied to the payload that was kept whole.
+    expect(canvasService.getCastInfo()).toBeNull();
   });
 });

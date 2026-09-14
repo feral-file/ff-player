@@ -54,6 +54,13 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
   - Failures that do surface an error event still reach `failed` normally; the gap is limited to navigation failures the browser reports as a successful load.
 - `showRenderLoadingOverlay` only gates the visible loading overlay; it does not change the codes reported on status polls.
 
+## Recently played (`getRecentlyPlayed`)
+
+- The device retains a bounded, reverse-chronological record of works that reached the visual-commit boundary (`RECENTLY_PLAYED_*` in `src/services/recentPlaybackHistory.ts`). It is a timeline, not current state: clearing the wall never deletes it, and restoring a cast after a reboot never fabricates an entry.
+- `activeOccurrenceKnown` answers one question only — does the device currently know which retained record is the work on the wall? It is `true` only while a committed record is still what is being displayed.
+- It returns to `false`, and no record is marked `isActive`, as soon as any of these happen: a newer work begins committing (until that work's own record is durable), an oversize record is omitted, or playback stops. Treat `false` as **pending**, never as "nothing has ever played" — the records list stands on its own.
+- A durable write that lands after the wall has moved on does not become the active occurrence. The record is still retained; it simply cannot claim to be what is showing. Without that rule a slow IndexedDB write could name a work that left the screen seconds earlier.
+
 ## Setup overlay background artwork
 
 - Every visible `setupDisplay` state (scanning, softap_qr, joining, connecting, setup_error, finalizing, updating, claim_qr, factory_reset, join_failed) renders a bundled artwork beneath its panel, behind the panels' existing dark scrim. This background layer does not change the setup-state arbitration contract.

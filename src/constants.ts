@@ -5,6 +5,11 @@ export enum LocalStorageItem {
   criticalTemp = 'criticalTemp',
   dp1ScheduledTask = 'dp1_scheduled_tasks',
   bootPlaylist = 'boot_playlist',
+  // Unsigned origin of the boot cast, kept beside the signed boot playlist
+  // instead of inside it so the persisted DP-1 document stays byte-faithful to
+  // what was signed. An absent key is a pre-policy record and reads as
+  // curated, which is the conservative default.
+  bootPlaylistContentContext = 'boot_playlist_content_context',
   versionUpdateReload = 'versionUpdateReload',
   defaultItemDuration = 'defaultItemDuration',
   // Bounded device-local evidence of artworks that reached the viewer's

@@ -9,6 +9,15 @@ export interface ContentPolicySnapshot {
   policy: Readonly<ContentPolicy>;
   active: boolean;
   epoch: number;
+  /**
+   * True once a hydration attempt finished without producing a policy — an
+   * unreadable or corrupt mirror. Distinguishes that from the ordinary
+   * not-yet-read state, which is also `active: false` but resolves on its own.
+   * Admission needs the difference: an unread mirror is reconciled a moment
+   * later by the hydration publish, while an unreadable one never is and must
+   * fail closed until the daemon repairs it with setContentPolicy.
+   */
+  hydrationFailed: boolean;
 }
 
 /**
@@ -17,7 +26,8 @@ export interface ContentPolicySnapshot {
  * record is unreadable, and a later daemon reconciliation can repair the mirror.
  */
 export class ContentPolicyStore {
-  private snapshot: ContentPolicySnapshot = { policy: DEFAULT_CONTENT_POLICY, active: false, epoch: 0 };
+  private snapshot: ContentPolicySnapshot = { policy: DEFAULT_CONTENT_POLICY, active: false,
+    epoch: 0, hydrationFailed: false };
   private readonly listeners = new Set<() => void>();
   private initialization?: Promise<void>;
   private pending: Promise<void> = Promise.resolve();
@@ -46,6 +56,10 @@ export class ContentPolicyStore {
     } catch {
       // The daemon can recover via set(). Never translate corruption to the
       // permissive pre-audit defaults, nor erase the last recovery snapshot.
+      // Publishing the failure is what lets admission tell an unreadable
+      // mirror apart from one that is merely still being read.
+      this.snapshot = { ...this.snapshot, hydrationFailed: true };
+      this.listeners.forEach(listener => { listener(); });
     }
   }
 
@@ -69,7 +83,10 @@ export class ContentPolicyStore {
 
   private publish(policy: Readonly<ContentPolicy>): void {
     if (this.snapshot.active && JSON.stringify(this.snapshot.policy) === JSON.stringify(policy)) {return;}
-    this.snapshot = { policy: Object.freeze({ ...policy }), active: true, epoch: this.snapshot.epoch + 1 };
+    // A successful set() after a failed hydration repairs the mirror, so the
+    // failure flag clears with the policy that replaced it.
+    this.snapshot = { policy: Object.freeze({ ...policy }), active: true,
+      epoch: this.snapshot.epoch + 1, hydrationFailed: false };
     this.listeners.forEach(listener => { listener(); });
   }
 }

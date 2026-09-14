@@ -17,6 +17,8 @@ const { axiosGet, canvasServiceMocks, deviceManager, reactSetCastInfo } =
       getItem: vi.fn().mockResolvedValue('true'),
       removeItem: vi.fn().mockResolvedValue(undefined),
       getBootPlaylist: vi.fn(),
+      // A pre-policy record has no stored context and reads as curated.
+      getBootPlaylistContentContext: vi.fn().mockResolvedValue('curated'),
       getCastInfo: vi.fn().mockResolvedValue(null),
       setItem: vi.fn().mockResolvedValue(undefined),
       setDeviceDisplaySettings: vi.fn().mockResolvedValue(undefined),
@@ -122,6 +124,7 @@ afterEach(() => {
 // from hoisted spies before each test; re-apply defaults here.
 beforeEach(() => {
   deviceManager.getItem.mockResolvedValue('true');
+  deviceManager.getBootPlaylistContentContext.mockResolvedValue('curated');
   deviceManager.getCastInfo.mockResolvedValue(null);
   deviceManager.getDeviceDisplaySettings.mockResolvedValue(null);
   deviceManager.removeItem.mockResolvedValue(undefined);
@@ -167,6 +170,35 @@ describe('AppContext persisted source compatibility', () => {
       expect(canvasServiceMocks.setCastInfo).toHaveBeenCalled();
     });
     expectRestoredSource('about:blank');
+    // A record written before the context key existed reads as curated, so an
+    // upgrade cannot turn an old boot cast into an unfiltered personal one.
+    const [legacyRestore] = canvasServiceMocks.setCastInfo.mock.calls.at(-1) ?? [];
+    expect(legacyRestore?.contentContext).toBe('curated');
+  });
+
+  it('restores the boot cast under the context it was accepted with', async () => {
+    deviceManager.getItem.mockResolvedValue(null);
+    deviceManager.getBootPlaylistContentContext.mockResolvedValue('personal');
+    deviceManager.getBootPlaylist.mockResolvedValue({
+      dpVersion: '1',
+      id: 'personal-boot',
+      title: 'Personal boot',
+      items: [{ id: 'personal-artwork', source: 'about:blank', license: {} }],
+    });
+
+    render(
+      <AppProvider>
+        <div data-testid="app-ready" />
+      </AppProvider>
+    );
+
+    await waitFor(() => {
+      expect(canvasServiceMocks.setCastInfo).toHaveBeenCalled();
+    });
+    // Losing this on restart would apply the curated filter to a cast the
+    // viewer made themselves.
+    const [restored] = canvasServiceMocks.setCastInfo.mock.calls.at(-1) ?? [];
+    expect(restored?.contentContext).toBe('personal');
   });
 
   it('restores a legacy cast snapshot without revalidating its source', async () => {

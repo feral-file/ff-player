@@ -289,6 +289,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
           index: 0,
           isPaused: false,
           playlistId: bootPlaylist.id,
+          // Restore the origin the cast was accepted under. A record written
+          // before this key existed reads as curated, so an upgrade cannot
+          // turn an old boot cast into an unfiltered personal one.
+          contentContext: await DeviceManager.getBootPlaylistContentContext(),
         };
       }
     }
