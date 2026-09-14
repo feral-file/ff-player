@@ -54,6 +54,17 @@ export default function PlaylistClient() {
     useState<DP1Defaults | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
+  // The item castPreviewURL currently points at — the work the renderer is
+  // actually showing, which is NOT playlist[currentIndex] during a handoff.
+  // An advance commits currentIndex and publishes the new Canvas index before
+  // the effect below publishes the new preview URL, so for one render the
+  // index names the incoming work while the screen still holds the outgoing
+  // one. The final media gate needs the outgoing item to recognise the URL it
+  // is still rendering; handing it the incoming item made the lookup fail and
+  // unmounted ArtworkPlayer on every ordinary advance, taking the crossfade
+  // with it. Tracking the URL's owner keeps the gate's meaning ("is what we
+  // are showing still allowed?") independent of which index React has reached.
+  const previewOwnerRef = useRef<DP1Item | undefined>(undefined);
   const { artworkPerformReloadRef, triggerArtworkRefresh, registerArtworkReload } =
     useArtworkRefreshBridge(setCastPreviewURL);
 
@@ -410,10 +421,13 @@ export default function PlaylistClient() {
     // manifest while its slot is hidden or while policy hydration is pending.
     if (!contentPolicy.active || !allowsContent(currentItem, contentPolicy.policy, contentContext)) {
       clearTimer();
+      previewOwnerRef.current = undefined;
       setCastPreviewURL(null);
       return;
     }
     void handleItemDisplayPreference(currentItem, normalizedIndex);
+    // Owner and URL move together; the gate reads them as one fact.
+    previewOwnerRef.current = currentItem;
     setCastPreviewURL(currentItem.source);
     scheduleCurrentItemTimer(normalizedIndex, playlist);
 
@@ -597,7 +611,7 @@ export default function PlaylistClient() {
   const currentItemIdentity = useCurrentItemIdentity(playlist, currentIndex);
   const currentShowingKey = useShowingKey(playlist, currentIndex);
   const permitted = castInfo !== null && permitsCurrentPreview(
-    canvasService.getCastInfo(), playlist[currentIndex], castPreviewURL, contentPolicy);
+    canvasService.getCastInfo(), previewOwnerRef.current, castPreviewURL, contentPolicy);
 
   // Tombstone state (feral-file#3452): committed-item tracking, label
   // resolution, mode coercion, and the FF1-side toast — see useTombstone.

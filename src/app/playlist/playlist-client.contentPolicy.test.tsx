@@ -85,4 +85,30 @@ describe('playlist content policy media boundary', () => {
     expect(screen.queryByTestId('media')).toBeNull();
     expect(unmounted).toHaveBeenCalled();
   });
+
+  it('keeps the renderer mounted through an ordinary slot handoff', async () => {
+    vi.useFakeTimers();
+    const first: DP1Item = { id: 'first', source: 'https://art.test/first',
+      contentRating: 'general', license: DP1License.Open, duration: 1 };
+    const second: DP1Item = { id: 'second', source: 'https://art.test/second',
+      contentRating: 'general', license: DP1License.Open, duration: 1 };
+    const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
+      contentContext: 'curated', index: 0,
+      playlist: { dpVersion: '1.1.0', title: 'Art', items: [first, second] } };
+    canvasService.setCastInfo(initial, false);
+    render(<Harness initial={initial} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId('media').textContent).toBe(first.source);
+    unmounted.mockClear();
+
+    // Let the first slot's timer expire so the playlist advances on its own.
+    await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+
+    // An advance publishes the new index before the effect publishes the new
+    // preview URL. The gate must still recognise the outgoing work during that
+    // render; unmounting here would drop the crossfade and reload the player
+    // on every ordinary advance.
+    expect(screen.getByTestId('media').textContent).toBe(second.source);
+    expect(unmounted).not.toHaveBeenCalled();
+  });
 });

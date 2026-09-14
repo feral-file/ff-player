@@ -288,6 +288,13 @@ class CanvasService {
     // The window guard covers module import during prerender.
     if (typeof window !== 'undefined') {
       window.addEventListener(CustomEventName.PlaybackHalted, event => {
+        // Every deliberate stop reaches this bus — disconnect, sleep, and the
+        // error navigation in utils — so retiring here covers them all by
+        // construction, including a future halt source. Only disconnect nulls
+        // castInfo; sleep and error navigation keep it, which is why the
+        // setCastInfo(null) path alone was not enough: the wall stops showing
+        // the work while the cast is still the current one.
+        this.retireActiveRecentlyPlayed();
         if (this.bootCastHydrationPending) {
           this.haltedDuringBootHydration = true;
           // detail is null at runtime for a bare CustomEvent (error
@@ -489,6 +496,16 @@ class CanvasService {
         await DeviceManager.setRecentlyPlayed(next);
         // Do not expose an entry before the durable transaction completes.
         this.recentlyPlayedRecords = next;
+        if (this.recentlyPlayedPersistenceError) {
+          // A later write succeeded, so the store is usable again and History
+          // should stop answering with an error for the rest of the page's
+          // life. The gap the earlier failure left is permanent, though, so
+          // make it durable FIRST — clearing the error while the timeline
+          // still silently claims to be complete is the one order that lies.
+          await DeviceManager.setRecentlyPlayedIncomplete(true);
+          this.recentlyPlayedIncomplete = true;
+          this.recentlyPlayedPersistenceError = null;
+        }
         // The record is retained either way; it only becomes the ACTIVE
         // occurrence if the wall still shows it. A stop or a newer commit
         // during the write moved the generation on.
@@ -714,8 +731,28 @@ class CanvasService {
     this.queuedPlaylistPending = false;
     this.setDeferredRefreshPlaylist(null);
     if (this.castInfo) {
+      const before = this.selectedItemId();
       this.setCastInfo({ ...this.castInfo, castCommand: CastCommand.displayPlaylist });
+      // A tightening that blocks the selected work promotes a different one
+      // without a new cast, so the wall changes with no commit to retire the
+      // old record. Only retire when the selection actually moved: a policy
+      // change that leaves the same work playing must not blank the active
+      // occurrence, or History would sit at pending until the next advance.
+      // A cast that filtered down to nothing has already been retired by
+      // setCastInfo(null); retiring again there is harmless.
+      if (this.selectedItemId() !== before) {
+        this.retireActiveRecentlyPlayed();
+      }
     }
+  }
+
+  /** Identity of the work the current cast has selected, for change detection. */
+  private selectedItemId(): string | undefined {
+    const items = this.castInfo?.playlist?.items ?? [];
+    if (!items.length) {
+      return undefined;
+    }
+    return items.at(normalizePlaylistIndex(this.castInfo?.index ?? 0, items.length))?.id;
   }
 
   /**
@@ -1199,9 +1236,10 @@ class CanvasService {
     console.log('[CanvasService] Set sleep mode', request.sleepMode);
     const path = request.sleepMode ? '/sleep' : '/playlist';
 
-    // Sleep keeps castInfo, so nothing else retires the active occurrence, but
-    // the wall has stopped showing the work. Outside the window guard below
-    // because this is a playback fact, not a DOM one.
+    // Sleep also reaches the PlaybackHalted listener in the constructor, which
+    // is the general rule. This direct call is what makes it hold with no
+    // window to dispatch on (SSR, node tests): the wall state is a fact about
+    // this service, not about the DOM.
     if (request.sleepMode) {
       this.retireActiveRecentlyPlayed();
     }

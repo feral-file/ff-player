@@ -118,6 +118,51 @@ describe('recently played active occurrence follows the wall', () => {
     expect(history().activeOccurrenceKnown).toBe(false);
   });
 
+});
+
+describe('recently played active occurrence under policy changes', () => {
+  it('stops claiming an active occurrence when a policy change moves the selection', async () => {
+    canvasService.setCastInfo({
+      castCommand: CastCommand.displayPlaylist,
+      contentContext: 'curated',
+      index: 0,
+      playlist: { dpVersion: '1.1.0', title: 'Set', items: [
+        item('unrated'),
+        { ...item('allowed'), contentRating: 'general' },
+      ] },
+    }, false);
+    canvasService.recordRecentlyPlayed(item('unrated'));
+    await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
+
+    // Tightening promotes a different work with no new cast and no commit, so
+    // nothing else would retire the record for the work that just left.
+    await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
+
+    expect(canvasService.getCastInfo()?.playlist?.items?.[0].id).toBe('allowed');
+    expect(history().activeOccurrenceKnown).toBe(false);
+  });
+
+  it('keeps the active occurrence when a policy change leaves the same work playing', async () => {
+    canvasService.setCastInfo({
+      castCommand: CastCommand.displayPlaylist,
+      contentContext: 'curated',
+      index: 0,
+      playlist: { dpVersion: '1.1.0', title: 'Set',
+        items: [{ ...item('allowed'), contentRating: 'general' }] },
+    }, false);
+    canvasService.recordRecentlyPlayed({ ...item('allowed'), contentRating: 'general' });
+    await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
+
+    await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
+
+    // Blanking this would leave History pending until the next advance, which
+    // on a single-work cast may never come.
+    expect(history().activeOccurrenceKnown).toBe(true);
+  });
+
+});
+
+describe('recently played record capacity', () => {
   it('leaves no stale active occurrence when an oversize record is omitted', async () => {
     canvasService.recordRecentlyPlayed(item('a'));
     await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
@@ -134,9 +179,11 @@ describe('recently played active occurrence follows the wall', () => {
     expect(history().activeOccurrenceKnown).toBe(false);
   });
 
-  // Runs last on purpose: a persistence failure latches for the life of the
-  // page by design — a timeline gap cannot be un-gapped — and CanvasService is
-  // a singleton, so this cannot be undone for a later test in this file.
+});
+
+// Runs last on purpose: these drive CanvasService's persistence-failure state,
+// and it is a process-lifetime singleton shared with the suite above.
+describe('recently played persistence failures', () => {
   it('persists the gap marker when a record cannot be written', async () => {
     const marker = vi.spyOn(DeviceManager, 'setRecentlyPlayedIncomplete')
       .mockResolvedValue(undefined);
@@ -148,5 +195,23 @@ describe('recently played active occurrence follows the wall', () => {
     // would report a timeline missing a committed work as complete.
     await vi.waitFor(() => { expect(marker).toHaveBeenCalledWith(true); });
     expect(history().incomplete).toBe(true);
+    expect(history().ok).toBe(false);
+  });
+
+  it('answers with records again once a later write succeeds, still marked incomplete', async () => {
+    const marker = vi.spyOn(DeviceManager, 'setRecentlyPlayedIncomplete')
+      .mockResolvedValue(undefined);
+    setRecentlyPlayed.mockRejectedValueOnce(new Error('quota'));
+    canvasService.recordRecentlyPlayed(item('dropped'));
+    await vi.waitFor(() => { expect(history().ok).toBe(false); });
+
+    canvasService.recordRecentlyPlayed(item('later'));
+
+    // One transient IndexedDB failure must not make History an error for the
+    // rest of the page's life. The gap is permanent and stays visible as
+    // `incomplete`; the records themselves are answerable again.
+    await vi.waitFor(() => { expect(history().ok).toBe(true); });
+    expect(history().incomplete).toBe(true);
+    expect(marker).toHaveBeenCalledWith(true);
   });
 });
