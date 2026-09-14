@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- playback orchestration is intentionally co-located. */
 'use client';
 
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
