@@ -1479,14 +1479,7 @@ class CanvasService {
         });
 
         if (reply.ok) {
-          DeviceManager.setBootPlaylist(dp1CallData, contentContext).catch(
-            (error: unknown) => {
-              console.error(
-                '[CanvasService] Error setting boot playlist:',
-                error
-              );
-            }
-          );
+          this.persistBootPlaylist(dp1CallData, contentContext);
         }
         break;
       }
@@ -1499,6 +1492,33 @@ class CanvasService {
     }
 
     return reply;
+  }
+
+  /**
+   * Store the boot record, keeping only items this version actually validated.
+   *
+   * Admission runs before source validation, so an item excluded by policy
+   * never has its source checked. Persisting the whole payload would let a
+   * later policy relaxation plus a restart hand the renderer a source nothing
+   * ever validated. Boot recovery deliberately does not re-validate — that is
+   * what keeps an older accepted playlist playable across an upgrade — so the
+   * guarantee has to be established here, when the record is written.
+   *
+   * Dropping an item means the stored list no longer matches the signed
+   * document, so its signature goes with it.
+   */
+  private persistBootPlaylist(dp1CallData: DP1Call, contentContext: ContentContext): void {
+    const items = dp1CallData.items ?? [];
+    const validated = items.filter(item => !findInvalidArtworkSource([item]));
+    if (!validated.length) {
+      return;
+    }
+    const record = validated.length === items.length
+      ? dp1CallData
+      : stripPlaylistSignature({ ...dp1CallData, items: validated });
+    DeviceManager.setBootPlaylist(record, contentContext).catch((error: unknown) => {
+      console.error('[CanvasService] Error setting boot playlist:', error);
+    });
   }
 
   /**
@@ -1533,7 +1553,15 @@ class CanvasService {
       contentPolicyStore.retireRendering();
       return reply;
     }
-    if (!filtered.playlist) {return { ok: false, error: 'contentBlocked' };}
+    if (!filtered.playlist) {
+      // An empty incoming list is an instruction to clear, not a playlist whose
+      // every work is blocked. Reporting contentBlocked for it would leave the
+      // old artwork on the wall against the source's own update.
+      if (!dp1CallData.items?.length) {
+        return this.refreshPlaylist([], contentContext);
+      }
+      return { ok: false, error: 'contentBlocked' };
+    }
     return this.refreshPlaylist(filtered.playlist.items, contentContext);
   }
 
@@ -1824,6 +1852,16 @@ class CanvasService {
       console.log(
         '[CanvasService] New playlist is the same as the current playlist'
       );
+      // Identical items can still arrive under a DIFFERENT origin, and that
+      // reclassification is the whole point of the refresh. Returning here
+      // without publishing it would leave the cast judged under the old
+      // context by every later policy change. `refreshPlaylist` is the one
+      // command the client applies without restarting the slot — with no
+      // queued playlist pending it breaks out untouched — so the context lands
+      // and is persisted while the current work keeps playing.
+      if (prior && this.castInfo?.contentContext !== prior.contentContext) {
+        this.setCastInfo({ ...prior, castCommand: CastCommand.refreshPlaylist });
+      }
       return { ok: true };
     }
 

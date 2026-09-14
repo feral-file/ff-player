@@ -90,6 +90,9 @@ describe('content policy at playback boundaries', () => {
     expect(canvasService.getCastInfo()?.playlist?.items?.some(value => value.id === 'a') ?? false).toBe(false);
   });
 
+});
+
+describe('content policy at persistence and refresh boundaries', () => {
   it('carries the boot cast context into playback and into what it persists', () => {
     const boot = vi.spyOn(DeviceManager, 'setBootPlaylist').mockResolvedValue(undefined);
     const mature = playlist(item('b', 'mature'));
@@ -115,6 +118,43 @@ describe('content policy at playback boundaries', () => {
 
     await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, strictPersonal: true });
     expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a', 'b']);
+  });
+
+  it('stores a reclassified context even when the refreshed items are identical', async () => {
+    const items = playlist(item('a'));
+    expect(cast(items, { contentContext: 'personal' })?.ok).toBe(true);
+
+    // Same list, new origin: the reclassification IS the refresh. Returning
+    // early on the equal-items fast path would leave the cast judged personal.
+    expect(cast(items, { refresh: true, contentContext: 'curated' })?.ok).toBe(true);
+    expect(canvasService.getCastInfo()?.contentContext).toBe('curated');
+
+    await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
+    expect(canvasService.getCastInfo()).toBeNull();
+  });
+
+  it('applies an intentionally emptied refresh instead of calling it blocked', () => {
+    expect(cast(playlist(item('a')))?.ok).toBe(true);
+
+    // An empty list is the source saying "nothing here now". Treating it as a
+    // fully-blocked playlist would leave the old artwork on the wall.
+    expect(cast(playlist(), { refresh: true })?.ok).toBe(true);
+    expect(canvasService.getCastInfo()?.playlist?.items ?? []).toHaveLength(0);
+  });
+
+  it('persists only boot items this version validated', () => {
+    const boot = vi.spyOn(DeviceManager, 'setBootPlaylist').mockResolvedValue(undefined);
+    const blockedInvalid = { ...item('blocked', 'mature'), source: 'about:blank' };
+    const allowed = item('allowed', 'general');
+
+    // The mature item is filtered before source validation, so nothing ever
+    // checked its source. Persisting it would let a later relaxation plus a
+    // restart hand that source to the renderer unvalidated.
+    expect(cast(playlist(blockedInvalid, allowed),
+      { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+    const [record] = boot.mock.calls[0];
+    expect(record.items?.map(value => value.id)).toEqual(['allowed']);
+    expect(record.signature).toBeUndefined();
   });
 
   it('does not attest a refreshed item list with the previous playlist signature', () => {
