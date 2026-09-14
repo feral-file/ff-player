@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { canvasService } from './CanvasService';
 import { contentPolicyStore } from './ContentPolicyStore';
 import { DEFAULT_CONTENT_POLICY } from './contentPolicy';
-import { RECENTLY_PLAYED_MAX_RECORD_BYTES } from './recentPlaybackHistory';
+import { RECENTLY_PLAYED_MAX_RECORD_BYTES, type RecentlyPlayedRecord } from './recentPlaybackHistory';
 import DeviceManager from '@/utils/DeviceManager';
 import { CastCommand } from '@/models';
 import { DP1Item, DP1License } from '@/models/dp1.model';
@@ -19,13 +19,15 @@ const history = () => canvasService.processMessage({
 
 /** Lets a test resolve the queued durable write at a moment of its choosing. */
 let releaseWrite: (() => void) | null = null;
+/** Held from the spy itself; reading it back off DeviceManager would be an unbound method reference. */
+let setRecentlyPlayed: MockInstance<(records: RecentlyPlayedRecord[]) => Promise<void>>;
 
 beforeEach(async () => {
   vi.spyOn(DeviceManager, 'getContentPolicyRecord').mockResolvedValue(null);
   vi.spyOn(DeviceManager, 'setContentPolicyRecord').mockResolvedValue(undefined);
   vi.spyOn(DeviceManager, 'getRecentlyPlayed').mockResolvedValue([]);
   vi.spyOn(DeviceManager, 'getRecentlyPlayedIncomplete').mockResolvedValue(false);
-  vi.spyOn(DeviceManager, 'setRecentlyPlayed').mockResolvedValue(undefined);
+  setRecentlyPlayed = vi.spyOn(DeviceManager, 'setRecentlyPlayed').mockResolvedValue(undefined);
   vi.spyOn(DeviceManager, 'setRecentlyPlayedIncomplete').mockResolvedValue(undefined);
   releaseWrite = null;
   await contentPolicyStore.initialize();
@@ -81,13 +83,13 @@ describe('recently played active occurrence follows the wall', () => {
 
   it('cannot let a write that lands after a stop resurrect an active occurrence', async () => {
     const gate = new Promise<void>(resolve => { releaseWrite = resolve; });
-    vi.mocked(DeviceManager.setRecentlyPlayed).mockImplementationOnce(async () => gate);
+    setRecentlyPlayed.mockImplementationOnce(async () => gate);
 
     canvasService.recordRecentlyPlayed(item('a'));
     canvasService.setCastInfo(null, false);
     releaseWrite?.();
     await vi.waitFor(() => {
-      expect(vi.mocked(DeviceManager.setRecentlyPlayed)).toHaveBeenCalled();
+      expect(setRecentlyPlayed).toHaveBeenCalled();
     });
 
     expect(history().activeOccurrenceKnown).toBe(false);
