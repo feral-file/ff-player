@@ -7,6 +7,8 @@ import {
   CustomEventName,
   MintPairingDisplayDetail,
   MintPairingDisplayState,
+  PlayerToastDetail,
+  PlayerToastNotice,
   SetupDisplayDetail,
   SetupDisplayState,
 } from '@/models/custom_event';
@@ -411,6 +413,69 @@ describe('CDPRequestHandler setup display command (softap_qr client_attached)', 
       portal_url: 'http://10.42.0.1',
       client_attached: 'yes',
     });
+  });
+});
+
+/**
+ * Send a playerToast CDP request through the browser-exposed bridge.
+ */
+function handlePlayerToast(request: unknown) {
+  return (window as unknown as CDPTestWindow).handleCDPRequest({
+    command: 'playerToast',
+    request: request as Record<string, unknown>,
+  });
+}
+
+describe('CDPRequestHandler playerToast command', () => {
+  beforeEach(() => {
+    CDPRequestHandler.getInstance().initialize();
+  });
+
+  afterEach(() => {
+    CDPRequestHandler.getInstance().cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('dispatches every known notice with a monotonic seq', () => {
+    const received: PlayerToastDetail[] = [];
+    const listener = (event: Event) => {
+      received.push((event as CustomEvent<PlayerToastDetail>).detail);
+    };
+    window.addEventListener(CustomEventName.PlayerToast, listener);
+
+    const notices = Object.values(PlayerToastNotice);
+    for (const notice of notices) {
+      const response = handlePlayerToast({ notice });
+      expect(JSON.parse(response)).toEqual({ message: { ok: true } });
+    }
+
+    expect(received.map((d) => d.notice)).toEqual(notices);
+    const seqs = received.map((d) => d.seq);
+    expect(new Set(seqs).size).toBe(notices.length);
+    expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
+
+    window.removeEventListener(CustomEventName.PlayerToast, listener);
+  });
+
+  it('rejects unknown, missing, and non-string notices without dispatching', () => {
+    const listener = vi.fn();
+    window.addEventListener(CustomEventName.PlayerToast, listener);
+
+    for (const request of [
+      { notice: 'signature_ok' },
+      { notice: 42 },
+      {},
+      null,
+      'signature_invalid',
+    ]) {
+      const response = handlePlayerToast(request);
+      expect(JSON.parse(response)).toEqual({
+        message: { ok: false, error: 'Invalid player toast request' },
+      });
+    }
+    expect(listener).not.toHaveBeenCalled();
+
+    window.removeEventListener(CustomEventName.PlayerToast, listener);
   });
 });
 

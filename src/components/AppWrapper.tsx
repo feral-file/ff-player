@@ -15,6 +15,7 @@ import DP1ScheduleService from '@/services/DP1ScheduleService';
 import ScheduleDisplay from './ScheduleDisplay';
 import MintPairingOverlay from './mint-pairing/MintPairingOverlay';
 import SetupOverlay from './setup/SetupOverlay';
+import PlayerToast from './toast/PlayerToast';
 
 const enum CastState {
   None, // Not casting
@@ -203,6 +204,10 @@ const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <MintPairingOverlay />
       {/* Keep the CDP-driven setup listener mounted during boot. */}
       <SetupOverlay />
+      {/* Daemon-driven transient notices (playerToast). App-wide so a notice
+          about a cast lands on every route; no arbitration, it never owns
+          the screen and sits under the full-screen overlays above. */}
+      <PlayerToast />
     </>
   );
 };
