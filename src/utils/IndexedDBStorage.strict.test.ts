@@ -64,3 +64,63 @@ describe('strict IndexedDB records', () => {
     }
   });
 });
+
+/** An open() that never fires either callback, the way a wedged IDB behaves. */
+function stalledOpen() {
+  const opens: { onsuccess: (() => void) | null; onerror: (() => void) | null;
+    onupgradeneeded: ((event: unknown) => void) | null; result: unknown;
+    error: Error | null }[] = [];
+  vi.stubGlobal('indexedDB', {
+    open: () => {
+      const request = { onsuccess: null, onerror: null, onupgradeneeded: null,
+        result: undefined as unknown, error: null };
+      opens.push(request);
+      return request;
+    },
+  });
+  return opens;
+}
+
+describe('a stalled IndexedDB open', () => {
+  it('gives up instead of hanging every later read and write', async () => {
+    stalledOpen();
+    const storage = new IndexedDBStorage(20);
+
+    await expect(storage.getItemStrict('policy')).rejects.toThrow();
+    await expect(storage.setItemStrict('policy', 'value')).rejects.toThrow();
+  });
+
+  it('starts a new open on the next attempt rather than reusing the wedged one', async () => {
+    const opens = stalledOpen();
+    const storage = new IndexedDBStorage(20);
+
+    await expect(storage.getItemStrict('policy')).rejects.toThrow();
+    await expect(storage.getItemStrict('policy')).rejects.toThrow();
+
+    // Caching the stalled open is what left the device unable to read OR write
+    // its policy for the life of the page, so the daemon could never repair it.
+    expect(opens.length).toBe(2);
+  });
+
+  it('works once a later open succeeds', async () => {
+    const opens = stalledOpen();
+    const storage = new IndexedDBStorage(20);
+    await expect(storage.getItemStrict('policy')).rejects.toThrow();
+
+    const pending = storage.getItemStrict('policy');
+    const latest = opens[opens.length - 1];
+    latest.result = { transaction: () => {
+      const request = { result: 'recovered' };
+      const transaction = {
+        objectStore: () => ({ get: () => request }),
+        oncomplete: null as (() => void) | null,
+        onerror: null, onabort: null, error: null,
+      };
+      queueMicrotask(() => { transaction.oncomplete?.(); });
+      return transaction;
+    } };
+    latest.onsuccess?.();
+
+    await expect(pending).resolves.toBe('recovered');
+  });
+});

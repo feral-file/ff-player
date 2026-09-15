@@ -211,6 +211,12 @@ function resolveRenderStatusForCastInfo(
  * components share, including playlist order, loop/shuffle modes, and deferred
  * refresh transitions.
  */
+/** Identifies a cast for boot-record matching: playlist id, else its items. */
+interface CastKey { id?: string; items: DP1Item[] }
+
+/**
+ *
+ */
 class CanvasService {
   private castInfo: CastInfo | null = null;
   private renderStatus: RenderStatus | undefined;
@@ -419,6 +425,25 @@ class CanvasService {
    * invalidate.
    */
   private occurrenceItem: DP1Item | null = null;
+  /** Serializes every boot-record mutation; see supersedeBootRecord. */
+  private bootRecordWrite: Promise<void> = Promise.resolve();
+  /**
+   * The projection this service last wrote over the boot record, and the cast
+   * it was written FOR. Successive refreshes of one cast each captured the same
+   * live list, so without the projection a second refresh would compare against
+   * a record the first one already replaced, decline, and leave the restart
+   * restoring content the newer refresh had removed.
+   *
+   * The owner is what keeps that from becoming a blank cheque. Without it the
+   * fallback asked only "is this the record I wrote", so ANY later cast's
+   * refresh matched it — an ordinary now_display, refreshed once, would
+   * overwrite or delete the boot record belonging to a different playlist
+   * entirely. A refresh may replace this projection only if it comes from the
+   * same cast that produced it. Cleared by a display_at_boot, which is what
+   * keeps a stale refresh from overwriting a genuinely newer boot cast.
+   */
+  private supersededBootProjection: DP1Call | null = null;
+  private supersededBootOwner: CastKey | null = null;
 
   /**
    * The policy admission must apply, or `null` while the device's own mirror is
@@ -840,6 +865,11 @@ class CanvasService {
     return filtered.playlist
       ? { items: filtered.playlist.items ?? [], index: filtered.index }
       : null;
+  }
+
+    /** The playlist slot matching a work exactly: same id AND same media. */
+  private findSlot(items: DP1Item[] | undefined, work: DP1Item): DP1Item | undefined {
+    return items?.find(item => item.id === work.id && item.source === work.source);
   }
 
   /** True when a projection is exactly the list and slot already playing. */
@@ -1671,6 +1701,24 @@ class CanvasService {
    * document, so its signature goes with it.
    */
   private persistBootPlaylist(dp1CallData: DP1Call, contentContext: ContentContext): void {
+    // Same queue as supersession, so a boot cast and a refresh racing for this
+    // one record apply in the order they were issued.
+    this.bootRecordWrite = this.bootRecordWrite
+      .then(() => {
+        // A new boot cast ends the refresh chain: a supersession still queued
+        // behind this one belongs to the cast this replaces.
+        this.supersededBootProjection = null;
+        this.supersededBootOwner = null;
+        return this.writeBootPlaylist(dp1CallData, contentContext);
+      })
+      .catch((error: unknown) => {
+        console.error('[CanvasService] Error setting boot playlist:', error);
+      });
+  }
+
+  /** Write the record, keeping only items this version validated. */
+  private async writeBootPlaylist(dp1CallData: DP1Call,
+    contentContext: ContentContext): Promise<void> {
     const items = dp1CallData.items ?? [];
     const validated = items.filter(item => !findInvalidArtworkSource([item]));
     if (!validated.length) {
@@ -1679,9 +1727,7 @@ class CanvasService {
     const record = validated.length === items.length
       ? dp1CallData
       : stripPlaylistSignature({ ...dp1CallData, items: validated });
-    DeviceManager.setBootPlaylist(record, contentContext).catch((error: unknown) => {
-      console.error('[CanvasService] Error setting boot playlist:', error);
-    });
+    await DeviceManager.setBootPlaylist(record, contentContext);
   }
 
   /**
@@ -1722,17 +1768,28 @@ class CanvasService {
    * Fire-and-forget on the same single-value write the boot path already uses,
    * so the playlist and its context can never be left disagreeing.
    */
-  private supersedeBootRecord(previous: { id?: string; items: DP1Item[] },
+  private supersedeBootRecord(previous: CastKey,
     next: DP1Call | null, contentContext: ContentContext): void {
-    void DeviceManager.getBootPlaylist()
-      .then(boot => {
-        if (!boot || !this.isBootRecordFor(boot, previous)) {
+    // Queued behind every other boot-record mutation, and the match is checked
+    // INSIDE the queue, immediately before the write. The read is asynchronous,
+    // so a display_at_boot landing while it was in flight would otherwise be
+    // overwritten by this older refresh — and the device would restore the
+    // superseded playlist on its next restart.
+    this.bootRecordWrite = this.bootRecordWrite
+      .then(async () => {
+        const boot = await DeviceManager.getBootPlaylist();
+        if (!boot || !this.backsThisCast(boot, previous)) {
           return;
         }
         if (next === null) {
-          return DeviceManager.removeItem(LocalStorageItem.bootPlaylist);
+          this.supersededBootProjection = null;
+          this.supersededBootOwner = null;
+          await DeviceManager.removeItem(LocalStorageItem.bootPlaylist);
+          return;
         }
-        this.persistBootPlaylist(next, contentContext);
+        this.supersededBootProjection = next;
+        this.supersededBootOwner = previous;
+        await this.writeBootPlaylist(next, contentContext);
       })
       .catch((error: unknown) => {
         console.error('[CanvasService] Error superseding boot playlist:', error);
@@ -1746,15 +1803,33 @@ class CanvasService {
    * comparison has to be made against that, since the refresh is what changes
    * it. No key at all means no match: never guess at which record to overwrite.
    */
-  private isBootRecordFor(boot: DP1Call, previous: { id?: string; items: DP1Item[] }): boolean {
-    if (previous.id !== undefined || boot.id !== undefined) {
-      return boot.id === previous.id;
+  private backsThisCast(boot: DP1Call, previous: CastKey): boolean {
+    if (this.isBootRecordFor(boot, previous)) {
+      return true;
+    }
+    // Or it is the projection an earlier refresh of this same cast wrote, which
+    // a later refresh of that cast is entitled to replace.
+    const own = this.supersededBootProjection;
+    const owner = this.supersededBootOwner;
+    return own !== null && owner !== null &&
+      this.matchesKey(owner, previous) &&
+      this.isBootRecordFor(boot, { id: own.id, items: own.items ?? [] });
+  }
+
+  private isBootRecordFor(boot: DP1Call, previous: CastKey): boolean {
+    return this.matchesKey({ id: boot.id, items: boot.items ?? [] }, previous);
+  }
+
+  /** Playlist id when either side carries one, item identity otherwise. */
+  private matchesKey(candidate: CastKey, previous: CastKey): boolean {
+    if (previous.id !== undefined || candidate.id !== undefined) {
+      return candidate.id === previous.id;
     }
     // By item identity, not by value: the live cast carries normalized
     // durations the stored document does not.
     const ids = (items: DP1Item[]): (string | undefined)[] => items.map(item => item.id);
     return previous.items.length > 0 &&
-      deepEqual(ids(boot.items ?? []), ids(previous.items));
+      deepEqual(ids(candidate.items), ids(previous.items));
   }
 
   /**
@@ -1776,7 +1851,13 @@ class CanvasService {
     const policy = this.admissionPolicy();
     const currentItems = this.castInfo?.playlist?.items ?? [];
     const currentItem = currentItems.at(normalizePlaylistIndex(this.castInfo?.index ?? 0, currentItems.length));
-    const updatedCurrent = currentItem && dp1CallData.items?.find(item => item.id === currentItem.id);
+    // Exact slot first, id alone second — the same precedence the on-screen and
+    // selection lookups use below. Resolving by id alone found an EARLIER twin
+    // of the selected work, so a refresh that blocked that twin tore down
+    // playback to re-display the slot that was allowed the whole time.
+    const updatedCurrent = currentItem && (
+      this.findSlot(dp1CallData.items, currentItem) ??
+      dp1CallData.items?.find(item => item.id === currentItem.id));
     // The SELECTED work is not necessarily the one on screen: during a slow
     // handoff the selection has moved on while the previous work is still
     // showing. Refreshed labels that block what is on screen have to retire it
@@ -1789,7 +1870,15 @@ class CanvasService {
     // labels. Requiring the old source would miss a source replacement that
     // also marks the work mature.
     const onScreen = this.occurrenceItem;
-    const updatedOnScreen = onScreen && dp1CallData.items?.find(item => item.id === onScreen.id);
+    // Exact slot first, id alone second. DP-1 lets a playlist repeat an id, so
+    // matching by id alone can resolve a DIFFERENT slot — the allowed twin of
+    // the work actually on screen — and skip retiring the blocked one. Matching
+    // by the pair alone is no good either: a refresh may give the same work new
+    // media, and requiring the old source would miss a source replacement that
+    // also marks it mature. Prefer the exact pair, fall back to the id.
+    const updatedOnScreen = onScreen && (
+      this.findSlot(dp1CallData.items, onScreen) ??
+      dp1CallData.items?.find(item => item.id === onScreen.id));
     // A work the refresh still carries is judged on its FRESH labels; a work it
     // omits is judged on the labels it already has, because the refresh may
     // have narrowed the context instead of relabelling anything. Without that
@@ -1803,7 +1892,21 @@ class CanvasService {
       blocks(updatedOnScreen ?? onScreen);
     // The selection is carried into the projection so filterContent can resolve
     // the next allowed slot at or after it, rather than defaulting to the first.
-    const selected = normalizePlaylistIndex(this.castInfo?.index ?? 0, currentItems.length);
+    // It has to be the selected work's position in the INCOMING payload, not in
+    // the live list: the live list is already a projection, so a payload that
+    // still carries blocked works is indexed differently and the live index
+    // would land on an earlier work — sending the viewer backward.
+    const incomingItems = dp1CallData.items ?? [];
+    // Same precedence as above: the selected work's own slot when the payload
+    // still carries it, otherwise the first slot sharing its id.
+    const exact = currentItem
+      ? incomingItems.findIndex(candidate => candidate.id === currentItem.id &&
+          candidate.source === currentItem.source)
+      : -1;
+    const byId = currentItem && exact < 0
+      ? incomingItems.findIndex(candidate => candidate.id === currentItem.id)
+      : exact;
+    const selected = byId >= 0 ? byId : 0;
     const filtered = policy === null ? admitUnfiltered(dp1CallData) :
       filterContent(dp1CallData, policy, contentContext, selected);
     const bootKey = { id: this.castInfo?.playlistId, items: currentItems };

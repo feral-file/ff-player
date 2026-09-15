@@ -4,6 +4,7 @@ import { contentPolicyStore, ContentPolicyStore } from './ContentPolicyStore';
 import { DEFAULT_CONTENT_POLICY } from './contentPolicy';
 import DeviceManager from '@/utils/DeviceManager';
 import { CastCommand } from '@/models';
+import { LocalStorageItem } from '@/constants';
 import { DP1Action, DP1Call, DP1Item, DP1License } from '@/models/dp1.model';
 import DP1ScheduleService from './DP1ScheduleService';
 
@@ -72,6 +73,108 @@ describe('content policy at playback boundaries', () => {
     expect(canvasService.getCastInfo()?.castCommand).toBe(CastCommand.displayPlaylist);
   });
 
+});
+
+describe('content policy with repeated playlist slots', () => {
+  const slot = (id: string, source: string, rating?: string): DP1Item => ({
+    id, source, license: DP1License.Open, ...(rating ? { contentRating: rating } : {}),
+  });
+
+  // These set the on-screen work by calling recordRecentlyPlayed directly, so
+  // they exercise the refresh lookups and NOT the route that decides which slot
+  // gets recorded in the first place. That route resolves a commit by
+  // itemIdentityFor, which returns the bare DP-1 id, so for repeated ids it can
+  // record the wrong slot before any of this runs — a known limit of the
+  // player-wide slot identity the change owner has kept as it is. These tests
+  // prove the refresh path handles the slot it is given; they do not prove the
+  // right slot arrives.
+  //
+  // The history store has to be readable here: a failed append latches for the
+  // life of the service and would leak into later suites.
+  beforeEach(() => {
+    vi.spyOn(DeviceManager, 'getRecentlyPlayed').mockResolvedValue([]);
+    vi.spyOn(DeviceManager, 'getRecentlyPlayedIncomplete').mockResolvedValue(false);
+    vi.spyOn(DeviceManager, 'setRecentlyPlayed').mockResolvedValue(undefined);
+    vi.spyOn(DeviceManager, 'setRecentlyPlayedIncomplete').mockResolvedValue(undefined);
+  });
+
+  it('retires the repeated slot actually on screen, not its allowed twin', () => {
+    // DP-1 permits a playlist to repeat an id. The viewer is on the SECOND
+    // slot, which carries different media; a refresh marks that one mature and
+    // leaves the first alone. Resolving the on-screen work by id alone finds
+    // the allowed first slot, so retirement was skipped and the gate — finding
+    // no live copy at the on-screen source — fell back to that work's own
+    // stale labels and kept the now-mature media painting.
+    const onScreen = slot('dup', 'https://art.test/second', 'general');
+    expect(cast(playlist(slot('dup', 'https://art.test/first', 'general'), onScreen))?.ok).toBe(true);
+    canvasService.setCastInfo({ ...canvasService.getCastInfo(), index: 1 }, false);
+    canvasService.recordRecentlyPlayed(onScreen);
+    const epoch = contentPolicyStore.getSnapshot().retireEpoch;
+
+    expect(cast(playlist(slot('dup', 'https://art.test/first', 'general'),
+      slot('dup', 'https://art.test/second', 'mature')), { refresh: true })?.ok).toBe(true);
+
+    // Immediate retirement, which is what drops the blocked media from the
+    // screen without waiting for its slot to end.
+    expect(contentPolicyStore.getSnapshot().retireEpoch).toBeGreaterThan(epoch);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.source))
+      .toEqual(['https://art.test/first']);
+  });
+
+  it('does not interrupt an allowed slot because an earlier twin was blocked', () => {
+    // Selected is the SECOND dup, still general; the refresh marks the earlier
+    // dup mature. Resolving the selected work by id alone finds that earlier
+    // slot, calls the selection blocked, and tears down playback to re-display
+    // the very work that was allowed all along.
+    const onScreen = slot('dup', 'https://art.test/b', 'general');
+    expect(cast(playlist(slot('dup', 'https://art.test/a', 'general'), onScreen))?.ok).toBe(true);
+    canvasService.setCastInfo({ ...canvasService.getCastInfo(), index: 1 }, false);
+    canvasService.recordRecentlyPlayed(onScreen);
+    const epoch = contentPolicyStore.getSnapshot().retireEpoch;
+
+    expect(cast(playlist(slot('dup', 'https://art.test/a', 'mature'), onScreen),
+      { refresh: true })?.ok).toBe(true);
+
+    expect(contentPolicyStore.getSnapshot().retireEpoch).toBe(epoch);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.source))
+      .toEqual(['https://art.test/b']);
+  });
+
+  it('still retires a repeated slot whose refresh replaces its source', () => {
+    // The other direction, which is why the lookup cannot require the source:
+    // the same work keeps its id, gets new media, and is marked mature.
+    const onScreen = slot('dup', 'https://art.test/v1', 'general');
+    expect(cast(playlist(onScreen))?.ok).toBe(true);
+    canvasService.recordRecentlyPlayed(onScreen);
+    const epoch = contentPolicyStore.getSnapshot().retireEpoch;
+
+    expect(cast(playlist(slot('dup', 'https://art.test/v2', 'mature')),
+      { refresh: true })?.ok).toBe(true);
+
+    expect(contentPolicyStore.getSnapshot().retireEpoch).toBeGreaterThan(epoch);
+  });
+});
+
+describe('content policy and playlist projections', () => {
+  it('advances forward when the live list is a projection of a longer payload', () => {
+    // The live cast is [a, b, c] projected from [hidden, a, b, c]; the viewer
+    // is on b. Treating the live index as a position in the raw payload picks
+    // the wrong work and sends them backward instead of on to c.
+    const hidden = item('hidden', 'mature');
+    const full = playlist(hidden, item('a', 'general'), item('b', 'general'), item('c', 'general'));
+    expect(cast(full)?.ok).toBe(true);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id))
+      .toEqual(['a', 'b', 'c']);
+    canvasService.setCastInfo({ ...canvasService.getCastInfo(), index: 1 }, false);
+
+    const refreshed = playlist(hidden, item('a', 'general'),
+      item('b', 'mature'), item('c', 'general'));
+    expect(cast(refreshed, { refresh: true })?.ok).toBe(true);
+
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a', 'c']);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
   it('advances past a retired work instead of restarting the playlist', () => {
     cast(playlist(item('a', 'general'), item('b', 'general'), item('c', 'general')));
     canvasService.setCastInfo({ ...canvasService.getCastInfo(), index: 1 }, false);
@@ -116,20 +219,20 @@ describe('content policy at playback boundaries', () => {
 
 });
 
-describe('a refresh that supersedes a boot-backed cast', () => {
-  /** Stands in for the device's boot record across a simulated restart. */
-  const bootStore = () => {
-    let record: { playlist: DP1Call; contentContext: string } | null = null;
-    vi.spyOn(DeviceManager, 'setBootPlaylist').mockImplementation(
-      (playlist, contentContext = 'curated') => {
-        record = { playlist, contentContext };
-        return Promise.resolve();
-      });
-    vi.spyOn(DeviceManager, 'getBootPlaylist').mockImplementation(
-      () => Promise.resolve(record?.playlist ?? null));
-    return () => record;
-  };
+/** Stands in for the device's boot record across a simulated restart. */
+const bootStore = () => {
+  let record: { playlist: DP1Call; contentContext: string } | null = null;
+  vi.spyOn(DeviceManager, 'setBootPlaylist').mockImplementation(
+    (playlist, contentContext = 'curated') => {
+      record = { playlist, contentContext };
+      return Promise.resolve();
+    });
+  vi.spyOn(DeviceManager, 'getBootPlaylist').mockImplementation(
+    () => Promise.resolve(record?.playlist ?? null));
+  return () => record;
+};
 
+describe('a refresh that supersedes a boot-backed cast', () => {
   it('rewrites the boot record when a refresh removes content from it', async () => {
     const read = bootStore();
     const boot = playlist(item('keep', 'general'), item('drop', 'general'));
@@ -159,6 +262,88 @@ describe('a refresh that supersedes a boot-backed cast', () => {
 
     await vi.waitFor(() => { expect(read()?.contentContext).toBe('curated'); });
     expect(read()?.playlist.items?.map(value => value.id)).toEqual(['general']);
+  });
+
+  it('keeps the boot record on the latest of successive refreshes', async () => {
+    const read = bootStore();
+    const boot = playlist(item('a', 'general'), item('b', 'general'));
+    expect(cast(boot, { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+    await vi.waitFor(() => { expect(read()).not.toBeNull(); });
+
+    // Two refreshes land before the first replacement is installed. Each one
+    // captured the SAME live cast, so matching only against that would let the
+    // first write win and leave the restart restoring content the second
+    // refresh had already removed.
+    expect(cast(playlist(item('c', 'general')), { refresh: true })?.ok).toBe(true);
+    expect(cast(playlist(item('d', 'general')), { refresh: true })?.ok).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(read()?.playlist.items?.map(value => value.id)).toEqual(['d']);
+    });
+  });
+
+});
+
+describe('boot-record ownership across casts', () => {
+  it('does not let an unrelated cast\'s refresh overwrite the boot record', async () => {
+    const read = bootStore();
+    const boot = playlist(item('a', 'general'), item('dropped', 'general'));
+    expect(cast(boot, { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+    await vi.waitFor(() => { expect(read()).not.toBeNull(); });
+    // A refresh of the boot-backed cast drops an item, so the record now holds
+    // that refresh's projection rather than the list it was written from.
+    expect(cast(playlist(item('a', 'general')), { refresh: true })?.ok).toBe(true);
+    await vi.waitFor(() => {
+      expect(read()?.playlist.items?.map(value => value.id)).toEqual(['a']);
+    });
+
+    // An ordinary cast takes the wall, then is refreshed. It has nothing to do
+    // with the boot record; matching it against the projection alone let its
+    // refresh overwrite what the device restores after a restart.
+    expect(cast(playlist(item('x', 'general'), item('y', 'general')))?.ok).toBe(true);
+    expect(cast(playlist(item('x', 'general')), { refresh: true })?.ok).toBe(true);
+
+    await new Promise(resolve => { setTimeout(resolve, 30); });
+    expect(read()?.playlist.items?.map(value => value.id)).toEqual(['a']);
+  });
+
+  it('does not let an unrelated clearing refresh delete the boot record', async () => {
+    const read = bootStore();
+    const removed = vi.spyOn(DeviceManager, 'removeItem').mockResolvedValue(undefined);
+    const boot = playlist(item('a', 'general'), item('dropped', 'general'));
+    expect(cast(boot, { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+    await vi.waitFor(() => { expect(read()).not.toBeNull(); });
+    expect(cast(playlist(item('a', 'general')), { refresh: true })?.ok).toBe(true);
+    await vi.waitFor(() => {
+      expect(read()?.playlist.items?.map(value => value.id)).toEqual(['a']);
+    });
+
+    // Same shape, but the unrelated cast's refresh empties the playlist, which
+    // invalidates the record it matches.
+    expect(cast(playlist(item('x', 'general')))?.ok).toBe(true);
+    expect(cast(playlist(), { refresh: true })?.ok).toBe(true);
+
+    await new Promise(resolve => { setTimeout(resolve, 30); });
+    // Scoped to the boot key: other state clears on an ordinary cast.
+    expect(removed).not.toHaveBeenCalledWith(LocalStorageItem.bootPlaylist);
+    expect(read()?.playlist.items?.map(value => value.id)).toEqual(['a']);
+  });
+
+  it('does not let a slow refresh overwrite a newer boot cast', async () => {
+    const read = bootStore();
+    const original = playlist(item('old', 'general'), item('gone', 'general'));
+    expect(cast(original, { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+    await vi.waitFor(() => { expect(read()).not.toBeNull(); });
+
+    // The refresh's boot-record read is still in flight when a NEW boot cast
+    // lands. Writing the refreshed projection afterwards would restore the
+    // superseded playlist on the next restart.
+    expect(cast(playlist(item('old', 'general')), { refresh: true })?.ok).toBe(true);
+    expect(cast(playlist(item('fresh', 'general')),
+      { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+
+    await new Promise(resolve => { setTimeout(resolve, 30); });
+    expect(read()?.playlist.items?.map(value => value.id)).toEqual(['fresh']);
   });
 
   it('leaves an unrelated boot record alone', async () => {
@@ -207,7 +392,7 @@ describe('content policy reconciliation and queued controller intent', () => {
 });
 
 describe('content policy at persistence and refresh boundaries', () => {
-  it('carries the boot cast context into playback and into what it persists', () => {
+  it('carries the boot cast context into playback and into what it persists', async () => {
     const boot = vi.spyOn(DeviceManager, 'setBootPlaylist').mockResolvedValue(undefined);
     const mature = playlist(item('b', 'mature'));
 
@@ -217,7 +402,7 @@ describe('content policy at persistence and refresh boundaries', () => {
     expect(cast(mature, { intent: { action: DP1Action.DisplayAtBoot },
       contentContext: 'personal' })?.ok).toBe(true);
     expect(canvasService.getCastInfo()?.contentContext).toBe('personal');
-    expect(boot).toHaveBeenCalledWith(mature, 'personal');
+    await vi.waitFor(() => { expect(boot).toHaveBeenCalledWith(mature, 'personal'); });
   });
 
   it('stores the context a refresh was actually filtered under', async () => {
@@ -370,7 +555,7 @@ describe('content policy and the selected work moving on', () => {
     expect(stored.items?.map(value => value.id)).toEqual(['allowed']);
   });
 
-  it('persists only boot items this version validated', () => {
+  it('persists only boot items this version validated', async () => {
     const boot = vi.spyOn(DeviceManager, 'setBootPlaylist').mockResolvedValue(undefined);
     const blockedInvalid = { ...item('blocked', 'mature'), source: 'about:blank' };
     const allowed = item('allowed', 'general');
@@ -380,6 +565,7 @@ describe('content policy and the selected work moving on', () => {
     // restart hand that source to the renderer unvalidated.
     expect(cast(playlist(blockedInvalid, allowed),
       { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+    await vi.waitFor(() => { expect(boot).toHaveBeenCalled(); });
     const [record] = boot.mock.calls[0];
     expect(record.items?.map(value => value.id)).toEqual(['allowed']);
     expect(record.signature).toBeUndefined();

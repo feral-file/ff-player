@@ -1,4 +1,5 @@
 import { DP1Call, DP1Item } from '@/models/dp1.model';
+import { normalizePlaylistIndex } from '@/utils/playlist';
 
 /** Unsigned playback origin; defaults and unclassified casts are curated. */
 export type ContentContext = 'curated' | 'personal';
@@ -100,7 +101,12 @@ export function filterContent(playlist: DP1Call, policy: ContentPolicy,
   const source = playlist.items ?? [];
   const positions = source.flatMap((item, index) => allowsContent(item, policy, context) ? [index] : []);
   const blocked = source.length - positions.length;
-  const index = Math.max(0, positions.findIndex(position => position >= selectedIndex));
+  // Wrapped against the SOURCE first: moveToArtwork accepts any non-negative
+  // index and the playback route wraps it, so an out-of-range value must mean
+  // the same slot here. Searching for a position >= the raw value finds none
+  // and would quietly select the first work instead of the requested one.
+  const from = source.length ? normalizePlaylistIndex(selectedIndex, source.length) : 0;
+  const index = Math.max(0, positions.findIndex(position => position >= from));
   if (!positions.length) {return { playlist: null, index: 0, blocked };}
   if (!blocked) {return { playlist, index, blocked: 0 };}
   const projection = stripPlaylistSignature({ ...playlist,

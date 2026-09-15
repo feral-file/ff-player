@@ -3,6 +3,23 @@
  * Provides a localStorage-like API using IndexedDB for larger storage capacity.
  */
 
+/**
+ * How long one `indexedDB.open()` may take before the attempt is abandoned.
+ *
+ * A wedged open fires neither onsuccess nor onerror, so without a bound the
+ * cached init promise stays pending for the life of the page and EVERY later
+ * read and write waits on it forever — including the write a daemon would use
+ * to repair the device.
+ *
+ * Deliberately LOOSER than the policy store's own read timeout, not tighter: a
+ * cold device can be slow to open, and rejecting a merely slow open is how a
+ * healthy boot loses its restored state. The policy store therefore gives up
+ * first and falls back to the built-in default, so playback never waits this
+ * long; a connection that lands afterwards is adopted and serves every later
+ * read, and the real policy is picked back up on the next poll.
+ */
+const OPEN_TIMEOUT_MS = 15000;
+
 const DB_NAME = 'FeralFileDisplayDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'keyValueStore';
@@ -13,6 +30,23 @@ const STORE_NAME = 'keyValueStore';
 export class IndexedDBStorage {
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
+  /** Attempt counter, so an open abandoned at timeout cannot adopt later. */
+  private openGeneration = 0;
+
+  constructor(private readonly openTimeoutMs: number = OPEN_TIMEOUT_MS) {}
+
+  /**
+   * Does a `null` read mean the key is ABSENT, rather than unreadable?
+   *
+   * True where storage does not exist at all — SSR, node — because there the
+   * absence is the truth, and true once a connection is open. False while the
+   * open has failed or not completed: a null then says nothing about what is
+   * stored, and a caller that caches it turns one bad moment into a device that
+   * believes it has no saved state.
+   */
+  public reflectsRealAbsence(): boolean {
+    return !this.isSupported() || this.db !== null;
+  }
 
   private isSupported(): boolean {
     // Guard against server-side / worker contexts where indexedDB is undefined.
@@ -70,10 +104,32 @@ export class IndexedDBStorage {
       return this.initPromise;
     }
 
-    this.initPromise = new Promise((resolve, reject) => {
+    const generation = ++this.openGeneration;
+    this.initPromise = this.openWithinTimeout(generation);
+
+    try {
+      await this.initPromise;
+    } catch (error) {
+      // Only the current attempt may clear the cache; a late failure from an
+      // abandoned open must not discard a newer attempt already in flight.
+      if (generation === this.openGeneration) {
+        this.initPromise = null;
+      }
+      throw error;
+    }
+  }
+
+  /** One bounded open attempt. An expiry and a failure are the same outcome. */
+  private openWithinTimeout(generation: number): Promise<void> {
+    return new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
+      const expiry = setTimeout(() => {
+        console.error('[IndexedDBStorage] Timed out opening database');
+        reject(new Error('IndexedDB open timed out'));
+      }, this.openTimeoutMs);
 
       request.onerror = () => {
+        clearTimeout(expiry);
         console.error(
           '[IndexedDBStorage] Failed to open database:',
           request.error
@@ -82,6 +138,16 @@ export class IndexedDBStorage {
       };
 
       request.onsuccess = () => {
+        clearTimeout(expiry);
+        if (generation !== this.openGeneration) {
+          // A newer attempt has taken over. Adopting this connection would race
+          // it; close it rather than leave a second handle open on the file.
+          request.result.close();
+          return;
+        }
+        // Still the current attempt, so a connection arriving after the timeout
+        // is useful rather than stale: adopt it, and the next call short
+        // circuits on `this.db` instead of opening again.
         this.db = request.result;
         resolve();
       };
@@ -93,13 +159,6 @@ export class IndexedDBStorage {
         }
       };
     });
-
-    try {
-      await this.initPromise;
-    } catch (error) {
-      this.initPromise = null;
-      throw error;
-    }
   }
 
   /** Get a best-effort legacy value; new policy/history code uses strict reads. */
