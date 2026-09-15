@@ -116,6 +116,67 @@ describe('content policy at playback boundaries', () => {
 
 });
 
+describe('a refresh that supersedes a boot-backed cast', () => {
+  /** Stands in for the device's boot record across a simulated restart. */
+  const bootStore = () => {
+    let record: { playlist: DP1Call; contentContext: string } | null = null;
+    vi.spyOn(DeviceManager, 'setBootPlaylist').mockImplementation(
+      (playlist, contentContext = 'curated') => {
+        record = { playlist, contentContext };
+        return Promise.resolve();
+      });
+    vi.spyOn(DeviceManager, 'getBootPlaylist').mockImplementation(
+      () => Promise.resolve(record?.playlist ?? null));
+    return () => record;
+  };
+
+  it('rewrites the boot record when a refresh removes content from it', async () => {
+    const read = bootStore();
+    const boot = playlist(item('keep', 'general'), item('drop', 'general'));
+    expect(cast(boot, { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+    await vi.waitFor(() => { expect(read()).not.toBeNull(); });
+
+    // The source drops a work from the live cast.
+    expect(cast(playlist(item('keep', 'general')), { refresh: true })?.ok).toBe(true);
+
+    // Without this the boot envelope still holds the original, so the removed
+    // work returns on the next restart — content taken off the wall live comes
+    // back by itself.
+    await vi.waitFor(() => {
+      expect(read()?.playlist.items?.map(value => value.id)).toEqual(['keep']);
+    });
+  });
+
+  it('rewrites the boot record when a refresh narrows its content context', async () => {
+    const read = bootStore();
+    const boot = playlist(item('mature', 'mature'), item('general', 'general'));
+    expect(cast(boot, { intent: { action: DP1Action.DisplayAtBoot },
+      contentContext: 'personal' })?.ok).toBe(true);
+    await vi.waitFor(() => { expect(read()?.contentContext).toBe('personal'); });
+
+    // Narrowed to curated: the mature work is no longer permitted.
+    expect(cast(boot, { refresh: true, contentContext: 'curated' })?.ok).toBe(true);
+
+    await vi.waitFor(() => { expect(read()?.contentContext).toBe('curated'); });
+    expect(read()?.playlist.items?.map(value => value.id)).toEqual(['general']);
+  });
+
+  it('leaves an unrelated boot record alone', async () => {
+    const read = bootStore();
+    expect(cast(playlist(item('booted', 'general')),
+      { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+    await vi.waitFor(() => { expect(read()).not.toBeNull(); });
+
+    // A different playlist is cast and refreshed; the boot record is not its
+    // business and must survive untouched.
+    expect(cast(playlist(item('other', 'general'), item('extra', 'general')))?.ok).toBe(true);
+    expect(cast(playlist(item('other', 'general')), { refresh: true })?.ok).toBe(true);
+
+    await new Promise(resolve => { setTimeout(resolve, 20); });
+    expect(read()?.playlist.items?.map(value => value.id)).toEqual(['booted']);
+  });
+});
+
 describe('content policy reconciliation and queued controller intent', () => {
   it('re-filters a deferred refresh instead of discarding it', async () => {
     // A refresh that omits the current work is deferred until that work ends.

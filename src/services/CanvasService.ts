@@ -512,17 +512,19 @@ class CanvasService {
     // displacement before this write lands must still invalidate it.
     this.occurrenceItem = item;
     const generation = this.playbackGeneration;
+    // Stamped HERE, at the visual commit, not inside the queued write. The
+    // append runs after any earlier write and after the history read, either of
+    // which can take a long time on a device — reading the clock there would
+    // date a work minutes after the viewer saw it, and the ordering sequence
+    // would be wrong by the same amount.
+    const nowMs = Date.now();
+    const nextSequence = nowMs * 1000 + ++this.recentlyPlayedSequence;
     this.recentlyPlayedWrite = this.recentlyPlayedWrite
       .then(async () => {
         const next = appendRecentlyPlayed(
           await this.loadRecentlyPlayed(),
           item,
-          {
-            nowMs: Date.now(),
-            nextSequence: Date.now() * 1000 + ++this.recentlyPlayedSequence,
-            defaults,
-            contentContext,
-          }
+          { nowMs, nextSequence, defaults, contentContext }
         );
         if (next === null) {
           console.warn('[CanvasService] Recently played record exceeds byte budget');
@@ -1706,6 +1708,56 @@ class CanvasService {
   }
 
   /**
+   * Carry an accepted refresh into the boot record that backs the same cast.
+   *
+   * `display_at_boot` persists what to restore after a reboot, and refreshes
+   * only ever updated the live cast. So a work removed from the wall live —
+   * dropped by the source, or excluded because the refresh narrowed the
+   * context — came back by itself on the next restart, which for a
+   * family-content narrowing is the one direction that must never happen.
+   *
+   * Only the record backing THIS cast is touched, so a refresh of some other
+   * playlist cannot clobber it. `null` means the refresh cleared playback, and
+   * the record is invalidated rather than rewritten.
+   * Fire-and-forget on the same single-value write the boot path already uses,
+   * so the playlist and its context can never be left disagreeing.
+   */
+  private supersedeBootRecord(previous: { id?: string; items: DP1Item[] },
+    next: DP1Call | null, contentContext: ContentContext): void {
+    void DeviceManager.getBootPlaylist()
+      .then(boot => {
+        if (!boot || !this.isBootRecordFor(boot, previous)) {
+          return;
+        }
+        if (next === null) {
+          return DeviceManager.removeItem(LocalStorageItem.bootPlaylist);
+        }
+        this.persistBootPlaylist(next, contentContext);
+      })
+      .catch((error: unknown) => {
+        console.error('[CanvasService] Error superseding boot playlist:', error);
+      });
+  }
+
+  /**
+   * Does this boot record back the cast being refreshed? Playlist id is the key
+   * when the document carries one. DP-1 makes `id` optional, so an id-less
+   * playlist falls back to its item list as it stood BEFORE the refresh — the
+   * comparison has to be made against that, since the refresh is what changes
+   * it. No key at all means no match: never guess at which record to overwrite.
+   */
+  private isBootRecordFor(boot: DP1Call, previous: { id?: string; items: DP1Item[] }): boolean {
+    if (previous.id !== undefined || boot.id !== undefined) {
+      return boot.id === previous.id;
+    }
+    // By item identity, not by value: the live cast carries normalized
+    // durations the stored document does not.
+    const ids = (items: DP1Item[]): (string | undefined)[] => items.map(item => item.id);
+    return previous.items.length > 0 &&
+      deepEqual(ids(boot.items ?? []), ids(previous.items));
+  }
+
+  /**
    * A source refresh under the current policy.
    *
    * Two outcomes differ in timing, not in what they allow. An ordinary refresh
@@ -1754,12 +1806,16 @@ class CanvasService {
     const selected = normalizePlaylistIndex(this.castInfo?.index ?? 0, currentItems.length);
     const filtered = policy === null ? admitUnfiltered(dp1CallData) :
       filterContent(dp1CallData, policy, contentContext, selected);
+    const bootKey = { id: this.castInfo?.playlistId, items: currentItems };
     if (retireCurrent || request.retireBlockedCurrent === true) {
       const currentPlaylistUrl = this.castInfo?.playlistUrl;
       this.setCastInfo(null);
       const reply = filtered.playlist ? this.nowDisplayPlaylist({ dp1CallData: filtered.playlist,
         contentContext, playlistUrl: currentPlaylistUrl, startIndex: filtered.index }) : { ok: true };
       contentPolicyStore.retireRendering();
+      if (reply.ok) {
+        this.supersedeBootRecord(bootKey, filtered.playlist, contentContext);
+      }
       return reply;
     }
     if (!filtered.playlist) {
@@ -1767,11 +1823,19 @@ class CanvasService {
       // every work is blocked. Reporting contentBlocked for it would leave the
       // old artwork on the wall against the source's own update.
       if (!dp1CallData.items?.length) {
-        return this.refreshPlaylist([], contentContext);
+        const cleared = this.refreshPlaylist([], contentContext);
+        if (cleared.ok) {
+          this.supersedeBootRecord(bootKey, null, contentContext);
+        }
+        return cleared;
       }
       return { ok: false, error: 'contentBlocked' };
     }
-    return this.refreshPlaylist(filtered.playlist.items, contentContext);
+    const applied = this.refreshPlaylist(filtered.playlist.items, contentContext);
+    if (applied.ok) {
+      this.supersedeBootRecord(bootKey, filtered.playlist, contentContext);
+    }
+    return applied;
   }
 
   private nowDisplayPlaylist(

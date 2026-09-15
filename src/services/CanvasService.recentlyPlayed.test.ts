@@ -45,6 +45,33 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
+describe('recently played timestamps', () => {
+  it('dates a work when it reached the screen, not when its write ran', async () => {
+    // Hold the queued write open so the append runs well after the commit, the
+    // way a slow IndexedDB read or a prior write delays it on a device.
+    let release: () => void = () => undefined;
+    setRecentlyPlayed.mockImplementationOnce(
+      () => new Promise<void>(resolve => { release = resolve; }));
+    canvasService.recordRecentlyPlayed(item('blocking'));
+    await vi.waitFor(() => { expect(setRecentlyPlayed).toHaveBeenCalled(); });
+
+    const appeared = Date.now();
+    canvasService.recordRecentlyPlayed(item('delayed'));
+    const stall = 200;
+    await new Promise(resolve => { setTimeout(resolve, stall); });
+    release();
+
+    const delayedRecord = () => setRecentlyPlayed.mock.calls
+      .map(call => call[0].find(record => record.item.id === 'delayed'))
+      .find(Boolean);
+    await vi.waitFor(() => { expect(delayedRecord()).toBeDefined(); });
+
+    // Reading the clock inside the queued write would date this work by the
+    // whole stall; the viewer saw it at `appeared`.
+    expect(delayedRecord()?.playedAtMs).toBeLessThan(appeared + stall);
+  });
+});
+
 describe('recently played active occurrence follows the wall', () => {
   it('reports the committed work as the active occurrence', async () => {
     canvasService.recordRecentlyPlayed(item('a'));
