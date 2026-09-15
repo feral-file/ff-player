@@ -366,11 +366,26 @@ function readPlayerStatus(): Record<string, unknown> {
 // binds the SAME fresh canvasService instance the test then drives directly.
 const freshHandlerAndService = async () => {
   vi.resetModules();
-  const [{ CDPRequestHandler: FreshHandler }, { canvasService: freshCanvas }] =
-    await Promise.all([
-      import('./CDPRequestHandler'),
-      import('../CanvasService'),
-    ]);
+  const [
+    { CDPRequestHandler: FreshHandler },
+    { canvasService: freshCanvas },
+    { contentPolicyStore: freshPolicy },
+    { DEFAULT_CONTENT_POLICY: freshDefaults },
+    { default: freshDeviceManager },
+  ] = await Promise.all([
+    import('./CDPRequestHandler'),
+    import('../CanvasService'),
+    import('../ContentPolicyStore'),
+    import('../contentPolicy'),
+    import('@/utils/DeviceManager'),
+  ]);
+  // The fresh module graph brings its own policy mirror and its own storage.
+  // Status reports nothing playable while that mirror is unavailable, so apply
+  // the policy the way AppContext's boot does before any cast reaches this
+  // harness; jsdom has no IndexedDB, hence the stubbed record accessors.
+  vi.spyOn(freshDeviceManager, 'getContentPolicyRecord').mockResolvedValue(null);
+  vi.spyOn(freshDeviceManager, 'setContentPolicyRecord').mockResolvedValue(undefined);
+  await freshPolicy.set(freshDefaults);
   return { handler: FreshHandler.getInstance(), canvas: freshCanvas };
 };
 

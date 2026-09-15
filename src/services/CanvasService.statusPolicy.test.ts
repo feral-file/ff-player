@@ -50,6 +50,28 @@ describe('checkStatus and content policy admission', () => {
     expect(reply.castCommand).toBeUndefined();
   });
 
+  it('reports nothing playable while the policy mirror is unreadable', () => {
+    canvasService.setCastInfo({
+      castCommand: CastCommand.displayPlaylist,
+      index: 0,
+      playlist: { dpVersion: '1.1.0', title: 'Set', items: [item('a')] },
+    }, false);
+    vi.spyOn(contentPolicyStore, 'getSnapshot').mockReturnValue({
+      policy: DEFAULT_CONTENT_POLICY, active: false, epoch: 1, retireEpoch: 0,
+      hydrationFailed: true,
+    });
+
+    // The renderer refuses to mount without an applied policy, so the cast is
+    // retained but is not on the wall. Reporting it as active would tell
+    // controld a blank device is playing and hide the fail-closed state it
+    // needs to see in order to repair the mirror.
+    expect(canvasService.hasActiveArtwork()).toBe(false);
+    const reply = status();
+    expect(reply.ok).toBe(true);
+    expect(reply.playlist).toBeUndefined();
+    expect(reply.index).toBeUndefined();
+  });
+
   it('still reports a persisted cast the policy allows', () => {
     const allowed = { ...item('allowed'), contentRating: 'general' as const };
     vi.spyOn(DeviceManager, 'getCachedCastInfo').mockReturnValue({

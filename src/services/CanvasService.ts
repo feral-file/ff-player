@@ -1130,8 +1130,9 @@ class CanvasService {
       // policy blocks all of it. Falling back to the stored payload there would
       // report that blocked playlist, its index and its command as current
       // while the wall is showing nothing — the one state a controller must not
-      // be told is active. A null result here IS the answer.
-      const activeCastInfo = this.castInfo;
+      // be told is active. A null result here IS the answer, and so is the
+      // unavailable-policy case renderableCastInfo covers.
+      const activeCastInfo = this.renderableCastInfo();
 
       console.log(
         '[CanvasService getStatus] Reply ok. Current index:',
@@ -1261,7 +1262,22 @@ class CanvasService {
    * whether the current cast has active artwork.
    */
   public hasActiveArtwork(): boolean {
-    return Boolean(this.castInfo?.playlist?.items?.length);
+    return Boolean(this.renderableCastInfo()?.playlist?.items?.length);
+  }
+
+  /**
+   * The cast as far as anything OUTSIDE the player may describe it.
+   *
+   * Retained cast state and reportable cast state are not the same thing while
+   * the policy mirror is unavailable. The renderer refuses to mount without an
+   * applied policy, so a retained playlist is not on the wall — reporting it as
+   * active would tell controld that a blank device is playing, and hide the
+   * fail-closed state it needs to see in order to repair the mirror. The state
+   * itself is kept, so a later durable policy resumes playback rather than
+   * losing the cast.
+   */
+  private renderableCastInfo(): CastInfo | null {
+    return contentPolicyStore.getSnapshot().active ? this.castInfo : null;
   }
 
   /**
