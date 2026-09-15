@@ -12,7 +12,7 @@
  * to repair the device. Tighter than the policy store's own read timeout, so
  * the inner layer is the one that gives up first.
  */
-const OPEN_TIMEOUT_MS = 2000;
+const OPEN_TIMEOUT_MS = 15000;
 
 const DB_NAME = 'FeralFileDisplayDB';
 const DB_VERSION = 1;
@@ -28,6 +28,19 @@ export class IndexedDBStorage {
   private openGeneration = 0;
 
   constructor(private readonly openTimeoutMs: number = OPEN_TIMEOUT_MS) {}
+
+  /**
+   * Does a `null` read mean the key is ABSENT, rather than unreadable?
+   *
+   * True where storage does not exist at all — SSR, node — because there the
+   * absence is the truth, and true once a connection is open. False while the
+   * open has failed or not completed: a null then says nothing about what is
+   * stored, and a caller that caches it turns one bad moment into a device that
+   * believes it has no saved state.
+   */
+  public reflectsRealAbsence(): boolean {
+    return !this.isSupported() || this.db !== null;
+  }
 
   private isSupported(): boolean {
     // Guard against server-side / worker contexts where indexedDB is undefined.

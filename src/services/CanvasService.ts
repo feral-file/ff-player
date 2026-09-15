@@ -421,6 +421,15 @@ class CanvasService {
   private occurrenceItem: DP1Item | null = null;
   /** Serializes every boot-record mutation; see supersedeBootRecord. */
   private bootRecordWrite: Promise<void> = Promise.resolve();
+  /**
+   * The projection this service last wrote over the boot record for the CURRENT
+   * boot-backed cast. Successive refreshes of one cast each captured the same
+   * live list, so without this a second refresh would compare against a record
+   * the first one already replaced, decline, and leave the restart restoring
+   * content the newer refresh had removed. Cleared by a display_at_boot, which
+   * is what keeps a stale refresh from overwriting a genuinely newer cast.
+   */
+  private supersededBootProjection: DP1Call | null = null;
 
   /**
    * The policy admission must apply, or `null` while the device's own mirror is
@@ -1681,7 +1690,12 @@ class CanvasService {
     // Same queue as supersession, so a boot cast and a refresh racing for this
     // one record apply in the order they were issued.
     this.bootRecordWrite = this.bootRecordWrite
-      .then(() => this.writeBootPlaylist(dp1CallData, contentContext))
+      .then(() => {
+        // A new boot cast ends the refresh chain: a supersession still queued
+        // behind this one belongs to the cast this replaces.
+        this.supersededBootProjection = null;
+        return this.writeBootPlaylist(dp1CallData, contentContext);
+      })
       .catch((error: unknown) => {
         console.error('[CanvasService] Error setting boot playlist:', error);
       });
@@ -1749,13 +1763,15 @@ class CanvasService {
     this.bootRecordWrite = this.bootRecordWrite
       .then(async () => {
         const boot = await DeviceManager.getBootPlaylist();
-        if (!boot || !this.isBootRecordFor(boot, previous)) {
+        if (!boot || !this.backsThisCast(boot, previous)) {
           return;
         }
         if (next === null) {
+          this.supersededBootProjection = null;
           await DeviceManager.removeItem(LocalStorageItem.bootPlaylist);
           return;
         }
+        this.supersededBootProjection = next;
         await this.writeBootPlaylist(next, contentContext);
       })
       .catch((error: unknown) => {
@@ -1770,6 +1786,17 @@ class CanvasService {
    * comparison has to be made against that, since the refresh is what changes
    * it. No key at all means no match: never guess at which record to overwrite.
    */
+  private backsThisCast(boot: DP1Call, previous: { id?: string; items: DP1Item[] }): boolean {
+    if (this.isBootRecordFor(boot, previous)) {
+      return true;
+    }
+    // Or it is the projection an earlier refresh of this same cast wrote, which
+    // a later refresh of that cast is entitled to replace.
+    const own = this.supersededBootProjection;
+    return own !== null &&
+      this.isBootRecordFor(boot, { id: own.id, items: own.items ?? [] });
+  }
+
   private isBootRecordFor(boot: DP1Call, previous: { id?: string; items: DP1Item[] }): boolean {
     if (previous.id !== undefined || boot.id !== undefined) {
       return boot.id === previous.id;

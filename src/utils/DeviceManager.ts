@@ -136,6 +136,13 @@ class DeviceManager {
       }
     }
 
+    if (value === null && !indexedDBStorage.reflectsRealAbsence()) {
+      // Unknown, not absent: the read never reached storage. Caching it would
+      // make the rest of this page believe the device has no saved state, so
+      // leave the key uncached and let a later call answer it properly.
+      return null;
+    }
+
     this.cache.set(key, value);
     return value;
   }

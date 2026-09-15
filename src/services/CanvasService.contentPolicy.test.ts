@@ -263,6 +263,24 @@ describe('a refresh that supersedes a boot-backed cast', () => {
     expect(read()?.playlist.items?.map(value => value.id)).toEqual(['general']);
   });
 
+  it('keeps the boot record on the latest of successive refreshes', async () => {
+    const read = bootStore();
+    const boot = playlist(item('a', 'general'), item('b', 'general'));
+    expect(cast(boot, { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+    await vi.waitFor(() => { expect(read()).not.toBeNull(); });
+
+    // Two refreshes land before the first replacement is installed. Each one
+    // captured the SAME live cast, so matching only against that would let the
+    // first write win and leave the restart restoring content the second
+    // refresh had already removed.
+    expect(cast(playlist(item('c', 'general')), { refresh: true })?.ok).toBe(true);
+    expect(cast(playlist(item('d', 'general')), { refresh: true })?.ok).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(read()?.playlist.items?.map(value => value.id)).toEqual(['d']);
+    });
+  });
+
   it('does not let a slow refresh overwrite a newer boot cast', async () => {
     const read = bootStore();
     const original = playlist(item('old', 'general'), item('gone', 'general'));
