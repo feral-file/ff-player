@@ -427,11 +427,11 @@ export default function PlaylistClient() {
       clearPreview();
       return;
     }
-    // A policy change can retire the painted work while this selected one
+    // A policy change can retire the work on screen while this selected one
     // stays allowed; the gate would otherwise keep judging the retired work
     // and never let its replacement mount.
-    retireCommittedIfGone(painted => allowsContent(
-      painted, contentPolicy.policy, contentContext));
+    retireCommittedIfGone(onScreen => allowsContent(
+      onScreen, contentPolicy.policy, contentContext));
     void handleItemDisplayPreference(currentItem, normalizedIndex);
     publishPreview(currentItem);
     scheduleCurrentItemTimer(normalizedIndex, playlist);

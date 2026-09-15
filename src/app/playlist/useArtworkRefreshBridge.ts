@@ -35,14 +35,14 @@ export function useArtworkRefreshBridge(
   // screen to recognise the URL it is rendering, so owner and URL are published
   // together here and never diverge.
   const previewOwnerRef = useRef<DP1Item | undefined>(undefined);
-  // What the renderer has actually PAINTED, as opposed to what has been
-  // selected for it. Selecting B publishes its URL immediately, but A stays on
-  // screen until B loads and commits, so the gate must ask about A during that
-  // window or a tightening that blocks A would authorise B and leave A visible
-  // — indefinitely if B stalls. Empty until the first commit, when the only
+  // What the renderer is actually SHOWING, as opposed to what has been selected
+  // for it. Selecting B publishes its URL immediately, but A stays on screen
+  // until B loads and commits, so the gate must ask about A during that window
+  // or a tightening that blocks A would authorise B and leave A visible —
+  // indefinitely if B stalls. Empty until the first commit, when the only
   // honest answer is the slot being mounted to produce one.
   const committedOwnerRef = useRef<DP1Item | undefined>(undefined);
-  /** The work on screen: what has been painted, else what is mounting to be. */
+  /** The work on screen: what has committed, else what is mounting to become it. */
   const getShowing = useCallback(
     () => committedOwnerRef.current ?? previewOwnerRef.current, []);
   const publishPreview = useCallback((item: DP1Item) => {
@@ -58,9 +58,9 @@ export function useArtworkRefreshBridge(
     onCommitted(identity);
   }, [onCommitted]);
   /**
-   * Drop the painted work once it is no longer something the cast will show.
+   * Drop the on-screen work once it is no longer something the cast will show.
    *
-   * Without this the gate can deadlock: policy retires painted A while allowed
+   * Without this the gate can deadlock: policy retires on-screen A while allowed
    * B is still loading, the gate evaluates blocked A and unmounts the player,
    * and with no player left there is no commit to replace the owner — so the
    * gate keeps evaluating A and the wall stays black for good. Clearing lets it

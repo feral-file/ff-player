@@ -147,24 +147,24 @@ describe('content policy at persistence and refresh boundaries', () => {
 });
 
 describe('content policy during a slow handoff', () => {
-  it('retires the painted work when its refresh changes source AND blocks it', async () => {
+  it('retires the work on screen when its refresh changes source AND blocks it', async () => {
     vi.spyOn(DeviceManager, 'getRecentlyPlayed').mockResolvedValue([]);
     vi.spyOn(DeviceManager, 'getRecentlyPlayedIncomplete').mockResolvedValue(false);
     vi.spyOn(DeviceManager, 'setRecentlyPlayed').mockResolvedValue(undefined);
-    const painted = item('painted');
+    const onScreen = item('on-screen');
     const selected = item('selected', 'general');
-    expect(cast(playlist(painted, selected))?.ok).toBe(true);
-    canvasService.recordRecentlyPlayed(painted);
+    expect(cast(playlist(onScreen, selected))?.ok).toBe(true);
+    canvasService.recordRecentlyPlayed(onScreen);
     const reply = () => canvasService.processMessage({
       command: CastCommand.getRecentlyPlayed, request: {},
     }) as { activeOccurrenceKnown?: boolean };
     await vi.waitFor(() => { expect(reply().activeOccurrenceKnown).toBe(true); });
     canvasService.setCastInfo({ ...canvasService.getCastInfo(), index: 1 }, false);
 
-    // Same work, new source, now mature. Matching the painted work by id AND
+    // Same work, new source, now mature. Matching the on-screen work by id AND
     // source would miss it entirely and leave it rendering under stale labels.
     expect(cast(playlist(
-      { ...painted, source: 'https://art.test/painted-v2', contentRating: 'mature' },
+      { ...onScreen, source: 'https://art.test/on-screen-v2', contentRating: 'mature' },
       selected), { refresh: true })?.ok).toBe(true);
 
     expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id))
@@ -174,31 +174,46 @@ describe('content policy during a slow handoff', () => {
 });
 
 describe('content policy and the selected work moving on', () => {
-  it('retires the painted work when a refresh blocks it, not just the selected one', async () => {
+  it('retires the work on screen when a refresh blocks it, not just the selected one', async () => {
     vi.spyOn(DeviceManager, 'getRecentlyPlayed').mockResolvedValue([]);
     vi.spyOn(DeviceManager, 'getRecentlyPlayedIncomplete').mockResolvedValue(false);
     vi.spyOn(DeviceManager, 'setRecentlyPlayed').mockResolvedValue(undefined);
-    const painted = item('painted');
+    const onScreen = item('on-screen');
     const selected = item('selected', 'general');
-    expect(cast(playlist(painted, selected))?.ok).toBe(true);
+    expect(cast(playlist(onScreen, selected))?.ok).toBe(true);
     // Commit `painted`, then let the selection move on: this is the slow
     // handoff, where the wall shows one work and the cast selects another.
-    canvasService.recordRecentlyPlayed(painted);
+    canvasService.recordRecentlyPlayed(onScreen);
     const historyReply = () => canvasService.processMessage({
       command: CastCommand.getRecentlyPlayed, request: {},
     }) as { activeOccurrenceKnown?: boolean };
     await vi.waitFor(() => { expect(historyReply().activeOccurrenceKnown).toBe(true); });
     canvasService.setCastInfo({ ...canvasService.getCastInfo(), index: 1 }, false);
 
-    // Fresh labels block the PAINTED work while the selected one stays fine.
-    expect(cast(playlist({ ...painted, contentRating: 'mature' }, selected),
+    // Fresh labels block the work ON SCREEN while the selected one stays fine.
+    expect(cast(playlist({ ...onScreen, contentRating: 'mature' }, selected),
       { refresh: true })?.ok).toBe(true);
 
-    // Checking only the selection would filter `painted` out of the projection
+    // Checking only the selection would filter `onScreen` out of the projection
     // and leave it rendering under its stale labels until `selected` commits.
     expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id))
       .toEqual(['selected']);
     expect(canvasService.getCastInfo()?.castCommand).toBe(CastCommand.displayPlaylist);
+  });
+
+  it('installs the replacement when a refresh narrows the context out of the current work', () => {
+    expect(cast(playlist(item('a', 'mature')), { contentContext: 'personal' })?.ok).toBe(true);
+
+    // The refresh narrows to curated and omits the mature work entirely, so
+    // neither the fresh-label checks nor the omitted work's own labels under
+    // the OLD context would catch it. Deferring here republished the current
+    // work under the new context, filtered it to nothing, and dropped the
+    // replacement with it: a blank wall reported as success.
+    expect(cast(playlist(item('b', 'general')),
+      { refresh: true, contentContext: 'curated' })?.ok).toBe(true);
+
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id))
+      .toEqual(['b']);
   });
 
   it('does not let a refresh upgrade a curated cast to personal', () => {

@@ -16,7 +16,7 @@ const { getItemRef, unmounted } = vi.hoisted(() => ({ getItemRef: vi.fn(), unmou
 vi.mock('@/services/DP1Service', () => ({ DP1Service: { getItemRef, getPlaylist: vi.fn() } }));
 vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn(), captureMessage: vi.fn(), addBreadcrumb: vi.fn() }));
 // Reports a visual commit on mount, the way ArtworkPlayer does once media is
-// ready. Without it nothing is ever "painted" and the painted-vs-selected
+// ready. Without it nothing is ever on screen and the on-screen-vs-selected
 // paths under test cannot be reached at all.
 vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
   default: function Media({ previewURL, itemIdentity, onItemCommitted }: {
@@ -173,23 +173,23 @@ describe('same-id source refresh', () => {
 });
 
 describe('policy change during a delayed transition', () => {
-  it('retires the painted work, not the one selected ahead of it', async () => {
+  it('retires the work on screen, not the one selected ahead of it', async () => {
     // The mock renderer never reports a commit for the second work, so the
-    // first stays "painted" exactly as ArtworkPlayer would keep it on screen
+    // first stays on screen exactly as ArtworkPlayer would keep it there
     // while the incoming slot loads.
-    const painted: DP1Item = { id: 'painted', source: 'https://art.test/painted',
+    const onScreen: DP1Item = { id: 'on-screen', source: 'https://art.test/on-screen',
       license: DP1License.Open, duration: 1 };
     const selected: DP1Item = { id: 'selected', source: 'https://art.test/selected',
       contentRating: 'general', license: DP1License.Open, duration: 1 };
     const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
       contentContext: 'curated', index: 0,
-      playlist: { dpVersion: '1.1.0', title: 'Art', items: [painted, selected] } };
+      playlist: { dpVersion: '1.1.0', title: 'Art', items: [onScreen, selected] } };
     canvasService.setCastInfo(initial, false);
     render(<Harness initial={initial} />);
     await act(async () => { await Promise.resolve(); });
-    expect(screen.getByTestId('media').textContent).toBe(painted.source);
+    expect(screen.getByTestId('media').textContent).toBe(onScreen.source);
 
-    // Tighten so the painted (unrated) work is blocked while the selected one
+    // Tighten so the on-screen (unrated) work is blocked while the selected one
     // stays allowed. Gating on the selection would authorise the allowed work
     // and leave the blocked one on screen until it loads — indefinitely if it
     // stalls.
@@ -197,26 +197,26 @@ describe('policy change during a delayed transition', () => {
       await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
     });
 
-    expect(screen.queryByTestId('media')?.textContent).not.toBe(painted.source);
+    expect(screen.queryByTestId('media')?.textContent).not.toBe(onScreen.source);
   });
 });
 
-describe('policy retiring the painted work mid-transition', () => {
+describe('policy retiring the on-screen work mid-transition', () => {
   it('ends up showing the allowed replacement, never a stuck black wall', async () => {
-    const painted: DP1Item = { id: 'painted', source: 'https://art.test/painted',
+    const onScreen: DP1Item = { id: 'on-screen', source: 'https://art.test/on-screen',
       license: DP1License.Open, duration: 1 };
     const allowed: DP1Item = { id: 'allowed', source: 'https://art.test/allowed',
       contentRating: 'general', license: DP1License.Open, duration: 1 };
     const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
       contentContext: 'curated', index: 0,
-      playlist: { dpVersion: '1.1.0', title: 'Art', items: [painted, allowed] } };
+      playlist: { dpVersion: '1.1.0', title: 'Art', items: [onScreen, allowed] } };
     canvasService.setCastInfo(initial, false);
     render(<Harness initial={initial} />);
     await act(async () => { await Promise.resolve(); });
-    expect(screen.getByTestId('media').textContent).toBe(painted.source);
+    expect(screen.getByTestId('media').textContent).toBe(onScreen.source);
 
-    // Block the painted (unrated) work while the other stays allowed. The gate
-    // judges the painted work, so if its record outlived it the wall would stay
+    // Block the on-screen (unrated) work while the other stays allowed. The gate
+    // judges that work, so if its record outlived it the wall would stay
     // black: no player mounted means no commit to replace the owner. This
     // asserts the outcome; the owner is also dropped explicitly in the client
     // so the recovery does not depend on the selection happening to pass
@@ -252,7 +252,7 @@ describe('cross-playlist handoff', () => {
 
     // The outgoing work is absent from the incoming cast, which is what an
     // ordinary handoff looks like — the two-slot transition loads B while A is
-    // still painted. Unmounting here makes every replacement a hard cut.
+    // still shown. Unmounting here makes every replacement a hard cut.
     expect(unmounted).not.toHaveBeenCalled();
     expect(screen.getByTestId('media').textContent).toBe(b.source);
   });

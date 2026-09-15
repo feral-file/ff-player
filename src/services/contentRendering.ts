@@ -9,7 +9,7 @@ import { allowsContent, parseContentContext } from './contentPolicy';
  *
  * `showing` is the item on screen, which need not be the cast's selected item —
  * Canvas can advance before React consumes updateIndex, and a tightening can
- * promote a different item while the outgoing one is still painted.
+ * promote a different item while the outgoing one is still shown.
  *
  * Admission is judged on the FRESHEST copy of that work: the one in the live
  * cast when it is still there, matched by id AND source. Matching by URL alone
@@ -36,11 +36,11 @@ export function permitsCurrentPreview(cast: CastInfo | null,
   if (!items.length) {return false;}
   // Matched on the SHOWING work's own source, never on the preview URL. During
   // a same-id source refresh the URL has already moved to the incoming source
-  // while the outgoing one is still painted, so pairing the outgoing id with
+  // while the outgoing one is still shown, so pairing the outgoing id with
   // the incoming URL finds the incoming item and judges the wrong work — which
   // would keep mature media on screen because its allowed replacement, not yet
   // loaded, passed admission. `url` is only a presence check: no URL, nothing
-  // painted, nothing to permit.
+  // shown, nothing to permit.
   const fresh = items.find(
     item => item.id === showing.id && item.source === showing.source);
   return allowsContent(fresh ?? showing, snapshot.policy, parseContentContext(cast.contentContext));

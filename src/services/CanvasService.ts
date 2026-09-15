@@ -786,28 +786,28 @@ class CanvasService {
   private retireActiveOccurrenceIfDisplaced(
     // The cast AS RECEIVED. Admission filtering strips a newly blocked work
     // before this runs, taking its fresh labels with it, so asking the filtered
-    // projection whether the painted work is blocked always answers no.
+    // projection whether the work on screen is blocked always answers no.
     incoming: CastInfo | null,
     applied: CastInfo | null
   ): void {
-    const painted = this.occurrenceItem;
-    if (painted === null || incoming === null) {
+    const onScreen = this.occurrenceItem;
+    if (onScreen === null || incoming === null) {
       return;
     }
     const items = incoming.playlist?.items ?? [];
     // Ask the same question the rendering gate asks, so history and the wall
-    // cannot disagree: is the painted work still something this cast will show?
+    // cannot disagree: is the work on screen still something this cast shows?
     // Mere absence from the incoming cast is NOT the test — the gate keeps
-    // painting an allowed outgoing work while its replacement loads, and
+    // showing an allowed outgoing work while its replacement loads, and
     // retiring here would report nothing active while it is plainly on screen.
     // What retires it is the cast going empty, or its own (or freshly
     // refreshed) labels being blocked, which is the case where the gate
     // unmounts it immediately. Its replacement's commit retires it otherwise.
     const policy = this.admissionPolicy();
-    const fresh = items.find(item => item.id === painted.id && item.source === painted.source);
+    const fresh = items.find(item => item.id === onScreen.id && item.source === onScreen.source);
     const context = parseContentContext(incoming.contentContext);
     const nothingToShow = (applied?.playlist?.items?.length ?? 0) === 0;
-    if (nothingToShow || (policy !== null && !allowsContent(fresh ?? painted, policy, context))) {
+    if (nothingToShow || (policy !== null && !allowsContent(fresh ?? onScreen, policy, context))) {
       this.retireActiveRecentlyPlayed();
     }
   }
@@ -1662,22 +1662,30 @@ class CanvasService {
     const currentItems = this.castInfo?.playlist?.items ?? [];
     const currentItem = currentItems.at(normalizePlaylistIndex(this.castInfo?.index ?? 0, currentItems.length));
     const updatedCurrent = currentItem && dp1CallData.items?.find(item => item.id === currentItem.id);
-    // The SELECTED work is not necessarily the painted one: during a slow
-    // handoff the selection has moved on while the previous work is still on
-    // screen. Refreshed labels that block what is painted have to retire it
-    // immediately — checking only the selection would filter the painted work
-    // out of the projection and leave it rendering under its stale labels
-    // until the incoming work commits, which may never happen.
-    const painted = this.occurrenceItem;
+    // The SELECTED work is not necessarily the one on screen: during a slow
+    // handoff the selection has moved on while the previous work is still
+    // showing. Refreshed labels that block what is on screen have to retire it
+    // immediately — checking only the selection would filter that work out of
+    // the projection and leave it rendering under its stale labels until the
+    // incoming work commits, which may never happen.
+    //
     // Matched by id ALONE, unlike the rendering gate: a refresh may give the
-    // painted work a new source, and that is still the same work carrying new
-    // labels. Requiring the old source here would miss exactly the case where
-    // a source replacement also marks the work mature.
-    const updatedPainted = painted && dp1CallData.items?.find(item => item.id === painted.id);
-    const retireBlocked = policy !== null && (
-      (!!updatedCurrent && !allowsContent(updatedCurrent, policy, contentContext)) ||
-      (!!updatedPainted && !allowsContent(updatedPainted, policy, contentContext)));
-    const retireCurrent = retireBlocked;
+    // same work a new source, and that is still the same work carrying new
+    // labels. Requiring the old source would miss a source replacement that
+    // also marks the work mature.
+    const onScreen = this.occurrenceItem;
+    const updatedOnScreen = onScreen && dp1CallData.items?.find(item => item.id === onScreen.id);
+    // A work the refresh still carries is judged on its FRESH labels; a work it
+    // omits is judged on the labels it already has, because the refresh may
+    // have narrowed the context instead of relabelling anything. Without that
+    // second case, a personal cast refreshed as curated deferred its allowed
+    // replacement, then republished the now-blocked current work, which
+    // filtered to nothing — a blank wall, the replacement discarded, and `ok`
+    // returned to the controller.
+    const blocks = (work: DP1Item | undefined | null): boolean =>
+      policy !== null && !!work && !allowsContent(work, policy, contentContext);
+    const retireCurrent = blocks(updatedCurrent ?? currentItem) ||
+      blocks(updatedOnScreen ?? onScreen);
     const filtered = policy === null ? admitUnfiltered(dp1CallData) :
       filterContent(dp1CallData, policy, contentContext);
     if (retireCurrent || request.retireBlockedCurrent === true) {
