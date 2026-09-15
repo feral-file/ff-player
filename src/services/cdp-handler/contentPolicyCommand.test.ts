@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import DeviceManager from '@/utils/DeviceManager';
 import { DEFAULT_CONTENT_POLICY } from '../contentPolicy';
-import { contentPolicyStore } from '../ContentPolicyStore';
+import { contentPolicyStore, ContentPolicyStore } from '../ContentPolicyStore';
 import { contentPolicyCommand } from './contentPolicyCommand';
 
 beforeEach(async () => {
@@ -49,4 +49,36 @@ describe('content policy CDP acknowledgements', () => {
         .toEqual({ message: { ok: false, error: 'invalidContentPolicy' } });
       expect(write).not.toHaveBeenCalled();
     });
+});
+
+describe('content policy reads before the mirror is applied', () => {
+  it('answers unavailable immediately instead of waiting on a stalled read', async () => {
+    const stalled = new ContentPolicyStore({
+      read: () => new Promise(() => undefined),
+      write: () => Promise.resolve(),
+    });
+    vi.spyOn(contentPolicyStore, 'getSnapshot').mockImplementation(stalled.getSnapshot);
+    const hydrate = vi.spyOn(contentPolicyStore, 'initialize')
+      .mockImplementation(() => stalled.initialize());
+
+    // Awaiting hydration would hold this promise for as long as the read takes,
+    // and forever if it never resolves, so controld times out rather than
+    // receiving the documented retryable reply.
+    const result = await Promise.race([
+      contentPolicyCommand('getContentPolicy', {}, 'read-1'),
+      new Promise<string>(resolve => { setTimeout(() => { resolve('timed out'); }, 50); }),
+    ]);
+
+    expect(JSON.parse(result)).toEqual({ messageID: 'read-1',
+      message: { ok: false, error: 'contentPolicyUnavailable' } });
+    // It still starts hydration, so a later poll can succeed.
+    expect(hydrate).toHaveBeenCalled();
+  });
+
+  it('returns the applied policy once the mirror is active', async () => {
+    const result = await contentPolicyCommand('getContentPolicy', {}, 'read-2');
+
+    expect(JSON.parse(result)).toEqual({ messageID: 'read-2',
+      message: { ok: true, contentPolicy: DEFAULT_CONTENT_POLICY, active: true } });
+  });
 });

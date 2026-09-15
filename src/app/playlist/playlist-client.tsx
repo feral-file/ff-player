@@ -635,7 +635,7 @@ export default function PlaylistClient() {
       <div style={{ width: '100%', height: '100%' }}>
         {currentItemDisplayPreference && permitted && (
           <ArtworkPlayer
-            key={contentPolicy.epoch}
+            key={contentPolicy.retireEpoch}
             previewURL={castPreviewURL ?? ''}
             displayPreferences={currentItemDisplayPreference}
             itemIdentity={currentItemIdentity}

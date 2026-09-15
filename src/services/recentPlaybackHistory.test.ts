@@ -124,6 +124,40 @@ describe('recent playback history', () => {
     expect(recentlyPlayedMetadata(records, 'rp-2').map(record => record.isActive)).toEqual([true, false]);
   });
 
+  it('survives malformed label metadata rather than failing the whole history', () => {
+    // A record is accepted on its castable fields, so its optional metadata is
+    // whatever the DP-1 document carried. Reading `artists` as an array here
+    // would throw inside the reply path and make the app's entire History fail
+    // — the unexplained failure this command exists to replace.
+    const malformed = {
+      ...item('odd'),
+      metadata: { title: 42, artists: 'not-an-array', thumbnails: { small: { uri: 7 } } },
+    } as unknown as ReturnType<typeof item>;
+    const records = appendRecentlyPlayed([], malformed, {nowMs: 1, nextSequence: 1});
+    if (records === null) {throw new Error('record was rejected');}
+
+    const [projected] = recentlyPlayedMetadata(records, null);
+
+    expect(projected.itemId).toBe('odd');
+    expect(projected.artist).toBeUndefined();
+    expect(projected.title).toBeUndefined();
+    expect(projected.thumbnailUrl).toBeUndefined();
+  });
+
+  it('keeps well-formed labels, including a multi-artist credit', () => {
+    const labelled = {
+      ...item('good'),
+      metadata: { title: 'Work', artists: [{ name: 'A' }, { name: '' }, { name: 'B' }] },
+    } as unknown as ReturnType<typeof item>;
+    const records = appendRecentlyPlayed([], labelled, {nowMs: 1, nextSequence: 1});
+    if (records === null) {throw new Error('record was rejected');}
+
+    const [projected] = recentlyPlayedMetadata(records, null);
+
+    expect(projected.title).toBe('Work');
+    expect(projected.artist).toBe('A, B');
+  });
+
   it('rejects corrupt retained JSON instead of presenting a false empty history', () => {
     expect(() => parseRecentlyPlayed('{"not":"a history"}')).toThrow(
       'Invalid recently played history'

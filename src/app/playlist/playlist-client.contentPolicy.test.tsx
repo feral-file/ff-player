@@ -86,6 +86,27 @@ describe('playlist content policy media boundary', () => {
     expect(unmounted).toHaveBeenCalled();
   });
 
+  it('does not reload allowed artwork when an unrelated setting changes', async () => {
+    const allowed: DP1Item = { id: 'a', source: 'https://art.test/a',
+      contentRating: 'general', license: DP1License.Open, duration: 60 };
+    const initial = cast(allowed);
+    canvasService.setCastInfo(initial, false);
+    render(<Harness initial={initial} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId('media')).toBeDefined();
+    unmounted.mockClear();
+
+    await act(async () => {
+      await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
+    });
+
+    // The work is still allowed. Remounting on every policy write reloaded it
+    // on screen and recommitted it, appending a duplicate history record for a
+    // work that never left the wall.
+    expect(screen.getByTestId('media').textContent).toBe(allowed.source);
+    expect(unmounted).not.toHaveBeenCalled();
+  });
+
   it('keeps the renderer mounted through an ordinary slot handoff', async () => {
     vi.useFakeTimers();
     const first: DP1Item = { id: 'first', source: 'https://art.test/first',

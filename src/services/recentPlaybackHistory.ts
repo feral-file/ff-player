@@ -150,23 +150,45 @@ export function recentlyPlayedMetadata(
   return records.filter(isRecord).map(record => {
     const metadata = record.item.inlineManifest?.metadata ?? record.item.metadata;
     const thumbnails = metadata?.thumbnails;
-    const thumbnailUrl =
-      thumbnails?.small?.uri ??
-      thumbnails?.default?.uri ??
-      thumbnails?.large?.uri ??
-      thumbnails?.xlarge?.uri;
-    const artist = metadata?.artists
-      ?.map(candidate => candidate.name)
-      .filter(Boolean)
-      .join(', ');
+    const thumbnailUrl = firstString(
+      thumbnails?.small?.uri,
+      thumbnails?.default?.uri,
+      thumbnails?.large?.uri,
+      thumbnails?.xlarge?.uri
+    );
     return {
       recordId: record.recordId,
       playedAtMs: record.playedAtMs,
       isActive: record.recordId === activeRecordId,
       itemId: record.item.id,
-      title: metadata?.title ?? record.item.title,
-      artist: artist && artist.length > 0 ? artist : undefined,
+      title: firstString(metadata?.title, record.item.title),
+      artist: artistLabel(metadata?.artists),
       thumbnailUrl,
     };
   });
+}
+
+/**
+ * Labels come from a DP-1 document the device did not author, and a record is
+ * accepted on its castable fields (`id`, `source`) rather than on its optional
+ * metadata. So `artists` can be any JSON value at this point. Reading it as an
+ * array would throw here, inside the reply path, and the app would see a bare
+ * failure for its whole History — the exact ambiguity this feature exists to
+ * remove. A label that cannot be read is simply absent.
+ */
+function artistLabel(artists: unknown): string | undefined {
+  if (!Array.isArray(artists)) {
+    return undefined;
+  }
+  const names = artists
+    .map(candidate => firstString((candidate as { name?: unknown } | null)?.name))
+    .filter((name): name is string => name !== undefined);
+  return names.length > 0 ? names.join(', ') : undefined;
+}
+
+/** First value that is actually a non-empty string, ignoring any other type. */
+function firstString(...values: unknown[]): string | undefined {
+  return values.find(
+    (value): value is string => typeof value === 'string' && value.length > 0
+  );
 }

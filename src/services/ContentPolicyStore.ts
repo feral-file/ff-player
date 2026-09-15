@@ -10,6 +10,15 @@ export interface ContentPolicySnapshot {
   active: boolean;
   epoch: number;
   /**
+   * Bumped ONLY when fresh labels force the current work off the screen without
+   * its outgoing crossfade. The renderer keys its mount on this rather than on
+   * `epoch`: every policy write moves `epoch`, so keying on it remounted and
+   * re-rendered allowed artwork whenever any unrelated setting changed, which
+   * both reloaded the wall and appended a duplicate Recently played record for
+   * a work that never left.
+   */
+  retireEpoch: number;
+  /**
    * True once a hydration attempt finished without producing a policy — an
    * unreadable or corrupt mirror. Distinguishes that from the ordinary
    * not-yet-read state, which is also `active: false` but resolves on its own.
@@ -27,7 +36,7 @@ export interface ContentPolicySnapshot {
  */
 export class ContentPolicyStore {
   private snapshot: ContentPolicySnapshot = { policy: DEFAULT_CONTENT_POLICY, active: false,
-    epoch: 0, hydrationFailed: false };
+    epoch: 0, retireEpoch: 0, hydrationFailed: false };
   private readonly listeners = new Set<() => void>();
   private initialization?: Promise<void>;
   private pending: Promise<void> = Promise.resolve();
@@ -77,7 +86,8 @@ export class ContentPolicyStore {
 
   /** Retire outgoing media when fresh labels block the current work. */
   retireRendering(): void {
-    this.snapshot = { ...this.snapshot, epoch: this.snapshot.epoch + 1 };
+    this.snapshot = { ...this.snapshot, epoch: this.snapshot.epoch + 1,
+      retireEpoch: this.snapshot.retireEpoch + 1 };
     this.listeners.forEach(listener => { listener(); });
   }
 
@@ -86,7 +96,8 @@ export class ContentPolicyStore {
     // A successful set() after a failed hydration repairs the mirror, so the
     // failure flag clears with the policy that replaced it.
     this.snapshot = { policy: Object.freeze({ ...policy }), active: true,
-      epoch: this.snapshot.epoch + 1, hydrationFailed: false };
+      epoch: this.snapshot.epoch + 1, retireEpoch: this.snapshot.retireEpoch,
+      hydrationFailed: false };
     this.listeners.forEach(listener => { listener(); });
   }
 }

@@ -8,7 +8,7 @@ import { permitsCurrentPreview } from './contentRendering';
 const a: DP1Item = { id: 'a', source: 'https://art.test/a', license: DP1License.Open };
 const b: DP1Item = { ...a, id: 'b', source: 'https://art.test/b' };
 const snapshot: ContentPolicySnapshot = { policy: DEFAULT_CONTENT_POLICY, active: true,
-  epoch: 1, hydrationFailed: false };
+  epoch: 1, retireEpoch: 0, hydrationFailed: false };
 const cast = (items: DP1Item[], index = 0) => ({ castCommand: CastCommand.displayPlaylist,
   playlist: { dpVersion: '1.1.0', title: 'Art', items }, index });
 

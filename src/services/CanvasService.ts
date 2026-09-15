@@ -554,10 +554,22 @@ class CanvasService {
         incomplete: true,
       };
     }
-    const records = recentlyPlayedMetadata(
-      this.recentlyPlayedRecords,
-      this.activeRecentlyPlayedRecordId
-    );
+    let records;
+    try {
+      records = recentlyPlayedMetadata(
+        this.recentlyPlayedRecords,
+        this.activeRecentlyPlayedRecordId
+      );
+    } catch (error: unknown) {
+      // The projection reads labels from documents the device did not author.
+      // If one of them still defeats it, answer with the contract's explicit
+      // error envelope: processMessage's catch would reduce a thrown error to
+      // a bare {ok:false}, which is exactly the unexplained failure the app
+      // already shows today and this command exists to replace.
+      console.error('[CanvasService] Failed to project recently played history', error);
+      return { ok: false, status: 'error', error: 'Recently played could not be read',
+        incomplete: this.recentlyPlayedIncomplete };
+    }
     return {
       ok: true,
       status: records.length === 0 ? 'empty' : 'ok',
@@ -1076,7 +1088,13 @@ class CanvasService {
         this.setCastInfo(stripEphemeralCastInfoFields(storedCastInfo), false);
       }
 
-      const activeCastInfo = this.castInfo ?? storedCastInfo ?? null;
+      // Deliberately NOT `?? storedCastInfo`: the hydration above runs the
+      // persisted cast through setCastInfo, which returns null when the active
+      // policy blocks all of it. Falling back to the stored payload there would
+      // report that blocked playlist, its index and its command as current
+      // while the wall is showing nothing — the one state a controller must not
+      // be told is active. A null result here IS the answer.
+      const activeCastInfo = this.castInfo;
 
       console.log(
         '[CanvasService getStatus] Reply ok. Current index:',
@@ -1085,7 +1103,11 @@ class CanvasService {
 
       return {
         ok: true,
-        castCommand: DeviceManager.getCachedCastInfo()?.castCommand,
+        // The cached command describes the persisted cast, so it may only be
+        // reported alongside state that survived admission.
+        castCommand: activeCastInfo
+          ? DeviceManager.getCachedCastInfo()?.castCommand
+          : undefined,
         contentContext: activeCastInfo?.contentContext,
 
         playlist: activeCastInfo?.playlist,

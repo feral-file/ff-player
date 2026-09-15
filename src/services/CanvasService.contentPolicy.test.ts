@@ -203,7 +203,7 @@ describe('admission when the policy mirror is not yet readable', () => {
 
   it('refuses a cast outright when the mirror is unreadable', () => {
     vi.spyOn(contentPolicyStore, 'getSnapshot').mockReturnValue({
-      policy: DEFAULT_CONTENT_POLICY, active: false, epoch: 1, hydrationFailed: true,
+      policy: DEFAULT_CONTENT_POLICY, active: false, epoch: 1, retireEpoch: 0, hydrationFailed: true,
     });
 
     expect(cast(playlist(item('a', 'general'))))
@@ -212,7 +212,7 @@ describe('admission when the policy mirror is not yet readable', () => {
 
   it('admits a cast whole while the mirror is still being read, then reconciles it', async () => {
     const snapshot = vi.spyOn(contentPolicyStore, 'getSnapshot').mockReturnValue({
-      policy: DEFAULT_CONTENT_POLICY, active: false, epoch: 1, hydrationFailed: false,
+      policy: DEFAULT_CONTENT_POLICY, active: false, epoch: 1, retireEpoch: 0, hydrationFailed: false,
     });
 
     // Filtering against the built-in default here would reject this cast
