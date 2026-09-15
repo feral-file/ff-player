@@ -152,6 +152,42 @@ describe('recently played active occurrence across cast replacement', () => {
     expect(history().activeOccurrenceKnown).toBe(false);
   });
 
+  it('cannot let a pending write promote a work the new cast displaced', async () => {
+    const gate = new Promise<void>(resolve => { releaseWrite = resolve; });
+    setRecentlyPlayed.mockImplementationOnce(async () => gate);
+    canvasService.setCastInfo(castOf([item('a')]), false);
+
+    // The append for 'a' has not landed, so there is no record id yet — but
+    // there is very much a work that this replacement displaces.
+    canvasService.recordRecentlyPlayed(item('a'));
+    canvasService.setCastInfo(castOf([item('b')]), false);
+    releaseWrite?.();
+    await vi.waitFor(() => { expect(setRecentlyPlayed).toHaveBeenCalled(); });
+
+    expect(history().activeOccurrenceKnown).toBe(false);
+  });
+
+  it('retires the visible work when reconciliation drops it mid-handoff', async () => {
+    const visible = item('visible');
+    const next = { ...item('next'), contentRating: 'general' as const };
+    canvasService.setCastInfo({
+      castCommand: CastCommand.displayPlaylist, contentContext: 'curated',
+      // The index already names the incoming work while `visible` is still
+      // committed, which is why an index-derived check inspects the wrong item.
+      index: 1,
+      playlist: { dpVersion: '1.1.0', title: 'Set', items: [visible, next] },
+    }, false);
+    canvasService.recordRecentlyPlayed(visible);
+    await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
+
+    // Tightening removes `visible` (unrated) and keeps `next` (general), so the
+    // selected slot does not change and only the displayed work disappears.
+    await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
+
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['next']);
+    expect(history().activeOccurrenceKnown).toBe(false);
+  });
+
   it('keeps the active occurrence while advancing within the same playlist', async () => {
     const items = [item('a'), item('b')];
     canvasService.setCastInfo(castOf(items), false);

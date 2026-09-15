@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ContentPolicyStore } from './ContentPolicyStore';
-import { DEFAULT_CONTENT_POLICY } from './contentPolicy';
+import { ContentPolicy, DEFAULT_CONTENT_POLICY } from './contentPolicy';
 
 describe('persisted content policy', () => {
   it('holds rendering until hydration, then supplies explicit defaults', async () => {
@@ -70,6 +70,9 @@ describe('content policy hydration and writes racing', () => {
     expect(store.getSnapshot()).toMatchObject({ active: true, policy: DEFAULT_CONTENT_POLICY });
   });
 
+});
+
+describe('content policy write precedence and recovery', () => {
   it('a read that fails after a successful write cannot invalidate that policy', async () => {
     let failRead: (error: Error) => void = () => undefined;
     const store = new ContentPolicyStore({
@@ -102,6 +105,33 @@ describe('content policy hydration and writes racing', () => {
     // A durable write proves the mirror is usable again. Recovery must not
     // depend on the daemon happening to pick a different policy.
     expect(store.getSnapshot()).toMatchObject({ active: true, hydrationFailed: false });
+  });
+
+  it('keeps hydration held while a later write is still queued', async () => {
+    let finishRead: (value: string | null) => void = () => undefined;
+    const writes = [
+      () => Promise.reject(new Error('quota')),
+      () => Promise.resolve(),
+    ];
+    const store = new ContentPolicyStore({
+      read: () => new Promise<string | null>(resolve => { finishRead = resolve; }),
+      write: () => (writes.shift() ?? (() => Promise.resolve()))(),
+    });
+    const published: ContentPolicy[] = [];
+    store.subscribe(() => { published.push(store.getSnapshot().policy); });
+
+    void store.initialize();
+    const first = store.set({ ...DEFAULT_CONTENT_POLICY, strictPersonal: true });
+    const second = store.set({ ...DEFAULT_CONTENT_POLICY, showMatureContent: true });
+    finishRead(null);
+    await expect(first).rejects.toThrow('quota');
+    await second;
+
+    // The failed write must not release the held mirror while a later write is
+    // still queued: that stale publish reconciles the live cast against a
+    // policy already superseded, and can clear it before the final, more
+    // permissive policy arrives with nothing left to resume.
+    expect(published).toEqual([{ ...DEFAULT_CONTENT_POLICY, showMatureContent: true }]);
   });
 
   it('serializes changes and reads the committed policy after a restart', async () => {

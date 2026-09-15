@@ -13,6 +13,8 @@ import { canvasService } from '@/services/CanvasService';
 import { allowsContent, parseContentContext } from '@/services/contentPolicy';
 import { permitsCurrentPreview } from '@/services/contentRendering';
 import { useArtworkRefreshBridge } from './useArtworkRefreshBridge';
+import { isSourceReplacement } from './sourceReplacement';
+import { usePlayableList } from './usePlayableList';
 import { useContentPolicy } from '@/services/custom-hooks/useContentPolicy';
 import {
   isNoDurationItem,
@@ -54,25 +56,11 @@ export default function PlaylistClient() {
     useState<DP1Defaults | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
-  // The item castPreviewURL currently points at — the work the renderer is
-  // actually showing, which is NOT playlist[currentIndex] during a handoff.
-  // An advance commits currentIndex and publishes the new Canvas index before
-  // the effect below publishes the new preview URL, so for one render the
-  // index names the incoming work while the screen still holds the outgoing
-  // one. The final media gate needs the outgoing item to recognise the URL it
-  // is still rendering; handing it the incoming item made the lookup fail and
-  // unmounted ArtworkPlayer on every ordinary advance, taking the crossfade
-  // with it. Tracking the URL's owner keeps the gate's meaning ("is what we
-  // are showing still allowed?") independent of which index React has reached.
-  const previewOwnerRef = useRef<DP1Item | undefined>(undefined);
-  // Owner and URL are published together wherever the preview changes, so the
-  // gate never sees one without the other.
-  const publishPreview = useCallback((item: DP1Item) => {
-    previewOwnerRef.current = item;
-    setCastPreviewURL(item.source);
-  }, []);
-  const { artworkPerformReloadRef, triggerArtworkRefresh, registerArtworkReload } =
-    useArtworkRefreshBridge(publishPreview);
+  // Preview URL and the item that owns it are published together by the
+  // bridge, so the final media gate never sees one without the other.
+  const { artworkPerformReloadRef, triggerArtworkRefresh, registerArtworkReload,
+    previewOwnerRef, publishPreview, clearPreview } =
+    useArtworkRefreshBridge(setCastPreviewURL);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   // The interval the active slot's timer is armed with — effective duration
@@ -109,6 +97,10 @@ export default function PlaylistClient() {
     currentIndexRef,
     playlistRef,
   });
+
+  const clearPlayableList = usePlayableList({ currentItemRef, setPlaylist,
+    setCurrentIndex, setPlaylistDefaultsSettings, resetItemDisplayPreference,
+    clearPreview });
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -427,8 +419,7 @@ export default function PlaylistClient() {
     // manifest while its slot is hidden or while policy hydration is pending.
     if (!contentPolicy.active || !allowsContent(currentItem, contentPolicy.policy, contentContext)) {
       clearTimer();
-      previewOwnerRef.current = undefined;
-      setCastPreviewURL(null);
+      clearPreview();
       return;
     }
     void handleItemDisplayPreference(currentItem, normalizedIndex);
@@ -443,6 +434,7 @@ export default function PlaylistClient() {
     playlist,
     playlistDefaultsSettings,
     clearTimer,
+    clearPreview,
     publishPreview,
     handleItemDisplayPreference,
     scheduleCurrentItemTimer,
@@ -462,13 +454,8 @@ export default function PlaylistClient() {
     if (!castInfo) {
       clearTimer();
       holdAfterFinalSlotRef.current = false;
-      currentItemRef.current = undefined;
       loopModeRef.current = LoopMode.playlist;
-      setPlaylist([]);
-      setCurrentIndex(-1);
-      setPlaylistDefaultsSettings(null);
-      resetItemDisplayPreference();
-      setCastPreviewURL(null);
+      clearPlayableList();
       return;
     }
 
@@ -491,11 +478,7 @@ export default function PlaylistClient() {
           );
           setCurrentIndex(startIndex);
         } else {
-          setPlaylist([]);
-          setCurrentIndex(-1);
-          setPlaylistDefaultsSettings(null);
-          resetItemDisplayPreference();
-          setCastPreviewURL(null);
+          clearPlayableList();
         }
         break;
       }
@@ -503,6 +486,18 @@ export default function PlaylistClient() {
       case CastCommand.refreshPlaylist:
       case CastCommand.setShuffle: {
         if (castInfo.playlist?.items?.length) {
+          // See isSourceReplacement: a same-id source swap must hand over now.
+          const incoming = castInfo.playlist.items;
+          if (isSourceReplacement(playlistRef.current[normalizePlaylistIndex(
+            currentIndexRef.current, playlistRef.current.length)], incoming)) {
+            setPlaylistDefaultsSettings(castInfo.playlist.defaults ?? null);
+            setPlaylist(incoming.map(dp1Item => ({
+              ...dp1Item,
+              duration: dp1Item.duration ?? NO_DURATION_VALUE,
+            })));
+            canvasService.clearQueuedPlaylistPending();
+            break;
+          }
           if (
             shouldApplyQueuedPlaylistOnShuffleOrRefresh({
               currentIndex: currentIndexRef.current,
@@ -519,12 +514,7 @@ export default function PlaylistClient() {
 
         holdAfterFinalSlotRef.current = false;
         clearTimer();
-        currentItemRef.current = undefined;
-        setPlaylist([]);
-        setCurrentIndex(-1);
-        setPlaylistDefaultsSettings(null);
-        resetItemDisplayPreference();
-        setCastPreviewURL(null);
+        clearPlayableList();
         break;
       }
 
@@ -606,6 +596,8 @@ export default function PlaylistClient() {
     artworkPerformReloadRef,
     castInfo,
     clearMergedDisplayForNewCast,
+    clearPlayableList,
+    clearPreview,
     clearTimer,
     replayCurrentSlot,
     resetItemDisplayPreference,

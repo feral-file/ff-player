@@ -133,3 +133,31 @@ describe('playlist content policy media boundary', () => {
     expect(unmounted).not.toHaveBeenCalled();
   });
 });
+
+describe('same-id source refresh', () => {
+  it('installs a new source for the current work without blanking the wall', async () => {
+    const v1: DP1Item = { id: 'a', source: 'https://art.test/a-v1',
+      contentRating: 'general', license: DP1License.Open };
+    const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
+      contentContext: 'curated', index: 0,
+      playlist: { dpVersion: '1.1.0', title: 'Art', items: [v1] } };
+    canvasService.setCastInfo(initial, false);
+    render(<Harness initial={initial} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId('media').textContent).toBe(v1.source);
+
+    // Untimed work: there is no later slot advance to install a deferred
+    // replacement, so a refresh that keeps the id and changes the source has
+    // to hand over immediately or the wall goes dark indefinitely.
+    await act(async () => {
+      canvasService.processMessage({ command: CastCommand.displayPlaylist,
+        request: { intent: { action: DP1Action.NowDisplay }, refresh: true,
+          dp1_call: { dpVersion: '1.1.0', title: 'Art',
+            items: [{ ...v1, source: 'https://art.test/a-v2' }] } } });
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByTestId('media')).not.toBeNull();
+    expect(screen.getByTestId('media').textContent).toBe('https://art.test/a-v2');
+  });
+});

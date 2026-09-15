@@ -42,8 +42,15 @@ export class ContentPolicyStore {
   private pending: Promise<void> = Promise.resolve();
   /** What hydration read, whether or not it was published. */
   private hydrated: Readonly<ContentPolicy> | null = null;
-  /** A daemon write is in flight; hydration must not publish ahead of it. */
-  private supersededByWrite = false;
+  /**
+   * How many daemon writes are in flight. Hydration must not publish ahead of
+   * any of them, and a failed write may only release the held value once it is
+   * the LAST one — otherwise a failure would publish the stale mirror while a
+   * later write is still queued, reconciling the cast against a policy that is
+   * already superseded and potentially clearing it before the final policy
+   * lands with nothing left to resume.
+   */
+  private outstandingWrites = 0;
 
   constructor(private readonly storage: PolicyStorage) {}
 
@@ -72,7 +79,7 @@ export class ContentPolicyStore {
       // a policy known to be obsolete, and a stricter old value can retire an
       // admitted work that the incoming policy allows — with nothing left to
       // restore when it lands a moment later. Hold it; the write publishes.
-      if (!this.supersededByWrite) {
+      if (this.outstandingWrites === 0) {
         this.publish(hydrated);
       }
     } catch {
@@ -102,30 +109,32 @@ export class ContentPolicyStore {
     // about to replace. The write does not wait on the read: it overwrites the
     // record wholesale, and waiting is what let the stale value reconcile the
     // live cast first.
-    this.supersededByWrite = true;
+    this.outstandingWrites += 1;
     const next = this.pending.then(async () => {
       try {
         await this.storage.write(JSON.stringify(policy));
       } catch (error) {
         // The mirror is unchanged, so whatever hydration read still describes
         // it and must be allowed through — otherwise a failed write would
-        // leave the store inactive and admission with nothing to apply.
+        // leave the store inactive and admission with nothing to apply. Only
+        // once no later write is still queued, though.
+        this.outstandingWrites -= 1;
         this.releaseSupersededHydration();
         throw error;
       }
-      this.supersededByWrite = false;
+      this.outstandingWrites -= 1;
       this.publish(policy);
     });
     this.pending = next.catch(() => undefined);
     return next;
   }
 
-  /** Publish a hydrated value that was held back for a write that then failed. */
+  /** Publish a hydrated value held back for writes that all then failed. */
   private releaseSupersededHydration(): void {
-    this.supersededByWrite = false;
-    if (this.hydrated) {
-      this.publish(this.hydrated);
+    if (this.outstandingWrites > 0 || !this.hydrated) {
+      return;
     }
+    this.publish(this.hydrated);
   }
 
   /** Retire outgoing media when fresh labels block the current work. */

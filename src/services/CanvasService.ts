@@ -407,6 +407,18 @@ class CanvasService {
   // still current, so a write that lands after the wall moved on (or was
   // cleared) cannot resurrect a work that is no longer displayed.
   private playbackGeneration = 0;
+  /**
+   * Identity of the work whose occurrence is active OR still being written.
+   *
+   * Deliberately NOT derived from `castInfo.index`: during a slow handoff the
+   * index already names the incoming work while the outgoing one is still
+   * committed and is the work history is talking about, so an index-derived
+   * check inspects the wrong item. Captured at commit time, and covering the
+   * pending window too — before a durable append finishes there is no record id
+   * to compare, but there is very much a work that a displacement must
+   * invalidate.
+   */
+  private occurrenceIdentity: { id: string; source: string } | null = null;
 
   /**
    * The policy admission must apply, or `null` while the device's own mirror is
@@ -435,6 +447,7 @@ class CanvasService {
   private retireActiveRecentlyPlayed(): void {
     this.playbackGeneration += 1;
     this.activeRecentlyPlayedRecordId = null;
+    this.occurrenceIdentity = null;
   }
 
   private async loadRecentlyPlayed(): Promise<RecentlyPlayedRecord[]> {
@@ -474,6 +487,9 @@ class CanvasService {
     // below, which records nothing and must not leave a stale active record
     // standing behind the work now displayed.
     this.retireActiveRecentlyPlayed();
+    // Claim the identity for the pending window as well as the active one: a
+    // displacement before this write lands must still invalidate it.
+    this.occurrenceIdentity = { id: item.id, source: item.source };
     const generation = this.playbackGeneration;
     this.recentlyPlayedWrite = this.recentlyPlayedWrite
       .then(async () => {
@@ -686,20 +702,21 @@ class CanvasService {
 
   public setCastInfo(castInfo: CastInfo | null, notify = true) {
     console.log('[CanvasService] Setting castInfo:', notify);
-    // The work whose record is currently active is about to leave the wall if
-    // the incoming cast does not contain it: the rendering gate cannot find it
-    // in the new playlist and unmounts it, and the replacement has not
-    // committed yet. Reporting it as displayed through that window would be a
-    // claim about a blank or loading screen. An advance WITHIN the same
-    // playlist keeps the item, so it is left alone and its own commit takes
-    // over — that transition still shows the outgoing work.
-    this.retireActiveOccurrenceIfDisplaced(castInfo);
     if (castInfo?.playlist?.items?.length && contentPolicyStore.getSnapshot().active) {
       const filtered = filterContent(castInfo.playlist,
         contentPolicyStore.getSnapshot().policy,
         parseContentContext(castInfo.contentContext), castInfo.index ?? 0);
       castInfo = filtered.playlist ? { ...castInfo, playlist: filtered.playlist, index: filtered.index } : null;
     }
+    // AFTER filtering, so this sees what the cast actually became: a policy
+    // reconciliation that drops the visible work while keeping another is a
+    // displacement just as much as a replacement cast is. The work whose record
+    // is active leaves the wall when the resulting cast no longer contains it —
+    // the rendering gate cannot find it and unmounts, and nothing has committed
+    // in its place — so reporting it as displayed would describe a blank or
+    // loading screen. An advance WITHIN the same playlist keeps the item and is
+    // left alone: that transition really is still showing the outgoing work.
+    this.retireActiveOccurrenceIfDisplaced(castInfo);
     if (castInfo === null) {
       this.queuedPlaylistPending = false;
       this.setDeferredRefreshPlaylist(null);
@@ -751,18 +768,11 @@ class CanvasService {
     this.queuedPlaylistPending = false;
     this.setDeferredRefreshPlaylist(null);
     if (this.castInfo) {
-      const before = this.selectedItemId();
+      // setCastInfo retires the occurrence if this reconciliation removes the
+      // work it belongs to, and leaves it alone if that work survives — a
+      // policy change that keeps the same work playing must not blank History,
+      // or it would sit at pending until an advance that may never come.
       this.setCastInfo({ ...this.castInfo, castCommand: CastCommand.displayPlaylist });
-      // A tightening that blocks the selected work promotes a different one
-      // without a new cast, so the wall changes with no commit to retire the
-      // old record. Only retire when the selection actually moved: a policy
-      // change that leaves the same work playing must not blank the active
-      // occurrence, or History would sit at pending until the next advance.
-      // A cast that filtered down to nothing has already been retired by
-      // setCastInfo(null); retiring again there is harmless.
-      if (this.selectedItemId() !== before) {
-        this.retireActiveRecentlyPlayed();
-      }
     }
   }
 
@@ -773,11 +783,8 @@ class CanvasService {
    * work is genuinely still showing until the incoming one commits.
    */
   private retireActiveOccurrenceIfDisplaced(next: CastInfo | null): void {
-    if (this.activeRecentlyPlayedRecordId === null || next === null) {
-      return;
-    }
-    const outgoing = this.selectedItem();
-    if (outgoing === undefined) {
+    const outgoing = this.occurrenceIdentity;
+    if (outgoing === null || next === null) {
       return;
     }
     const incomingItems = next.playlist?.items ?? [];

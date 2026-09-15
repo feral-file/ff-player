@@ -12,8 +12,24 @@ import { DP1Item } from '@/models/dp1.model';
  * item that owns it would leave the gate looking for the previous work at the
  * new URL, and it would unmount the renderer this refresh just reloaded.
  */
-export function useArtworkRefreshBridge(setPreview: (item: DP1Item) => void) {
+export function useArtworkRefreshBridge(setPreviewURL: (url: string | null) => void) {
   const artworkPerformReloadRef = useRef<(() => void) | null>(null);
+  // The item the published preview URL belongs to — the work the renderer is
+  // actually showing, which is NOT playlist[currentIndex] during a handoff: an
+  // advance commits the new index and Canvas index before the new URL is
+  // published, so for one render the index names the incoming work while the
+  // screen still holds the outgoing one. The final media gate needs the work on
+  // screen to recognise the URL it is rendering, so owner and URL are published
+  // together here and never diverge.
+  const previewOwnerRef = useRef<DP1Item | undefined>(undefined);
+  const publishPreview = useCallback((item: DP1Item) => {
+    previewOwnerRef.current = item;
+    setPreviewURL(item.source);
+  }, [setPreviewURL]);
+  const clearPreview = useCallback(() => {
+    previewOwnerRef.current = undefined;
+    setPreviewURL(null);
+  }, [setPreviewURL]);
   const triggerArtworkRefresh = useCallback((): boolean => {
     const cast = canvasService.getCastInfo();
     const items = cast?.playlist?.items;
@@ -22,10 +38,10 @@ export function useArtworkRefreshBridge(setPreview: (item: DP1Item) => void) {
     const currentItem = items.at(normalizePlaylistIndex(rawIndex, items.length));
     const performReload = artworkPerformReloadRef.current;
     if (!currentItem?.source || !performReload) {return false;}
-    setPreview(currentItem);
+    publishPreview(currentItem);
     performReload();
     return true;
-  }, [setPreview]);
+  }, [publishPreview]);
 
   const registerArtworkReload = useCallback((reload: (() => void) | null) => {
     artworkPerformReloadRef.current = reload;
@@ -42,5 +58,6 @@ export function useArtworkRefreshBridge(setPreview: (item: DP1Item) => void) {
     canvasService.onRefreshArtwork = triggerArtworkRefresh;
     return () => { canvasService.onRefreshArtwork = null; };
   }, [triggerArtworkRefresh]);
-  return { artworkPerformReloadRef, triggerArtworkRefresh, registerArtworkReload };
+  return { artworkPerformReloadRef, triggerArtworkRefresh, registerArtworkReload,
+    previewOwnerRef, publishPreview, clearPreview };
 }
