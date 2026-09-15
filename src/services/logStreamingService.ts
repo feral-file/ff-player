@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 
 const LOG_PROXY_ENDPOINT = 'http://127.0.0.1:1111/api/logs';
+const PLAYER_ORIGIN = 'http://127.0.0.1:8080';
 const IDLE_TIMEOUT_MS = 5_000;
 const MAX_SESSION_MS = 60_000;
 const RETRY_DELAY_MS = 5_000;
@@ -251,7 +252,10 @@ const consoleLevels: Record<ConsoleMethod, LogLevel> = {
 
 /** Installs the player-wide console tee once per browser page lifetime. */
 export function installLogStreaming(): void {
-  if (typeof window === 'undefined') {
+  if (
+    typeof window === 'undefined' ||
+    window.location.origin !== PLAYER_ORIGIN
+  ) {
     return;
   }
   const scope = globalThis as typeof globalThis & {
