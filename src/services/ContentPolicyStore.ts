@@ -4,6 +4,14 @@ import { ContentPolicy, DEFAULT_CONTENT_POLICY, parseContentPolicy } from './con
 /** Strict persistence boundary: an unreadable record must throw, not look absent. */
 interface PolicyStorage { read(): Promise<string | null>; write(value: string): Promise<void> }
 
+/**
+ * How long one hydration attempt may take before the device stops waiting.
+ * A stalled IndexedDB open does not reject, so without a bound the first read
+ * can hold the policy — and therefore the whole rendering gate — forever.
+ * Comfortably longer than a healthy read and shorter than controld's poll.
+ */
+const HYDRATION_TIMEOUT_MS = 3000;
+
 /** Stable snapshot for React's external-store subscription and admission checks. */
 export interface ContentPolicySnapshot {
   policy: Readonly<ContentPolicy>;
@@ -60,7 +68,11 @@ export class ContentPolicyStore {
    */
   private writeApplied = false;
 
-  constructor(private readonly storage: PolicyStorage) {}
+  /** Attempt counter, so a read abandoned at timeout cannot publish later. */
+  private hydrationGeneration = 0;
+
+  constructor(private readonly storage: PolicyStorage,
+    private readonly readTimeoutMs: number = HYDRATION_TIMEOUT_MS) {}
 
   /** Returns a referentially stable snapshot until a durable change occurs. */
   getSnapshot = (): ContentPolicySnapshot => this.snapshot;
@@ -83,8 +95,14 @@ export class ContentPolicyStore {
   }
 
   private async hydrate(): Promise<void> {
+    const generation = ++this.hydrationGeneration;
     try {
-      const raw = await this.storage.read();
+      const raw = await this.readWithinTimeout();
+      if (generation !== this.hydrationGeneration) {
+        // A newer attempt started while this read was outstanding. Whatever it
+        // returned describes a mirror that has since been read again.
+        return;
+      }
       const hydrated = raw === null ? DEFAULT_CONTENT_POLICY : parseContentPolicy(JSON.parse(raw));
       this.hydrated = hydrated;
       // A daemon write already in flight supersedes what the mirror held.
@@ -96,9 +114,13 @@ export class ContentPolicyStore {
         this.publish(hydrated);
       }
     } catch {
-      // Let the next initialize() try again: a read can fail because storage
-      // was briefly unavailable, and this failure must not outlive that.
+      // Let the next initialize() try again: a read can fail, or simply never
+      // answer, because storage was briefly unavailable — and that must not
+      // outlive the attempt.
       this.initialization = undefined;
+      if (generation !== this.hydrationGeneration) {
+        return;
+      }
       // A write can land while this read is still outstanding, and the record
       // it failed to read has been replaced since. Do not touch the snapshot
       // then — the applied policy is the truth.
@@ -114,6 +136,25 @@ export class ContentPolicyStore {
       this.snapshot = { ...this.snapshot, policy: DEFAULT_CONTENT_POLICY, hydrationFailed: true };
       this.listeners.forEach(listener => { listener(); });
     }
+  }
+
+  /**
+   * One bounded read attempt. A rejection and an expiry are deliberately the
+   * same outcome: in both the device has no policy it can trust, and the catch
+   * puts the built-in default in force rather than waiting on storage that may
+   * never answer.
+   */
+  private readWithinTimeout(): Promise<string | null> {
+    return new Promise<string | null>((resolve, reject) => {
+      const expiry = setTimeout(
+        () => { reject(new Error('contentPolicyReadTimeout')); }, this.readTimeoutMs);
+      this.storage.read().then(
+        value => { clearTimeout(expiry); resolve(value); },
+        (error: unknown) => {
+          clearTimeout(expiry);
+          reject(error instanceof Error ? error : new Error('contentPolicyReadFailed'));
+        });
+    });
   }
 
   /** Resolve only when the complete validated policy is durable and applied. */

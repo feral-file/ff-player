@@ -419,6 +419,8 @@ class CanvasService {
    * invalidate.
    */
   private occurrenceItem: DP1Item | null = null;
+  /** Serializes every boot-record mutation; see supersedeBootRecord. */
+  private bootRecordWrite: Promise<void> = Promise.resolve();
 
   /**
    * The policy admission must apply, or `null` while the device's own mirror is
@@ -1671,6 +1673,18 @@ class CanvasService {
    * document, so its signature goes with it.
    */
   private persistBootPlaylist(dp1CallData: DP1Call, contentContext: ContentContext): void {
+    // Same queue as supersession, so a boot cast and a refresh racing for this
+    // one record apply in the order they were issued.
+    this.bootRecordWrite = this.bootRecordWrite
+      .then(() => this.writeBootPlaylist(dp1CallData, contentContext))
+      .catch((error: unknown) => {
+        console.error('[CanvasService] Error setting boot playlist:', error);
+      });
+  }
+
+  /** Write the record, keeping only items this version validated. */
+  private async writeBootPlaylist(dp1CallData: DP1Call,
+    contentContext: ContentContext): Promise<void> {
     const items = dp1CallData.items ?? [];
     const validated = items.filter(item => !findInvalidArtworkSource([item]));
     if (!validated.length) {
@@ -1679,9 +1693,7 @@ class CanvasService {
     const record = validated.length === items.length
       ? dp1CallData
       : stripPlaylistSignature({ ...dp1CallData, items: validated });
-    DeviceManager.setBootPlaylist(record, contentContext).catch((error: unknown) => {
-      console.error('[CanvasService] Error setting boot playlist:', error);
-    });
+    await DeviceManager.setBootPlaylist(record, contentContext);
   }
 
   /**
@@ -1724,15 +1736,22 @@ class CanvasService {
    */
   private supersedeBootRecord(previous: { id?: string; items: DP1Item[] },
     next: DP1Call | null, contentContext: ContentContext): void {
-    void DeviceManager.getBootPlaylist()
-      .then(boot => {
+    // Queued behind every other boot-record mutation, and the match is checked
+    // INSIDE the queue, immediately before the write. The read is asynchronous,
+    // so a display_at_boot landing while it was in flight would otherwise be
+    // overwritten by this older refresh — and the device would restore the
+    // superseded playlist on its next restart.
+    this.bootRecordWrite = this.bootRecordWrite
+      .then(async () => {
+        const boot = await DeviceManager.getBootPlaylist();
         if (!boot || !this.isBootRecordFor(boot, previous)) {
           return;
         }
         if (next === null) {
-          return DeviceManager.removeItem(LocalStorageItem.bootPlaylist);
+          await DeviceManager.removeItem(LocalStorageItem.bootPlaylist);
+          return;
         }
-        this.persistBootPlaylist(next, contentContext);
+        await this.writeBootPlaylist(next, contentContext);
       })
       .catch((error: unknown) => {
         console.error('[CanvasService] Error superseding boot playlist:', error);
@@ -1803,7 +1822,15 @@ class CanvasService {
       blocks(updatedOnScreen ?? onScreen);
     // The selection is carried into the projection so filterContent can resolve
     // the next allowed slot at or after it, rather than defaulting to the first.
-    const selected = normalizePlaylistIndex(this.castInfo?.index ?? 0, currentItems.length);
+    // It has to be the selected work's position in the INCOMING payload, not in
+    // the live list: the live list is already a projection, so a payload that
+    // still carries blocked works is indexed differently and the live index
+    // would land on an earlier work — sending the viewer backward.
+    const incomingItems = dp1CallData.items ?? [];
+    const selectedPosition = currentItem
+      ? incomingItems.findIndex(candidate => candidate.id === currentItem.id)
+      : -1;
+    const selected = selectedPosition >= 0 ? selectedPosition : 0;
     const filtered = policy === null ? admitUnfiltered(dp1CallData) :
       filterContent(dp1CallData, policy, contentContext, selected);
     const bootKey = { id: this.castInfo?.playlistId, items: currentItems };

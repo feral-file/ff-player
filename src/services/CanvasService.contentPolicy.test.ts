@@ -72,6 +72,28 @@ describe('content policy at playback boundaries', () => {
     expect(canvasService.getCastInfo()?.castCommand).toBe(CastCommand.displayPlaylist);
   });
 
+});
+
+describe('content policy and playlist projections', () => {
+  it('advances forward when the live list is a projection of a longer payload', () => {
+    // The live cast is [a, b, c] projected from [hidden, a, b, c]; the viewer
+    // is on b. Treating the live index as a position in the raw payload picks
+    // the wrong work and sends them backward instead of on to c.
+    const hidden = item('hidden', 'mature');
+    const full = playlist(hidden, item('a', 'general'), item('b', 'general'), item('c', 'general'));
+    expect(cast(full)?.ok).toBe(true);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id))
+      .toEqual(['a', 'b', 'c']);
+    canvasService.setCastInfo({ ...canvasService.getCastInfo(), index: 1 }, false);
+
+    const refreshed = playlist(hidden, item('a', 'general'),
+      item('b', 'mature'), item('c', 'general'));
+    expect(cast(refreshed, { refresh: true })?.ok).toBe(true);
+
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a', 'c']);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
   it('advances past a retired work instead of restarting the playlist', () => {
     cast(playlist(item('a', 'general'), item('b', 'general'), item('c', 'general')));
     canvasService.setCastInfo({ ...canvasService.getCastInfo(), index: 1 }, false);
@@ -161,6 +183,23 @@ describe('a refresh that supersedes a boot-backed cast', () => {
     expect(read()?.playlist.items?.map(value => value.id)).toEqual(['general']);
   });
 
+  it('does not let a slow refresh overwrite a newer boot cast', async () => {
+    const read = bootStore();
+    const original = playlist(item('old', 'general'), item('gone', 'general'));
+    expect(cast(original, { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+    await vi.waitFor(() => { expect(read()).not.toBeNull(); });
+
+    // The refresh's boot-record read is still in flight when a NEW boot cast
+    // lands. Writing the refreshed projection afterwards would restore the
+    // superseded playlist on the next restart.
+    expect(cast(playlist(item('old', 'general')), { refresh: true })?.ok).toBe(true);
+    expect(cast(playlist(item('fresh', 'general')),
+      { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+
+    await new Promise(resolve => { setTimeout(resolve, 30); });
+    expect(read()?.playlist.items?.map(value => value.id)).toEqual(['fresh']);
+  });
+
   it('leaves an unrelated boot record alone', async () => {
     const read = bootStore();
     expect(cast(playlist(item('booted', 'general')),
@@ -207,7 +246,7 @@ describe('content policy reconciliation and queued controller intent', () => {
 });
 
 describe('content policy at persistence and refresh boundaries', () => {
-  it('carries the boot cast context into playback and into what it persists', () => {
+  it('carries the boot cast context into playback and into what it persists', async () => {
     const boot = vi.spyOn(DeviceManager, 'setBootPlaylist').mockResolvedValue(undefined);
     const mature = playlist(item('b', 'mature'));
 
@@ -217,7 +256,7 @@ describe('content policy at persistence and refresh boundaries', () => {
     expect(cast(mature, { intent: { action: DP1Action.DisplayAtBoot },
       contentContext: 'personal' })?.ok).toBe(true);
     expect(canvasService.getCastInfo()?.contentContext).toBe('personal');
-    expect(boot).toHaveBeenCalledWith(mature, 'personal');
+    await vi.waitFor(() => { expect(boot).toHaveBeenCalledWith(mature, 'personal'); });
   });
 
   it('stores the context a refresh was actually filtered under', async () => {
@@ -370,7 +409,7 @@ describe('content policy and the selected work moving on', () => {
     expect(stored.items?.map(value => value.id)).toEqual(['allowed']);
   });
 
-  it('persists only boot items this version validated', () => {
+  it('persists only boot items this version validated', async () => {
     const boot = vi.spyOn(DeviceManager, 'setBootPlaylist').mockResolvedValue(undefined);
     const blockedInvalid = { ...item('blocked', 'mature'), source: 'about:blank' };
     const allowed = item('allowed', 'general');
@@ -380,6 +419,7 @@ describe('content policy and the selected work moving on', () => {
     // restart hand that source to the renderer unvalidated.
     expect(cast(playlist(blockedInvalid, allowed),
       { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+    await vi.waitFor(() => { expect(boot).toHaveBeenCalled(); });
     const [record] = boot.mock.calls[0];
     expect(record.items?.map(value => value.id)).toEqual(['allowed']);
     expect(record.signature).toBeUndefined();

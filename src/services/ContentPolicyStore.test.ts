@@ -113,6 +113,66 @@ describe('content policy when storage is broken', () => {
 
 });
 
+describe('content policy when the read never settles', () => {
+  it('falls back to the default rather than waiting forever', async () => {
+    const store = new ContentPolicyStore({
+      read: () => new Promise<string | null>(() => undefined),
+      write: () => Promise.resolve(),
+    }, 10);
+
+    await store.initialize();
+
+    // A read that never settles is worse than one that fails: nothing rejects,
+    // so nothing retried, policyInForce stayed null, and the rendering gate
+    // refused every artwork — a device black until it is rebooted.
+    expect(policyInForce(store.getSnapshot())).toEqual(DEFAULT_CONTENT_POLICY);
+    expect(store.getSnapshot()).toMatchObject({ active: false, hydrationFailed: true });
+  });
+
+  it('lets a later poll start a fresh read after one stalls', async () => {
+    let attempts = 0;
+    const store = new ContentPolicyStore({
+      read: () => {
+        attempts += 1;
+        return attempts === 1
+          ? new Promise<string | null>(() => undefined)
+          : Promise.resolve(JSON.stringify({ ...DEFAULT_CONTENT_POLICY, showMatureContent: true }));
+      },
+      write: () => Promise.resolve(),
+    }, 10);
+
+    await store.initialize();
+    await store.initialize();
+
+    expect(attempts).toBe(2);
+    expect(store.getSnapshot()).toMatchObject({ active: true, hydrationFailed: false });
+  });
+
+  it('ignores an abandoned read that resolves after its attempt expired', async () => {
+    let settle: (value: string | null) => void = () => undefined;
+    let attempts = 0;
+    const store = new ContentPolicyStore({
+      read: () => {
+        attempts += 1;
+        return attempts === 1
+          ? new Promise<string | null>(resolve => { settle = resolve; })
+          : Promise.resolve(JSON.stringify({ ...DEFAULT_CONTENT_POLICY, strictPersonal: true }));
+      },
+      write: () => Promise.resolve(),
+    }, 10);
+
+    await store.initialize();
+    await store.initialize();
+    // The first read finally comes back, carrying what the mirror held before.
+    settle(JSON.stringify(DEFAULT_CONTENT_POLICY));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // It must not overwrite the generation that superseded it.
+    expect(store.getSnapshot().policy.strictPersonal).toBe(true);
+  });
+});
+
 describe('content policy write precedence and recovery', () => {
   it('a read that fails after a successful write cannot invalidate that policy', async () => {
     let failRead: (error: Error) => void = () => undefined;

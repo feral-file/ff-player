@@ -36,6 +36,18 @@ describe('content viewing policy', () => {
     }
   });
 
+  it('normalizes an out-of-range selection against the source playlist', () => {
+    // moveToArtwork accepts any non-negative index and the route wraps it. With
+    // policy active the raw value reached filterContent, where no position is
+    // >= 3, so the projection silently fell back to the first work instead of
+    // the one the controller asked for.
+    const items = [work('a', 'general'), work('b', 'general')];
+    const source = { dpVersion: '1.1.0', title: 'Set', items };
+
+    expect(filterContent(source, DEFAULT_CONTENT_POLICY, 'curated', 3).index).toBe(1);
+    expect(filterContent(source, DEFAULT_CONTENT_POLICY, 'curated', 4).index).toBe(0);
+  });
+
   it('rejects malformed labels even when normal playback is selected', () => {
     const policy = { ...DEFAULT_CONTENT_POLICY, showMatureContent: true };
     // Shape, not vocabulary: a rating that is not a string is malformed input.
