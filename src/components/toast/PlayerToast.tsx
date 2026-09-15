@@ -15,13 +15,25 @@ export const PLAYER_TOAST_DURATION_MS = 5000;
  * Copy for each notice, owned here rather than sent by the daemon so it goes
  * through the copy lint and stays localizable. Rendered verbatim on the wall
  * at TV distance: short, one line, no jargon.
+ *
+ * Every line is `[result]. [what happens next].` so the viewer learns both
+ * the verdict and its consequence without a call to action (the owner acts
+ * from the app, not at the wall). "Playing anyway" is the honest outcome of
+ * notify mode: the frame chose to show unverified content. "Display
+ * unchanged" is the honest outcome of strict mode: controld refuses the cast
+ * before any write to the player, so whatever was on screen stays — the
+ * wall never goes blank. The rejected line stays general ("not verified")
+ * because strict refuses unsigned and invalid documents alike. Length is
+ * budgeted, not free: the sizing test pins the longest line to one row at
+ * every documented viewport, so a longer rejected line must be re-measured.
  */
 export const PLAYER_TOAST_COPY: Record<PlayerToastNotice, string> = {
   [PlayerToastNotice.SignatureInvalid]:
-    'Playlist signature could not be verified.',
-  [PlayerToastNotice.SignatureUnsigned]: 'This playlist is not signed.',
+    'Signature check failed. Playing anyway.',
+  [PlayerToastNotice.SignatureUnsigned]:
+    "This playlist isn't signed. Playing anyway.",
   [PlayerToastNotice.SignatureRejected]:
-    'Playlist not shown: it did not pass signature verification.',
+    'Playlist blocked: signature not verified. Display unchanged.',
 };
 
 /**

@@ -6,9 +6,10 @@ import { PLAYER_TOAST_COPY } from './PlayerToast';
  * The pill is nowrap, so its one-line promise is a sizing budget: at every
  * documented viewport the longest copy must fit inside maxWidth. jsdom has
  * no text metrics, so the budget is pinned arithmetically from a measured em
- * width: in Chrome with PP Mori loaded, the 59-character
- * "Playlist not shown: …" renders at 25.57 em (0.433 em per character; the
- * other two notices at 0.437 and 0.418). 0.45 leaves margin. The unit must
+ * width: in Chrome with PP Mori loaded, the original 59-character
+ * "Playlist not shown: …" rendered at 25.57 em (0.433 em per character; the
+ * other two notices at 0.437 and 0.418). 0.45 leaves margin, and the current
+ * 60-character "Playlist blocked: …" is held to that same budget. The unit must
  * stay vmin (the tombstone sizing contract): at vh on a 2160×3840 portrait
  * wall the type is 85px and the line needs ~2,350px of a 1,728px budget.
  */
