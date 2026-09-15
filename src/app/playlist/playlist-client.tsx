@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- playback orchestration is intentionally co-located. */
 'use client';
 
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
@@ -59,8 +60,11 @@ export default function PlaylistClient() {
   // Preview URL and the item that owns it are published together by the
   // bridge, so the final media gate never sees one without the other.
   const { artworkPerformReloadRef, triggerArtworkRefresh, registerArtworkReload,
-    previewOwnerRef, publishPreview, clearPreview } =
-    useArtworkRefreshBridge(setCastPreviewURL);
+    getShowing, publishPreview, notePreviewCommitted, clearPreview } =
+    useArtworkRefreshBridge(setCastPreviewURL, identity => {
+      handleItemCommittedRef.current(identity);
+    });
+  const handleItemCommittedRef = useRef<(identity: string) => void>(() => undefined);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   // The interval the active slot's timer is armed with — effective duration
@@ -495,6 +499,15 @@ export default function PlaylistClient() {
               ...dp1Item,
               duration: dp1Item.duration ?? NO_DURATION_VALUE,
             })));
+            // Canvas remaps the selection by id, so a refresh that also
+            // reorders moves it. Installing the list without the resolved
+            // index would render one work while the controller reports another.
+            // The ref is mirrored synchronously, the way every other index
+            // handoff in this file does, so a same-tick reader is not stale.
+            const resolvedIndex = normalizePlaylistIndex(
+              castInfo.index ?? 0, incoming.length);
+            currentIndexRef.current = resolvedIndex;
+            setCurrentIndex(resolvedIndex);
             canvasService.clearQueuedPlaylistPending();
             break;
           }
@@ -608,7 +621,7 @@ export default function PlaylistClient() {
   const currentItemIdentity = useCurrentItemIdentity(playlist, currentIndex);
   const currentShowingKey = useShowingKey(playlist, currentIndex);
   const permitted = castInfo !== null && permitsCurrentPreview(
-    canvasService.getCastInfo(), previewOwnerRef.current, castPreviewURL, contentPolicy);
+    canvasService.getCastInfo(), getShowing(), castPreviewURL, contentPolicy);
 
   // Tombstone state (feral-file#3452): committed-item tracking, label
   // resolution, mode coercion, and the FF1-side toast — see useTombstone.
@@ -620,6 +633,7 @@ export default function PlaylistClient() {
     artistName: tombstoneArtist,
     toastText: tombstoneToast,
   } = useTombstone(playlist, deviceDisplaySettings);
+  handleItemCommittedRef.current = handleItemCommitted;
 
   const handleArtworkCommitted = useRecentlyPlayedCommit(
     playlist,
@@ -639,7 +653,7 @@ export default function PlaylistClient() {
             sessionKey={currentShowingKey}
             onRegisterArtworkReload={registerArtworkReload}
             onSourceEnded={handleSourceEnded}
-            onItemCommitted={handleItemCommitted}
+            onItemCommitted={notePreviewCommitted}
             onItemPlayed={handleArtworkCommitted}
           />
         )}

@@ -28,7 +28,17 @@ describe('final current-preview admission', () => {
 
   it('uses fresh live labels, not a stale allowed React item', () => {
     expect(permitsCurrentPreview(cast([{ ...a, contentRating: 'mature' }, b], 1), a, a.source, snapshot)).toBe(false);
-    expect(permitsCurrentPreview(cast([b]), a, a.source, snapshot)).toBe(false);
+  });
+
+  it('keeps painting an allowed outgoing work through an ordinary handoff', () => {
+    // The outgoing work is legitimately absent from the incoming cast while the
+    // two-slot transition loads its replacement. Refusing it here unmounts the
+    // player mid-transition and turns every playlist replacement into a hard
+    // cut; forcing a work off immediately is the retire epoch's job.
+    expect(permitsCurrentPreview(cast([b]), a, a.source, snapshot)).toBe(true);
+    // Still judged by its own labels, so a blocked outgoing work never lingers.
+    expect(permitsCurrentPreview(cast([b]), { ...a, contentRating: 'mature' },
+      a.source, snapshot)).toBe(false);
   });
 
   it('cannot borrow a rating merely because another work shares a source URL', () => {

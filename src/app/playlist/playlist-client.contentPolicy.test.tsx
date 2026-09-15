@@ -161,3 +161,87 @@ describe('same-id source refresh', () => {
     expect(screen.getByTestId('media').textContent).toBe('https://art.test/a-v2');
   });
 });
+
+describe('policy change during a delayed transition', () => {
+  it('retires the painted work, not the one selected ahead of it', async () => {
+    // The mock renderer never reports a commit for the second work, so the
+    // first stays "painted" exactly as ArtworkPlayer would keep it on screen
+    // while the incoming slot loads.
+    const painted: DP1Item = { id: 'painted', source: 'https://art.test/painted',
+      license: DP1License.Open, duration: 1 };
+    const selected: DP1Item = { id: 'selected', source: 'https://art.test/selected',
+      contentRating: 'general', license: DP1License.Open, duration: 1 };
+    const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
+      contentContext: 'curated', index: 0,
+      playlist: { dpVersion: '1.1.0', title: 'Art', items: [painted, selected] } };
+    canvasService.setCastInfo(initial, false);
+    render(<Harness initial={initial} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId('media').textContent).toBe(painted.source);
+
+    // Tighten so the painted (unrated) work is blocked while the selected one
+    // stays allowed. Gating on the selection would authorise the allowed work
+    // and leave the blocked one on screen until it loads — indefinitely if it
+    // stalls.
+    await act(async () => {
+      await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
+    });
+
+    expect(screen.queryByTestId('media')?.textContent).not.toBe(painted.source);
+  });
+});
+
+describe('cross-playlist handoff', () => {
+  it('keeps the outgoing renderer through an ordinary playlist replacement', async () => {
+    const a: DP1Item = { id: 'a', source: 'https://art.test/a',
+      contentRating: 'general', license: DP1License.Open };
+    const b: DP1Item = { id: 'b', source: 'https://art.test/b',
+      contentRating: 'general', license: DP1License.Open };
+    const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
+      contentContext: 'curated', index: 0,
+      playlist: { dpVersion: '1.1.0', title: 'Art', items: [a] } };
+    canvasService.setCastInfo(initial, false);
+    render(<Harness initial={initial} />);
+    await act(async () => { await Promise.resolve(); });
+    unmounted.mockClear();
+
+    await act(async () => {
+      canvasService.setCastInfo({ ...initial,
+        playlist: { dpVersion: '1.1.0', title: 'Art', items: [b] } }, true);
+      await Promise.resolve();
+    });
+
+    // The outgoing work is absent from the incoming cast, which is what an
+    // ordinary handoff looks like — the two-slot transition loads B while A is
+    // still painted. Unmounting here makes every replacement a hard cut.
+    expect(unmounted).not.toHaveBeenCalled();
+    expect(screen.getByTestId('media').textContent).toBe(b.source);
+  });
+
+  it('renders the selection the controller reports after a reordering refresh', async () => {
+    const a: DP1Item = { id: 'a', source: 'https://art.test/a',
+      contentRating: 'general', license: DP1License.Open };
+    const b: DP1Item = { id: 'b', source: 'https://art.test/b',
+      contentRating: 'general', license: DP1License.Open };
+    const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
+      contentContext: 'curated', index: 1,
+      playlist: { dpVersion: '1.1.0', title: 'Art', items: [a, b] } };
+    canvasService.setCastInfo(initial, false);
+    render(<Harness initial={initial} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId('media').textContent).toBe(b.source);
+
+    // b keeps its id, gets a new source, and moves to the front. Canvas remaps
+    // the selection to index 0; installing the list without that index would
+    // render a while the controller reports b.
+    await act(async () => {
+      canvasService.processMessage({ command: CastCommand.displayPlaylist,
+        request: { intent: { action: DP1Action.NowDisplay }, refresh: true,
+          dp1_call: { dpVersion: '1.1.0', title: 'Art',
+            items: [{ ...b, source: 'https://art.test/b-v2' }, a] } } });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('media').textContent).toBe('https://art.test/b-v2');
+  });
+});
