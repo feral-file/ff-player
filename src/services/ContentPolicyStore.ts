@@ -51,6 +51,14 @@ export class ContentPolicyStore {
    * lands with nothing left to resume.
    */
   private outstandingWrites = 0;
+  /**
+   * A durable write has published. Hydration may never publish again after
+   * that, whatever order the read resolves in: the record it read has been
+   * replaced, so publishing it would silently revert a setting the daemon was
+   * already told is active — and for a family-content policy, reverting to a
+   * more permissive value is the worst direction to fail in.
+   */
+  private writeApplied = false;
 
   constructor(private readonly storage: PolicyStorage) {}
 
@@ -79,7 +87,7 @@ export class ContentPolicyStore {
       // a policy known to be obsolete, and a stricter old value can retire an
       // admitted work that the incoming policy allows — with nothing left to
       // restore when it lands a moment later. Hold it; the write publishes.
-      if (this.outstandingWrites === 0) {
+      if (this.canPublishHydration()) {
         this.publish(hydrated);
       }
     } catch {
@@ -123,6 +131,7 @@ export class ContentPolicyStore {
         throw error;
       }
       this.outstandingWrites -= 1;
+      this.writeApplied = true;
       this.publish(policy);
     });
     this.pending = next.catch(() => undefined);
@@ -131,10 +140,14 @@ export class ContentPolicyStore {
 
   /** Publish a hydrated value held back for writes that all then failed. */
   private releaseSupersededHydration(): void {
-    if (this.outstandingWrites > 0 || !this.hydrated) {
-      return;
+    if (this.hydrated && this.canPublishHydration()) {
+      this.publish(this.hydrated);
     }
-    this.publish(this.hydrated);
+  }
+
+  /** The mirror may speak only while no write has spoken for it. */
+  private canPublishHydration(): boolean {
+    return this.outstandingWrites === 0 && !this.writeApplied;
   }
 
   /** Retire outgoing media when fresh labels block the current work. */

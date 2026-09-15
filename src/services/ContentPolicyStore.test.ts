@@ -134,6 +134,26 @@ describe('content policy write precedence and recovery', () => {
     expect(published).toEqual([{ ...DEFAULT_CONTENT_POLICY, showMatureContent: true }]);
   });
 
+  it('a read that lands after a successful write cannot revert it', async () => {
+    let finishRead: (value: string | null) => void = () => undefined;
+    const store = new ContentPolicyStore({
+      read: () => new Promise<string | null>(resolve => { finishRead = resolve; }),
+      write: () => Promise.resolve(),
+    });
+
+    void store.initialize();
+    await store.set({ ...DEFAULT_CONTENT_POLICY, showMatureContent: true });
+    // The read finally returns the record the write already replaced.
+    finishRead(JSON.stringify(DEFAULT_CONTENT_POLICY));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Publishing it would silently revert a setting the daemon was told is
+    // active, and for a family-content policy the revert direction is the
+    // permissive one.
+    expect(store.getSnapshot().policy.showMatureContent).toBe(true);
+  });
+
   it('serializes changes and reads the committed policy after a restart', async () => {
     let raw: string | null = null;
     const storage = { read: () => Promise.resolve(raw), write: (value: string) => { raw = value; return Promise.resolve(); } };
