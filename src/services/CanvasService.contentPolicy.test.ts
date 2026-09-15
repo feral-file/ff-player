@@ -103,6 +103,35 @@ describe('content policy at playback boundaries', () => {
 
 });
 
+describe('content policy reconciliation and queued controller intent', () => {
+  it('re-filters a deferred refresh instead of discarding it', async () => {
+    // A refresh that omits the current work is deferred until that work ends.
+    cast(playlist(item('current', 'general')));
+    expect(cast(playlist(item('queued', 'general'), item('queuedMature', 'mature')),
+      { refresh: true })?.ok).toBe(true);
+    expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
+
+    // An unrelated policy write must not throw that accepted refresh away; it
+    // must be re-filtered under the new policy and kept.
+    await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, strictPersonal: true });
+
+    expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
+    expect(canvasService.hasDeferredRefreshPlaylist()).toBe(true);
+    expect(canvasService.getQueuedPlaylistItems()?.map(value => value.id)).toEqual(['queued']);
+  });
+
+  it('drops a deferred refresh only when policy leaves nothing in it', async () => {
+    cast(playlist(item('current', 'general')));
+    expect(cast(playlist(item('queuedUnrated')), { refresh: true })?.ok).toBe(true);
+    expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
+
+    await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
+
+    expect(canvasService.hasQueuedPlaylistPending()).toBe(false);
+    expect(canvasService.hasDeferredRefreshPlaylist()).toBe(false);
+  });
+});
+
 describe('content policy at persistence and refresh boundaries', () => {
   it('carries the boot cast context into playback and into what it persists', () => {
     const boot = vi.spyOn(DeviceManager, 'setBootPlaylist').mockResolvedValue(undefined);
@@ -326,13 +355,29 @@ describe('admission when the policy mirror is not yet readable', () => {
     expect(unread.getSnapshot().hydrationFailed).toBe(false);
   });
 
-  it('refuses a cast outright when the mirror is unreadable', () => {
+  it('keeps playing under the built-in default when the mirror is unreadable', () => {
     vi.spyOn(contentPolicyStore, 'getSnapshot').mockReturnValue({
       policy: DEFAULT_CONTENT_POLICY, active: false, epoch: 1, retireEpoch: 0, hydrationFailed: true,
     });
 
-    expect(cast(playlist(item('a', 'general'))))
-      .toEqual({ ok: false, error: 'contentPolicyUnavailable' });
+    // Refusing here would black the wall for as long as storage is broken, and
+    // the daemon's repair write lands in that same broken database — so "fail
+    // closed" would mean fail forever. Nothing assumed, keep playing.
+    expect(cast(playlist(item('a', 'general')))?.ok).toBe(true);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a']);
+  });
+
+  it('still hides mature work under the fallback default', () => {
+    vi.spyOn(contentPolicyStore, 'getSnapshot').mockReturnValue({
+      policy: DEFAULT_CONTENT_POLICY, active: false, epoch: 1, retireEpoch: 0, hydrationFailed: true,
+    });
+
+    // The fallback is the real default, not an absence of policy: mature is
+    // hidden, everything else plays.
+    expect(cast(playlist(item('m', 'mature'))))
+      .toEqual({ ok: false, error: 'contentBlocked' });
+    expect(cast(playlist(item('m', 'mature'), item('a', 'general')))?.ok).toBe(true);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a']);
   });
 
   it('admits a cast whole while the mirror is still being read, then reconciles it', async () => {

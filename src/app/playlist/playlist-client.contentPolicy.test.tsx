@@ -12,7 +12,8 @@ import { DEFAULT_CONTENT_POLICY } from '@/services/contentPolicy';
 import { prepareContentPolicy } from '@/services/contentPolicy.testkit';
 import PlaylistClient from './playlist-client';
 
-const { getItemRef, unmounted } = vi.hoisted(() => ({ getItemRef: vi.fn(), unmounted: vi.fn() }));
+const { getItemRef, unmounted, onCastInfo } = vi.hoisted(() => ({
+  getItemRef: vi.fn(), unmounted: vi.fn(), onCastInfo: vi.fn() }));
 vi.mock('@/services/DP1Service', () => ({ DP1Service: { getItemRef, getPlaylist: vi.fn() } }));
 vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn(), captureMessage: vi.fn(), addBreadcrumb: vi.fn() }));
 // Reports a visual commit on mount, the way ArtworkPlayer does once media is
@@ -35,7 +36,7 @@ vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
 function Harness({ initial }: { initial: CastInfo | null }) {
   const [castInfo, setCastInfo] = React.useState(initial);
   React.useLayoutEffect(() => {
-    canvasService.onCastInfoChange = setCastInfo;
+    canvasService.onCastInfoChange = next => { onCastInfo(next); setCastInfo(next); };
     return () => { canvasService.onCastInfoChange = null; };
   }, []);
   const value = { context: { isInitialized: true, isOnline: true,
@@ -198,6 +199,33 @@ describe('policy change during a delayed transition', () => {
     });
 
     expect(screen.queryByTestId('media')?.textContent).not.toBe(onScreen.source);
+  });
+});
+
+describe('a policy write that changes nothing on screen', () => {
+  it('does not restart the current slot or re-resolve its display preference', async () => {
+    vi.useFakeTimers();
+    const allowed: DP1Item = { id: 'a', source: 'https://art.test/a',
+      contentRating: 'general', license: DP1License.Open, duration: 10 };
+    const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
+      contentContext: 'curated', index: 0,
+      playlist: { dpVersion: '1.1.0', title: 'Art', items: [allowed] } };
+    canvasService.setCastInfo(initial, false);
+    render(<Harness initial={initial} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId('media').textContent).toBe(allowed.source);
+    const castsBefore = onCastInfo.mock.calls.length;
+
+    // An unrelated setting changes and the projection is identical to what is
+    // playing. Re-issuing displayPlaylist would rebuild the route's item array
+    // and re-arm the slot timer, restarting the artwork the viewer is watching.
+    await act(async () => {
+      await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, strictPersonal: true });
+    });
+
+    expect(onCastInfo.mock.calls.length).toBe(castsBefore);
+    expect(screen.getByTestId('media').textContent).toBe(allowed.source);
+    expect(unmounted).not.toHaveBeenCalled();
   });
 });
 

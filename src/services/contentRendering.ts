@@ -1,6 +1,6 @@
 import { CastInfo } from '@/models/cast_info.model';
 import { DP1Item } from '@/models/dp1.model';
-import { ContentPolicySnapshot } from './ContentPolicyStore';
+import { ContentPolicySnapshot, policyInForce } from './ContentPolicyStore';
 import { allowsContent, parseContentContext } from './contentPolicy';
 
 /**
@@ -29,7 +29,8 @@ import { allowsContent, parseContentContext } from './contentPolicy';
 export function permitsCurrentPreview(cast: CastInfo | null,
   showing: DP1Item | undefined, url: string | null,
   snapshot: ContentPolicySnapshot): boolean {
-  if (!cast || !snapshot.active || !url || !showing) {return false;}
+  const policy = policyInForce(snapshot);
+  if (!cast || !policy || !url || !showing) {return false;}
   const items = cast.playlist?.items ?? [];
   // An empty cast is not a handoff: nothing is loading to replace what is on
   // screen, so there is nothing to keep painting for.
@@ -43,5 +44,5 @@ export function permitsCurrentPreview(cast: CastInfo | null,
   // shown, nothing to permit.
   const fresh = items.find(
     item => item.id === showing.id && item.source === showing.source);
-  return allowsContent(fresh ?? showing, snapshot.policy, parseContentContext(cast.contentContext));
+  return allowsContent(fresh ?? showing, policy, parseContentContext(cast.contentContext));
 }

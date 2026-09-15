@@ -72,11 +72,19 @@ The boot path hydrates the mirror before restoring any artwork. A cast that
 arrives while the mirror is still being read is admitted whole and reconciled
 by the hydration publish, which re-applies the real policy to the retained
 payload; filtering it against the built-in default instead would reject a cast
-the viewer opted into and leave nothing to reconcile. A corrupt mirror is the
-other case and fails closed: nothing will repair it on its own, so
-`displayPlaylist` refuses with `contentPolicyUnavailable` until the daemon
-reconciles it. A read that fails after a write has already applied a policy does
-not mark the mirror unreadable — the record it failed on has been replaced — and
+the viewer opted into and leave nothing to reconcile.
+
+A mirror that cannot be read at all is the
+other case, and it does NOT fail closed: the built-in default goes into force
+(mature hidden, everything else plays) and casts keep being accepted under it,
+while the snapshot reports `active: false` so the daemon can see the policy is
+not durable and repair it. Refusing playback there would black the wall for as
+long as storage is broken, and the daemon's repair write lands in that same
+broken database — "fail closed" would mean fail forever. The read is retried
+rather than latched, so a device whose storage recovers picks its real policy
+back up without a restart.
+
+A read that fails after a write has already applied a policy does not disturb it — the record it failed on has been replaced — and
 any durable write clears the flag, including a resend of the policy already in
 force.
 

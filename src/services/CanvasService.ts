@@ -74,7 +74,7 @@ import { coerceLoopMode } from '@/utils/loopMode';
 import { coerceTombstoneMode } from '@/utils/tombstoneMode';
 import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
-import { contentPolicyStore } from './ContentPolicyStore';
+import { contentPolicyStore, policyInForce } from './ContentPolicyStore';
 import { admitUnfiltered, allowsContent, ContentContext, ContentPolicy, filterContent, hasValidContentLabels, parseContentContext, stripPlaylistSignature } from './contentPolicy';
 
 const PLAYLIST_SOURCE_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
@@ -435,7 +435,7 @@ class CanvasService {
    */
   private admissionPolicy(): Readonly<ContentPolicy> | null {
     const snapshot = contentPolicyStore.getSnapshot();
-    return snapshot.active ? snapshot.policy : null;
+    return policyInForce(snapshot);
   }
 
   /**
@@ -448,6 +448,15 @@ class CanvasService {
     this.playbackGeneration += 1;
     this.activeRecentlyPlayedRecordId = null;
     this.occurrenceItem = null;
+  }
+
+  /**
+   * Read the retained history once, at boot, so the app's first request is an
+   * answer rather than "still loading" — a reply it has no way to tell apart
+   * from a failure, and the exact ambiguity this command exists to remove.
+   */
+  public async primeRecentlyPlayed(): Promise<void> {
+    await this.loadRecentlyPlayed();
   }
 
   private async loadRecentlyPlayed(): Promise<RecentlyPlayedRecord[]> {
@@ -464,9 +473,21 @@ class CanvasService {
       this.recentlyPlayedRecords = records;
       this.recentlyPlayedIncomplete = incomplete;
       return records;
+    }).catch((error: unknown) => {
+      // An unreadable or corrupt store is a GAP, not a reason to refuse
+      // History for the life of the page: answering "still loading" forever is
+      // indistinguishable from a broken command, and the records are gone
+      // either way. Start from empty and say so — `incomplete` is what keeps
+      // that honest — so the next committed work simply overwrites the record.
+      console.error('[CanvasService] Recently played history is unreadable', error);
+      this.recentlyPlayedRecords = [];
+      this.recentlyPlayedIncomplete = true;
+      return this.recentlyPlayedRecords;
     });
     this.recentlyPlayedLoad = load;
-    void load.finally(() => {
+    // `.catch` rather than `.finally`: a rejected promise here would be
+    // unhandled, and the load above already absorbs the failure.
+    void load.catch(() => undefined).finally(() => {
       if (this.recentlyPlayedLoad === load) {
         this.recentlyPlayedLoad = null;
       }
@@ -703,9 +724,9 @@ class CanvasService {
   public setCastInfo(castInfo: CastInfo | null, notify = true) {
     console.log('[CanvasService] Setting castInfo:', notify);
     const incoming = castInfo;
-    if (castInfo?.playlist?.items?.length && contentPolicyStore.getSnapshot().active) {
-      const filtered = filterContent(castInfo.playlist,
-        contentPolicyStore.getSnapshot().policy,
+    const inForce = policyInForce(contentPolicyStore.getSnapshot());
+    if (castInfo?.playlist?.items?.length && inForce) {
+      const filtered = filterContent(castInfo.playlist, inForce,
         parseContentContext(castInfo.contentContext), castInfo.index ?? 0);
       castInfo = filtered.playlist ? { ...castInfo, playlist: filtered.playlist, index: filtered.index } : null;
     }
@@ -765,16 +786,64 @@ class CanvasService {
 
   /** Retire blocked recovery/queued snapshots when a durable policy changes. */
   private reconcileContentPolicy(): void {
-    this.originalPlaylistItems = null;
-    this.queuedPlaylistPending = false;
-    this.setDeferredRefreshPlaylist(null);
-    if (this.castInfo) {
-      // setCastInfo retires the occurrence if this reconciliation removes the
-      // work it belongs to, and leaves it alone if that work survives — a
-      // policy change that keeps the same work playing must not blank History,
-      // or it would sit at pending until an advance that may never come.
-      this.setCastInfo({ ...this.castInfo, castCommand: CastCommand.displayPlaylist });
+    const policy = this.admissionPolicy();
+    const context = parseContentContext(this.castInfo?.contentContext);
+    const keep = (item: DP1Item): boolean =>
+      policy === null || allowsContent(item, policy, context);
+
+    // Queued controller intent is RE-FILTERED, never discarded. A refresh the
+    // device accepted is a replacement it promised to make; dropping it because
+    // an unrelated setting changed loses that replacement silently and leaves
+    // the stale list playing. The same goes for the unshuffled-order snapshot,
+    // without which a later shuffle-off cannot restore the real order.
+    this.originalPlaylistItems = this.originalPlaylistItems?.filter(keep) ?? null;
+    const deferred = this.deferredRefreshPlaylist;
+    const deferredItems = deferred?.items?.filter(keep) ?? [];
+    if (deferred && deferredItems.length) {
+      // The item list changed, so the signed document no longer describes it.
+      this.setDeferredRefreshPlaylist(
+        stripPlaylistSignature({ ...deferred, items: deferredItems }));
+    } else if (deferred) {
+      // Only when policy leaves nothing to install does the promise lapse.
+      this.setDeferredRefreshPlaylist(null);
+      this.queuedPlaylistPending = false;
     }
+
+    if (!this.castInfo) {
+      return;
+    }
+    // Re-issuing displayPlaylist makes the route rebuild its item array and
+    // re-arm the slot timer, which restarts the artwork the viewer is watching.
+    // When the projection is byte-for-byte what is already playing, this policy
+    // change did not touch the wall and must not disturb it.
+    const projected = this.projectedCast(this.castInfo, policy, context);
+    if (projected !== null && this.isSameProjection(projected)) {
+      return;
+    }
+    // setCastInfo retires the occurrence if this reconciliation removes the
+    // work it belongs to, and leaves it alone if that work survives — a
+    // policy change that keeps the same work playing must not blank History,
+    // or it would sit at pending until an advance that may never come.
+    this.setCastInfo({ ...this.castInfo, castCommand: CastCommand.displayPlaylist });
+  }
+
+  /** What setCastInfo would install for this cast, without installing it. */
+  private projectedCast(cast: CastInfo, policy: Readonly<ContentPolicy> | null,
+    context: ContentContext): { items: DP1Item[]; index: number } | null {
+    const playlist = cast.playlist;
+    if (!playlist?.items?.length || policy === null) {
+      return null;
+    }
+    const filtered = filterContent(playlist, policy, context, cast.index ?? 0);
+    return filtered.playlist
+      ? { items: filtered.playlist.items ?? [], index: filtered.index }
+      : null;
+  }
+
+  /** True when a projection is exactly the list and slot already playing. */
+  private isSameProjection(projected: { items: DP1Item[]; index: number }): boolean {
+    return projected.index === (this.castInfo?.index ?? 0) &&
+      deepEqual(projected.items, this.castInfo?.playlist?.items ?? []);
   }
 
   /**
@@ -1299,7 +1368,7 @@ class CanvasService {
    * losing the cast.
    */
   private renderableCastInfo(): CastInfo | null {
-    return contentPolicyStore.getSnapshot().active ? this.castInfo : null;
+    return policyInForce(contentPolicyStore.getSnapshot()) ? this.castInfo : null;
   }
 
   /**
@@ -1524,12 +1593,6 @@ class CanvasService {
     const action = dp1Intent?.action;
     if (action === DP1Action.GetCurrentPlaylist) {return this.getStatus();}
     if (!dp1CallData) {return { ok: false, error: 'playlistInvalid' };}
-    // An unreadable mirror fails closed: the device cannot know what it is
-    // allowed to show, and unlike an unread mirror nothing will reconcile it
-    // until the daemon repairs it with setContentPolicy.
-    if (contentPolicyStore.getSnapshot().hydrationFailed) {
-      return { ok: false, error: 'contentPolicyUnavailable' };
-    }
     const contentContext = request.refresh
       ? this.refreshContentContext(request)
       : parseContentContext('contentContext' in request ? request.contentContext : undefined);

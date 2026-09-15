@@ -225,6 +225,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
       }
       try {
         await contentPolicyStore.initialize();
+        // Fire and forget: History is not a boot precondition, but reading it
+        // now is what makes the app's first request an answer instead of
+        // "still loading".
+        void canvasService.primeRecentlyPlayed();
         await initCastInfo();
       } catch (error) {
         bootHydrationOutcome = 'failed';

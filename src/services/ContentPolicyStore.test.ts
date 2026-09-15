@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ContentPolicyStore } from './ContentPolicyStore';
+import { ContentPolicyStore, policyInForce } from './ContentPolicyStore';
 import { ContentPolicy, DEFAULT_CONTENT_POLICY } from './contentPolicy';
 
 describe('persisted content policy', () => {
@@ -68,6 +68,47 @@ describe('content policy hydration and writes racing', () => {
     // The record is unchanged, so what hydration read still describes it.
     // Staying inactive would leave admission with no policy to apply at all.
     expect(store.getSnapshot()).toMatchObject({ active: true, policy: DEFAULT_CONTENT_POLICY });
+  });
+
+});
+
+describe('content policy when storage is broken', () => {
+  it('falls back to the built-in default when the mirror cannot be read', async () => {
+    const store = new ContentPolicyStore({
+      read: () => Promise.reject(new Error('IndexedDB unavailable')),
+      write: () => Promise.resolve(),
+    });
+
+    await store.initialize();
+
+    // Nothing assumed, keep playing: the device applies the built-in default
+    // (mature hidden, everything else plays) and reports active:false so the
+    // daemon can tell the mirror is not durable.
+    expect(policyInForce(store.getSnapshot())).toEqual(DEFAULT_CONTENT_POLICY);
+    expect(store.getSnapshot()).toMatchObject({ active: false, hydrationFailed: true });
+  });
+
+  it('retries a failed read instead of latching for the page lifetime', async () => {
+    let attempts = 0;
+    const store = new ContentPolicyStore({
+      read: () => {
+        attempts += 1;
+        return attempts === 1
+          ? Promise.reject(new Error('IndexedDB unavailable'))
+          : Promise.resolve(JSON.stringify({ ...DEFAULT_CONTENT_POLICY, showMatureContent: true }));
+      },
+      write: () => Promise.resolve(),
+    });
+
+    await store.initialize();
+    expect(store.getSnapshot().active).toBe(false);
+
+    // A memoized failure never recovers on a device whose storage came back.
+    await store.initialize();
+
+    expect(attempts).toBe(2);
+    expect(store.getSnapshot()).toMatchObject({ active: true, hydrationFailed: false });
+    expect(store.getSnapshot().policy.showMatureContent).toBe(true);
   });
 
 });

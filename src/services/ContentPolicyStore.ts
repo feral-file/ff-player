@@ -71,7 +71,12 @@ export class ContentPolicyStore {
     return () => { this.listeners.delete(listener); };
   };
 
-  /** Load before boot restoration; a read error leaves rendering inactive. */
+  /**
+   * Load before boot restoration. A failed read is NOT memoized: storage can
+   * come back (a transient IndexedDB open failure, a quota that clears), and
+   * latching the failure for the page lifetime would keep a device on the
+   * fallback long after the mirror became readable.
+   */
   initialize(): Promise<void> {
     this.initialization ??= this.hydrate();
     return this.initialization;
@@ -91,20 +96,22 @@ export class ContentPolicyStore {
         this.publish(hydrated);
       }
     } catch {
-      // The daemon can recover via set(). Never translate corruption to the
-      // permissive pre-audit defaults, nor erase the last recovery snapshot.
-      // Publishing the failure is what lets admission tell an unreadable
-      // mirror apart from one that is merely still being read.
-      //
-      // Unless a policy is already applied: a write can land while this read is
-      // still outstanding, and the record it failed to read has been replaced
-      // since. Marking the mirror unreadable then would make displayPlaylist
-      // refuse every cast on a device the daemon was just told is configured —
-      // a successful activation followed by a player that plays nothing.
+      // Let the next initialize() try again: a read can fail because storage
+      // was briefly unavailable, and this failure must not outlive that.
+      this.initialization = undefined;
+      // A write can land while this read is still outstanding, and the record
+      // it failed to read has been replaced since. Do not touch the snapshot
+      // then — the applied policy is the truth.
       if (this.snapshot.active) {
         return;
       }
-      this.snapshot = { ...this.snapshot, hydrationFailed: true };
+      // Otherwise: nothing assumed, keep playing. `hydrationFailed` puts the
+      // built-in default in force (see policyInForce) rather than refusing
+      // playback, and leaves `active` false so the daemon can see the mirror is
+      // not durable and repair it. Blacking the wall on broken storage is the
+      // one outcome that helps nobody: the daemon's repair write lands in the
+      // same broken database, so "fail closed" would mean fail forever.
+      this.snapshot = { ...this.snapshot, policy: DEFAULT_CONTENT_POLICY, hydrationFailed: true };
       this.listeners.forEach(listener => { listener(); });
     }
   }
@@ -176,6 +183,24 @@ export class ContentPolicyStore {
       hydrationFailed: false };
     this.listeners.forEach(listener => { listener(); });
   }
+}
+
+/**
+ * The policy the device must apply right now, or `null` only while it genuinely
+ * cannot judge content yet — the brief window before the first read resolves,
+ * where a cast is admitted whole and reconciled when the policy lands.
+ *
+ * An UNREADABLE mirror is not that window. It puts the built-in default in
+ * force (mature hidden, everything else plays) so the wall keeps working, while
+ * the snapshot still reports `active: false` because nothing about that policy
+ * is durable. Callers should ask this rather than reading `active` when what
+ * they need to know is "what am I allowed to show".
+ */
+export function policyInForce(
+  snapshot: ContentPolicySnapshot
+): Readonly<ContentPolicy> | null {
+  if (snapshot.active) {return snapshot.policy;}
+  return snapshot.hydrationFailed ? DEFAULT_CONTENT_POLICY : null;
 }
 
 /** One mirror per player document, reconciled by the daemon after navigation. */

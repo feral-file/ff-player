@@ -17,6 +17,7 @@ import { useArtworkRefreshBridge } from './useArtworkRefreshBridge';
 import { isSourceReplacement } from './sourceReplacement';
 import { usePlayableList } from './usePlayableList';
 import { useContentPolicy } from '@/services/custom-hooks/useContentPolicy';
+import { policyInForce } from '@/services/ContentPolicyStore';
 import {
   isNoDurationItem,
   itemIdentityFor,
@@ -422,7 +423,8 @@ export default function PlaylistClient() {
 
     // The final media gate is not enough: do not fetch a blocked work's ref
     // manifest while its slot is hidden or while policy hydration is pending.
-    if (!contentPolicy.active || !allowsContent(currentItem, contentPolicy.policy, contentContext)) {
+    const inForce = policyInForce(contentPolicy);
+    if (!inForce || !allowsContent(currentItem, inForce, contentContext)) {
       clearTimer();
       clearPreview();
       return;
@@ -431,7 +433,7 @@ export default function PlaylistClient() {
     // stays allowed; the gate would otherwise keep judging the retired work
     // and never let its replacement mount.
     retireCommittedIfGone(onScreen => allowsContent(
-      onScreen, contentPolicy.policy, contentContext));
+      onScreen, inForce, contentContext));
     void handleItemDisplayPreference(currentItem, normalizedIndex);
     publishPreview(currentItem);
     scheduleCurrentItemTimer(normalizedIndex, playlist);

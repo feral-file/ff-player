@@ -35,6 +35,7 @@ const { axiosGet, canvasServiceMocks, deviceManager } = vi.hoisted(() => {
         (playlistURL: string, shouldAbort?: () => boolean) => Promise<boolean>
       >(() => Promise.resolve(true)),
       completeBootCastHydration: vi.fn(),
+      primeRecentlyPlayed: vi.fn().mockResolvedValue(undefined),
       getCastInfo: vi.fn(() => null),
       setCastInfo: vi.fn(),
       requestArtworkRefresh: vi.fn(() => true),
@@ -96,6 +97,7 @@ vi.mock('@/services/CanvasService', () => ({
   canvasService: {
     castPlaylistByURL: canvasServiceMocks.castPlaylistByURL,
     completeBootCastHydration: canvasServiceMocks.completeBootCastHydration,
+    primeRecentlyPlayed: canvasServiceMocks.primeRecentlyPlayed,
     getCastInfo: canvasServiceMocks.getCastInfo,
     setCastInfo: canvasServiceMocks.setCastInfo,
     requestArtworkRefresh: canvasServiceMocks.requestArtworkRefresh,

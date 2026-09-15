@@ -50,7 +50,7 @@ describe('checkStatus and content policy admission', () => {
     expect(reply.castCommand).toBeUndefined();
   });
 
-  it('reports nothing playable while the policy mirror is unreadable', () => {
+  it('reports the cast it is still playing under the fallback default', () => {
     canvasService.setCastInfo({
       castCommand: CastCommand.displayPlaylist,
       index: 0,
@@ -61,15 +61,15 @@ describe('checkStatus and content policy admission', () => {
       hydrationFailed: true,
     });
 
-    // The renderer refuses to mount without an applied policy, so the cast is
-    // retained but is not on the wall. Reporting it as active would tell
-    // controld a blank device is playing and hide the fail-closed state it
-    // needs to see in order to repair the mirror.
-    expect(canvasService.hasActiveArtwork()).toBe(false);
+    // An unreadable mirror puts the built-in default in force rather than
+    // stopping playback, so the device IS showing this work and must say so.
+    // The daemon learns the mirror is not durable from the policy reply's
+    // active:false, not by the player pretending nothing is playing.
+    expect(canvasService.hasActiveArtwork()).toBe(true);
     const reply = status();
     expect(reply.ok).toBe(true);
-    expect(reply.playlist).toBeUndefined();
-    expect(reply.index).toBeUndefined();
+    expect(reply.playlist?.items?.map(value => value.id)).toEqual(['a']);
+    expect(reply.index).toBe(0);
   });
 
   it('still reports a persisted cast the policy allows', () => {
