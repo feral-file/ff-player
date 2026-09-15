@@ -75,6 +75,25 @@ describe('content policy reads before the mirror is applied', () => {
     expect(hydrate).toHaveBeenCalled();
   });
 
+  it('reports the degraded fallback as a policy, not as unavailable', async () => {
+    const broken = new ContentPolicyStore({
+      read: () => Promise.reject(new Error('IndexedDB unavailable')),
+      write: () => Promise.resolve(),
+    });
+    await broken.initialize();
+    vi.spyOn(contentPolicyStore, 'getSnapshot').mockImplementation(broken.getSnapshot);
+    vi.spyOn(contentPolicyStore, 'initialize').mockImplementation(() => broken.initialize());
+
+    const result = await contentPolicyCommand('getContentPolicy', {}, 'degraded');
+
+    // The device IS enforcing a policy — the built-in default — and is still
+    // playing under it. Reporting `contentPolicyUnavailable` would make that
+    // indistinguishable from a read that has not finished, and the daemon
+    // cannot repair a mirror it has not been told is broken.
+    expect(JSON.parse(result)).toEqual({ messageID: 'degraded',
+      message: { ok: true, contentPolicy: DEFAULT_CONTENT_POLICY, active: false } });
+  });
+
   it('returns the applied policy once the mirror is active', async () => {
     const result = await contentPolicyCommand('getContentPolicy', {}, 'read-2');
 

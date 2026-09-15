@@ -72,6 +72,19 @@ describe('content policy at playback boundaries', () => {
     expect(canvasService.getCastInfo()?.castCommand).toBe(CastCommand.displayPlaylist);
   });
 
+  it('advances past a retired work instead of restarting the playlist', () => {
+    cast(playlist(item('a', 'general'), item('b', 'general'), item('c', 'general')));
+    canvasService.setCastInfo({ ...canvasService.getCastInfo(), index: 1 }, false);
+
+    // The work being watched is blocked by fresh labels. The viewer should see
+    // the next allowed work, not be sent back to the start of the playlist.
+    expect(cast(playlist(item('a', 'general'), item('b', 'mature'), item('c', 'general')),
+      { refresh: true })?.ok).toBe(true);
+
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a', 'c']);
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
+
   it('retires newly blocked work even if its proposed replacement has an invalid source', () => {
     cast(playlist(item('a')));
     const invalid = { ...item('b', 'general'), source: 'about:blank' };

@@ -45,6 +45,13 @@ export interface NowDisplayRequest {
   dp1CallData: DP1Call;
   playlistUrl?: string;
   contentContext?: ContentContext;
+  /**
+   * Slot to start on. A fresh cast starts at 0; a policy retirement that
+   * replaces the current work passes the slot its projection resolved to, so
+   * the viewer advances past the retired work instead of being sent back to
+   * the start of a playlist they were already part-way through.
+   */
+  startIndex?: number;
 }
 export type NowDisplayReply = Reply;
 

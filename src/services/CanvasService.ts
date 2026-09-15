@@ -1749,13 +1749,16 @@ class CanvasService {
       policy !== null && !!work && !allowsContent(work, policy, contentContext);
     const retireCurrent = blocks(updatedCurrent ?? currentItem) ||
       blocks(updatedOnScreen ?? onScreen);
+    // The selection is carried into the projection so filterContent can resolve
+    // the next allowed slot at or after it, rather than defaulting to the first.
+    const selected = normalizePlaylistIndex(this.castInfo?.index ?? 0, currentItems.length);
     const filtered = policy === null ? admitUnfiltered(dp1CallData) :
-      filterContent(dp1CallData, policy, contentContext);
+      filterContent(dp1CallData, policy, contentContext, selected);
     if (retireCurrent || request.retireBlockedCurrent === true) {
       const currentPlaylistUrl = this.castInfo?.playlistUrl;
       this.setCastInfo(null);
       const reply = filtered.playlist ? this.nowDisplayPlaylist({ dp1CallData: filtered.playlist,
-        contentContext, playlistUrl: currentPlaylistUrl }) : { ok: true };
+        contentContext, playlistUrl: currentPlaylistUrl, startIndex: filtered.index }) : { ok: true };
       contentPolicyStore.retireRendering();
       return reply;
     }
@@ -1842,7 +1845,7 @@ class CanvasService {
         })),
       },
       playlistUrl: request.playlistUrl,
-      index: 0,
+      index: normalizePlaylistIndex(request.startIndex ?? 0, playableItems.length),
       playlistId: request.dp1CallData.id,
       loopMode: LoopMode.playlist,
       shuffle: false,
