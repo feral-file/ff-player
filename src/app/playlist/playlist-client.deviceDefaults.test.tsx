@@ -38,12 +38,6 @@ vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
   },
 }));
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
-}));
-
 const { getItemRefMock } = vi.hoisted(() => ({ getItemRefMock: vi.fn() }));
 
 vi.mock('@/services/DP1Service', () => ({

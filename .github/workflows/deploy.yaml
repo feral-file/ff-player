@@ -34,11 +34,9 @@ jobs:
         run: |
           echo "NEXT_PUBLIC_ENVIRONMENT=${{ vars.ENVIRONMENT }}" >> .env.local
           echo "NEXT_PUBLIC_PUB_DOC_URL=${{ vars.PUB_DOC_URL }}" >> .env.local
-          echo "NEXT_PUBLIC_SENTRY_DSN=${{ vars.SENTRY_DSN }}" >> .env.local
+          echo "NEXT_PUBLIC_LOG_SAMPLE_RATE=${{ vars.LOG_SAMPLE_RATE || '1' }}" >> .env.local
 
       - name: Build Next.js app
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: npm run build
 
       - name: Write the current version hash

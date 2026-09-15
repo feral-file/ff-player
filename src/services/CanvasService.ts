@@ -9,7 +9,6 @@ import {
   SchedulePlaylistReply,
   UpdateDefaultDurationRequest,
 } from '@/models/cast_request_reply.model';
-import * as Sentry from '@sentry/nextjs';
 import {
   CastCommand,
   CastInfo,
@@ -1149,12 +1148,6 @@ class CanvasService {
 
     const command = CastCommand[commandStr as keyof typeof CastCommand];
 
-    Sentry.addBreadcrumb({
-      data: { command },
-      category: 'CanvasService',
-      message: 'Received command',
-    });
-
     const requestJson = messageData.request;
     const reply = this.commandHandler(command, requestJson);
     return reply;
@@ -1256,11 +1249,6 @@ class CanvasService {
       // be told is active. A null result here IS the answer, and so is the
       // unavailable-policy case renderableCastInfo covers.
       const activeCastInfo = this.renderableCastInfo();
-
-      console.log(
-        '[CanvasService getStatus] Reply ok. Current index:',
-        activeCastInfo?.index ?? 'N/A'
-      );
 
       return {
         ok: true,
@@ -1633,11 +1621,6 @@ class CanvasService {
     }
 
     console.log('[CanvasService] display playlist: ', action);
-    Sentry.addBreadcrumb({
-      data: { action },
-      category: 'CanvasService',
-      message: 'Received DP1 command',
-    });
 
     if (request.refresh) {
       return this.refreshUnderPolicy(request, dp1CallData, contentContext);

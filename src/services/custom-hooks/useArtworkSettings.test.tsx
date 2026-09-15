@@ -14,12 +14,6 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useArtworkSettings } from './useArtworkSettings';
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
-}));
-
 const fillPreference: DP1DisplayPreference = {
   ...defaultDP1DisplayPreference,
   scaling: Scaling.Fill,

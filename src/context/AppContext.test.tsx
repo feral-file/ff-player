@@ -55,10 +55,6 @@ vi.mock('axios', () => ({
   },
 }));
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-}));
-
 vi.mock('@/services/custom-hooks/useNetworkManager', () => ({
   default: vi.fn(() => false),
 }));

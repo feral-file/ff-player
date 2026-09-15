@@ -16,6 +16,9 @@ import ScheduleDisplay from './ScheduleDisplay';
 import MintPairingOverlay from './mint-pairing/MintPairingOverlay';
 import SetupOverlay from './setup/SetupOverlay';
 import PlayerToast from './toast/PlayerToast';
+import { installLogStreaming } from '@/services/logStreamingService';
+
+installLogStreaming();
 
 const enum CastState {
   None, // Not casting

@@ -1,6 +1,5 @@
 import { DP1Call, RefManifest } from '@/models/dp1.model';
 import axios from 'axios';
-import * as Sentry from '@sentry/nextjs';
 
 export const DP1Service = {
   async getPlaylist(playlistURL: string): Promise<DP1Call | null> {
@@ -13,7 +12,6 @@ export const DP1Service = {
       return response.data;
     } catch (error) {
       console.error('[DP1Service] Failed to load playlist:', error);
-      Sentry.captureException(error);
       return null;
     }
   },
@@ -29,7 +27,6 @@ export const DP1Service = {
         itemRefURL,
         error
       );
-      Sentry.captureException(error);
       return null;
     }
   },

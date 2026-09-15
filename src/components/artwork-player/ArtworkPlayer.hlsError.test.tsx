@@ -104,12 +104,6 @@ vi.mock('hls.js', () => {
   };
 });
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
-}));
-
 function renderArtworkPlayer(
   itemIdentity = 'hls-error-item',
   onItemCommitted?: (identity: string) => void,

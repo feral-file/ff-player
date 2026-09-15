@@ -1,0 +1,192 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { LogStreamingService, publicLogMessage } from './logStreamingService';
+
+/** Parses the string body expected from the log streamer. */
+function requestRecords(init?: RequestInit): unknown[] {
+  if (typeof init?.body !== 'string') {
+    throw new Error('expected a string request body');
+  }
+  return JSON.parse(init.body) as unknown[];
+}
+
+/** Creates a fetch seam that records successful loopback-proxy uploads. */
+function successfulFetcher(posts: unknown[][]): typeof fetch {
+  return vi.fn((_input: URL | RequestInfo, init?: RequestInit) => {
+    posts.push(requestRecords(init));
+    return Promise.resolve(new Response(null, { status: 202 }));
+  }) as typeof fetch;
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('LogStreamingService session boundaries', () => {
+  it('groups logs by five seconds of inactivity', async () => {
+    vi.useFakeTimers();
+    let now = 0;
+    const posts: unknown[][] = [];
+    const stream = new LogStreamingService({
+      environment: 'test',
+      sampleRate: 1,
+      fetcher: successfulFetcher(posts),
+      now: () => now,
+      random: () => 0,
+    });
+
+    stream.record('info', 'one');
+    now = 1_000;
+    stream.record('warn', 'two');
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(posts).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toHaveLength(2);
+    const [first, second] = posts[0] as {
+      context: { session_id: string };
+    }[];
+    expect(first.context.session_id).toBe(second.context.session_id);
+    expect(first).toMatchObject({
+      environment: 'test',
+      level: 'info',
+      message: 'one',
+      timestamp: new Date(0).toISOString(),
+    });
+  });
+
+  it('samples once for each complete session', async () => {
+    vi.useFakeTimers();
+    let now = 0;
+    const posts: unknown[][] = [];
+    const decisions = [0.9, 0.1];
+    const stream = new LogStreamingService({
+      environment: 'test',
+      sampleRate: 0.5,
+      fetcher: successfulFetcher(posts),
+      now: () => now,
+      random: () => decisions.shift() ?? 1,
+    });
+
+    stream.record('info', 'not sampled');
+    await vi.advanceTimersByTimeAsync(5_000);
+    now = 5_000;
+    stream.record('info', 'sampled');
+    stream.flush();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toMatchObject([{ message: 'sampled' }]);
+  });
+});
+
+describe('LogStreamingService maximum session duration', () => {
+  it('splits continuous activity after one minute', async () => {
+    vi.useFakeTimers();
+    let now = 0;
+    const posts: unknown[][] = [];
+    const stream = new LogStreamingService({
+      environment: 'test',
+      sampleRate: 1,
+      fetcher: successfulFetcher(posts),
+      now: () => now,
+      random: () => 0,
+    });
+
+    stream.record('info', 'first');
+    for (let second = 1; second < 60; second += 1) {
+      now = second * 1_000;
+      await vi.advanceTimersByTimeAsync(1_000);
+      stream.record('debug', 'continuous');
+    }
+    now = 60_000;
+    await vi.advanceTimersByTimeAsync(1_000);
+    stream.record('info', 'next session');
+    stream.flush();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(posts).toHaveLength(2);
+    expect(posts[0]).toHaveLength(60);
+    const firstID = (posts[0][0] as { context: { session_id: string } }).context
+      .session_id;
+    const secondID = (posts[1][0] as { context: { session_id: string } })
+      .context.session_id;
+    expect(firstID).not.toBe(secondID);
+  });
+});
+
+describe('LogStreamingService delivery', () => {
+  it('retries transient proxy failures', async () => {
+    vi.useFakeTimers();
+    let attempts = 0;
+    const posts: unknown[][] = [];
+    const fetcher = vi.fn((_input: URL | RequestInfo, init?: RequestInit) => {
+      attempts += 1;
+      posts.push(requestRecords(init));
+      return Promise.resolve(
+        new Response(null, { status: attempts === 1 ? 503 : 202 })
+      );
+    }) as typeof fetch;
+    const stream = new LogStreamingService({
+      environment: 'test',
+      sampleRate: 1,
+      fetcher,
+      now: () => 0,
+      random: () => 0,
+    });
+
+    stream.record('error', 'queued');
+    stream.flush();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(posts).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(posts).toHaveLength(2);
+    expect(posts[1]).toMatchObject([{ message: 'queued' }]);
+  });
+
+  it('drops a permanent bad batch so a newer batch can proceed', async () => {
+    vi.useFakeTimers();
+    let attempts = 0;
+    const posts: unknown[][] = [];
+    const fetcher = vi.fn((_input: URL | RequestInfo, init?: RequestInit) => {
+      attempts += 1;
+      posts.push(requestRecords(init));
+      return Promise.resolve(
+        new Response(null, { status: attempts === 1 ? 400 : 202 })
+      );
+    }) as typeof fetch;
+    let now = 0;
+    const stream = new LogStreamingService({
+      environment: 'test',
+      sampleRate: 1,
+      fetcher,
+      now: () => now,
+      random: () => 0,
+    });
+
+    stream.record('error', 'bad batch');
+    stream.flush();
+    now = 10_000;
+    stream.record('info', 'new batch');
+    stream.flush();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(posts).toHaveLength(2);
+    expect(posts[1]).toMatchObject([{ message: 'new batch' }]);
+  });
+});
+
+describe('publicLogMessage', () => {
+  it('keeps open-ended console data out of the public stream', () => {
+    expect(publicLogMessage({ ssid: 'home-network' })).toBe(
+      '[non-string console message]'
+    );
+    expect(
+      publicLogMessage(
+        'fetch https://user:pass@example.com/art?token=url-secret apiKey=message-secret'
+      )
+    ).toBe('fetch https://example.com/art apiKey=[REDACTED]');
+  });
+});

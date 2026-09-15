@@ -11,7 +11,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import * as Sentry from '@sentry/nextjs';
 import Loading from '../loading/loading';
 import { useAppContext } from '@/context/AppContext';
 import { canvasService } from '@/services/CanvasService';
@@ -595,7 +594,6 @@ const ArtworkPlayer = ({
       const playPromise = el.play() as Promise<void> | undefined;
       void playPromise?.catch((error: unknown) => {
         console.log('[ArtworkPlayer] Error play video', JSON.stringify(error));
-        Sentry.captureMessage('[ArtworkPlayer] Error play video');
       });
     }
   };
@@ -1092,23 +1090,11 @@ const ArtworkPlayer = ({
     }> => {
       if (artworkPreviewMIMEType) {
         resolvedMimeType = artworkPreviewMIMEType.toLowerCase();
-        const cfg = getPreviewTypeConfig(artworkPreviewMIMEType);
-        Sentry.addBreadcrumb({
-          category: 'ArtworkPlayer',
-          message: 'play artwork',
-          data: { previewURL: url, artworkPreviewMIMEType },
-        });
-        return cfg;
+        return getPreviewTypeConfig(artworkPreviewMIMEType);
       }
       const contentType = await getContentTypeFromURL(url);
       resolvedMimeType = contentType.toLowerCase();
-      const cfg = getPreviewTypeConfig(contentType);
-      Sentry.addBreadcrumb({
-        category: 'ArtworkPlayer',
-        message: 'play artwork',
-        data: { previewURL: url, contentType },
-      });
-      return cfg;
+      return getPreviewTypeConfig(contentType);
     };
 
     detectPreviewType()
@@ -1133,7 +1119,7 @@ const ArtworkPlayer = ({
       })
       .catch((error: unknown) => {
         if (cancelled || previewURLRef.current !== url) {return;}
-        Sentry.captureException(error);
+        console.error('[ArtworkPlayer] Failed to detect preview type:', error);
         // Detection failure is a first-class outcome, not just a typing
         // guess: getContentTypeFromURL's HEAD dies offline (or on any other
         // network-level failure) exactly as often as it dies on a merely
@@ -1281,10 +1267,6 @@ const ArtworkPlayer = ({
           // artwork request. loadedSource's layer guard drops stale failures.
           if (loadedSource(slotIndex, layer)) {
             handleArtworkRenderFailure(slotIndex, layer);
-            Sentry.captureMessage(`[ArtworkPlayer] ${mediaType} load failed`, {
-              level: 'error',
-              extra: { displayPreviewURL: layer.displayPreviewURL, mediaType },
-            });
             // Only a failure loadedSource actually accepted describes what
             // the device is trying to show; a rejected one belongs to a
             // superseded slot and must not mark playback degraded.
@@ -1504,7 +1486,6 @@ const ArtworkPlayer = ({
               '[ArtworkPlayer] Error play video',
               JSON.stringify(error)
             );
-            Sentry.captureMessage('[ArtworkPlayer] Error play video');
           });
         }
       } else {
