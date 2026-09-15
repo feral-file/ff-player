@@ -844,6 +844,11 @@ class CanvasService {
       : null;
   }
 
+    /** The playlist slot matching a work exactly: same id AND same media. */
+  private findSlot(items: DP1Item[] | undefined, work: DP1Item): DP1Item | undefined {
+    return items?.find(item => item.id === work.id && item.source === work.source);
+  }
+
   /** True when a projection is exactly the list and slot already playing. */
   private isSameProjection(projected: { items: DP1Item[]; index: number }): boolean {
     return projected.index === (this.castInfo?.index ?? 0) &&
@@ -1808,7 +1813,15 @@ class CanvasService {
     // labels. Requiring the old source would miss a source replacement that
     // also marks the work mature.
     const onScreen = this.occurrenceItem;
-    const updatedOnScreen = onScreen && dp1CallData.items?.find(item => item.id === onScreen.id);
+    // Exact slot first, id alone second. DP-1 lets a playlist repeat an id, so
+    // matching by id alone can resolve a DIFFERENT slot — the allowed twin of
+    // the work actually on screen — and skip retiring the blocked one. Matching
+    // by the pair alone is no good either: a refresh may give the same work new
+    // media, and requiring the old source would miss a source replacement that
+    // also marks it mature. Prefer the exact pair, fall back to the id.
+    const updatedOnScreen = onScreen && (
+      this.findSlot(dp1CallData.items, onScreen) ??
+      dp1CallData.items?.find(item => item.id === onScreen.id));
     // A work the refresh still carries is judged on its FRESH labels; a work it
     // omits is judged on the labels it already has, because the refresh may
     // have narrowed the context instead of relabelling anything. Without that
@@ -1827,10 +1840,16 @@ class CanvasService {
     // still carries blocked works is indexed differently and the live index
     // would land on an earlier work — sending the viewer backward.
     const incomingItems = dp1CallData.items ?? [];
-    const selectedPosition = currentItem
-      ? incomingItems.findIndex(candidate => candidate.id === currentItem.id)
+    // Same precedence as above: the selected work's own slot when the payload
+    // still carries it, otherwise the first slot sharing its id.
+    const exact = currentItem
+      ? incomingItems.findIndex(candidate => candidate.id === currentItem.id &&
+          candidate.source === currentItem.source)
       : -1;
-    const selected = selectedPosition >= 0 ? selectedPosition : 0;
+    const byId = currentItem && exact < 0
+      ? incomingItems.findIndex(candidate => candidate.id === currentItem.id)
+      : exact;
+    const selected = byId >= 0 ? byId : 0;
     const filtered = policy === null ? admitUnfiltered(dp1CallData) :
       filterContent(dp1CallData, policy, contentContext, selected);
     const bootKey = { id: this.castInfo?.playlistId, items: currentItems };

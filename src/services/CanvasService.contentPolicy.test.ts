@@ -74,6 +74,59 @@ describe('content policy at playback boundaries', () => {
 
 });
 
+describe('content policy with repeated playlist slots', () => {
+  const slot = (id: string, source: string, rating?: string): DP1Item => ({
+    id, source, license: DP1License.Open, ...(rating ? { contentRating: rating } : {}),
+  });
+
+  // These drive a real commit to set the on-screen work, so the history store
+  // has to be readable — a failed append latches for the life of the service
+  // and would leak into later suites.
+  beforeEach(() => {
+    vi.spyOn(DeviceManager, 'getRecentlyPlayed').mockResolvedValue([]);
+    vi.spyOn(DeviceManager, 'getRecentlyPlayedIncomplete').mockResolvedValue(false);
+    vi.spyOn(DeviceManager, 'setRecentlyPlayed').mockResolvedValue(undefined);
+    vi.spyOn(DeviceManager, 'setRecentlyPlayedIncomplete').mockResolvedValue(undefined);
+  });
+
+  it('retires the repeated slot actually on screen, not its allowed twin', () => {
+    // DP-1 permits a playlist to repeat an id. The viewer is on the SECOND
+    // slot, which carries different media; a refresh marks that one mature and
+    // leaves the first alone. Resolving the on-screen work by id alone finds
+    // the allowed first slot, so retirement was skipped and the gate — finding
+    // no live copy at the on-screen source — fell back to that work's own
+    // stale labels and kept the now-mature media painting.
+    const onScreen = slot('dup', 'https://art.test/second', 'general');
+    expect(cast(playlist(slot('dup', 'https://art.test/first', 'general'), onScreen))?.ok).toBe(true);
+    canvasService.setCastInfo({ ...canvasService.getCastInfo(), index: 1 }, false);
+    canvasService.recordRecentlyPlayed(onScreen);
+    const epoch = contentPolicyStore.getSnapshot().retireEpoch;
+
+    expect(cast(playlist(slot('dup', 'https://art.test/first', 'general'),
+      slot('dup', 'https://art.test/second', 'mature')), { refresh: true })?.ok).toBe(true);
+
+    // Immediate retirement, which is what drops the blocked media from the
+    // screen without waiting for its slot to end.
+    expect(contentPolicyStore.getSnapshot().retireEpoch).toBeGreaterThan(epoch);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.source))
+      .toEqual(['https://art.test/first']);
+  });
+
+  it('still retires a repeated slot whose refresh replaces its source', () => {
+    // The other direction, which is why the lookup cannot require the source:
+    // the same work keeps its id, gets new media, and is marked mature.
+    const onScreen = slot('dup', 'https://art.test/v1', 'general');
+    expect(cast(playlist(onScreen))?.ok).toBe(true);
+    canvasService.recordRecentlyPlayed(onScreen);
+    const epoch = contentPolicyStore.getSnapshot().retireEpoch;
+
+    expect(cast(playlist(slot('dup', 'https://art.test/v2', 'mature')),
+      { refresh: true })?.ok).toBe(true);
+
+    expect(contentPolicyStore.getSnapshot().retireEpoch).toBeGreaterThan(epoch);
+  });
+});
+
 describe('content policy and playlist projections', () => {
   it('advances forward when the live list is a projection of a longer payload', () => {
     // The live cast is [a, b, c] projected from [hidden, a, b, c]; the viewer
