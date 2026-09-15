@@ -137,6 +137,33 @@ describe('content policy at persistence and refresh boundaries', () => {
 });
 
 describe('content policy during a slow handoff', () => {
+  it('retires the painted work when its refresh changes source AND blocks it', async () => {
+    vi.spyOn(DeviceManager, 'getRecentlyPlayed').mockResolvedValue([]);
+    vi.spyOn(DeviceManager, 'getRecentlyPlayedIncomplete').mockResolvedValue(false);
+    vi.spyOn(DeviceManager, 'setRecentlyPlayed').mockResolvedValue(undefined);
+    const painted = item('painted');
+    const selected = item('selected', 'general');
+    expect(cast(playlist(painted, selected))?.ok).toBe(true);
+    canvasService.recordRecentlyPlayed(painted);
+    const reply = () => canvasService.processMessage({
+      command: CastCommand.getRecentlyPlayed, request: {},
+    }) as { activeOccurrenceKnown?: boolean };
+    await vi.waitFor(() => { expect(reply().activeOccurrenceKnown).toBe(true); });
+    canvasService.setCastInfo({ ...canvasService.getCastInfo(), index: 1 }, false);
+
+    // Same work, new source, now mature. Matching the painted work by id AND
+    // source would miss it entirely and leave it rendering under stale labels.
+    expect(cast(playlist(
+      { ...painted, source: 'https://art.test/painted-v2', contentRating: 'mature' },
+      selected), { refresh: true })?.ok).toBe(true);
+
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id))
+      .toEqual(['selected']);
+  });
+
+});
+
+describe('content policy and the selected work moving on', () => {
   it('retires the painted work when a refresh blocks it, not just the selected one', async () => {
     vi.spyOn(DeviceManager, 'getRecentlyPlayed').mockResolvedValue([]);
     vi.spyOn(DeviceManager, 'getRecentlyPlayedIncomplete').mockResolvedValue(false);

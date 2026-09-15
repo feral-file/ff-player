@@ -60,7 +60,8 @@ export default function PlaylistClient() {
   // Preview URL and the item that owns it are published together by the
   // bridge, so the final media gate never sees one without the other.
   const { artworkPerformReloadRef, triggerArtworkRefresh, registerArtworkReload,
-    getShowing, publishPreview, notePreviewCommitted, clearPreview } =
+    getShowing, publishPreview, notePreviewCommitted, retireCommittedIfGone,
+    clearPreview } =
     useArtworkRefreshBridge(setCastPreviewURL, identity => {
       handleItemCommittedRef.current(identity);
     });
@@ -426,6 +427,11 @@ export default function PlaylistClient() {
       clearPreview();
       return;
     }
+    // A policy change can retire the painted work while this selected one
+    // stays allowed; the gate would otherwise keep judging the retired work
+    // and never let its replacement mount.
+    retireCommittedIfGone(painted => allowsContent(
+      painted, contentPolicy.policy, contentContext));
     void handleItemDisplayPreference(currentItem, normalizedIndex);
     publishPreview(currentItem);
     scheduleCurrentItemTimer(normalizedIndex, playlist);
@@ -440,6 +446,7 @@ export default function PlaylistClient() {
     clearTimer,
     clearPreview,
     publishPreview,
+    retireCommittedIfGone,
     handleItemDisplayPreference,
     scheduleCurrentItemTimer,
     contentContext,

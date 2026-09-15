@@ -1669,8 +1669,11 @@ class CanvasService {
     // out of the projection and leave it rendering under its stale labels
     // until the incoming work commits, which may never happen.
     const painted = this.occurrenceItem;
-    const updatedPainted = painted && dp1CallData.items?.find(
-      item => item.id === painted.id && item.source === painted.source);
+    // Matched by id ALONE, unlike the rendering gate: a refresh may give the
+    // painted work a new source, and that is still the same work carrying new
+    // labels. Requiring the old source here would miss exactly the case where
+    // a source replacement also marks the work mature.
+    const updatedPainted = painted && dp1CallData.items?.find(item => item.id === painted.id);
     const retireBlocked = policy !== null && (
       (!!updatedCurrent && !allowsContent(updatedCurrent, policy, contentContext)) ||
       (!!updatedPainted && !allowsContent(updatedPainted, policy, contentContext)));

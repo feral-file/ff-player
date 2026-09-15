@@ -57,6 +57,21 @@ export function useArtworkRefreshBridge(
     }
     onCommitted(identity);
   }, [onCommitted]);
+  /**
+   * Drop the painted work once it is no longer something the cast will show.
+   *
+   * Without this the gate can deadlock: policy retires painted A while allowed
+   * B is still loading, the gate evaluates blocked A and unmounts the player,
+   * and with no player left there is no commit to replace the owner — so the
+   * gate keeps evaluating A and the wall stays black for good. Clearing lets it
+   * fall back to the selected preview, which is what will actually be mounted.
+   */
+  const retireCommittedIfGone = useCallback((stillShowable: (item: DP1Item) => boolean) => {
+    const committed = committedOwnerRef.current;
+    if (committed && !stillShowable(committed)) {
+      committedOwnerRef.current = undefined;
+    }
+  }, []);
   const clearPreview = useCallback(() => {
     previewOwnerRef.current = undefined;
     committedOwnerRef.current = undefined;
@@ -91,5 +106,6 @@ export function useArtworkRefreshBridge(
     return () => { canvasService.onRefreshArtwork = null; };
   }, [triggerArtworkRefresh]);
   return { artworkPerformReloadRef, triggerArtworkRefresh, registerArtworkReload,
-    getShowing, publishPreview, notePreviewCommitted, clearPreview };
+    getShowing, publishPreview, notePreviewCommitted, retireCommittedIfGone,
+    clearPreview };
 }

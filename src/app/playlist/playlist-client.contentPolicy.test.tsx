@@ -15,9 +15,19 @@ import PlaylistClient from './playlist-client';
 const { getItemRef, unmounted } = vi.hoisted(() => ({ getItemRef: vi.fn(), unmounted: vi.fn() }));
 vi.mock('@/services/DP1Service', () => ({ DP1Service: { getItemRef, getPlaylist: vi.fn() } }));
 vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn(), captureMessage: vi.fn(), addBreadcrumb: vi.fn() }));
+// Reports a visual commit on mount, the way ArtworkPlayer does once media is
+// ready. Without it nothing is ever "painted" and the painted-vs-selected
+// paths under test cannot be reached at all.
 vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
-  default: function Media({ previewURL }: { previewURL: string }) {
+  default: function Media({ previewURL, itemIdentity, onItemCommitted }: {
+    previewURL: string; itemIdentity?: string;
+    onItemCommitted?: (identity: string) => void;
+  }) {
     React.useEffect(() => () => { unmounted(); }, []);
+    React.useEffect(() => {
+      onItemCommitted?.(itemIdentity ?? '');
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [previewURL]);
     return <div data-testid="media">{previewURL}</div>;
   },
 }));
@@ -188,6 +198,35 @@ describe('policy change during a delayed transition', () => {
     });
 
     expect(screen.queryByTestId('media')?.textContent).not.toBe(painted.source);
+  });
+});
+
+describe('policy retiring the painted work mid-transition', () => {
+  it('ends up showing the allowed replacement, never a stuck black wall', async () => {
+    const painted: DP1Item = { id: 'painted', source: 'https://art.test/painted',
+      license: DP1License.Open, duration: 1 };
+    const allowed: DP1Item = { id: 'allowed', source: 'https://art.test/allowed',
+      contentRating: 'general', license: DP1License.Open, duration: 1 };
+    const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
+      contentContext: 'curated', index: 0,
+      playlist: { dpVersion: '1.1.0', title: 'Art', items: [painted, allowed] } };
+    canvasService.setCastInfo(initial, false);
+    render(<Harness initial={initial} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId('media').textContent).toBe(painted.source);
+
+    // Block the painted (unrated) work while the other stays allowed. The gate
+    // judges the painted work, so if its record outlived it the wall would stay
+    // black: no player mounted means no commit to replace the owner. This
+    // asserts the outcome; the owner is also dropped explicitly in the client
+    // so the recovery does not depend on the selection happening to pass
+    // through the blocked item first.
+    await act(async () => {
+      await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
+    });
+
+    expect(screen.queryByTestId('media')).not.toBeNull();
+    expect(screen.getByTestId('media').textContent).toBe(allowed.source);
   });
 });
 
