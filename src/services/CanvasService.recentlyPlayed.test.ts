@@ -126,41 +126,55 @@ describe('recently played active occurrence across cast replacement', () => {
     playlist: { dpVersion: '1.1.0', title: 'Set', items },
   });
 
-  it('stops claiming an active occurrence when a new cast drops the shown work', async () => {
+  it('keeps the active occurrence while an allowed work is still painted', async () => {
     canvasService.setCastInfo(castOf([item('a')]), false);
     canvasService.recordRecentlyPlayed(item('a'));
     await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
 
-    // The rendering gate cannot find 'a' in the new playlist and unmounts it,
-    // while 'b' has not committed. Reporting 'a' through that window would
-    // describe a blank or loading screen.
     canvasService.setCastInfo(castOf([item('b')]), false);
 
+    // The gate deliberately keeps 'a' painted while 'b' loads, so history must
+    // agree: reporting nothing active would deny a work that is on the screen.
+    // 'b' retires it when it commits.
+    expect(history().activeOccurrenceKnown).toBe(true);
+  });
+
+  it('retires the painted work as soon as the cast that replaces it blocks it', async () => {
+    const painted = item('painted');
+    canvasService.setCastInfo(castOf([painted]), false);
+    canvasService.recordRecentlyPlayed(painted);
+    await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
+
+    // Refreshed labels block it, which is the case where the gate unmounts it
+    // immediately rather than letting it ride out the transition.
+    canvasService.setCastInfo(
+      castOf([{ ...painted, contentRating: 'mature' }, item('other')]), false);
+
     expect(history().activeOccurrenceKnown).toBe(false);
   });
 
-  it('stops claiming an active occurrence when a refresh changes the shown source', async () => {
+  it('retires the active occurrence when the cast empties', async () => {
     canvasService.setCastInfo(castOf([item('a')]), false);
     canvasService.recordRecentlyPlayed(item('a'));
     await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
 
-    // Same id, new source. The rendering gate matches on the pair, so it
-    // cannot find what it is showing and unmounts while the replacement loads.
-    canvasService.setCastInfo(
-      castOf([{ ...item('a'), source: 'https://art.test/a-v2' }]), false);
+    // An empty cast is not a handoff: nothing is loading to take over, so the
+    // gate stops painting and history must stop claiming.
+    canvasService.setCastInfo(castOf([]), false);
 
     expect(history().activeOccurrenceKnown).toBe(false);
   });
 
-  it('cannot let a pending write promote a work the new cast displaced', async () => {
+  it('cannot let a pending write promote a work the new cast blocks', async () => {
     const gate = new Promise<void>(resolve => { releaseWrite = resolve; });
     setRecentlyPlayed.mockImplementationOnce(async () => gate);
     canvasService.setCastInfo(castOf([item('a')]), false);
 
     // The append for 'a' has not landed, so there is no record id yet — but
-    // there is very much a work that this replacement displaces.
+    // there is very much a work whose fresh labels this cast blocks.
     canvasService.recordRecentlyPlayed(item('a'));
-    canvasService.setCastInfo(castOf([item('b')]), false);
+    canvasService.setCastInfo(
+      castOf([{ ...item('a'), contentRating: 'mature' }, item('b')]), false);
     releaseWrite?.();
     await vi.waitFor(() => { expect(setRecentlyPlayed).toHaveBeenCalled(); });
 

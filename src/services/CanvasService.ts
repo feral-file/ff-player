@@ -418,7 +418,7 @@ class CanvasService {
    * to compare, but there is very much a work that a displacement must
    * invalidate.
    */
-  private occurrenceIdentity: { id: string; source: string } | null = null;
+  private occurrenceItem: DP1Item | null = null;
 
   /**
    * The policy admission must apply, or `null` while the device's own mirror is
@@ -447,7 +447,7 @@ class CanvasService {
   private retireActiveRecentlyPlayed(): void {
     this.playbackGeneration += 1;
     this.activeRecentlyPlayedRecordId = null;
-    this.occurrenceIdentity = null;
+    this.occurrenceItem = null;
   }
 
   private async loadRecentlyPlayed(): Promise<RecentlyPlayedRecord[]> {
@@ -489,7 +489,7 @@ class CanvasService {
     this.retireActiveRecentlyPlayed();
     // Claim the identity for the pending window as well as the active one: a
     // displacement before this write lands must still invalidate it.
-    this.occurrenceIdentity = { id: item.id, source: item.source };
+    this.occurrenceItem = item;
     const generation = this.playbackGeneration;
     this.recentlyPlayedWrite = this.recentlyPlayedWrite
       .then(async () => {
@@ -702,6 +702,7 @@ class CanvasService {
 
   public setCastInfo(castInfo: CastInfo | null, notify = true) {
     console.log('[CanvasService] Setting castInfo:', notify);
+    const incoming = castInfo;
     if (castInfo?.playlist?.items?.length && contentPolicyStore.getSnapshot().active) {
       const filtered = filterContent(castInfo.playlist,
         contentPolicyStore.getSnapshot().policy,
@@ -716,7 +717,7 @@ class CanvasService {
     // in its place — so reporting it as displayed would describe a blank or
     // loading screen. An advance WITHIN the same playlist keeps the item and is
     // left alone: that transition really is still showing the outgoing work.
-    this.retireActiveOccurrenceIfDisplaced(castInfo);
+    this.retireActiveOccurrenceIfDisplaced(incoming, castInfo);
     if (castInfo === null) {
       this.queuedPlaylistPending = false;
       this.setDeferredRefreshPlaylist(null);
@@ -782,17 +783,31 @@ class CanvasService {
    * that still contains the outgoing item keeps its occurrence, because that
    * work is genuinely still showing until the incoming one commits.
    */
-  private retireActiveOccurrenceIfDisplaced(next: CastInfo | null): void {
-    const outgoing = this.occurrenceIdentity;
-    if (outgoing === null || next === null) {
+  private retireActiveOccurrenceIfDisplaced(
+    // The cast AS RECEIVED. Admission filtering strips a newly blocked work
+    // before this runs, taking its fresh labels with it, so asking the filtered
+    // projection whether the painted work is blocked always answers no.
+    incoming: CastInfo | null,
+    applied: CastInfo | null
+  ): void {
+    const painted = this.occurrenceItem;
+    if (painted === null || incoming === null) {
       return;
     }
-    const incomingItems = next.playlist?.items ?? [];
-    // Identity is id AND source, the same pair the rendering gate matches on.
-    // A refresh can keep an id and change its source; the gate then cannot find
-    // the pair it is showing and unmounts it, so the old record must not keep
-    // claiming to be displayed.
-    if (!incomingItems.some(item => item.id === outgoing.id && item.source === outgoing.source)) {
+    const items = incoming.playlist?.items ?? [];
+    // Ask the same question the rendering gate asks, so history and the wall
+    // cannot disagree: is the painted work still something this cast will show?
+    // Mere absence from the incoming cast is NOT the test — the gate keeps
+    // painting an allowed outgoing work while its replacement loads, and
+    // retiring here would report nothing active while it is plainly on screen.
+    // What retires it is the cast going empty, or its own (or freshly
+    // refreshed) labels being blocked, which is the case where the gate
+    // unmounts it immediately. Its replacement's commit retires it otherwise.
+    const policy = this.admissionPolicy();
+    const fresh = items.find(item => item.id === painted.id && item.source === painted.source);
+    const context = parseContentContext(incoming.contentContext);
+    const nothingToShow = (applied?.playlist?.items?.length ?? 0) === 0;
+    if (nothingToShow || (policy !== null && !allowsContent(fresh ?? painted, policy, context))) {
       this.retireActiveRecentlyPlayed();
     }
   }
@@ -1647,8 +1662,19 @@ class CanvasService {
     const currentItems = this.castInfo?.playlist?.items ?? [];
     const currentItem = currentItems.at(normalizePlaylistIndex(this.castInfo?.index ?? 0, currentItems.length));
     const updatedCurrent = currentItem && dp1CallData.items?.find(item => item.id === currentItem.id);
-    const retireCurrent = policy !== null && updatedCurrent &&
-      !allowsContent(updatedCurrent, policy, contentContext);
+    // The SELECTED work is not necessarily the painted one: during a slow
+    // handoff the selection has moved on while the previous work is still on
+    // screen. Refreshed labels that block what is painted have to retire it
+    // immediately — checking only the selection would filter the painted work
+    // out of the projection and leave it rendering under its stale labels
+    // until the incoming work commits, which may never happen.
+    const painted = this.occurrenceItem;
+    const updatedPainted = painted && dp1CallData.items?.find(
+      item => item.id === painted.id && item.source === painted.source);
+    const retireBlocked = policy !== null && (
+      (!!updatedCurrent && !allowsContent(updatedCurrent, policy, contentContext)) ||
+      (!!updatedPainted && !allowsContent(updatedPainted, policy, contentContext)));
+    const retireCurrent = retireBlocked;
     const filtered = policy === null ? admitUnfiltered(dp1CallData) :
       filterContent(dp1CallData, policy, contentContext);
     if (retireCurrent || request.retireBlockedCurrent === true) {

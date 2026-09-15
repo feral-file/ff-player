@@ -134,6 +134,36 @@ describe('content policy at persistence and refresh boundaries', () => {
     expect(canvasService.getCastInfo()).toBeNull();
   });
 
+});
+
+describe('content policy during a slow handoff', () => {
+  it('retires the painted work when a refresh blocks it, not just the selected one', async () => {
+    vi.spyOn(DeviceManager, 'getRecentlyPlayed').mockResolvedValue([]);
+    vi.spyOn(DeviceManager, 'getRecentlyPlayedIncomplete').mockResolvedValue(false);
+    vi.spyOn(DeviceManager, 'setRecentlyPlayed').mockResolvedValue(undefined);
+    const painted = item('painted');
+    const selected = item('selected', 'general');
+    expect(cast(playlist(painted, selected))?.ok).toBe(true);
+    // Commit `painted`, then let the selection move on: this is the slow
+    // handoff, where the wall shows one work and the cast selects another.
+    canvasService.recordRecentlyPlayed(painted);
+    const historyReply = () => canvasService.processMessage({
+      command: CastCommand.getRecentlyPlayed, request: {},
+    }) as { activeOccurrenceKnown?: boolean };
+    await vi.waitFor(() => { expect(historyReply().activeOccurrenceKnown).toBe(true); });
+    canvasService.setCastInfo({ ...canvasService.getCastInfo(), index: 1 }, false);
+
+    // Fresh labels block the PAINTED work while the selected one stays fine.
+    expect(cast(playlist({ ...painted, contentRating: 'mature' }, selected),
+      { refresh: true })?.ok).toBe(true);
+
+    // Checking only the selection would filter `painted` out of the projection
+    // and leave it rendering under its stale labels until `selected` commits.
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id))
+      .toEqual(['selected']);
+    expect(canvasService.getCastInfo()?.castCommand).toBe(CastCommand.displayPlaylist);
+  });
+
   it('does not let a refresh upgrade a curated cast to personal', () => {
     expect(cast(playlist(item('a', 'general')))?.ok).toBe(true);
 
