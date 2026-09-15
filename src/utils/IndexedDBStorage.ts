@@ -3,6 +3,17 @@
  * Provides a localStorage-like API using IndexedDB for larger storage capacity.
  */
 
+/**
+ * How long one `indexedDB.open()` may take before the attempt is abandoned.
+ *
+ * A wedged open fires neither onsuccess nor onerror, so without a bound the
+ * cached init promise stays pending for the life of the page and EVERY later
+ * read and write waits on it forever — including the write a daemon would use
+ * to repair the device. Tighter than the policy store's own read timeout, so
+ * the inner layer is the one that gives up first.
+ */
+const OPEN_TIMEOUT_MS = 2000;
+
 const DB_NAME = 'FeralFileDisplayDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'keyValueStore';
@@ -13,6 +24,10 @@ const STORE_NAME = 'keyValueStore';
 export class IndexedDBStorage {
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
+  /** Attempt counter, so an open abandoned at timeout cannot adopt later. */
+  private openGeneration = 0;
+
+  constructor(private readonly openTimeoutMs: number = OPEN_TIMEOUT_MS) {}
 
   private isSupported(): boolean {
     // Guard against server-side / worker contexts where indexedDB is undefined.
@@ -70,10 +85,32 @@ export class IndexedDBStorage {
       return this.initPromise;
     }
 
-    this.initPromise = new Promise((resolve, reject) => {
+    const generation = ++this.openGeneration;
+    this.initPromise = this.openWithinTimeout(generation);
+
+    try {
+      await this.initPromise;
+    } catch (error) {
+      // Only the current attempt may clear the cache; a late failure from an
+      // abandoned open must not discard a newer attempt already in flight.
+      if (generation === this.openGeneration) {
+        this.initPromise = null;
+      }
+      throw error;
+    }
+  }
+
+  /** One bounded open attempt. An expiry and a failure are the same outcome. */
+  private openWithinTimeout(generation: number): Promise<void> {
+    return new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
+      const expiry = setTimeout(() => {
+        console.error('[IndexedDBStorage] Timed out opening database');
+        reject(new Error('IndexedDB open timed out'));
+      }, this.openTimeoutMs);
 
       request.onerror = () => {
+        clearTimeout(expiry);
         console.error(
           '[IndexedDBStorage] Failed to open database:',
           request.error
@@ -82,6 +119,16 @@ export class IndexedDBStorage {
       };
 
       request.onsuccess = () => {
+        clearTimeout(expiry);
+        if (generation !== this.openGeneration) {
+          // A newer attempt has taken over. Adopting this connection would race
+          // it; close it rather than leave a second handle open on the file.
+          request.result.close();
+          return;
+        }
+        // Still the current attempt, so a connection arriving after the timeout
+        // is useful rather than stale: adopt it, and the next call short
+        // circuits on `this.db` instead of opening again.
         this.db = request.result;
         resolve();
       };
@@ -93,13 +140,6 @@ export class IndexedDBStorage {
         }
       };
     });
-
-    try {
-      await this.initPromise;
-    } catch (error) {
-      this.initPromise = null;
-      throw error;
-    }
   }
 
   /** Get a best-effort legacy value; new policy/history code uses strict reads. */
