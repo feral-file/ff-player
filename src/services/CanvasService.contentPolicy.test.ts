@@ -79,6 +79,16 @@ describe('content policy at playback boundaries', () => {
     expect(canvasService.getCastInfo()).toBeNull();
   });
 
+  it('never refuses a document, or hides a work, over a label it cannot read', () => {
+    // dp1 §3.3: the rating vocabulary is open. An unrecognised value is not
+    // malformed input and carries no meaning the player may act on, so the cast
+    // is accepted and the work plays exactly as an unrated one would.
+    const unknown = { ...item('unknown'), contentRating: 'explicit' };
+    expect(cast(playlist(unknown, item('b', 'general')))?.ok).toBe(true);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id))
+      .toEqual(['unknown', 'b']);
+  });
+
   it('distinguishes malformed labels from valid content excluded by policy', () => {
     const malformed = { ...item('a'), contentRating: null } as unknown as DP1Item;
     expect(cast(playlist(malformed))).toEqual({ ok: false, error: 'playlistInvalid' });

@@ -4,10 +4,12 @@ The policy is a convenience viewing default on the current trusted-LAN
 controller boundary, not tamper-resistant parental control. No production
 labels, remote defaults, or rollout changes accompany this implementation.
 
-`contentRating` on a DP-1 item is optional `general | mature`. Absence is
-unrated. Optional `contentReasons` preserves nonempty strings in the curator's
-own vocabulary. These are curator judgments covered by the containing playlist
-signature, not manifest metadata or a claim that the media was inspected.
+`contentRating` on a DP-1 item is optional and its vocabulary is open
+(dp1 §3.3). `general` and `mature` are the values this player recognises;
+absence is unrated, and so is any other string. Optional `contentReasons`
+preserves nonempty strings in the curator's own vocabulary. These are curator
+judgments covered by the containing playlist signature, not manifest metadata
+or a claim that the media was inspected.
 
 `ContentPolicy` version 1 has three booleans:
 
@@ -19,8 +21,12 @@ signature, not manifest metadata or a claim that the media was inspected.
 Explicit opt-in permits all valid labels. Personal casts are otherwise
 unfiltered unless strictPersonal is enabled. Curated casts exclude mature
 items and, only after the audit gate, unrated items. Strict personal casts
-still permit unrated items. Invalid labels are invalid input, never an
-unrated escape hatch. Unknown content context is rejected.
+still permit unrated items. Only `mature` hides anything: a rating this player
+does not recognise is treated exactly as unrated, so no document is ever
+refused, and no item ever hidden, because of a label the player cannot read.
+Assuming otherwise would let a future vocabulary hide works no curator marked
+mature. Shape is still checked — a rating that is not a string, or a malformed
+`contentReasons`, remains invalid input. Unknown content context is rejected.
 
 `displayPlaylist.request.contentContext` is `curated | personal`, outside the
 signed DP-1 body. Missing context and every device default are curated.

@@ -36,7 +36,14 @@ export function parseContentContext(raw: unknown): ContentContext {
   throw new Error('invalidContentContext');
 }
 
-/** Apply the agreed policy matrix without treating invalid labels as unrated. */
+/**
+ * Apply the agreed policy matrix. `contentRating` is an OPEN vocabulary
+ * (dp1 §3.3): only `mature` hides anything, and a label this player does not
+ * recognise reads exactly like an absent one — it falls through to the unrated
+ * branch below with no special case of its own. Nothing is assumed from a word
+ * the player cannot read: treating an unknown label as mature would let a
+ * future vocabulary silently hide works no curator marked mature.
+ */
 export function allowsContent(item: DP1Item, policy: ContentPolicy, context: ContentContext): boolean {
   if (!hasValidContentLabels(item)) {return false;}
   const rating = item.contentRating;
@@ -45,9 +52,14 @@ export function allowsContent(item: DP1Item, policy: ContentPolicy, context: Con
   return rating === 'general' || context === 'personal' || !policy.blockUnratedCurated;
 }
 
-/** Wire validation is distinct from a valid work being excluded by policy. */
+/**
+ * Wire validation, which is about SHAPE and not vocabulary: a rating must be a
+ * string, and reasons must be nonempty strings. An unrecognised rating is
+ * well-formed input carrying a word this player does not know, so it is not
+ * rejected here — no document is refused over a label it cannot read.
+ */
 export function hasValidContentLabels(item: DP1Item): boolean {
-  if ('contentRating' in item && item.contentRating !== 'general' && item.contentRating !== 'mature') {return false;}
+  if ('contentRating' in item && typeof item.contentRating !== 'string') {return false;}
   return !('contentReasons' in item) || (Array.isArray(item.contentReasons) &&
     item.contentReasons.every(reason => typeof reason === 'string' && reason.length > 0));
 }

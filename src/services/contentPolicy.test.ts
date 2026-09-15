@@ -8,7 +8,7 @@ import {
   parseContentPolicy,
 } from './contentPolicy';
 
-const work = (id: string, rating?: 'general' | 'mature'): DP1Item => ({
+const work = (id: string, rating?: string): DP1Item => ({
   id, source: `https://art.test/${id}`, license: DP1License.Open,
   ...(rating === undefined ? {} : { contentRating: rating }),
 });
@@ -38,8 +38,30 @@ describe('content viewing policy', () => {
 
   it('rejects malformed labels even when normal playback is selected', () => {
     const policy = { ...DEFAULT_CONTENT_POLICY, showMatureContent: true };
-    for (const raw of [null, 'safe', 1]) {
+    // Shape, not vocabulary: a rating that is not a string is malformed input.
+    for (const raw of [null, 1, true, {}]) {
       expect(allowsContent({ ...work('a'), contentRating: raw } as DP1Item, policy, 'curated')).toBe(false);
+    }
+  });
+
+  it('reads a rating it does not recognise exactly as unrated (dp1 §3.3)', () => {
+    // Only `mature` hides anything. An unknown label must never hide a work or
+    // refuse a document, and must never be assumed to mean mature — a future
+    // vocabulary would otherwise hide works no curator marked mature.
+    for (const unknown of ['safe', 'explicit', 'PG-13', 'mature-ish', '']) {
+      expect(allowsContent(work('a', unknown), DEFAULT_CONTENT_POLICY, 'curated')).toBe(true);
+      expect(allowsContent(work('a', unknown),
+        { ...DEFAULT_CONTENT_POLICY, showMatureContent: true }, 'curated')).toBe(true);
+    }
+  });
+
+  it('gives an unrecognised rating the same treatment as absence, gate included', () => {
+    // Including under the archive-audit gate, where "same as unrated" is the
+    // whole claim: it is hidden there for being unrated, never for its label.
+    const audited = { ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true };
+    for (const context of ['curated', 'personal'] as const) {
+      expect(allowsContent(work('a', 'explicit'), audited, context))
+        .toBe(allowsContent(work('a'), audited, context));
     }
   });
 

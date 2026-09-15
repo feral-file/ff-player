@@ -50,7 +50,13 @@ export interface DP1Item {
   ref?: string; // URL ipfs:// or https://... (content-addressed preferred)
   refHash?: string; // When "ref" uses HTTPS, the "refHash" field is required for integrity.
   // Curator judgments carried by the signed item, never manifest defaults.
-  contentRating?: 'general' | 'mature';
+  //
+  // An OPEN vocabulary (dp1 §3.3): `general` and `mature` are the values this
+  // player recognises, and any other string is a label it cannot read. Typed as
+  // `string` rather than that union on purpose — narrowing it here would
+  // describe a wire that does not exist, and invite code to assume a value it
+  // never checked. An unreadable label reads as unrated; see allowsContent.
+  contentRating?: string;
   contentReasons?: string[];
   override?: {
     duration?: number;
