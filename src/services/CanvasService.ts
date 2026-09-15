@@ -686,6 +686,14 @@ class CanvasService {
 
   public setCastInfo(castInfo: CastInfo | null, notify = true) {
     console.log('[CanvasService] Setting castInfo:', notify);
+    // The work whose record is currently active is about to leave the wall if
+    // the incoming cast does not contain it: the rendering gate cannot find it
+    // in the new playlist and unmounts it, and the replacement has not
+    // committed yet. Reporting it as displayed through that window would be a
+    // claim about a blank or loading screen. An advance WITHIN the same
+    // playlist keeps the item, so it is left alone and its own commit takes
+    // over — that transition still shows the outgoing work.
+    this.retireActiveOccurrenceIfDisplaced(castInfo);
     if (castInfo?.playlist?.items?.length && contentPolicyStore.getSnapshot().active) {
       const filtered = filterContent(castInfo.playlist,
         contentPolicyStore.getSnapshot().policy,
@@ -755,6 +763,26 @@ class CanvasService {
       if (this.selectedItemId() !== before) {
         this.retireActiveRecentlyPlayed();
       }
+    }
+  }
+
+  /**
+   * Retire the active occurrence when an incoming cast drops the work that is
+   * currently on the wall. Null casts are handled by the clear path; a cast
+   * that still contains the outgoing item keeps its occurrence, because that
+   * work is genuinely still showing until the incoming one commits.
+   */
+  private retireActiveOccurrenceIfDisplaced(next: CastInfo | null): void {
+    if (this.activeRecentlyPlayedRecordId === null || next === null) {
+      return;
+    }
+    const outgoing = this.selectedItemId();
+    if (outgoing === undefined) {
+      return;
+    }
+    const incomingItems = next.playlist?.items ?? [];
+    if (!incomingItems.some(item => item.id === outgoing)) {
+      this.retireActiveRecentlyPlayed();
     }
   }
 

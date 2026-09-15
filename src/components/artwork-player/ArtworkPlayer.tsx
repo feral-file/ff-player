@@ -192,6 +192,14 @@ const ArtworkPlayer = ({
   const transitionTimeoutRef = useRef<NodeJS.Timeout>();
   const transitionTokenRef = useRef(0);
   const renderStatusRef = useRef<RenderStatus | undefined>(undefined);
+  // The history callback closes over the cast's content context, and a
+  // sequential transition commits 650ms after it is scheduled. An equal-items
+  // refresh can reclassify the cast (personal → curated) inside that window
+  // without replacing any slot, so a captured callback would record the work
+  // under the origin it no longer has — and Recently played would later replay
+  // it down the personal path. Read the latest callback at commit time.
+  const onItemPlayedRef = useRef(onItemPlayed);
+  onItemPlayedRef.current = onItemPlayed;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isWebGLContextLost = useRef<boolean>(false);
   const iframeKeyCounterRef = useRef(0);
@@ -902,7 +910,8 @@ const ArtworkPlayer = ({
         markArtworkReady();
         onItemCommitted?.(incomingLayer.itemIdentity);
         if (renderStatusRef.current !== RenderStatus.failed) {
-          onItemPlayed?.(incomingLayer.itemIdentity);
+          // Deliberately the ref, not the captured prop: see onItemPlayedRef.
+          onItemPlayedRef.current?.(incomingLayer.itemIdentity);
         }
       }, FADE_IN_OUT_DURATION_MS);
       return;

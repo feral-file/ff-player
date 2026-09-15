@@ -120,6 +120,39 @@ describe('recently played active occurrence follows the wall', () => {
 
 });
 
+describe('recently played active occurrence across cast replacement', () => {
+  const castOf = (items: DP1Item[], index = 0, command = CastCommand.displayPlaylist) => ({
+    castCommand: command, contentContext: 'curated' as const, index,
+    playlist: { dpVersion: '1.1.0', title: 'Set', items },
+  });
+
+  it('stops claiming an active occurrence when a new cast drops the shown work', async () => {
+    canvasService.setCastInfo(castOf([item('a')]), false);
+    canvasService.recordRecentlyPlayed(item('a'));
+    await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
+
+    // The rendering gate cannot find 'a' in the new playlist and unmounts it,
+    // while 'b' has not committed. Reporting 'a' through that window would
+    // describe a blank or loading screen.
+    canvasService.setCastInfo(castOf([item('b')]), false);
+
+    expect(history().activeOccurrenceKnown).toBe(false);
+  });
+
+  it('keeps the active occurrence while advancing within the same playlist', async () => {
+    const items = [item('a'), item('b')];
+    canvasService.setCastInfo(castOf(items), false);
+    canvasService.recordRecentlyPlayed(item('a'));
+    await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
+
+    canvasService.setCastInfo(castOf(items, 1, CastCommand.moveToArtwork), false);
+
+    // 'a' is genuinely still on the wall until 'b' commits, and that commit
+    // retires it. Retiring here would report pending while it is displayed.
+    expect(history().activeOccurrenceKnown).toBe(true);
+  });
+});
+
 describe('recently played active occurrence under policy changes', () => {
   it('stops claiming an active occurrence when a policy change moves the selection', async () => {
     canvasService.setCastInfo({
