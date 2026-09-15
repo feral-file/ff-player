@@ -13,8 +13,10 @@ const cast = (items: DP1Item[], index = 0) => ({ castCommand: CastCommand.displa
   playlist: { dpVersion: '1.1.0', title: 'Art', items }, index });
 
 describe('final current-preview admission', () => {
-  it('permits Canvas advancing ahead of React and an allowed outgoing selection', () => {
-    expect(permitsCurrentPreview(cast([a, b], 1), a, b.source, snapshot)).toBe(true);
+  it('permits the showing work whether or not the cast has advanced past it', () => {
+    // The gate asks about the work on screen, identified by the URL it owns,
+    // so Canvas advancing ahead of React does not change the answer.
+    expect(permitsCurrentPreview(cast([a, b], 1), b, b.source, snapshot)).toBe(true);
     expect(permitsCurrentPreview(cast([a, b], 1), a, a.source, snapshot)).toBe(true);
   });
 
@@ -32,5 +34,17 @@ describe('final current-preview admission', () => {
   it('cannot borrow a rating merely because another work shares a source URL', () => {
     const mature = { ...a, contentRating: 'mature' as const };
     expect(permitsCurrentPreview(cast([mature, { ...b, source: a.source }]), a, a.source, snapshot)).toBe(false);
+  });
+
+  it('retires a blocked showing work even after an allowed sibling with its source is selected', () => {
+    // Post-filter shape: the mature work has been removed from the projection
+    // and a different work carrying the same source is now selected, while the
+    // screen still holds the blocked one. Permitting through the selected
+    // item's matching URL would keep blocked artwork visible through the
+    // transition.
+    const mature = { ...a, contentRating: 'mature' as const };
+    const sibling = { ...b, source: a.source, contentRating: 'general' as const };
+
+    expect(permitsCurrentPreview(cast([sibling]), mature, a.source, snapshot)).toBe(false);
   });
 });

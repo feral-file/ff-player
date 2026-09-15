@@ -139,6 +139,19 @@ describe('recently played active occurrence across cast replacement', () => {
     expect(history().activeOccurrenceKnown).toBe(false);
   });
 
+  it('stops claiming an active occurrence when a refresh changes the shown source', async () => {
+    canvasService.setCastInfo(castOf([item('a')]), false);
+    canvasService.recordRecentlyPlayed(item('a'));
+    await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
+
+    // Same id, new source. The rendering gate matches on the pair, so it
+    // cannot find what it is showing and unmounts while the replacement loads.
+    canvasService.setCastInfo(
+      castOf([{ ...item('a'), source: 'https://art.test/a-v2' }]), false);
+
+    expect(history().activeOccurrenceKnown).toBe(false);
+  });
+
   it('keeps the active occurrence while advancing within the same playlist', async () => {
     const items = [item('a'), item('b')];
     canvasService.setCastInfo(castOf(items), false);

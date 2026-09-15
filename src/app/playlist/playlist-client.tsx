@@ -65,8 +65,14 @@ export default function PlaylistClient() {
   // with it. Tracking the URL's owner keeps the gate's meaning ("is what we
   // are showing still allowed?") independent of which index React has reached.
   const previewOwnerRef = useRef<DP1Item | undefined>(undefined);
+  // Owner and URL are published together wherever the preview changes, so the
+  // gate never sees one without the other.
+  const publishPreview = useCallback((item: DP1Item) => {
+    previewOwnerRef.current = item;
+    setCastPreviewURL(item.source);
+  }, []);
   const { artworkPerformReloadRef, triggerArtworkRefresh, registerArtworkReload } =
-    useArtworkRefreshBridge(setCastPreviewURL);
+    useArtworkRefreshBridge(publishPreview);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   // The interval the active slot's timer is armed with — effective duration
@@ -426,9 +432,7 @@ export default function PlaylistClient() {
       return;
     }
     void handleItemDisplayPreference(currentItem, normalizedIndex);
-    // Owner and URL move together; the gate reads them as one fact.
-    previewOwnerRef.current = currentItem;
-    setCastPreviewURL(currentItem.source);
+    publishPreview(currentItem);
     scheduleCurrentItemTimer(normalizedIndex, playlist);
 
     return () => {
@@ -439,6 +443,7 @@ export default function PlaylistClient() {
     playlist,
     playlistDefaultsSettings,
     clearTimer,
+    publishPreview,
     handleItemDisplayPreference,
     scheduleCurrentItemTimer,
     contentContext,

@@ -776,23 +776,32 @@ class CanvasService {
     if (this.activeRecentlyPlayedRecordId === null || next === null) {
       return;
     }
-    const outgoing = this.selectedItemId();
+    const outgoing = this.selectedItem();
     if (outgoing === undefined) {
       return;
     }
     const incomingItems = next.playlist?.items ?? [];
-    if (!incomingItems.some(item => item.id === outgoing)) {
+    // Identity is id AND source, the same pair the rendering gate matches on.
+    // A refresh can keep an id and change its source; the gate then cannot find
+    // the pair it is showing and unmounts it, so the old record must not keep
+    // claiming to be displayed.
+    if (!incomingItems.some(item => item.id === outgoing.id && item.source === outgoing.source)) {
       this.retireActiveRecentlyPlayed();
     }
   }
 
-  /** Identity of the work the current cast has selected, for change detection. */
-  private selectedItemId(): string | undefined {
+  /** The work the current cast has selected, for displacement detection. */
+  private selectedItem(): DP1Item | undefined {
     const items = this.castInfo?.playlist?.items ?? [];
     if (!items.length) {
       return undefined;
     }
-    return items.at(normalizePlaylistIndex(this.castInfo?.index ?? 0, items.length))?.id;
+    return items.at(normalizePlaylistIndex(this.castInfo?.index ?? 0, items.length));
+  }
+
+  /** Identity of the work the current cast has selected, for change detection. */
+  private selectedItemId(): string | undefined {
+    return this.selectedItem()?.id;
   }
 
   /**
@@ -1483,8 +1492,9 @@ class CanvasService {
     if (contentPolicyStore.getSnapshot().hydrationFailed) {
       return { ok: false, error: 'contentPolicyUnavailable' };
     }
-    const contentContext = parseContentContext('contentContext' in request
-      ? request.contentContext : (request.refresh ? this.castInfo?.contentContext : undefined));
+    const contentContext = request.refresh
+      ? this.refreshContentContext(request)
+      : parseContentContext('contentContext' in request ? request.contentContext : undefined);
     if (dp1CallData.items?.some(item => !hasValidContentLabels(item))) {
       return { ok: false, error: 'playlistInvalid' };
     }
@@ -1569,6 +1579,29 @@ class CanvasService {
     DeviceManager.setBootPlaylist(record, contentContext).catch((error: unknown) => {
       console.error('[CanvasService] Error setting boot playlist:', error);
     });
+  }
+
+  /**
+   * The origin a refresh is filtered and stored under.
+   *
+   * A refresh updates the source of a cast that already exists, so it may carry
+   * an origin forward or narrow it — never widen it. An absent context means
+   * "unchanged" and inherits the cast's own origin; defaulting it to curated
+   * instead would re-filter a viewer's personal cast every time its source
+   * updated. An explicit `curated` narrows, and takes effect.
+   *
+   * An explicit `personal` is only honoured when the live cast is ALREADY
+   * personal. Otherwise a refresh could reclassify a curated playlist as
+   * personal and walk mature content past the default filter without anyone
+   * casting it — the one thing a source update must not be able to do.
+   */
+  private refreshContentContext(request: DisplayPlaylistRequest): ContentContext {
+    const current = parseContentContext(this.castInfo?.contentContext);
+    if (!('contentContext' in request)) {
+      return current;
+    }
+    const requested = parseContentContext(request.contentContext);
+    return requested === 'personal' && current !== 'personal' ? current : requested;
   }
 
   /**

@@ -29,6 +29,9 @@ describe('persisted content policy', () => {
     expect(store.getSnapshot().policy).toEqual(policy);
   });
 
+});
+
+describe('content policy hydration and writes racing', () => {
   it('never publishes the stale mirror ahead of a write already in flight', async () => {
     let finishRead: (value: string | null) => void = () => undefined;
     const store = new ContentPolicyStore({
@@ -65,6 +68,40 @@ describe('persisted content policy', () => {
     // The record is unchanged, so what hydration read still describes it.
     // Staying inactive would leave admission with no policy to apply at all.
     expect(store.getSnapshot()).toMatchObject({ active: true, policy: DEFAULT_CONTENT_POLICY });
+  });
+
+  it('a read that fails after a successful write cannot invalidate that policy', async () => {
+    let failRead: (error: Error) => void = () => undefined;
+    const store = new ContentPolicyStore({
+      read: () => new Promise<string | null>((unused, reject) => { failRead = reject; }),
+      write: () => Promise.resolve(),
+    });
+
+    void store.initialize();
+    await store.set({ ...DEFAULT_CONTENT_POLICY, showMatureContent: true });
+    failRead(new Error('disk'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // The record this read failed on has already been replaced. Marking the
+    // mirror unreadable now would make the player refuse every cast on a device
+    // the daemon was just told is configured.
+    expect(store.getSnapshot()).toMatchObject({ active: true, hydrationFailed: false });
+  });
+
+  it('clears an unreadable mirror even when the daemon resends the same policy', async () => {
+    const store = new ContentPolicyStore({
+      read: () => Promise.reject(new Error('disk')),
+      write: () => Promise.resolve(),
+    });
+    await store.initialize();
+    expect(store.getSnapshot().hydrationFailed).toBe(true);
+
+    await store.set(DEFAULT_CONTENT_POLICY);
+
+    // A durable write proves the mirror is usable again. Recovery must not
+    // depend on the daemon happening to pick a different policy.
+    expect(store.getSnapshot()).toMatchObject({ active: true, hydrationFailed: false });
   });
 
   it('serializes changes and reads the committed policy after a restart', async () => {

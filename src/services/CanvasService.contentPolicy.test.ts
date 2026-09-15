@@ -134,6 +134,27 @@ describe('content policy at persistence and refresh boundaries', () => {
     expect(canvasService.getCastInfo()).toBeNull();
   });
 
+  it('does not let a refresh upgrade a curated cast to personal', () => {
+    expect(cast(playlist(item('a', 'general')))?.ok).toBe(true);
+
+    // A source update must not be able to reclassify a curated playlist as
+    // personal and walk mature content past the default filter; only a cast
+    // can establish a personal origin.
+    expect(cast(playlist(item('a', 'general'), item('b', 'mature')),
+      { refresh: true, contentContext: 'personal' })?.ok).toBe(true);
+    expect(canvasService.getCastInfo()?.contentContext).toBe('curated');
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a']);
+  });
+
+  it('lets a refresh narrow a personal cast to curated', () => {
+    expect(cast(playlist(item('a', 'general')), { contentContext: 'personal' })?.ok).toBe(true);
+
+    // Narrowing is always allowed; only widening is refused.
+    expect(cast(playlist(item('a', 'general')),
+      { refresh: true, contentContext: 'personal' })?.ok).toBe(true);
+    expect(canvasService.getCastInfo()?.contentContext).toBe('personal');
+  });
+
   it('applies an intentionally emptied refresh instead of calling it blocked', () => {
     expect(cast(playlist(item('a')))?.ok).toBe(true);
 

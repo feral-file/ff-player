@@ -80,6 +80,15 @@ export class ContentPolicyStore {
       // permissive pre-audit defaults, nor erase the last recovery snapshot.
       // Publishing the failure is what lets admission tell an unreadable
       // mirror apart from one that is merely still being read.
+      //
+      // Unless a policy is already applied: a write can land while this read is
+      // still outstanding, and the record it failed to read has been replaced
+      // since. Marking the mirror unreadable then would make displayPlaylist
+      // refuse every cast on a device the daemon was just told is configured —
+      // a successful activation followed by a player that plays nothing.
+      if (this.snapshot.active) {
+        return;
+      }
       this.snapshot = { ...this.snapshot, hydrationFailed: true };
       this.listeners.forEach(listener => { listener(); });
     }
@@ -127,7 +136,17 @@ export class ContentPolicyStore {
   }
 
   private publish(policy: Readonly<ContentPolicy>): void {
-    if (this.snapshot.active && JSON.stringify(this.snapshot.policy) === JSON.stringify(policy)) {return;}
+    if (this.snapshot.active && JSON.stringify(this.snapshot.policy) === JSON.stringify(policy)) {
+      // Same policy, so nothing to re-render — but a durable write still proves
+      // the mirror is readable again. Without this, resending the CURRENT
+      // policy could never clear a failure flag, and recovery would depend on
+      // the daemon happening to pick a different one.
+      if (this.snapshot.hydrationFailed) {
+        this.snapshot = { ...this.snapshot, hydrationFailed: false };
+        this.listeners.forEach(listener => { listener(); });
+      }
+      return;
+    }
     // A successful set() after a failed hydration repairs the mirror, so the
     // failure flag clears with the policy that replaced it.
     this.snapshot = { policy: Object.freeze({ ...policy }), active: true,

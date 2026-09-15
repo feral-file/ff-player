@@ -25,13 +25,15 @@ unrated escape hatch. Unknown content context is rejected.
 `displayPlaylist.request.contentContext` is `curated | personal`, outside the
 signed DP-1 body. Missing context and every device default are curated.
 Persisted cast, scheduled, refreshed and Recently played requests retain it. A
-refresh is a source update to an existing cast, so an absent context there
-means "unchanged", not curated: it inherits the cast's own origin, and an
-explicit context on the refresh overrides it. Defaulting a context-less refresh
-to curated instead would filter a viewer's own personal cast every time its
-source updated. A refresh cannot invent a personal origin — it can only carry
-forward one the device already admitted — and it retains the context it was
-actually filtered under, not the one the previous cast carried. A `display_at_boot` cast stores its context and the
+refresh is a source update to an existing cast, so it may carry an origin
+forward or narrow it, never widen it. An absent context means "unchanged" and
+inherits the cast's own origin; defaulting it to curated would filter a
+viewer's own personal cast every time its source updated. An explicit `curated`
+narrows and takes effect. An explicit `personal` is honoured only when the live
+cast is already personal — otherwise a source update could reclassify a curated
+playlist and walk mature content past the default filter with nobody casting
+it. A refresh retains the context it was actually filtered under, not the one
+the previous cast carried. A `display_at_boot` cast stores its context and the
 signed playlist as one value: two keys would be two best-effort writes, and a
 reboot between them could pair a playlist with the wrong origin. The context
 sits beside the DP-1 document inside that value, never inside the document, and
@@ -67,7 +69,15 @@ payload; filtering it against the built-in default instead would reject a cast
 the viewer opted into and leave nothing to reconcile. A corrupt mirror is the
 other case and fails closed: nothing will repair it on its own, so
 `displayPlaylist` refuses with `contentPolicyUnavailable` until the daemon
-reconciles it.
+reconciles it. A read that fails after a write has already applied a policy does
+not mark the mirror unreadable — the record it failed on has been replaced — and
+any durable write clears the flag, including a resend of the policy already in
+force.
+
+The final rendering gate asks one question: is the work the renderer is
+currently showing still allowed? It identifies that work by id AND source
+together, never by URL alone, so a freshly blocked work cannot be kept on the
+wall by an allowed sibling that happens to share its source.
 
 For source refreshes, newly blocked current artwork retires immediately, even
 if no replacement remains. Controld sends the internal refresh-only
