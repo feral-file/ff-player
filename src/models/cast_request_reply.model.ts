@@ -3,6 +3,7 @@ import { TokenDisplaySettings, TombstoneMode } from './display_settings.model';
 import { ErrorType } from './error.model';
 import { DP1Call, DP1Intent, DP1Item, Scaling } from './dp1.model';
 import { CastCommand, LoopMode, RenderStatus, ViewMode } from '.';
+import type { ContentContext } from '@/services/contentPolicy';
 
 export interface CursorOffset {
   dx: number;
@@ -43,18 +44,28 @@ export type DisconnectReplyV2 = Reply;
 export interface NowDisplayRequest {
   dp1CallData: DP1Call;
   playlistUrl?: string;
+  contentContext?: ContentContext;
+  /**
+   * Slot to start on. A fresh cast starts at 0; a policy retirement that
+   * replaces the current work passes the slot its projection resolved to, so
+   * the viewer advances past the retired work instead of being sent back to
+   * the start of a playlist they were already part-way through.
+   */
+  startIndex?: number;
 }
 export type NowDisplayReply = Reply;
 
 export interface SchedulePlaylistRequest {
   dp1CallData: DP1Call;
   scheduleTime?: string;
+  contentContext?: ContentContext;
 }
 export type SchedulePlaylistReply = Reply;
 
 export type CheckDeviceStatusRequest = Request;
 export interface CheckDeviceStatusReply extends Reply {
   castCommand?: CastCommand;
+  contentContext?: ContentContext;
 
   playlist?: DP1Call;
   playlistUrl?: string;
@@ -93,9 +104,12 @@ export interface CheckDeviceStatusReply extends Reply {
 
 export interface DisplayPlaylistRequest {
   intent?: DP1Intent;
-  dp1_call: DP1Call;
+  dp1_call?: DP1Call;
   playlistUrl?: string;
   refresh?: boolean;
+  /** Daemon-only projection hint: blocked current work must not finish/crossfade. */
+  retireBlockedCurrent?: boolean;
+  contentContext?: ContentContext;
 }
 export type DisplayPlaylistReply = Reply;
 

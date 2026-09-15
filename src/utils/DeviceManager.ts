@@ -2,6 +2,17 @@ import { LocalStorageItem } from '@/constants';
 import { DisplaySettings } from '@/models/display_settings.model';
 import { CastInfo, ViewMode } from '@/models';
 import { DP1Call } from '@/models/dp1.model';
+import {
+  parseRecentlyPlayed,
+  RecentlyPlayedRecord,
+} from '@/services/recentPlaybackHistory';
+import { ContentContext } from '@/services/contentPolicy';
+
+/** One stored value so the playlist and its origin can never disagree. */
+interface BootPlaylistRecord {
+  playlist: DP1Call;
+  contentContext: ContentContext;
+}
 import { stripEphemeralCastInfoFields } from './castInfo';
 import indexedDBStorage from './IndexedDBStorage';
 
@@ -13,6 +24,8 @@ const PRELOAD_KEYS: string[] = [
   LocalStorageItem.dp1ScheduledTask,
   LocalStorageItem.bootPlaylist,
   LocalStorageItem.defaultItemDuration,
+  LocalStorageItem.recentlyPlayed,
+  LocalStorageItem.recentlyPlayedIncomplete,
 ];
 
 /**
@@ -209,24 +222,97 @@ class DeviceManager {
     await indexedDBStorage.setItem(LocalStorageItem.castInfo, serialized);
   }
 
-  public async getBootPlaylist(): Promise<DP1Call | null> {
+  /**
+   * The boot cast and the unsigned origin it was accepted under.
+   *
+   * Both travel in ONE stored value. Two keys would be two best-effort
+   * IndexedDB writes, and `setItem` swallows a failure, so a reboot between
+   * them could pair a new playlist with the previous cast's context — the
+   * worst possible outcome for a family-content filter. The context stays
+   * OUTSIDE the DP-1 document inside that envelope, so the signed playlist is
+   * still stored exactly as it was received.
+   *
+   * A record written before the envelope existed is a bare DP-1 document and
+   * reads as curated, which is the conservative default.
+   */
+  private async readBootRecord(): Promise<BootPlaylistRecord | null> {
     await this.ensureInitialized();
-    const bootPlaylist = await this.fetchAndCache(
-      LocalStorageItem.bootPlaylist
-    );
-    return bootPlaylist ? (JSON.parse(bootPlaylist) as DP1Call) : null;
+    const stored = await this.fetchAndCache(LocalStorageItem.bootPlaylist);
+    if (!stored) {
+      return null;
+    }
+    const parsed = JSON.parse(stored) as BootPlaylistRecord | DP1Call;
+    if ('playlist' in parsed) {
+      return {
+        playlist: parsed.playlist,
+        contentContext: parsed.contentContext === 'personal' ? 'personal' : 'curated',
+      };
+    }
+    return { playlist: parsed, contentContext: 'curated' };
   }
 
-  public async setBootPlaylist(bootPlaylist: DP1Call): Promise<void> {
+  public async getBootPlaylist(): Promise<DP1Call | null> {
+    return (await this.readBootRecord())?.playlist ?? null;
+  }
+
+  public async getBootPlaylistContentContext(): Promise<ContentContext> {
+    return (await this.readBootRecord())?.contentContext ?? 'curated';
+  }
+
+  public async setBootPlaylist(
+    bootPlaylist: DP1Call,
+    contentContext: ContentContext = 'curated'
+  ): Promise<void> {
     await this.ensureInitialized();
-    const serialized = JSON.stringify(bootPlaylist);
+    const serialized = JSON.stringify({ playlist: bootPlaylist, contentContext });
     this.cache.set(LocalStorageItem.bootPlaylist, serialized);
     await indexedDBStorage.setItem(LocalStorageItem.bootPlaylist, serialized);
+  }
+
+  /**
+   * Recent-playback history is a separate, bounded device-local record. It
+   * never reuses castInfo: restoring a current cast after a reboot must not
+   * fabricate a timeline entry, and replacing a cast must not erase history.
+   */
+  public async getRecentlyPlayed(): Promise<RecentlyPlayedRecord[]> {
+    const raw = await indexedDBStorage.getItemStrict(LocalStorageItem.recentlyPlayed);
+    if (!raw) {
+      return [];
+    }
+    return parseRecentlyPlayed(raw);
+  }
+
+  public async setRecentlyPlayed(records: RecentlyPlayedRecord[]): Promise<void> {
+    const serialized = JSON.stringify(records);
+    await indexedDBStorage.setItemStrict(LocalStorageItem.recentlyPlayed, serialized);
+    this.cache.set(LocalStorageItem.recentlyPlayed, serialized);
+  }
+
+  public async getRecentlyPlayedIncomplete(): Promise<boolean> {
+    return (await indexedDBStorage.getItemStrict(LocalStorageItem.recentlyPlayedIncomplete)) === 'true';
+  }
+
+  public async setRecentlyPlayedIncomplete(incomplete: boolean): Promise<void> {
+    await indexedDBStorage.setItemStrict(
+      LocalStorageItem.recentlyPlayedIncomplete,
+      String(incomplete)
+    );
+    this.cache.set(LocalStorageItem.recentlyPlayedIncomplete, String(incomplete));
   }
 
   public async getItem(key: string): Promise<string | null> {
     await this.ensureInitialized();
     return await this.fetchAndCache(key);
+  }
+
+  /** Policy reads are strict: a storage failure is not an absent/default record. */
+  public async getContentPolicyRecord(): Promise<string | null> {
+    return indexedDBStorage.getItemStrict('contentPolicy');
+  }
+
+  /** Persist the mirror before any caller reports a new policy as active. */
+  public async setContentPolicyRecord(value: string): Promise<void> {
+    await indexedDBStorage.setItemStrict('contentPolicy', value);
   }
 
   public async setItem(key: string, value: string): Promise<void> {

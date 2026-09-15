@@ -22,9 +22,12 @@ import DeviceManager from '@/utils/DeviceManager';
 import { clearRefManifestDisplayCache } from '@/utils/playlistDisplayPreference';
 import { cleanup, render, waitFor } from '@testing-library/react';
 import * as React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PlaylistClient from './playlist-client';
+import { prepareContentPolicy } from '@/services/contentPolicy.testkit';
 import { advanceMs, dp1Call, item } from './playlist-client.testkit';
+
+beforeEach(prepareContentPolicy);
 
 vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
   default: function MockArtworkPlayer(props: Record<string, unknown>) {
@@ -79,6 +82,13 @@ function Harness(props: {
   castInfo: CastInfo;
   displaySettings: DisplaySettings | null;
 }): React.ReactElement {
+  // AppContext receives casts from Canvas in production. Keep that admission
+  // state aligned here, without resetting it for display-settings rerenders.
+  const previousCast = React.useRef<CastInfo | null>(null);
+  if (previousCast.current !== props.castInfo) {
+    previousCast.current = props.castInfo;
+    canvasService.setCastInfo(props.castInfo, false);
+  }
   const value = React.useMemo(
     () => ({
       context: {

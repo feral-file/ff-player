@@ -33,6 +33,7 @@ import {
 } from '@/models/custom_event';
 import { normalizePlaylistIndex } from '@/utils/playlist';
 import { stripEphemeralCastInfoFields } from '@/utils/castInfo';
+import { contentPolicyStore } from '@/services/ContentPolicyStore';
 import { useRouter } from 'next/navigation';
 
 interface AppContextProps {
@@ -223,6 +224,11 @@ export const AppProvider = ({ children }: AppContextProps) => {
         console.log('Error init display settings', error);
       }
       try {
+        await contentPolicyStore.initialize();
+        // Fire and forget: History is not a boot precondition, but reading it
+        // now is what makes the app's first request an answer instead of
+        // "still loading".
+        void canvasService.primeRecentlyPlayed();
         await initCastInfo();
       } catch (error) {
         bootHydrationOutcome = 'failed';
@@ -287,6 +293,10 @@ export const AppProvider = ({ children }: AppContextProps) => {
           index: 0,
           isPaused: false,
           playlistId: bootPlaylist.id,
+          // Restore the origin the cast was accepted under. A record written
+          // before this key existed reads as curated, so an upgrade cannot
+          // turn an old boot cast into an unfiltered personal one.
+          contentContext: await DeviceManager.getBootPlaylistContentContext(),
         };
       }
     }
@@ -399,7 +409,9 @@ export const AppProvider = ({ children }: AppContextProps) => {
       const cleanCastInfo = stripEphemeralCastInfoFields(castInfo);
       canvasService.setCastInfo(cleanCastInfo, false);
       if (!halted) {
-        setCastInfo(cleanCastInfo);
+        // The service reapplies current policy to old recovery snapshots.
+        // Publishing the pre-filter copy would bypass that boot boundary.
+        setCastInfo(canvasService.getCastInfo());
         navigateToHomePage();
       }
     } else if (!halted) {

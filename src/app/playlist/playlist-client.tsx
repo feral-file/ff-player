@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- playback orchestration is intentionally co-located. */
 'use client';
 
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
@@ -10,6 +11,13 @@ import { LoopMode } from '@/models/cast_info.model';
 import { DP1Defaults, DP1Item } from '@/models/dp1.model';
 import { NO_DURATION_VALUE } from '@/constants';
 import { canvasService } from '@/services/CanvasService';
+import { allowsContent, parseContentContext } from '@/services/contentPolicy';
+import { permitsCurrentPreview } from '@/services/contentRendering';
+import { useArtworkRefreshBridge } from './useArtworkRefreshBridge';
+import { isSourceReplacement } from './sourceReplacement';
+import { usePlayableList } from './usePlayableList';
+import { useContentPolicy } from '@/services/custom-hooks/useContentPolicy';
+import { policyInForce } from '@/services/ContentPolicyStore';
 import {
   isNoDurationItem,
   itemIdentityFor,
@@ -27,6 +35,7 @@ import { coerceLoopMode } from '@/utils/loopMode';
 import { useCurrentItemIdentity, useShowingKey } from './useCurrentItemIdentity';
 import { useMergeLandedRearm } from './useMergeLandedRearm';
 import { usePlaylistItemDisplayPreference } from './usePlaylistItemDisplayPreference';
+import { useRecentlyPlayedCommit } from './useRecentlyPlayedCommit';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 // 'sourceEnd' means the media just ended (display.loop=false) and needs a
@@ -41,13 +50,23 @@ interface ArmedInterval { duration: number; deadline: number }
 export default function PlaylistClient() {
   const castInfo = useAppContext().context.castInfo;
   const deviceDisplaySettings = useAppContext().context.displaySettings;
+  const contentPolicy = useContentPolicy();
+  const contentContext = parseContentContext(castInfo?.contentContext);
 
   const [playlist, setPlaylist] = useState<DP1Item[]>([]);
   const [playlistDefaultsSettings, setPlaylistDefaultsSettings] =
     useState<DP1Defaults | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
-  const artworkPerformReloadRef = useRef<(() => void) | null>(null);
+  // Preview URL and the item that owns it are published together by the
+  // bridge, so the final media gate never sees one without the other.
+  const { artworkPerformReloadRef, triggerArtworkRefresh, registerArtworkReload,
+    getShowing, publishPreview, notePreviewCommitted, retireCommittedIfGone,
+    clearPreview } =
+    useArtworkRefreshBridge(setCastPreviewURL, identity => {
+      handleItemCommittedRef.current(identity);
+    });
+  const handleItemCommittedRef = useRef<(identity: string) => void>(() => undefined);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   // The interval the active slot's timer is armed with — effective duration
@@ -85,6 +104,10 @@ export default function PlaylistClient() {
     playlistRef,
   });
 
+  const clearPlayableList = usePlayableList({ currentItemRef, setPlaylist,
+    setCurrentIndex, setPlaylistDefaultsSettings, resetItemDisplayPreference,
+    clearPreview });
+
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -111,50 +134,7 @@ export default function PlaylistClient() {
         artworkPerformReloadRef.current?.();
       }
     },
-    []
-  );
-
-  const triggerArtworkRefresh = useCallback((): boolean => {
-    const cast = canvasService.getCastInfo();
-    const items = cast?.playlist?.items;
-    const rawIndex = cast?.index;
-    if (!items?.length || rawIndex === undefined) {
-      return false;
-    }
-
-    const normalizedIndex = normalizePlaylistIndex(rawIndex, items.length);
-    const currentSource = items[normalizedIndex]?.source;
-    if (!currentSource) {
-      return false;
-    }
-    const performReload = artworkPerformReloadRef.current;
-    if (!performReload) {
-      return false;
-    }
-    setCastPreviewURL(currentSource);
-    performReload();
-    return true;
-  }, []);
-
-  const registerArtworkReload = useCallback(
-    (reload: (() => void) | null) => {
-      artworkPerformReloadRef.current = reload;
-      if (reload) {
-        // Second flush trigger (§4.2 of the cross-repo recovery design):
-        // covers a registration-ordering gap the `onRefreshArtwork` setter's
-        // own flush cannot close on its own. If a refusal parks while
-        // `onRefreshArtwork` gets set (below) but ArtworkPlayer has not
-        // mounted yet — `currentItemDisplayPreference` still resolving, so
-        // this ref was still null — that flush runs against a still-empty
-        // reload ref and leaves the refusal parked. Nothing else re-arms it
-        // once ArtworkPlayer finally mounts. Re-assigning the setter here
-        // (its own body always attempts a flush) re-triggers it now that the
-        // reload function actually exists. Teardown (reload === null) must
-        // NOT flush — there is nothing to refresh into a torn-down handler.
-        canvasService.onRefreshArtwork = triggerArtworkRefresh;
-      }
-    },
-    [triggerArtworkRefresh]
+    [artworkPerformReloadRef]
   );
 
   useLayoutEffect(() => {
@@ -166,13 +146,6 @@ export default function PlaylistClient() {
     const normalizedIndex = normalizePlaylistIndex(currentIndex, playlist.length);
     currentItemRef.current = playlist[normalizedIndex];
   }, [currentIndex, playlist]);
-
-  useEffect(() => {
-    canvasService.onRefreshArtwork = triggerArtworkRefresh;
-    return () => {
-      canvasService.onRefreshArtwork = null;
-    };
-  }, [triggerArtworkRefresh]);
 
   // Same-tick dedupe of index transitions lives with the cast state owner.
   const publishCurrentIndex = useCallback((index: number) => {
@@ -448,8 +421,21 @@ export default function PlaylistClient() {
     const normalizedIndex = normalizePlaylistIndex(currentIndex, playlist.length);
     const currentItem = playlist[normalizedIndex];
 
+    // The final media gate is not enough: do not fetch a blocked work's ref
+    // manifest while its slot is hidden or while policy hydration is pending.
+    const inForce = policyInForce(contentPolicy);
+    if (!inForce || !allowsContent(currentItem, inForce, contentContext)) {
+      clearTimer();
+      clearPreview();
+      return;
+    }
+    // A policy change can retire the work on screen while this selected one
+    // stays allowed; the gate would otherwise keep judging the retired work
+    // and never let its replacement mount.
+    retireCommittedIfGone(onScreen => allowsContent(
+      onScreen, inForce, contentContext));
     void handleItemDisplayPreference(currentItem, normalizedIndex);
-    setCastPreviewURL(currentItem.source);
+    publishPreview(currentItem);
     scheduleCurrentItemTimer(normalizedIndex, playlist);
 
     return () => {
@@ -460,8 +446,13 @@ export default function PlaylistClient() {
     playlist,
     playlistDefaultsSettings,
     clearTimer,
+    clearPreview,
+    publishPreview,
+    retireCommittedIfGone,
     handleItemDisplayPreference,
     scheduleCurrentItemTimer,
+    contentContext,
+    contentPolicy,
   ]);
 
   useMergeLandedRearm({
@@ -476,13 +467,8 @@ export default function PlaylistClient() {
     if (!castInfo) {
       clearTimer();
       holdAfterFinalSlotRef.current = false;
-      currentItemRef.current = undefined;
       loopModeRef.current = LoopMode.playlist;
-      setPlaylist([]);
-      setCurrentIndex(-1);
-      setPlaylistDefaultsSettings(null);
-      resetItemDisplayPreference();
-      setCastPreviewURL(null);
+      clearPlayableList();
       return;
     }
 
@@ -505,11 +491,7 @@ export default function PlaylistClient() {
           );
           setCurrentIndex(startIndex);
         } else {
-          setPlaylist([]);
-          setCurrentIndex(-1);
-          setPlaylistDefaultsSettings(null);
-          resetItemDisplayPreference();
-          setCastPreviewURL(null);
+          clearPlayableList();
         }
         break;
       }
@@ -517,6 +499,27 @@ export default function PlaylistClient() {
       case CastCommand.refreshPlaylist:
       case CastCommand.setShuffle: {
         if (castInfo.playlist?.items?.length) {
+          // See isSourceReplacement: a same-id source swap must hand over now.
+          const incoming = castInfo.playlist.items;
+          if (isSourceReplacement(playlistRef.current[normalizePlaylistIndex(
+            currentIndexRef.current, playlistRef.current.length)], incoming)) {
+            setPlaylistDefaultsSettings(castInfo.playlist.defaults ?? null);
+            setPlaylist(incoming.map(dp1Item => ({
+              ...dp1Item,
+              duration: dp1Item.duration ?? NO_DURATION_VALUE,
+            })));
+            // Canvas remaps the selection by id, so a refresh that also
+            // reorders moves it. Installing the list without the resolved
+            // index would render one work while the controller reports another.
+            // The ref is mirrored synchronously, the way every other index
+            // handoff in this file does, so a same-tick reader is not stale.
+            const resolvedIndex = normalizePlaylistIndex(
+              castInfo.index ?? 0, incoming.length);
+            currentIndexRef.current = resolvedIndex;
+            setCurrentIndex(resolvedIndex);
+            canvasService.clearQueuedPlaylistPending();
+            break;
+          }
           if (
             shouldApplyQueuedPlaylistOnShuffleOrRefresh({
               currentIndex: currentIndexRef.current,
@@ -533,12 +536,7 @@ export default function PlaylistClient() {
 
         holdAfterFinalSlotRef.current = false;
         clearTimer();
-        currentItemRef.current = undefined;
-        setPlaylist([]);
-        setCurrentIndex(-1);
-        setPlaylistDefaultsSettings(null);
-        resetItemDisplayPreference();
-        setCastPreviewURL(null);
+        clearPlayableList();
         break;
       }
 
@@ -617,8 +615,11 @@ export default function PlaylistClient() {
     }
   }, [
     applyQueuedPlaylistIfExists,
+    artworkPerformReloadRef,
     castInfo,
     clearMergedDisplayForNewCast,
+    clearPlayableList,
+    clearPreview,
     clearTimer,
     replayCurrentSlot,
     resetItemDisplayPreference,
@@ -628,6 +629,8 @@ export default function PlaylistClient() {
 
   const currentItemIdentity = useCurrentItemIdentity(playlist, currentIndex);
   const currentShowingKey = useShowingKey(playlist, currentIndex);
+  const permitted = castInfo !== null && permitsCurrentPreview(
+    canvasService.getCastInfo(), getShowing(), castPreviewURL, contentPolicy);
 
   // Tombstone state (feral-file#3452): committed-item tracking, label
   // resolution, mode coercion, and the FF1-side toast — see useTombstone.
@@ -639,29 +642,38 @@ export default function PlaylistClient() {
     artistName: tombstoneArtist,
     toastText: tombstoneToast,
   } = useTombstone(playlist, deviceDisplaySettings);
+  handleItemCommittedRef.current = handleItemCommitted;
+
+  const handleArtworkCommitted = useRecentlyPlayedCommit(
+    playlist,
+    playlistDefaultsSettings,
+    contentContext
+  );
 
   return (
     <>
       <div style={{ width: '100%', height: '100%' }}>
-        {currentItemDisplayPreference && (
+        {currentItemDisplayPreference && permitted && (
           <ArtworkPlayer
+            key={contentPolicy.retireEpoch}
             previewURL={castPreviewURL ?? ''}
             displayPreferences={currentItemDisplayPreference}
             itemIdentity={currentItemIdentity}
             sessionKey={currentShowingKey}
             onRegisterArtworkReload={registerArtworkReload}
             onSourceEnded={handleSourceEnded}
-            onItemCommitted={handleItemCommitted}
+            onItemCommitted={notePreviewCommitted}
+            onItemPlayed={handleArtworkCommitted}
           />
         )}
-        <TombstoneOverlay
+        {permitted && <TombstoneOverlay
           mode={tombstoneMode}
           itemKey={tombstoneItemKey}
           title={tombstoneTitle}
           artistName={tombstoneArtist}
-          curatorName={castInfo?.playlist?.curator}
-        />
-        <TombstoneToast text={tombstoneToast} />
+          curatorName={castInfo.playlist?.curator}
+        />}
+        {permitted && <TombstoneToast text={tombstoneToast} />}
       </div>
     </>
   );

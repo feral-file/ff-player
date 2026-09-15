@@ -2,13 +2,18 @@ import { DP1Call } from '@/models/dp1.model';
 import { canvasService } from './CanvasService';
 import { LocalStorageItem } from '@/constants';
 import DeviceManager from '@/utils/DeviceManager';
+import type { ContentContext } from './contentPolicy';
 
 export interface ScheduledDP1Task {
   id: string;
   scheduleTime: string;
   dp1CallData: DP1Call;
+  contentContext?: ContentContext;
 }
 
+/**
+ *
+ */
 class DP1ScheduleService {
   private static instance: DP1ScheduleService | null = null;
   private timeoutId: NodeJS.Timeout | null = null;
@@ -20,13 +25,15 @@ class DP1ScheduleService {
 
   public async storeScheduledTask(
     dp1CallData: DP1Call,
-    scheduleTime: string
+    scheduleTime: string,
+    contentContext?: ContentContext
   ): Promise<void> {
     try {
       const newTask: ScheduledDP1Task = {
         id: dp1CallData.id ?? '',
         scheduleTime,
         dp1CallData,
+        contentContext,
       };
 
       await DeviceManager.setItem(
@@ -136,7 +143,7 @@ class DP1ScheduleService {
       '[DP1ScheduleService] Executing scheduled task:',
       scheduledTask.id
     );
-    canvasService.executeScheduledDP1Task(scheduledTask.dp1CallData);
+    canvasService.executeScheduledDP1Task(scheduledTask.dp1CallData, scheduledTask.contentContext);
     this.removeTask(scheduledTask.id).catch((error: unknown) => {
       console.error(
         '[DP1ScheduleService] Error removing task after execution:',

@@ -40,7 +40,13 @@ import {
   stripLegacyCastPlaybackTimeline,
 } from '@/utils/castInfo';
 import { LoopMode } from '@/models/cast_info.model';
-import { DP1Item } from '@/models/dp1.model';
+import { DP1Defaults, DP1Item } from '@/models/dp1.model';
+import {
+  appendRecentlyPlayed,
+  recentlyPlayedMetadata,
+  recentlyPlayedReplay,
+  RecentlyPlayedRecord,
+} from './recentPlaybackHistory';
 import {
   CustomEventName,
   NavigateEventDetail,
@@ -68,6 +74,8 @@ import { coerceLoopMode } from '@/utils/loopMode';
 import { coerceTombstoneMode } from '@/utils/tombstoneMode';
 import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
+import { contentPolicyStore, policyInForce } from './ContentPolicyStore';
+import { admitUnfiltered, allowsContent, ContentContext, ContentPolicy, filterContent, hasValidContentLabels, parseContentContext, stripPlaylistSignature } from './contentPolicy';
 
 const PLAYLIST_SOURCE_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
 const ARTWORK_SOURCE_RESOLVE_BASE = 'https://ff-player.local/';
@@ -266,6 +274,9 @@ class CanvasService {
   private bootHydrationFailed = false;
 
   private constructor() {
+    // One subscription for the document-lifetime singleton. Tightening policy
+    // invalidates queued old snapshots as well as the currently selected work.
+    contentPolicyStore.subscribe(() => { this.reconcileContentPolicy(); });
     // Latch any deliberate-stop notification that lands before boot
     // hydration settles. The PlaybackHalted event is the one contract every
     // halt source already honors (disconnect and sleep in this class, error
@@ -277,6 +288,13 @@ class CanvasService {
     // The window guard covers module import during prerender.
     if (typeof window !== 'undefined') {
       window.addEventListener(CustomEventName.PlaybackHalted, event => {
+        // Every deliberate stop reaches this bus — disconnect, sleep, and the
+        // error navigation in utils — so retiring here covers them all by
+        // construction, including a future halt source. Only disconnect nulls
+        // castInfo; sleep and error navigation keep it, which is why the
+        // setCastInfo(null) path alone was not enough: the wall stops showing
+        // the work while the cast is still the current one.
+        this.retireActiveRecentlyPlayed();
         if (this.bootCastHydrationPending) {
           this.haltedDuringBootHydration = true;
           // detail is null at runtime for a bare CustomEvent (error
@@ -370,6 +388,267 @@ class CanvasService {
     displaySettings: DP1DisplayPreference
   ) => void)[] = [];
 
+  // Separate from castInfo: castInfo is recovery state for one current cast,
+  // while these are device-local, visual-commit playback evidence. Writes are
+  // serialized so two quick automatic advances cannot append to one stale
+  // IndexedDB snapshot.
+  private recentlyPlayedRecords: RecentlyPlayedRecord[] | null = null;
+  private recentlyPlayedIncomplete: boolean | null = null;
+  private recentlyPlayedLoad: Promise<RecentlyPlayedRecord[]> | null = null;
+  private recentlyPlayedPersistenceError: string | null = null;
+  // This is intentionally session-only. After a player restart it is unknown
+  // until the current successful commit is observed; guessing by item id
+  // would suppress prior repeats from the reverse-chronological history.
+  private activeRecentlyPlayedRecordId: string | null = null;
+  private recentlyPlayedWrite: Promise<void> = Promise.resolve();
+  private recentlyPlayedSequence = 0;
+  // Bumped on every new commit and every hard stop. A queued durable write
+  // publishes its record as the active occurrence only while its generation is
+  // still current, so a write that lands after the wall moved on (or was
+  // cleared) cannot resurrect a work that is no longer displayed.
+  private playbackGeneration = 0;
+  /**
+   * Identity of the work whose occurrence is active OR still being written.
+   *
+   * Deliberately NOT derived from `castInfo.index`: during a slow handoff the
+   * index already names the incoming work while the outgoing one is still
+   * committed and is the work history is talking about, so an index-derived
+   * check inspects the wrong item. Captured at commit time, and covering the
+   * pending window too — before a durable append finishes there is no record id
+   * to compare, but there is very much a work that a displacement must
+   * invalidate.
+   */
+  private occurrenceItem: DP1Item | null = null;
+
+  /**
+   * The policy admission must apply, or `null` while the device's own mirror is
+   * still being read.
+   *
+   * `null` admits the cast whole and keeps the complete payload in castInfo.
+   * The hydration publish then runs `reconcileContentPolicy`, which re-applies
+   * the real policy to that payload and retires anything it blocks. Filtering
+   * against the built-in default during that window would do the opposite of
+   * what it looks like: it would reject a cast the viewer explicitly opted into
+   * and permanently drop items from a mixed playlist, leaving nothing for
+   * reconciliation to restore. An unreadable mirror is a different case and is
+   * refused at the command boundary — see `displayPlaylist`.
+   */
+  private admissionPolicy(): Readonly<ContentPolicy> | null {
+    const snapshot = contentPolicyStore.getSnapshot();
+    return policyInForce(snapshot);
+  }
+
+  /**
+   * Retire the active occurrence. `getRecentlyPlayed` then reports
+   * `activeOccurrenceKnown: false`, which the app renders as pending rather
+   * than as a claim about what is on the wall. Called when a new work begins
+   * committing and when playback stops.
+   */
+  private retireActiveRecentlyPlayed(): void {
+    this.playbackGeneration += 1;
+    this.activeRecentlyPlayedRecordId = null;
+    this.occurrenceItem = null;
+  }
+
+  /**
+   * Read the retained history once, at boot, so the app's first request is an
+   * answer rather than "still loading" — a reply it has no way to tell apart
+   * from a failure, and the exact ambiguity this command exists to remove.
+   */
+  public async primeRecentlyPlayed(): Promise<void> {
+    await this.loadRecentlyPlayed();
+  }
+
+  private async loadRecentlyPlayed(): Promise<RecentlyPlayedRecord[]> {
+    if (this.recentlyPlayedRecords !== null) {
+      return this.recentlyPlayedRecords;
+    }
+    if (this.recentlyPlayedLoad) {
+      return this.recentlyPlayedLoad;
+    }
+    const load = Promise.all([
+      DeviceManager.getRecentlyPlayed(),
+      DeviceManager.getRecentlyPlayedIncomplete(),
+    ]).then(([records, incomplete]) => {
+      this.recentlyPlayedRecords = records;
+      this.recentlyPlayedIncomplete = incomplete;
+      return records;
+    }).catch((error: unknown) => {
+      // An unreadable or corrupt store is a GAP, not a reason to refuse
+      // History for the life of the page: answering "still loading" forever is
+      // indistinguishable from a broken command, and the records are gone
+      // either way. Start from empty and say so — `incomplete` is what keeps
+      // that honest — so the next committed work simply overwrites the record.
+      console.error('[CanvasService] Recently played history is unreadable', error);
+      this.recentlyPlayedRecords = [];
+      this.recentlyPlayedIncomplete = true;
+      return this.recentlyPlayedRecords;
+    });
+    this.recentlyPlayedLoad = load;
+    // `.catch` rather than `.finally`: a rejected promise here would be
+    // unhandled, and the load above already absorbs the failure.
+    void load.catch(() => undefined).finally(() => {
+      if (this.recentlyPlayedLoad === load) {
+        this.recentlyPlayedLoad = null;
+      }
+    });
+    return load;
+  }
+
+  /** Called only from ArtworkPlayer's visual-commit callback. */
+  public recordRecentlyPlayed(
+    item: DP1Item,
+    defaults: DP1Defaults | null = null,
+    contentContext: ContentContext = 'curated'
+  ): void {
+    // A new work is committing, so the previous occurrence is no longer the
+    // active one. Retire it here, synchronously, rather than after the durable
+    // write: between the two, the honest answer is "not known yet", never the
+    // work that has already left the wall. This also covers the oversize path
+    // below, which records nothing and must not leave a stale active record
+    // standing behind the work now displayed.
+    this.retireActiveRecentlyPlayed();
+    // Claim the identity for the pending window as well as the active one: a
+    // displacement before this write lands must still invalidate it.
+    this.occurrenceItem = item;
+    const generation = this.playbackGeneration;
+    // Stamped HERE, at the visual commit, not inside the queued write. The
+    // append runs after any earlier write and after the history read, either of
+    // which can take a long time on a device — reading the clock there would
+    // date a work minutes after the viewer saw it, and the ordering sequence
+    // would be wrong by the same amount.
+    const nowMs = Date.now();
+    const nextSequence = nowMs * 1000 + ++this.recentlyPlayedSequence;
+    this.recentlyPlayedWrite = this.recentlyPlayedWrite
+      .then(async () => {
+        const next = appendRecentlyPlayed(
+          await this.loadRecentlyPlayed(),
+          item,
+          { nowMs, nextSequence, defaults, contentContext }
+        );
+        if (next === null) {
+          console.warn('[CanvasService] Recently played record exceeds byte budget');
+          await DeviceManager.setRecentlyPlayedIncomplete(true);
+          this.recentlyPlayedIncomplete = true;
+          return;
+        }
+        await DeviceManager.setRecentlyPlayed(next);
+        // Do not expose an entry before the durable transaction completes.
+        this.recentlyPlayedRecords = next;
+        if (this.recentlyPlayedPersistenceError) {
+          // A later write succeeded, so the store is usable again and History
+          // should stop answering with an error for the rest of the page's
+          // life. The gap the earlier failure left is permanent, though, so
+          // make it durable FIRST — clearing the error while the timeline
+          // still silently claims to be complete is the one order that lies.
+          await DeviceManager.setRecentlyPlayedIncomplete(true);
+          this.recentlyPlayedIncomplete = true;
+          this.recentlyPlayedPersistenceError = null;
+        }
+        // The record is retained either way; it only becomes the ACTIVE
+        // occurrence if the wall still shows it. A stop or a newer commit
+        // during the write moved the generation on.
+        if (generation === this.playbackGeneration) {
+          this.activeRecentlyPlayedRecordId = next[0]?.recordId ?? null;
+        }
+      })
+      .catch(async (error: unknown) => {
+        // Do not make a persistence failure break wall playback. Retain the
+        // last known durable snapshot but make the dropped commit explicit;
+        // reloading old records as complete would hide a timeline gap.
+        this.recentlyPlayedIncomplete = true;
+        this.recentlyPlayedPersistenceError = 'Recently played could not persist a committed work';
+        console.error('[CanvasService] Failed to persist recently played history', error);
+        // Try to carry the gap across a restart too. Without this the next boot
+        // reloads the older records together with the previous `incomplete`
+        // value and reports a timeline that is missing a committed work as
+        // complete. The marker is a much smaller write than the record that
+        // just failed, so it can still succeed; if it does not, the in-memory
+        // flag above is all this page can honestly offer.
+        try {
+          await DeviceManager.setRecentlyPlayedIncomplete(true);
+        } catch (markerError: unknown) {
+          console.error('[CanvasService] Failed to persist the history gap marker', markerError);
+        }
+      });
+  }
+
+  private getRecentlyPlayed(): Reply & {
+    status?: string;
+    records?: unknown[];
+    incomplete?: boolean;
+    activeOccurrenceKnown?: boolean;
+  } {
+    if (this.recentlyPlayedRecords === null || this.recentlyPlayedIncomplete === null) {
+      void this.loadRecentlyPlayed().catch((error: unknown) => {
+        console.error('[CanvasService] Failed to load recently played history', error);
+      });
+      return { ok: false, status: 'error', error: 'Recently played is still loading' };
+    }
+    if (this.recentlyPlayedPersistenceError) {
+      return {
+        ok: false,
+        status: 'error',
+        error: this.recentlyPlayedPersistenceError,
+        incomplete: true,
+      };
+    }
+    let records;
+    try {
+      records = recentlyPlayedMetadata(
+        this.recentlyPlayedRecords,
+        this.activeRecentlyPlayedRecordId
+      );
+    } catch (error: unknown) {
+      // The projection reads labels from documents the device did not author.
+      // If one of them still defeats it, answer with the contract's explicit
+      // error envelope: processMessage's catch would reduce a thrown error to
+      // a bare {ok:false}, which is exactly the unexplained failure the app
+      // already shows today and this command exists to replace.
+      console.error('[CanvasService] Failed to project recently played history', error);
+      return { ok: false, status: 'error', error: 'Recently played could not be read',
+        incomplete: this.recentlyPlayedIncomplete };
+    }
+    return {
+      ok: true,
+      status: records.length === 0 ? 'empty' : 'ok',
+      records,
+      incomplete: this.recentlyPlayedIncomplete,
+      activeOccurrenceKnown: this.activeRecentlyPlayedRecordId !== null,
+    };
+  }
+
+  private resolveRecentlyPlayed(
+    request: unknown
+  ): Reply & {
+    item?: DP1Item;
+    defaults?: DP1Defaults;
+    contentContext?: ContentContext;
+    status?: string;
+  } {
+    const recordId =
+      typeof request === 'object' && request !== null &&
+      typeof (request as { recordId?: unknown }).recordId === 'string'
+        ? (request as { recordId: string }).recordId
+        : '';
+    if (!recordId) {
+      return { ok: false, status: 'error', error: 'recordId is required' };
+    }
+    if (this.recentlyPlayedRecords === null || this.recentlyPlayedIncomplete === null) {
+      void this.loadRecentlyPlayed().catch((error: unknown) => {
+        console.error('[CanvasService] Failed to load recently played history', error);
+      });
+      return { ok: false, status: 'error', error: 'Recently played is still loading' };
+    }
+    if (this.recentlyPlayedPersistenceError) {
+      return { ok: false, status: 'error', error: this.recentlyPlayedPersistenceError };
+    }
+    const replay = recentlyPlayedReplay(this.recentlyPlayedRecords, recordId);
+    return replay
+      ? { ok: true, status: 'ok', ...replay }
+      : { ok: false, status: 'empty', error: 'Recently played record is unavailable' };
+  }
+
   public addDisplaySettingsChangedListener(
     callback: (
       isSaveToDevice: boolean,
@@ -446,12 +725,31 @@ class CanvasService {
 
   public setCastInfo(castInfo: CastInfo | null, notify = true) {
     console.log('[CanvasService] Setting castInfo:', notify);
+    const incoming = castInfo;
+    const inForce = policyInForce(contentPolicyStore.getSnapshot());
+    if (castInfo?.playlist?.items?.length && inForce) {
+      const filtered = filterContent(castInfo.playlist, inForce,
+        parseContentContext(castInfo.contentContext), castInfo.index ?? 0);
+      castInfo = filtered.playlist ? { ...castInfo, playlist: filtered.playlist, index: filtered.index } : null;
+    }
+    // AFTER filtering, so this sees what the cast actually became: a policy
+    // reconciliation that drops the visible work while keeping another is a
+    // displacement just as much as a replacement cast is. The work whose record
+    // is active leaves the wall when the resulting cast no longer contains it —
+    // the rendering gate cannot find it and unmounts, and nothing has committed
+    // in its place — so reporting it as displayed would describe a blank or
+    // loading screen. An advance WITHIN the same playlist keeps the item and is
+    // left alone: that transition really is still showing the outgoing work.
+    this.retireActiveOccurrenceIfDisplaced(incoming, castInfo);
     if (castInfo === null) {
       this.queuedPlaylistPending = false;
       this.setDeferredRefreshPlaylist(null);
       this.pendingRefreshArtwork = false;
       this.renderStatus = undefined;
       this.castInfo = null;
+      // The wall is cleared. Retained history survives — it is a timeline, not
+      // current state — but nothing is playing, so no occurrence is active.
+      this.retireActiveRecentlyPlayed();
     } else {
       if (!this.isSamePlaylistContent(this.castInfo, castInfo)) {
         // A REAL cast-content change supersedes any refresh parked against
@@ -488,6 +786,117 @@ class CanvasService {
     }
   }
 
+  /** Retire blocked recovery/queued snapshots when a durable policy changes. */
+  private reconcileContentPolicy(): void {
+    const policy = this.admissionPolicy();
+    const context = parseContentContext(this.castInfo?.contentContext);
+    const keep = (item: DP1Item): boolean =>
+      policy === null || allowsContent(item, policy, context);
+
+    // Queued controller intent is RE-FILTERED, never discarded. A refresh the
+    // device accepted is a replacement it promised to make; dropping it because
+    // an unrelated setting changed loses that replacement silently and leaves
+    // the stale list playing. The same goes for the unshuffled-order snapshot,
+    // without which a later shuffle-off cannot restore the real order.
+    this.originalPlaylistItems = this.originalPlaylistItems?.filter(keep) ?? null;
+    const deferred = this.deferredRefreshPlaylist;
+    const deferredItems = deferred?.items?.filter(keep) ?? [];
+    if (deferred && deferredItems.length) {
+      // The item list changed, so the signed document no longer describes it.
+      this.setDeferredRefreshPlaylist(
+        stripPlaylistSignature({ ...deferred, items: deferredItems }));
+    } else if (deferred) {
+      // Only when policy leaves nothing to install does the promise lapse.
+      this.setDeferredRefreshPlaylist(null);
+      this.queuedPlaylistPending = false;
+    }
+
+    if (!this.castInfo) {
+      return;
+    }
+    // Re-issuing displayPlaylist makes the route rebuild its item array and
+    // re-arm the slot timer, which restarts the artwork the viewer is watching.
+    // When the projection is byte-for-byte what is already playing, this policy
+    // change did not touch the wall and must not disturb it.
+    const projected = this.projectedCast(this.castInfo, policy, context);
+    if (projected !== null && this.isSameProjection(projected)) {
+      return;
+    }
+    // setCastInfo retires the occurrence if this reconciliation removes the
+    // work it belongs to, and leaves it alone if that work survives — a
+    // policy change that keeps the same work playing must not blank History,
+    // or it would sit at pending until an advance that may never come.
+    this.setCastInfo({ ...this.castInfo, castCommand: CastCommand.displayPlaylist });
+  }
+
+  /** What setCastInfo would install for this cast, without installing it. */
+  private projectedCast(cast: CastInfo, policy: Readonly<ContentPolicy> | null,
+    context: ContentContext): { items: DP1Item[]; index: number } | null {
+    const playlist = cast.playlist;
+    if (!playlist?.items?.length || policy === null) {
+      return null;
+    }
+    const filtered = filterContent(playlist, policy, context, cast.index ?? 0);
+    return filtered.playlist
+      ? { items: filtered.playlist.items ?? [], index: filtered.index }
+      : null;
+  }
+
+  /** True when a projection is exactly the list and slot already playing. */
+  private isSameProjection(projected: { items: DP1Item[]; index: number }): boolean {
+    return projected.index === (this.castInfo?.index ?? 0) &&
+      deepEqual(projected.items, this.castInfo?.playlist?.items ?? []);
+  }
+
+  /**
+   * Retire the active occurrence when an incoming cast drops the work that is
+   * currently on the wall. Null casts are handled by the clear path; a cast
+   * that still contains the outgoing item keeps its occurrence, because that
+   * work is genuinely still showing until the incoming one commits.
+   */
+  private retireActiveOccurrenceIfDisplaced(
+    // The cast AS RECEIVED. Admission filtering strips a newly blocked work
+    // before this runs, taking its fresh labels with it, so asking the filtered
+    // projection whether the work on screen is blocked always answers no.
+    incoming: CastInfo | null,
+    applied: CastInfo | null
+  ): void {
+    const onScreen = this.occurrenceItem;
+    if (onScreen === null || incoming === null) {
+      return;
+    }
+    const items = incoming.playlist?.items ?? [];
+    // Ask the same question the rendering gate asks, so history and the wall
+    // cannot disagree: is the work on screen still something this cast shows?
+    // Mere absence from the incoming cast is NOT the test — the gate keeps
+    // showing an allowed outgoing work while its replacement loads, and
+    // retiring here would report nothing active while it is plainly on screen.
+    // What retires it is the cast going empty, or its own (or freshly
+    // refreshed) labels being blocked, which is the case where the gate
+    // unmounts it immediately. Its replacement's commit retires it otherwise.
+    const policy = this.admissionPolicy();
+    const fresh = items.find(item => item.id === onScreen.id && item.source === onScreen.source);
+    const context = parseContentContext(incoming.contentContext);
+    const nothingToShow = (applied?.playlist?.items?.length ?? 0) === 0;
+    if (nothingToShow || (policy !== null && !allowsContent(fresh ?? onScreen, policy, context))) {
+      this.retireActiveRecentlyPlayed();
+    }
+  }
+
+  /** The work the current cast has selected, for displacement detection. */
+  private selectedItem(): DP1Item | undefined {
+    const items = this.castInfo?.playlist?.items ?? [];
+    if (!items.length) {
+      return undefined;
+    }
+    return items.at(normalizePlaylistIndex(this.castInfo?.index ?? 0, items.length));
+  }
+
+  /** Identity of the work the current cast has selected, for change detection. */
+  private selectedItemId(): string | undefined {
+    return this.selectedItem()?.id;
+  }
+
   /**
    * Publish the live artwork render lifecycle for status replies.
    * This updates in-memory castInfo without emitting a cast command. The
@@ -497,6 +906,14 @@ class CanvasService {
    * ready/failed from a previous page.
    */
   public setRenderStatus(renderStatus: RenderStatus | undefined) {
+    // A failed render is the other way a work stops being what the wall is
+    // showing. ArtworkPlayer still commits a failed incoming slot visually (it
+    // calls onItemCommitted and deliberately withholds onItemPlayed), so
+    // without this the previous work's record would keep claiming to be active
+    // behind a replacement that never rendered.
+    if (renderStatus === RenderStatus.failed) {
+      this.retireActiveRecentlyPlayed();
+    }
     this.renderStatus = renderStatus;
     if (!this.castInfo) {
       return;
@@ -604,12 +1021,12 @@ class CanvasService {
     });
   }
 
-  public executeScheduledDP1Task(dp1CallData: DP1Call): void {
+  public executeScheduledDP1Task(dp1CallData: DP1Call, contentContext?: ContentContext): void {
     console.log('[CanvasService] Executing scheduled DP1 task with data');
     // Scheduled tasks are persisted recovery snapshots. Their source passed
     // validation when initially accepted (or predates this guard), so do not
     // reinterpret it as a new live cast when its timer fires after an upgrade.
-    this.nowDisplayPlaylist({ dp1CallData }, false);
+    this.nowDisplayPlaylist({ dp1CallData, contentContext }, false);
   }
 
   /**
@@ -767,6 +1184,10 @@ class CanvasService {
           return this.updateDefaultDuration(
             requestJson as UpdateDefaultDurationRequest
           );
+        case CastCommand.getRecentlyPlayed:
+          return this.getRecentlyPlayed();
+        case CastCommand.resolveRecentlyPlayed:
+          return this.resolveRecentlyPlayed(requestJson);
         default:
           console.error(`[CAST] Unknown command: ${command}`);
           return { ok: false };
@@ -797,7 +1218,14 @@ class CanvasService {
         this.setCastInfo(stripEphemeralCastInfoFields(storedCastInfo), false);
       }
 
-      const activeCastInfo = this.castInfo ?? storedCastInfo ?? null;
+      // Deliberately NOT `?? storedCastInfo`: the hydration above runs the
+      // persisted cast through setCastInfo, which returns null when the active
+      // policy blocks all of it. Falling back to the stored payload there would
+      // report that blocked playlist, its index and its command as current
+      // while the wall is showing nothing — the one state a controller must not
+      // be told is active. A null result here IS the answer, and so is the
+      // unavailable-policy case renderableCastInfo covers.
+      const activeCastInfo = this.renderableCastInfo();
 
       console.log(
         '[CanvasService getStatus] Reply ok. Current index:',
@@ -806,7 +1234,12 @@ class CanvasService {
 
       return {
         ok: true,
-        castCommand: DeviceManager.getCachedCastInfo()?.castCommand,
+        // The cached command describes the persisted cast, so it may only be
+        // reported alongside state that survived admission.
+        castCommand: activeCastInfo
+          ? DeviceManager.getCachedCastInfo()?.castCommand
+          : undefined,
+        contentContext: activeCastInfo?.contentContext,
 
         playlist: activeCastInfo?.playlist,
         playlistUrl: activeCastInfo?.playlistUrl,
@@ -922,7 +1355,22 @@ class CanvasService {
    * whether the current cast has active artwork.
    */
   public hasActiveArtwork(): boolean {
-    return Boolean(this.castInfo?.playlist?.items?.length);
+    return Boolean(this.renderableCastInfo()?.playlist?.items?.length);
+  }
+
+  /**
+   * The cast as far as anything OUTSIDE the player may describe it.
+   *
+   * Retained cast state and reportable cast state are not the same thing while
+   * the policy mirror is unavailable. The renderer refuses to mount without an
+   * applied policy, so a retained playlist is not on the wall — reporting it as
+   * active would tell controld that a blank device is playing, and hide the
+   * fail-closed state it needs to see in order to repair the mirror. The state
+   * itself is kept, so a later durable policy resumes playback rather than
+   * losing the cast.
+   */
+  private renderableCastInfo(): CastInfo | null {
+    return policyInForce(contentPolicyStore.getSnapshot()) ? this.castInfo : null;
   }
 
   /**
@@ -955,6 +1403,14 @@ class CanvasService {
   public setSleepMode(request: SetSleepModeRequest): SetSleepModeReply {
     console.log('[CanvasService] Set sleep mode', request.sleepMode);
     const path = request.sleepMode ? '/sleep' : '/playlist';
+
+    // Sleep also reaches the PlaybackHalted listener in the constructor, which
+    // is the general rule. This direct call is what makes it hold with no
+    // window to dispatch on (SSR, node tests): the wall state is a fact about
+    // this service, not about the DOM.
+    if (request.sleepMode) {
+      this.retireActiveRecentlyPlayed();
+    }
 
     if (typeof window !== 'undefined') {
       if (!request.sleepMode) {
@@ -1137,6 +1593,14 @@ class CanvasService {
     const dp1CallData = request.dp1_call;
     const playlistUrl = request.playlistUrl;
     const action = dp1Intent?.action;
+    if (action === DP1Action.GetCurrentPlaylist) {return this.getStatus();}
+    if (!dp1CallData) {return { ok: false, error: 'playlistInvalid' };}
+    const contentContext = request.refresh
+      ? this.refreshContentContext(request)
+      : parseContentContext('contentContext' in request ? request.contentContext : undefined);
+    if (dp1CallData.items?.some(item => !hasValidContentLabels(item))) {
+      return { ok: false, error: 'playlistInvalid' };
+    }
 
     console.log('[CanvasService] display playlist: ', action);
     Sentry.addBreadcrumb({
@@ -1146,7 +1610,7 @@ class CanvasService {
     });
 
     if (request.refresh) {
-      return this.refreshPlaylist(dp1CallData.items);
+      return this.refreshUnderPolicy(request, dp1CallData, contentContext);
     }
 
     let reply: Reply;
@@ -1155,6 +1619,7 @@ class CanvasService {
         return this.nowDisplayPlaylist({
           dp1CallData,
           playlistUrl,
+          contentContext,
         });
       }
 
@@ -1162,27 +1627,22 @@ class CanvasService {
         return this.schedulePlaylist({
           dp1CallData,
           scheduleTime: dp1Intent?.schedule_time,
+          contentContext,
         });
-      }
-
-      case DP1Action.GetCurrentPlaylist: {
-        reply = this.getStatus();
-        break;
       }
 
       case DP1Action.DisplayAtBoot: {
+        // The boot cast carries its origin like every other cast: dropping it
+        // here would filter a personal cast as curated now, and persisting it
+        // without the context would repeat that on every restart.
         reply = this.nowDisplayPlaylist({
           dp1CallData,
           playlistUrl,
+          contentContext,
         });
 
         if (reply.ok) {
-          DeviceManager.setBootPlaylist(dp1CallData).catch((error: unknown) => {
-            console.error(
-              '[CanvasService] Error setting boot playlist:',
-              error
-            );
-          });
+          this.persistBootPlaylist(dp1CallData, contentContext);
         }
         break;
       }
@@ -1197,6 +1657,187 @@ class CanvasService {
     return reply;
   }
 
+  /**
+   * Store the boot record, keeping only items this version actually validated.
+   *
+   * Admission runs before source validation, so an item excluded by policy
+   * never has its source checked. Persisting the whole payload would let a
+   * later policy relaxation plus a restart hand the renderer a source nothing
+   * ever validated. Boot recovery deliberately does not re-validate — that is
+   * what keeps an older accepted playlist playable across an upgrade — so the
+   * guarantee has to be established here, when the record is written.
+   *
+   * Dropping an item means the stored list no longer matches the signed
+   * document, so its signature goes with it.
+   */
+  private persistBootPlaylist(dp1CallData: DP1Call, contentContext: ContentContext): void {
+    const items = dp1CallData.items ?? [];
+    const validated = items.filter(item => !findInvalidArtworkSource([item]));
+    if (!validated.length) {
+      return;
+    }
+    const record = validated.length === items.length
+      ? dp1CallData
+      : stripPlaylistSignature({ ...dp1CallData, items: validated });
+    DeviceManager.setBootPlaylist(record, contentContext).catch((error: unknown) => {
+      console.error('[CanvasService] Error setting boot playlist:', error);
+    });
+  }
+
+  /**
+   * The origin a refresh is filtered and stored under.
+   *
+   * A refresh updates the source of a cast that already exists, so it may carry
+   * an origin forward or narrow it — never widen it. An absent context means
+   * "unchanged" and inherits the cast's own origin; defaulting it to curated
+   * instead would re-filter a viewer's personal cast every time its source
+   * updated. An explicit `curated` narrows, and takes effect.
+   *
+   * An explicit `personal` is only honoured when the live cast is ALREADY
+   * personal. Otherwise a refresh could reclassify a curated playlist as
+   * personal and walk mature content past the default filter without anyone
+   * casting it — the one thing a source update must not be able to do.
+   */
+  private refreshContentContext(request: DisplayPlaylistRequest): ContentContext {
+    const current = parseContentContext(this.castInfo?.contentContext);
+    if (!('contentContext' in request)) {
+      return current;
+    }
+    const requested = parseContentContext(request.contentContext);
+    return requested === 'personal' && current !== 'personal' ? current : requested;
+  }
+
+  /**
+   * Carry an accepted refresh into the boot record that backs the same cast.
+   *
+   * `display_at_boot` persists what to restore after a reboot, and refreshes
+   * only ever updated the live cast. So a work removed from the wall live —
+   * dropped by the source, or excluded because the refresh narrowed the
+   * context — came back by itself on the next restart, which for a
+   * family-content narrowing is the one direction that must never happen.
+   *
+   * Only the record backing THIS cast is touched, so a refresh of some other
+   * playlist cannot clobber it. `null` means the refresh cleared playback, and
+   * the record is invalidated rather than rewritten.
+   * Fire-and-forget on the same single-value write the boot path already uses,
+   * so the playlist and its context can never be left disagreeing.
+   */
+  private supersedeBootRecord(previous: { id?: string; items: DP1Item[] },
+    next: DP1Call | null, contentContext: ContentContext): void {
+    void DeviceManager.getBootPlaylist()
+      .then(boot => {
+        if (!boot || !this.isBootRecordFor(boot, previous)) {
+          return;
+        }
+        if (next === null) {
+          return DeviceManager.removeItem(LocalStorageItem.bootPlaylist);
+        }
+        this.persistBootPlaylist(next, contentContext);
+      })
+      .catch((error: unknown) => {
+        console.error('[CanvasService] Error superseding boot playlist:', error);
+      });
+  }
+
+  /**
+   * Does this boot record back the cast being refreshed? Playlist id is the key
+   * when the document carries one. DP-1 makes `id` optional, so an id-less
+   * playlist falls back to its item list as it stood BEFORE the refresh — the
+   * comparison has to be made against that, since the refresh is what changes
+   * it. No key at all means no match: never guess at which record to overwrite.
+   */
+  private isBootRecordFor(boot: DP1Call, previous: { id?: string; items: DP1Item[] }): boolean {
+    if (previous.id !== undefined || boot.id !== undefined) {
+      return boot.id === previous.id;
+    }
+    // By item identity, not by value: the live cast carries normalized
+    // durations the stored document does not.
+    const ids = (items: DP1Item[]): (string | undefined)[] => items.map(item => item.id);
+    return previous.items.length > 0 &&
+      deepEqual(ids(boot.items ?? []), ids(previous.items));
+  }
+
+  /**
+   * A source refresh under the current policy.
+   *
+   * Two outcomes differ in timing, not in what they allow. An ordinary refresh
+   * hands the filtered item list to `refreshPlaylist`, which may defer the swap
+   * until the current work ends. A current work that the refreshed labels now
+   * block cannot use that path, or its outgoing crossfade: it retires
+   * immediately, which is also what the daemon asks for with
+   * `retireBlockedCurrent` when it has already dropped the blocked item from
+   * its own projection.
+   */
+  private refreshUnderPolicy(
+    request: DisplayPlaylistRequest,
+    dp1CallData: DP1Call,
+    contentContext: ContentContext
+  ): DisplayPlaylistReply {
+    const policy = this.admissionPolicy();
+    const currentItems = this.castInfo?.playlist?.items ?? [];
+    const currentItem = currentItems.at(normalizePlaylistIndex(this.castInfo?.index ?? 0, currentItems.length));
+    const updatedCurrent = currentItem && dp1CallData.items?.find(item => item.id === currentItem.id);
+    // The SELECTED work is not necessarily the one on screen: during a slow
+    // handoff the selection has moved on while the previous work is still
+    // showing. Refreshed labels that block what is on screen have to retire it
+    // immediately — checking only the selection would filter that work out of
+    // the projection and leave it rendering under its stale labels until the
+    // incoming work commits, which may never happen.
+    //
+    // Matched by id ALONE, unlike the rendering gate: a refresh may give the
+    // same work a new source, and that is still the same work carrying new
+    // labels. Requiring the old source would miss a source replacement that
+    // also marks the work mature.
+    const onScreen = this.occurrenceItem;
+    const updatedOnScreen = onScreen && dp1CallData.items?.find(item => item.id === onScreen.id);
+    // A work the refresh still carries is judged on its FRESH labels; a work it
+    // omits is judged on the labels it already has, because the refresh may
+    // have narrowed the context instead of relabelling anything. Without that
+    // second case, a personal cast refreshed as curated deferred its allowed
+    // replacement, then republished the now-blocked current work, which
+    // filtered to nothing — a blank wall, the replacement discarded, and `ok`
+    // returned to the controller.
+    const blocks = (work: DP1Item | undefined | null): boolean =>
+      policy !== null && !!work && !allowsContent(work, policy, contentContext);
+    const retireCurrent = blocks(updatedCurrent ?? currentItem) ||
+      blocks(updatedOnScreen ?? onScreen);
+    // The selection is carried into the projection so filterContent can resolve
+    // the next allowed slot at or after it, rather than defaulting to the first.
+    const selected = normalizePlaylistIndex(this.castInfo?.index ?? 0, currentItems.length);
+    const filtered = policy === null ? admitUnfiltered(dp1CallData) :
+      filterContent(dp1CallData, policy, contentContext, selected);
+    const bootKey = { id: this.castInfo?.playlistId, items: currentItems };
+    if (retireCurrent || request.retireBlockedCurrent === true) {
+      const currentPlaylistUrl = this.castInfo?.playlistUrl;
+      this.setCastInfo(null);
+      const reply = filtered.playlist ? this.nowDisplayPlaylist({ dp1CallData: filtered.playlist,
+        contentContext, playlistUrl: currentPlaylistUrl, startIndex: filtered.index }) : { ok: true };
+      contentPolicyStore.retireRendering();
+      if (reply.ok) {
+        this.supersedeBootRecord(bootKey, filtered.playlist, contentContext);
+      }
+      return reply;
+    }
+    if (!filtered.playlist) {
+      // An empty incoming list is an instruction to clear, not a playlist whose
+      // every work is blocked. Reporting contentBlocked for it would leave the
+      // old artwork on the wall against the source's own update.
+      if (!dp1CallData.items?.length) {
+        const cleared = this.refreshPlaylist([], contentContext);
+        if (cleared.ok) {
+          this.supersedeBootRecord(bootKey, null, contentContext);
+        }
+        return cleared;
+      }
+      return { ok: false, error: 'contentBlocked' };
+    }
+    const applied = this.refreshPlaylist(filtered.playlist.items, contentContext);
+    if (applied.ok) {
+      this.supersedeBootRecord(bootKey, filtered.playlist, contentContext);
+    }
+    return applied;
+  }
+
   private nowDisplayPlaylist(
     request: NowDisplayRequest,
     validateSources = true
@@ -1205,6 +1846,16 @@ class CanvasService {
       console.error('[CanvasService] No items to display');
       return { ok: false };
     }
+    if (request.dp1CallData.items.some(item => !hasValidContentLabels(item))) {
+      return { ok: false, error: 'playlistInvalid' };
+    }
+    const contentContext = parseContentContext(request.contentContext);
+    const admissionPolicy = this.admissionPolicy();
+    const filtered = admissionPolicy === null ? admitUnfiltered(request.dp1CallData) :
+      filterContent(request.dp1CallData, admissionPolicy, contentContext);
+    if (!filtered.playlist) {return { ok: false, error: 'contentBlocked' };}
+    request = { ...request, dp1CallData: filtered.playlist };
+    const playableItems = filtered.playlist.items ?? [];
     // Live casts validate; persisted scheduled/boot recovery may skip so an
     // upgrade does not strand a previously accepted playlist (see
     // executeScheduledDP1Task). Do not add a second unconditional check here.
@@ -1238,7 +1889,7 @@ class CanvasService {
     if (
       !isSameSelectedArtworkIdentity(
         currentSelectedItem,
-        request.dp1CallData.items[0]
+        playableItems[0]
       )
     ) {
       this.setRenderStatus(RenderStatus.pending);
@@ -1249,15 +1900,16 @@ class CanvasService {
     // shuffle / loop toggles from the previous playlist on the same device tab.
     this.setCastInfo({
       castCommand: CastCommand.displayPlaylist,
+      contentContext,
       playlist: {
         ...request.dp1CallData,
-        items: request.dp1CallData.items.map(item => ({
+        items: playableItems.map(item => ({
           ...item,
           duration: item.duration ?? NO_DURATION_VALUE,
         })),
       },
       playlistUrl: request.playlistUrl,
-      index: 0,
+      index: normalizePlaylistIndex(request.startIndex ?? 0, playableItems.length),
       playlistId: request.dp1CallData.id,
       loopMode: LoopMode.playlist,
       shuffle: false,
@@ -1294,15 +1946,27 @@ class CanvasService {
       console.error('[CanvasService] No schedule time found');
       return { ok: false };
     }
-    if (findInvalidArtworkSource(request.dp1CallData.items)) {
+    // Same order as an immediate cast: policy first, sources second. Validating
+    // the raw list would let a blocked work's unsupported source reject a
+    // schedule whose playable works are all fine, and it would store items this
+    // version never validated — the scheduled task is a recovery snapshot that
+    // is replayed without re-validation, exactly like the boot record.
+    const policy = this.admissionPolicy();
+    const filtered = policy === null ? admitUnfiltered(request.dp1CallData) :
+      filterContent(request.dp1CallData, policy, request.contentContext ?? 'curated');
+    if (!filtered.playlist) {
+      return { ok: false, error: 'contentBlocked' };
+    }
+    if (findInvalidArtworkSource(filtered.playlist.items)) {
       console.error('[CanvasService] Invalid artwork source');
       return { ok: false };
     }
 
     console.log('[CanvasService] Schedule playlist');
     DP1ScheduleService.storeScheduledTask(
-      request.dp1CallData,
-      request.scheduleTime.replace('Z', '')
+      filtered.playlist,
+      request.scheduleTime.replace('Z', ''),
+      request.contentContext,
     ).catch((error: unknown) => {
       console.error('[CanvasService] Error storing scheduled task:', error);
     });
@@ -1421,9 +2085,19 @@ class CanvasService {
   // Keep deferred-refresh, shuffle restoration, and index remapping together
   // because they all amend the same compatibility-sensitive cast contract.
   // eslint-disable-next-line max-lines-per-function
-  private refreshPlaylist(newItems: DP1Item[] | undefined): Reply {
+  private refreshPlaylist(
+    newItems: DP1Item[] | undefined,
+    // The origin the caller actually filtered under. It must travel with the
+    // refreshed state: admission used this value, and setCastInfo re-applies
+    // policy from what is stored, so leaving the previous cast's context in
+    // place would let one origin choose the items and a different one judge
+    // them on the next policy change.
+    contentContext?: ContentContext
+  ): Reply {
     const currentPlaylist = this.castInfo?.playlist;
-    const prior = this.castInfo;
+    const prior = this.castInfo
+      ? { ...this.castInfo, ...(contentContext ? { contentContext } : {}) }
+      : this.castInfo;
     if (findInvalidArtworkSource(newItems)) {
       console.error('[CanvasService] Invalid artwork source');
       return { ok: false };
@@ -1462,6 +2136,16 @@ class CanvasService {
       console.log(
         '[CanvasService] New playlist is the same as the current playlist'
       );
+      // Identical items can still arrive under a DIFFERENT origin, and that
+      // reclassification is the whole point of the refresh. Returning here
+      // without publishing it would leave the cast judged under the old
+      // context by every later policy change. `refreshPlaylist` is the one
+      // command the client applies without restarting the slot — with no
+      // queued playlist pending it breaks out untouched — so the context lands
+      // and is persisted while the current work keeps playing.
+      if (prior && this.castInfo?.contentContext !== prior.contentContext) {
+        this.setCastInfo({ ...prior, castCommand: CastCommand.refreshPlaylist });
+      }
       return { ok: true };
     }
 
@@ -1481,10 +2165,10 @@ class CanvasService {
     }
     const prevItems = currentPlaylist.items;
     const prevIndex = prior.index;
-    const playlistForRefresh = {
+    const playlistForRefresh = stripPlaylistSignature({
       ...currentPlaylist,
       items: normalizedItems,
-    };
+    });
 
     let currentItemId: string | undefined;
     if (prevItems.length && prevIndex !== undefined) {
