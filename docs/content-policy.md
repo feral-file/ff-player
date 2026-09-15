@@ -25,8 +25,13 @@ unrated escape hatch. Unknown content context is rejected.
 `displayPlaylist.request.contentContext` is `curated | personal`, outside the
 signed DP-1 body. Missing context and every device default are curated.
 Persisted cast, scheduled, refreshed and Recently played requests retain it. A
-refresh retains the context it was actually filtered under, not the one the
-previous cast carried. A `display_at_boot` cast stores its context and the
+refresh is a source update to an existing cast, so an absent context there
+means "unchanged", not curated: it inherits the cast's own origin, and an
+explicit context on the refresh overrides it. Defaulting a context-less refresh
+to curated instead would filter a viewer's own personal cast every time its
+source updated. A refresh cannot invent a personal origin — it can only carry
+forward one the device already admitted — and it retains the context it was
+actually filtered under, not the one the previous cast carried. A `display_at_boot` cast stores its context and the
 signed playlist as one value: two keys would be two best-effort writes, and a
 reboot between them could pair a playlist with the wrong origin. The context
 sits beside the DP-1 document inside that value, never inside the document, and
@@ -49,7 +54,12 @@ Admission rejects an all-filtered new cast with `contentBlocked` without
 replacing the current work. Tightening settings is different: newly blocked
 current/queued work must immediately retire without an outgoing-art crossfade,
 and no stale timer, default fetch, persisted boot cast, or replay may restore
-it. Policy is applied before source probes, manifest resolution and rendering.
+it. Policy is applied before source probes, manifest resolution and rendering —
+on the immediate cast, on a scheduled playlist, and on what the boot record
+stores, so a blocked work's unsupported source can never reject a playlist
+whose playable works are sound. Anything written to a recovery snapshot
+(scheduled task, boot record) has passed source validation in this version,
+because replay deliberately does not re-validate.
 The boot path hydrates the mirror before restoring any artwork. A cast that
 arrives while the mirror is still being read is admitted whole and reconciled
 by the hydration publish, which re-applies the real policy to the retained

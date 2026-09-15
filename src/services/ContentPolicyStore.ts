@@ -40,6 +40,10 @@ export class ContentPolicyStore {
   private readonly listeners = new Set<() => void>();
   private initialization?: Promise<void>;
   private pending: Promise<void> = Promise.resolve();
+  /** What hydration read, whether or not it was published. */
+  private hydrated: Readonly<ContentPolicy> | null = null;
+  /** A daemon write is in flight; hydration must not publish ahead of it. */
+  private supersededByWrite = false;
 
   constructor(private readonly storage: PolicyStorage) {}
 
@@ -61,7 +65,16 @@ export class ContentPolicyStore {
   private async hydrate(): Promise<void> {
     try {
       const raw = await this.storage.read();
-      this.publish(raw === null ? DEFAULT_CONTENT_POLICY : parseContentPolicy(JSON.parse(raw)));
+      const hydrated = raw === null ? DEFAULT_CONTENT_POLICY : parseContentPolicy(JSON.parse(raw));
+      this.hydrated = hydrated;
+      // A daemon write already in flight supersedes what the mirror held.
+      // Publishing the stale value first would reconcile the live cast against
+      // a policy known to be obsolete, and a stricter old value can retire an
+      // admitted work that the incoming policy allows — with nothing left to
+      // restore when it lands a moment later. Hold it; the write publishes.
+      if (!this.supersededByWrite) {
+        this.publish(hydrated);
+      }
     } catch {
       // The daemon can recover via set(). Never translate corruption to the
       // permissive pre-audit defaults, nor erase the last recovery snapshot.
@@ -75,13 +88,35 @@ export class ContentPolicyStore {
   /** Resolve only when the complete validated policy is durable and applied. */
   set(raw: unknown): Promise<void> {
     const policy = parseContentPolicy(raw);
+    // Claimed before the write starts, so a hydration that resolves in the
+    // meantime holds its value instead of publishing a policy this write is
+    // about to replace. The write does not wait on the read: it overwrites the
+    // record wholesale, and waiting is what let the stale value reconcile the
+    // live cast first.
+    this.supersededByWrite = true;
     const next = this.pending.then(async () => {
-      await this.initialize();
-      await this.storage.write(JSON.stringify(policy));
+      try {
+        await this.storage.write(JSON.stringify(policy));
+      } catch (error) {
+        // The mirror is unchanged, so whatever hydration read still describes
+        // it and must be allowed through — otherwise a failed write would
+        // leave the store inactive and admission with nothing to apply.
+        this.releaseSupersededHydration();
+        throw error;
+      }
+      this.supersededByWrite = false;
       this.publish(policy);
     });
     this.pending = next.catch(() => undefined);
     return next;
+  }
+
+  /** Publish a hydrated value that was held back for a write that then failed. */
+  private releaseSupersededHydration(): void {
+    this.supersededByWrite = false;
+    if (this.hydrated) {
+      this.publish(this.hydrated);
+    }
   }
 
   /** Retire outgoing media when fresh labels block the current work. */

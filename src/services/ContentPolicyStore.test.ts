@@ -29,6 +29,44 @@ describe('persisted content policy', () => {
     expect(store.getSnapshot().policy).toEqual(policy);
   });
 
+  it('never publishes the stale mirror ahead of a write already in flight', async () => {
+    let finishRead: (value: string | null) => void = () => undefined;
+    const store = new ContentPolicyStore({
+      read: () => new Promise<string | null>(resolve => { finishRead = resolve; }),
+      write: () => Promise.resolve(),
+    });
+    const published: boolean[] = [];
+    store.subscribe(() => { published.push(store.getSnapshot().policy.showMatureContent); });
+
+    void store.initialize();
+    const write = store.set({ ...DEFAULT_CONTENT_POLICY, showMatureContent: true });
+    finishRead(null);
+    await write;
+
+    // Publishing the hydrated default first would reconcile the live cast
+    // against a policy already known to be obsolete, and a mature work admitted
+    // under the incoming opt-in would be retired before that opt-in applied.
+    expect(published).toEqual([true]);
+    expect(store.getSnapshot().policy.showMatureContent).toBe(true);
+  });
+
+  it('lets the hydrated mirror through when the write it waited for fails', async () => {
+    let finishRead: (value: string | null) => void = () => undefined;
+    const store = new ContentPolicyStore({
+      read: () => new Promise<string | null>(resolve => { finishRead = resolve; }),
+      write: () => Promise.reject(new Error('quota')),
+    });
+
+    void store.initialize();
+    const write = store.set({ ...DEFAULT_CONTENT_POLICY, showMatureContent: true });
+    finishRead(null);
+    await expect(write).rejects.toThrow('quota');
+
+    // The record is unchanged, so what hydration read still describes it.
+    // Staying inactive would leave admission with no policy to apply at all.
+    expect(store.getSnapshot()).toMatchObject({ active: true, policy: DEFAULT_CONTENT_POLICY });
+  });
+
   it('serializes changes and reads the committed policy after a restart', async () => {
     let raw: string | null = null;
     const storage = { read: () => Promise.resolve(raw), write: (value: string) => { raw = value; return Promise.resolve(); } };

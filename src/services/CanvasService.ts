@@ -1695,14 +1695,25 @@ class CanvasService {
       console.error('[CanvasService] No schedule time found');
       return { ok: false };
     }
-    if (findInvalidArtworkSource(request.dp1CallData.items)) {
+    // Same order as an immediate cast: policy first, sources second. Validating
+    // the raw list would let a blocked work's unsupported source reject a
+    // schedule whose playable works are all fine, and it would store items this
+    // version never validated — the scheduled task is a recovery snapshot that
+    // is replayed without re-validation, exactly like the boot record.
+    const policy = this.admissionPolicy();
+    const filtered = policy === null ? admitUnfiltered(request.dp1CallData) :
+      filterContent(request.dp1CallData, policy, request.contentContext ?? 'curated');
+    if (!filtered.playlist) {
+      return { ok: false, error: 'contentBlocked' };
+    }
+    if (findInvalidArtworkSource(filtered.playlist.items)) {
       console.error('[CanvasService] Invalid artwork source');
       return { ok: false };
     }
 
     console.log('[CanvasService] Schedule playlist');
     DP1ScheduleService.storeScheduledTask(
-      request.dp1CallData,
+      filtered.playlist,
       request.scheduleTime.replace('Z', ''),
       request.contentContext,
     ).catch((error: unknown) => {

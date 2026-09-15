@@ -5,6 +5,7 @@ import { DEFAULT_CONTENT_POLICY } from './contentPolicy';
 import DeviceManager from '@/utils/DeviceManager';
 import { CastCommand } from '@/models';
 import { DP1Action, DP1Call, DP1Item, DP1License } from '@/models/dp1.model';
+import DP1ScheduleService from './DP1ScheduleService';
 
 const item = (id: string, contentRating?: 'general' | 'mature'): DP1Item => ({
   id, source: `https://art.test/${id}`, license: DP1License.Open,
@@ -140,6 +141,27 @@ describe('content policy at persistence and refresh boundaries', () => {
     // fully-blocked playlist would leave the old artwork on the wall.
     expect(cast(playlist(), { refresh: true })?.ok).toBe(true);
     expect(canvasService.getCastInfo()?.playlist?.items ?? []).toHaveLength(0);
+  });
+
+  it('filters a scheduled playlist before validating its sources', () => {
+    const store = vi.spyOn(DP1ScheduleService, 'storeScheduledTask').mockResolvedValue(undefined);
+    const blockedInvalid = { ...item('blocked', 'mature'), source: 'about:blank' };
+    const allowed = item('allowed', 'general');
+
+    // Same order as an immediate cast. Validating the raw list would let the
+    // blocked work's unsupported source reject a schedule whose playable work
+    // is fine, and would store an item this version never validated.
+    const reply = canvasService.processMessage({
+      command: CastCommand.displayPlaylist,
+      request: {
+        intent: { action: DP1Action.SchedulePlay, schedule_time: '2099-01-01T00:00:00Z' },
+        dp1_call: playlist(blockedInvalid, allowed),
+      },
+    });
+
+    expect(reply?.ok).toBe(true);
+    const [stored] = store.mock.calls[0];
+    expect(stored.items?.map(value => value.id)).toEqual(['allowed']);
   });
 
   it('persists only boot items this version validated', () => {
