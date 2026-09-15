@@ -22,16 +22,22 @@ import { useEffect, useMemo, useState } from 'react';
  * disturb playback.
  */
 export function useTombstoneInfo(item: DP1Item | undefined) {
-  // The resolved label is stored WITH the item id it belongs to and checked
-  // synchronously at read time. State alone would lag one render behind an
-  // item change (effects run post-render), letting the new item's key render
-  // with the previous item's artist/title — a brief misidentification the
-  // label must never show.
+  // The resolved label is stored WITH the item identity it belongs to and
+  // checked synchronously at read time. State alone would lag one render
+  // behind an item change (effects run post-render), letting the new item's
+  // key render with the previous item's artist/title — a brief
+  // misidentification the label must never show. The ref and refHash are part
+  // of that identity because publishers may replace or version a ref manifest
+  // in place while preserving the playlist item id.
   const [labelEntry, setLabelEntry] = useState<{
     forItemId: string;
+    forRef: string;
+    forRefHash: string;
     label: RefManifestLabel;
   } | null>(null);
   const itemId = item?.id ?? '';
+  const itemRef = item?.ref ?? '';
+  const itemRefHash = item?.refHash ?? '';
 
   useEffect(() => {
     if (!item?.ref) {
@@ -45,17 +51,25 @@ export function useTombstoneInfo(item: DP1Item | undefined) {
     loadRefManifestLabel(item)
       .then(label => {
         if (!stale && label) {
-          setLabelEntry({ forItemId: itemId, label });
+          setLabelEntry({
+            forItemId: itemId,
+            forRef: itemRef,
+            forRefHash: itemRefHash,
+            label,
+          });
         }
       })
       .catch(() => undefined);
     return () => {
       stale = true;
     };
-  }, [item, itemId]);
+  }, [item, itemId, itemRef, itemRefHash]);
 
   const manifestLabel =
-    labelEntry !== null && labelEntry.forItemId === itemId
+    labelEntry !== null &&
+    labelEntry.forItemId === itemId &&
+    labelEntry.forRef === itemRef &&
+    labelEntry.forRefHash === itemRefHash
       ? labelEntry.label
       : null;
 
