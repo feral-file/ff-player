@@ -79,9 +79,17 @@ describe('content policy with repeated playlist slots', () => {
     id, source, license: DP1License.Open, ...(rating ? { contentRating: rating } : {}),
   });
 
-  // These drive a real commit to set the on-screen work, so the history store
-  // has to be readable — a failed append latches for the life of the service
-  // and would leak into later suites.
+  // These set the on-screen work by calling recordRecentlyPlayed directly, so
+  // they exercise the refresh lookups and NOT the route that decides which slot
+  // gets recorded in the first place. That route resolves a commit by
+  // itemIdentityFor, which returns the bare DP-1 id, so for repeated ids it can
+  // record the wrong slot before any of this runs — a known limit of the
+  // player-wide slot identity the change owner has kept as it is. These tests
+  // prove the refresh path handles the slot it is given; they do not prove the
+  // right slot arrives.
+  //
+  // The history store has to be readable here: a failed append latches for the
+  // life of the service and would leak into later suites.
   beforeEach(() => {
     vi.spyOn(DeviceManager, 'getRecentlyPlayed').mockResolvedValue([]);
     vi.spyOn(DeviceManager, 'getRecentlyPlayedIncomplete').mockResolvedValue(false);
@@ -110,6 +118,25 @@ describe('content policy with repeated playlist slots', () => {
     expect(contentPolicyStore.getSnapshot().retireEpoch).toBeGreaterThan(epoch);
     expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.source))
       .toEqual(['https://art.test/first']);
+  });
+
+  it('does not interrupt an allowed slot because an earlier twin was blocked', () => {
+    // Selected is the SECOND dup, still general; the refresh marks the earlier
+    // dup mature. Resolving the selected work by id alone finds that earlier
+    // slot, calls the selection blocked, and tears down playback to re-display
+    // the very work that was allowed all along.
+    const onScreen = slot('dup', 'https://art.test/b', 'general');
+    expect(cast(playlist(slot('dup', 'https://art.test/a', 'general'), onScreen))?.ok).toBe(true);
+    canvasService.setCastInfo({ ...canvasService.getCastInfo(), index: 1 }, false);
+    canvasService.recordRecentlyPlayed(onScreen);
+    const epoch = contentPolicyStore.getSnapshot().retireEpoch;
+
+    expect(cast(playlist(slot('dup', 'https://art.test/a', 'mature'), onScreen),
+      { refresh: true })?.ok).toBe(true);
+
+    expect(contentPolicyStore.getSnapshot().retireEpoch).toBe(epoch);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.source))
+      .toEqual(['https://art.test/b']);
   });
 
   it('still retires a repeated slot whose refresh replaces its source', () => {

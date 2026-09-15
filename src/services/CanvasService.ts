@@ -1800,7 +1800,13 @@ class CanvasService {
     const policy = this.admissionPolicy();
     const currentItems = this.castInfo?.playlist?.items ?? [];
     const currentItem = currentItems.at(normalizePlaylistIndex(this.castInfo?.index ?? 0, currentItems.length));
-    const updatedCurrent = currentItem && dp1CallData.items?.find(item => item.id === currentItem.id);
+    // Exact slot first, id alone second — the same precedence the on-screen and
+    // selection lookups use below. Resolving by id alone found an EARLIER twin
+    // of the selected work, so a refresh that blocked that twin tore down
+    // playback to re-display the slot that was allowed the whole time.
+    const updatedCurrent = currentItem && (
+      this.findSlot(dp1CallData.items, currentItem) ??
+      dp1CallData.items?.find(item => item.id === currentItem.id));
     // The SELECTED work is not necessarily the one on screen: during a slow
     // handoff the selection has moved on while the previous work is still
     // showing. Refreshed labels that block what is on screen have to retire it
