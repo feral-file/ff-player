@@ -46,6 +46,24 @@ describe('final current-preview admission', () => {
     expect(permitsCurrentPreview(cast([mature, { ...b, source: a.source }]), a, a.source, snapshot)).toBe(false);
   });
 
+  it('judges the painted source, not the one already queued to replace it', () => {
+    // Same-id source refresh mid-load: the preview URL has moved to the
+    // incoming source while the outgoing one is still painted. Pairing the
+    // outgoing id with the incoming URL finds the incoming item, so a mature
+    // work would stay on screen because its allowed replacement passed —
+    // indefinitely if that replacement stalls.
+    const paintedMature = { ...a, source: 'https://art.test/a-v1',
+      contentRating: 'mature' as const };
+    const incomingAllowed = { ...a, source: 'https://art.test/a-v2',
+      contentRating: 'general' as const };
+
+    expect(permitsCurrentPreview(cast([incomingAllowed]), paintedMature,
+      incomingAllowed.source, snapshot)).toBe(false);
+    // Once the replacement is what is painted, it plays normally.
+    expect(permitsCurrentPreview(cast([incomingAllowed]), incomingAllowed,
+      incomingAllowed.source, snapshot)).toBe(true);
+  });
+
   it('retires a blocked showing work even after an allowed sibling with its source is selected', () => {
     // Post-filter shape: the mature work has been removed from the projection
     // and a different work carrying the same source is now selected, while the

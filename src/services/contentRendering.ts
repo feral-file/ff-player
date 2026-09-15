@@ -34,6 +34,14 @@ export function permitsCurrentPreview(cast: CastInfo | null,
   // An empty cast is not a handoff: nothing is loading to replace what is on
   // screen, so there is nothing to keep painting for.
   if (!items.length) {return false;}
-  const fresh = items.find(item => item.id === showing.id && item.source === url);
+  // Matched on the SHOWING work's own source, never on the preview URL. During
+  // a same-id source refresh the URL has already moved to the incoming source
+  // while the outgoing one is still painted, so pairing the outgoing id with
+  // the incoming URL finds the incoming item and judges the wrong work — which
+  // would keep mature media on screen because its allowed replacement, not yet
+  // loaded, passed admission. `url` is only a presence check: no URL, nothing
+  // painted, nothing to permit.
+  const fresh = items.find(
+    item => item.id === showing.id && item.source === showing.source);
   return allowsContent(fresh ?? showing, snapshot.policy, parseContentContext(cast.contentContext));
 }
