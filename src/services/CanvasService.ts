@@ -211,6 +211,12 @@ function resolveRenderStatusForCastInfo(
  * components share, including playlist order, loop/shuffle modes, and deferred
  * refresh transitions.
  */
+/** Identifies a cast for boot-record matching: playlist id, else its items. */
+interface CastKey { id?: string; items: DP1Item[] }
+
+/**
+ *
+ */
 class CanvasService {
   private castInfo: CastInfo | null = null;
   private renderStatus: RenderStatus | undefined;
@@ -422,14 +428,22 @@ class CanvasService {
   /** Serializes every boot-record mutation; see supersedeBootRecord. */
   private bootRecordWrite: Promise<void> = Promise.resolve();
   /**
-   * The projection this service last wrote over the boot record for the CURRENT
-   * boot-backed cast. Successive refreshes of one cast each captured the same
-   * live list, so without this a second refresh would compare against a record
-   * the first one already replaced, decline, and leave the restart restoring
-   * content the newer refresh had removed. Cleared by a display_at_boot, which
-   * is what keeps a stale refresh from overwriting a genuinely newer cast.
+   * The projection this service last wrote over the boot record, and the cast
+   * it was written FOR. Successive refreshes of one cast each captured the same
+   * live list, so without the projection a second refresh would compare against
+   * a record the first one already replaced, decline, and leave the restart
+   * restoring content the newer refresh had removed.
+   *
+   * The owner is what keeps that from becoming a blank cheque. Without it the
+   * fallback asked only "is this the record I wrote", so ANY later cast's
+   * refresh matched it — an ordinary now_display, refreshed once, would
+   * overwrite or delete the boot record belonging to a different playlist
+   * entirely. A refresh may replace this projection only if it comes from the
+   * same cast that produced it. Cleared by a display_at_boot, which is what
+   * keeps a stale refresh from overwriting a genuinely newer boot cast.
    */
   private supersededBootProjection: DP1Call | null = null;
+  private supersededBootOwner: CastKey | null = null;
 
   /**
    * The policy admission must apply, or `null` while the device's own mirror is
@@ -1694,6 +1708,7 @@ class CanvasService {
         // A new boot cast ends the refresh chain: a supersession still queued
         // behind this one belongs to the cast this replaces.
         this.supersededBootProjection = null;
+        this.supersededBootOwner = null;
         return this.writeBootPlaylist(dp1CallData, contentContext);
       })
       .catch((error: unknown) => {
@@ -1753,7 +1768,7 @@ class CanvasService {
    * Fire-and-forget on the same single-value write the boot path already uses,
    * so the playlist and its context can never be left disagreeing.
    */
-  private supersedeBootRecord(previous: { id?: string; items: DP1Item[] },
+  private supersedeBootRecord(previous: CastKey,
     next: DP1Call | null, contentContext: ContentContext): void {
     // Queued behind every other boot-record mutation, and the match is checked
     // INSIDE the queue, immediately before the write. The read is asynchronous,
@@ -1768,10 +1783,12 @@ class CanvasService {
         }
         if (next === null) {
           this.supersededBootProjection = null;
+          this.supersededBootOwner = null;
           await DeviceManager.removeItem(LocalStorageItem.bootPlaylist);
           return;
         }
         this.supersededBootProjection = next;
+        this.supersededBootOwner = previous;
         await this.writeBootPlaylist(next, contentContext);
       })
       .catch((error: unknown) => {
@@ -1786,26 +1803,33 @@ class CanvasService {
    * comparison has to be made against that, since the refresh is what changes
    * it. No key at all means no match: never guess at which record to overwrite.
    */
-  private backsThisCast(boot: DP1Call, previous: { id?: string; items: DP1Item[] }): boolean {
+  private backsThisCast(boot: DP1Call, previous: CastKey): boolean {
     if (this.isBootRecordFor(boot, previous)) {
       return true;
     }
     // Or it is the projection an earlier refresh of this same cast wrote, which
     // a later refresh of that cast is entitled to replace.
     const own = this.supersededBootProjection;
-    return own !== null &&
+    const owner = this.supersededBootOwner;
+    return own !== null && owner !== null &&
+      this.matchesKey(owner, previous) &&
       this.isBootRecordFor(boot, { id: own.id, items: own.items ?? [] });
   }
 
-  private isBootRecordFor(boot: DP1Call, previous: { id?: string; items: DP1Item[] }): boolean {
-    if (previous.id !== undefined || boot.id !== undefined) {
-      return boot.id === previous.id;
+  private isBootRecordFor(boot: DP1Call, previous: CastKey): boolean {
+    return this.matchesKey({ id: boot.id, items: boot.items ?? [] }, previous);
+  }
+
+  /** Playlist id when either side carries one, item identity otherwise. */
+  private matchesKey(candidate: CastKey, previous: CastKey): boolean {
+    if (previous.id !== undefined || candidate.id !== undefined) {
+      return candidate.id === previous.id;
     }
     // By item identity, not by value: the live cast carries normalized
     // durations the stored document does not.
     const ids = (items: DP1Item[]): (string | undefined)[] => items.map(item => item.id);
     return previous.items.length > 0 &&
-      deepEqual(ids(boot.items ?? []), ids(previous.items));
+      deepEqual(ids(candidate.items), ids(previous.items));
   }
 
   /**

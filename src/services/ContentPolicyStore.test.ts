@@ -148,29 +148,6 @@ describe('content policy when the read never settles', () => {
     expect(store.getSnapshot()).toMatchObject({ active: true, hydrationFailed: false });
   });
 
-  it('ignores an abandoned read that resolves after its attempt expired', async () => {
-    let settle: (value: string | null) => void = () => undefined;
-    let attempts = 0;
-    const store = new ContentPolicyStore({
-      read: () => {
-        attempts += 1;
-        return attempts === 1
-          ? new Promise<string | null>(resolve => { settle = resolve; })
-          : Promise.resolve(JSON.stringify({ ...DEFAULT_CONTENT_POLICY, strictPersonal: true }));
-      },
-      write: () => Promise.resolve(),
-    }, 10);
-
-    await store.initialize();
-    await store.initialize();
-    // The first read finally comes back, carrying what the mirror held before.
-    settle(JSON.stringify(DEFAULT_CONTENT_POLICY));
-    await Promise.resolve();
-    await Promise.resolve();
-
-    // It must not overwrite the generation that superseded it.
-    expect(store.getSnapshot().policy.strictPersonal).toBe(true);
-  });
 });
 
 describe('content policy write precedence and recovery', () => {

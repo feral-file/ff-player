@@ -9,8 +9,14 @@
  * A wedged open fires neither onsuccess nor onerror, so without a bound the
  * cached init promise stays pending for the life of the page and EVERY later
  * read and write waits on it forever — including the write a daemon would use
- * to repair the device. Tighter than the policy store's own read timeout, so
- * the inner layer is the one that gives up first.
+ * to repair the device.
+ *
+ * Deliberately LOOSER than the policy store's own read timeout, not tighter: a
+ * cold device can be slow to open, and rejecting a merely slow open is how a
+ * healthy boot loses its restored state. The policy store therefore gives up
+ * first and falls back to the built-in default, so playback never waits this
+ * long; a connection that lands afterwards is adopted and serves every later
+ * read, and the real policy is picked back up on the next poll.
  */
 const OPEN_TIMEOUT_MS = 15000;
 

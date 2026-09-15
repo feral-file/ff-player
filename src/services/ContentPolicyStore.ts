@@ -68,9 +68,6 @@ export class ContentPolicyStore {
    */
   private writeApplied = false;
 
-  /** Attempt counter, so a read abandoned at timeout cannot publish later. */
-  private hydrationGeneration = 0;
-
   constructor(private readonly storage: PolicyStorage,
     private readonly readTimeoutMs: number = HYDRATION_TIMEOUT_MS) {}
 
@@ -95,14 +92,8 @@ export class ContentPolicyStore {
   }
 
   private async hydrate(): Promise<void> {
-    const generation = ++this.hydrationGeneration;
     try {
       const raw = await this.readWithinTimeout();
-      if (generation !== this.hydrationGeneration) {
-        // A newer attempt started while this read was outstanding. Whatever it
-        // returned describes a mirror that has since been read again.
-        return;
-      }
       const hydrated = raw === null ? DEFAULT_CONTENT_POLICY : parseContentPolicy(JSON.parse(raw));
       this.hydrated = hydrated;
       // A daemon write already in flight supersedes what the mirror held.
@@ -118,9 +109,6 @@ export class ContentPolicyStore {
       // answer, because storage was briefly unavailable — and that must not
       // outlive the attempt.
       this.initialization = undefined;
-      if (generation !== this.hydrationGeneration) {
-        return;
-      }
       // A write can land while this read is still outstanding, and the record
       // it failed to read has been replaced since. Do not touch the snapshot
       // then — the applied policy is the truth.

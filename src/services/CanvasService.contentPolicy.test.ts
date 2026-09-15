@@ -4,6 +4,7 @@ import { contentPolicyStore, ContentPolicyStore } from './ContentPolicyStore';
 import { DEFAULT_CONTENT_POLICY } from './contentPolicy';
 import DeviceManager from '@/utils/DeviceManager';
 import { CastCommand } from '@/models';
+import { LocalStorageItem } from '@/constants';
 import { DP1Action, DP1Call, DP1Item, DP1License } from '@/models/dp1.model';
 import DP1ScheduleService from './DP1ScheduleService';
 
@@ -218,20 +219,20 @@ describe('content policy and playlist projections', () => {
 
 });
 
-describe('a refresh that supersedes a boot-backed cast', () => {
-  /** Stands in for the device's boot record across a simulated restart. */
-  const bootStore = () => {
-    let record: { playlist: DP1Call; contentContext: string } | null = null;
-    vi.spyOn(DeviceManager, 'setBootPlaylist').mockImplementation(
-      (playlist, contentContext = 'curated') => {
-        record = { playlist, contentContext };
-        return Promise.resolve();
-      });
-    vi.spyOn(DeviceManager, 'getBootPlaylist').mockImplementation(
-      () => Promise.resolve(record?.playlist ?? null));
-    return () => record;
-  };
+/** Stands in for the device's boot record across a simulated restart. */
+const bootStore = () => {
+  let record: { playlist: DP1Call; contentContext: string } | null = null;
+  vi.spyOn(DeviceManager, 'setBootPlaylist').mockImplementation(
+    (playlist, contentContext = 'curated') => {
+      record = { playlist, contentContext };
+      return Promise.resolve();
+    });
+  vi.spyOn(DeviceManager, 'getBootPlaylist').mockImplementation(
+    () => Promise.resolve(record?.playlist ?? null));
+  return () => record;
+};
 
+describe('a refresh that supersedes a boot-backed cast', () => {
   it('rewrites the boot record when a refresh removes content from it', async () => {
     const read = bootStore();
     const boot = playlist(item('keep', 'general'), item('drop', 'general'));
@@ -279,6 +280,53 @@ describe('a refresh that supersedes a boot-backed cast', () => {
     await vi.waitFor(() => {
       expect(read()?.playlist.items?.map(value => value.id)).toEqual(['d']);
     });
+  });
+
+});
+
+describe('boot-record ownership across casts', () => {
+  it('does not let an unrelated cast\'s refresh overwrite the boot record', async () => {
+    const read = bootStore();
+    const boot = playlist(item('a', 'general'), item('dropped', 'general'));
+    expect(cast(boot, { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+    await vi.waitFor(() => { expect(read()).not.toBeNull(); });
+    // A refresh of the boot-backed cast drops an item, so the record now holds
+    // that refresh's projection rather than the list it was written from.
+    expect(cast(playlist(item('a', 'general')), { refresh: true })?.ok).toBe(true);
+    await vi.waitFor(() => {
+      expect(read()?.playlist.items?.map(value => value.id)).toEqual(['a']);
+    });
+
+    // An ordinary cast takes the wall, then is refreshed. It has nothing to do
+    // with the boot record; matching it against the projection alone let its
+    // refresh overwrite what the device restores after a restart.
+    expect(cast(playlist(item('x', 'general'), item('y', 'general')))?.ok).toBe(true);
+    expect(cast(playlist(item('x', 'general')), { refresh: true })?.ok).toBe(true);
+
+    await new Promise(resolve => { setTimeout(resolve, 30); });
+    expect(read()?.playlist.items?.map(value => value.id)).toEqual(['a']);
+  });
+
+  it('does not let an unrelated clearing refresh delete the boot record', async () => {
+    const read = bootStore();
+    const removed = vi.spyOn(DeviceManager, 'removeItem').mockResolvedValue(undefined);
+    const boot = playlist(item('a', 'general'), item('dropped', 'general'));
+    expect(cast(boot, { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+    await vi.waitFor(() => { expect(read()).not.toBeNull(); });
+    expect(cast(playlist(item('a', 'general')), { refresh: true })?.ok).toBe(true);
+    await vi.waitFor(() => {
+      expect(read()?.playlist.items?.map(value => value.id)).toEqual(['a']);
+    });
+
+    // Same shape, but the unrelated cast's refresh empties the playlist, which
+    // invalidates the record it matches.
+    expect(cast(playlist(item('x', 'general')))?.ok).toBe(true);
+    expect(cast(playlist(), { refresh: true })?.ok).toBe(true);
+
+    await new Promise(resolve => { setTimeout(resolve, 30); });
+    // Scoped to the boot key: other state clears on an ordinary cast.
+    expect(removed).not.toHaveBeenCalledWith(LocalStorageItem.bootPlaylist);
+    expect(read()?.playlist.items?.map(value => value.id)).toEqual(['a']);
   });
 
   it('does not let a slow refresh overwrite a newer boot cast', async () => {
