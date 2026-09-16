@@ -7,7 +7,6 @@ on:
       - develop
     paths:
       - 'src/**'
-      - 'scripts/check-log-proxy-browser.mjs'
       - 'package.json'
       - 'package-lock.json'
       - 'vitest.config.ts'
@@ -17,7 +16,6 @@ on:
       - develop
     paths:
       - 'src/**'
-      - 'scripts/check-log-proxy-browser.mjs'
       - 'package.json'
       - 'package-lock.json'
       - 'vitest.config.ts'

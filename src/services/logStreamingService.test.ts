@@ -18,6 +18,15 @@ function successfulFetcher(posts: unknown[][]): typeof fetch {
   }) as typeof fetch;
 }
 
+/** Records a message carrying an explicitly approved application namespace. */
+function record(
+  stream: LogStreamingService,
+  level: 'trace' | 'debug' | 'info' | 'warn' | 'error',
+  message: string
+): void {
+  stream.record(level, `[CanvasService] ${message}`);
+}
+
 afterEach(() => {
   vi.useRealTimers();
 });
@@ -35,9 +44,9 @@ describe('LogStreamingService session boundaries', () => {
       random: () => 0,
     });
 
-    stream.record('info', 'one');
+    record(stream, 'info', 'one');
     now = 1_000;
-    stream.record('warn', 'two');
+    record(stream, 'warn', 'two');
     await vi.advanceTimersByTimeAsync(4_999);
     expect(posts).toHaveLength(0);
     await vi.advanceTimersByTimeAsync(1);
@@ -51,7 +60,7 @@ describe('LogStreamingService session boundaries', () => {
     expect(first).toMatchObject({
       environment: 'test',
       level: 'info',
-      message: 'one',
+      message: '[CanvasService] one',
       timestamp: new Date(0).toISOString(),
     });
   });
@@ -69,15 +78,15 @@ describe('LogStreamingService session boundaries', () => {
       random: () => decisions.shift() ?? 1,
     });
 
-    stream.record('info', 'not sampled');
+    record(stream, 'info', 'not sampled');
     await vi.advanceTimersByTimeAsync(5_000);
     now = 5_000;
-    stream.record('info', 'sampled');
+    record(stream, 'info', 'sampled');
     stream.flush();
     await vi.advanceTimersByTimeAsync(0);
 
     expect(posts).toHaveLength(1);
-    expect(posts[0]).toMatchObject([{ message: 'sampled' }]);
+    expect(posts[0]).toMatchObject([{ message: '[CanvasService] sampled' }]);
   });
 });
 
@@ -94,15 +103,15 @@ describe('LogStreamingService maximum session duration', () => {
       random: () => 0,
     });
 
-    stream.record('info', 'first');
+    record(stream, 'info', 'first');
     for (let second = 1; second < 60; second += 1) {
       now = second * 1_000;
       await vi.advanceTimersByTimeAsync(1_000);
-      stream.record('debug', 'continuous');
+      record(stream, 'debug', 'continuous');
     }
     now = 60_000;
     await vi.advanceTimersByTimeAsync(1_000);
-    stream.record('info', 'next session');
+    record(stream, 'info', 'next session');
     stream.flush();
     await vi.advanceTimersByTimeAsync(0);
 
@@ -136,14 +145,14 @@ describe('LogStreamingService delivery', () => {
       random: () => 0,
     });
 
-    stream.record('error', 'queued');
+    record(stream, 'error', 'queued');
     stream.flush();
     await vi.advanceTimersByTimeAsync(0);
     expect(posts).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(5_000);
 
     expect(posts).toHaveLength(2);
-    expect(posts[1]).toMatchObject([{ message: 'queued' }]);
+    expect(posts[1]).toMatchObject([{ message: '[CanvasService] queued' }]);
   });
 
   it('drops a permanent bad batch so a newer batch can proceed', async () => {
@@ -166,15 +175,15 @@ describe('LogStreamingService delivery', () => {
       random: () => 0,
     });
 
-    stream.record('error', 'bad batch');
+    record(stream, 'error', 'bad batch');
     stream.flush();
     now = 10_000;
-    stream.record('info', 'new batch');
+    record(stream, 'info', 'new batch');
     stream.flush();
     await vi.advanceTimersByTimeAsync(0);
 
     expect(posts).toHaveLength(2);
-    expect(posts[1]).toMatchObject([{ message: 'new batch' }]);
+    expect(posts[1]).toMatchObject([{ message: '[CanvasService] new batch' }]);
   });
 });
 
@@ -201,7 +210,7 @@ describe('LogStreamingService stalled delivery', () => {
       random: () => 0,
     });
 
-    stream.record('error', 'stalled');
+    record(stream, 'error', 'stalled');
     stream.flush();
     await vi.advanceTimersByTimeAsync(15_000);
     expect(attempts).toBe(1);
@@ -232,12 +241,12 @@ describe('LogStreamingService stalled delivery', () => {
       random: () => 0,
     });
 
-    stream.record('info', 'in flight');
+    record(stream, 'info', 'in flight');
     stream.flush();
     await vi.advanceTimersByTimeAsync(0);
     for (let index = 0; index < 33; index += 1) {
       now += 10_000;
-      stream.record('info', `queued-${String(index)}`);
+      record(stream, 'info', `queued-${String(index)}`);
       stream.flush();
     }
     releaseFirst?.(new Response(null, { status: 202 }));
@@ -247,12 +256,12 @@ describe('LogStreamingService stalled delivery', () => {
       batch => (batch[0] as { message: string }).message
     );
     expect(messages).toHaveLength(33);
-    expect(messages[0]).toBe('in flight');
-    expect(messages).not.toContain('queued-0');
+    expect(messages[0]).toBe('[CanvasService] in flight');
+    expect(messages).not.toContain('[CanvasService] queued-0');
     expect(messages.slice(1)).toEqual(
       Array.from(
         { length: 32 },
-        (_value, index) => `queued-${String(index + 1)}`
+        (_value, index) => `[CanvasService] queued-${String(index + 1)}`
       )
     );
   });
@@ -274,7 +283,7 @@ describe('LogStreamingService page exit', () => {
       random: () => 0,
     });
     for (let index = 0; index < 40; index += 1) {
-      stream.record('info', `${String(index)}-${'x'.repeat(2_048)}`);
+      record(stream, 'info', `${String(index)}-${'x'.repeat(2_048)}`);
     }
 
     stream.flushForPageExit();
@@ -289,38 +298,38 @@ describe('LogStreamingService page exit', () => {
       new TextEncoder().encode(body as string).byteLength
     ).toBeLessThanOrEqual(60 * 1_024);
     const records = JSON.parse(body as string) as { message: string }[];
-    expect(records.at(-1)?.message.startsWith('39-')).toBe(true);
+    expect(records.at(-1)?.message.startsWith('[CanvasService] 39-')).toBe(true);
   });
 });
 
 describe('publicLogMessage', () => {
   it('keeps open-ended console data out of the public stream', () => {
-    expect(publicLogMessage('   ')).toBe('[empty console message]');
-    expect(publicLogMessage({ ssid: 'home-network' })).toBe(
-      '[non-string console message]'
+    expect(publicLogMessage('   ')).toBeNull();
+    expect(publicLogMessage({ ssid: 'home-network' })).toBeNull();
+    expect(publicLogMessage('Bearer eyJ.private.token')).toBeNull();
+    expect(publicLogMessage('arbitrary operator output')).toBeNull();
+    expect(
+      publicLogMessage(
+        '[MediaLoader] fetch https://user:pass@example.com/art?token=url-secret apiKey=message-secret'
+      )
+    ).toBe('[MediaLoader] fetch https://example.com/art [REDACTED_CREDENTIAL]');
+    expect(publicLogMessage('[API] Authorization: Bearer secret-token')).toBe(
+      '[API] [REDACTED_CREDENTIAL]'
+    );
+    expect(publicLogMessage('[API] payload {"apiKey":"secret"}')).toBe(
+      '[API] payload { [REDACTED_CREDENTIAL]'
     );
     expect(
       publicLogMessage(
-        'fetch https://user:pass@example.com/art?token=url-secret apiKey=message-secret'
+        '[CDP] connect wss://user:secret@example.com/socket?token=query-secret'
       )
-    ).toBe('fetch https://example.com/art [REDACTED_CREDENTIAL]');
-    expect(publicLogMessage('Authorization: Bearer secret-token')).toBe(
-      '[REDACTED_CREDENTIAL]'
-    );
-    expect(publicLogMessage('payload {"apiKey":"secret"}')).toBe(
-      'payload { [REDACTED_CREDENTIAL]'
-    );
-    expect(
-      publicLogMessage(
-        'connect wss://user:secret@example.com/socket?token=query-secret'
-      )
-    ).toBe('connect wss://example.com/socket');
+    ).toBe('[CDP] connect wss://example.com/socket');
   });
 
   it('caps multibyte messages by the proxy UTF-8 byte limit', () => {
-    const message = publicLogMessage('😀'.repeat(1_024));
+    const message = publicLogMessage(`[CanvasService] ${'😀'.repeat(1_024)}`);
 
-    expect(new TextEncoder().encode(message).byteLength).toBe(2_048);
-    expect(message).toBe('😀'.repeat(512));
+    expect(new TextEncoder().encode(message ?? '').byteLength).toBe(2_048);
+    expect(message?.startsWith('[CanvasService] ')).toBe(true);
   });
 });

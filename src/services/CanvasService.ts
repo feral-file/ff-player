@@ -219,6 +219,8 @@ interface CastKey { id?: string; items: DP1Item[] }
 class CanvasService {
   private castInfo: CastInfo | null = null;
   private renderStatus: RenderStatus | undefined;
+  private rejectedCachedCastInfo: CastInfo | null = null;
+  private rejectedCachedCastEpoch: number | null = null;
   private static instance: CanvasService | null;
   private originalPlaylistItems: DP1Item[] | null = null;
   private queuedPlaylistPending = false;
@@ -1237,12 +1239,24 @@ class CanvasService {
       }
 
       const storedCastInfo = DeviceManager.getCachedCastInfo();
-      if (!this.castInfo && storedCastInfo) {
+      const policyEpoch = contentPolicyStore.getSnapshot().epoch;
+      if (
+        !this.castInfo &&
+        storedCastInfo &&
+        (storedCastInfo !== this.rejectedCachedCastInfo ||
+          policyEpoch !== this.rejectedCachedCastEpoch)
+      ) {
         // Hydrate playlist/index only. renderStatus is live-only and must wait
         // for ArtworkPlayer (or an explicit setRenderStatus) after recovery.
         // Use the shared strip helper so future ephemeral fields stay aligned
         // with AppContext boot and useCastInfo persistence.
         this.setCastInfo(stripEphemeralCastInfoFields(storedCastInfo), false);
+        this.rejectedCachedCastInfo = this.renderableCastInfo()
+          ? null
+          : storedCastInfo;
+        this.rejectedCachedCastEpoch = this.rejectedCachedCastInfo
+          ? policyEpoch
+          : null;
       }
 
       // Deliberately NOT `?? storedCastInfo`: the hydration above runs the

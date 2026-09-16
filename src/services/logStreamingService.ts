@@ -33,6 +33,30 @@ interface LogStreamingOptions {
 const URL_PATTERN = /(?:https?|wss?):\/\/[^\s"'<>]+/gi;
 const CREDENTIAL_START_PATTERN =
   /["']?\b(?:password|secret|token|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|private[_-]?key|authorization|cookie|dsn)\b["']?\s*[:=]/i;
+const BEARER_CREDENTIAL_PATTERN = /\bbearer\s+[a-z0-9._~+/-]+=*/i;
+const PUBLIC_MESSAGE_PREFIXES = [
+  '[API]',
+  '[AppContext]',
+  '[AppWrapper]',
+  '[ArtworkPlayer]',
+  '[CanvasService]',
+  '[CAST]',
+  '[CDP Handler]',
+  '[CDP]',
+  '[ContentType]',
+  '[DeviceManager]',
+  '[DP1ScheduleService]',
+  '[DP1Service]',
+  '[ErrorNavigation]',
+  '[ErrorPage]',
+  '[GlobalError]',
+  '[IndexedDBStorage]',
+  '[MediaLoader]',
+  '[ModelViewer]',
+  '[PlaylistClient]',
+  '[useArtworkSettings]',
+  '[useCastInfo]',
+] as const;
 
 /** Removes credentials and query data while retaining a useful URL origin/path. */
 function sanitizeURL(raw: string): string {
@@ -79,23 +103,31 @@ function truncateUTF8(value: string, maximumBytes: number): string {
  * callers pass signed URLs, playlist payloads, Wi-Fi identifiers, and errors
  * through that open-ended surface.
  */
-export function publicLogMessage(firstArgument: unknown): string {
-  let message: string;
-  if (typeof firstArgument === 'string') {
-    message = firstArgument;
-  } else if (firstArgument instanceof Error) {
-    message = `[${firstArgument.name}]`;
-  } else {
-    message = '[non-string console message]';
+export function publicLogMessage(firstArgument: unknown): string | null {
+  if (typeof firstArgument !== 'string') {
+    return null;
   }
 
-  if (message.trim() === '') {
-    message = '[empty console message]';
+  const message = firstArgument.trim();
+  if (
+    !PUBLIC_MESSAGE_PREFIXES.some(
+      prefix => message === prefix || message.startsWith(`${prefix} `)
+    )
+  ) {
+    return null;
   }
 
   const withoutPrivateURLs = message.replace(URL_PATTERN, sanitizeURL);
-  const credentialStart = CREDENTIAL_START_PATTERN.exec(withoutPrivateURLs);
-  if (credentialStart?.index !== undefined) {
+  const namedCredential = CREDENTIAL_START_PATTERN.exec(withoutPrivateURLs);
+  const bearerCredential = BEARER_CREDENTIAL_PATTERN.exec(withoutPrivateURLs);
+  let credentialStart = namedCredential;
+  if (
+    bearerCredential &&
+    (!credentialStart || bearerCredential.index < credentialStart.index)
+  ) {
+    credentialStart = bearerCredential;
+  }
+  if (credentialStart) {
     const prefix = withoutPrivateURLs.slice(0, credentialStart.index).trimEnd();
     return truncateUTF8(
       `${prefix}${prefix ? ' ' : ''}[REDACTED_CREDENTIAL]`,
@@ -139,6 +171,10 @@ export class LogStreamingService {
 
   /** Records one console call while preserving whole-session sampling. */
   public record(level: LogLevel, firstArgument: unknown): void {
+    const message = publicLogMessage(firstArgument);
+    if (message === null) {
+      return;
+    }
     const emittedAt = this.now();
     if (
       this.sessionID &&
@@ -161,7 +197,7 @@ export class LogStreamingService {
         timestamp: new Date(emittedAt).toISOString(),
         level,
         environment: this.environment,
-        message: publicLogMessage(firstArgument),
+        message,
         context: { session_id: sessionID },
       });
       if (this.records.length >= MAX_RECORDS_PER_REQUEST) {
