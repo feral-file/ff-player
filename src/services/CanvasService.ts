@@ -1154,7 +1154,11 @@ class CanvasService {
   }
 
   private commandHandler(command: CastCommand, requestJson: unknown): Reply {
-    console.log('[CAST] commandHandler:', JSON.stringify(command));
+    // checkStatus is the daemon's five-second health poll. Keeping that local
+    // loop silent prevents it from manufacturing permanent remote sessions.
+    if (command !== CastCommand.checkStatus) {
+      console.log('[CAST] commandHandler:', JSON.stringify(command));
+    }
     try {
       if (
         command === CastCommand.displayPlaylist ||

@@ -30,6 +30,17 @@ afterEach(async () => {
 });
 
 describe('checkStatus and content policy admission', () => {
+  it('does not log recurring status polls as player activity', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    canvasService.processMessage({ command: CastCommand.checkStatus });
+    canvasService.processMessage({ command: CastCommand.checkStatus });
+
+    expect(
+      log.mock.calls.filter(([message]) => message === '[CAST] commandHandler:')
+    ).toHaveLength(0);
+  });
+
   it('never reports a persisted cast the policy filtered away as active', async () => {
     await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
     vi.spyOn(DeviceManager, 'getCachedCastInfo').mockReturnValue({

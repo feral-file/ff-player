@@ -9,7 +9,7 @@
     "lint": "bash ./scripts/lint-changed.sh",
     "lint:all": "eslint .",
     "post-implement-check": "bash ./scripts/lint-changed.sh --fix",
-    "test": "node scripts/check-copy.mjs && vitest run",
+    "test": "node scripts/check-copy.mjs && vitest run && node scripts/check-log-proxy-browser.mjs",
     "check:copy": "node scripts/check-copy.mjs",
     "typecheck": "tsc --noEmit",
     "verify": "bash ./scripts/verify.sh"
