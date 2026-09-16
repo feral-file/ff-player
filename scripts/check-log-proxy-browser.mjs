@@ -110,6 +110,7 @@ const browser = spawn(
     '--headless=new',
     '--disable-gpu',
     '--no-sandbox',
+    '--disable-dev-shm-usage',
     '--disable-background-networking',
     `--user-data-dir=${profile}`,
     `${playerOrigin}/`,
@@ -125,7 +126,7 @@ try {
     new Promise((_, reject) => {
       contractTimeout = setTimeout(
         () => reject(new Error('browser log proxy contract timed out')),
-        15_000
+        45_000
       );
     }),
   ]);
