@@ -5,9 +5,11 @@ const PLAYER_ORIGIN = 'http://127.0.0.1:8080';
 const IDLE_TIMEOUT_MS = 5_000;
 const MAX_SESSION_MS = 60_000;
 const RETRY_DELAY_MS = 5_000;
+const UPLOAD_TIMEOUT_MS = 15_000;
 const MAX_RECORDS_PER_REQUEST = 500;
 const MAX_PENDING_REQUESTS = 32;
-const MAX_MESSAGE_LENGTH = 2_048;
+const MAX_MESSAGE_BYTES = 2_048;
+const MAX_KEEPALIVE_BYTES = 60 * 1_024;
 
 type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
 type ConsoleMethod = 'trace' | 'debug' | 'log' | 'info' | 'warn' | 'error';
@@ -28,9 +30,9 @@ interface LogStreamingOptions {
   random?: () => number;
 }
 
-const URL_PATTERN = /https?:\/\/[^\s"'<>]+/g;
-const CREDENTIAL_PATTERN =
-  /\b(password|secret|token|api[_-]?key|authorization|cookie|dsn)\s*[:=]\s*[^,\s;]+/gi;
+const URL_PATTERN = /(?:https?|wss?):\/\/[^\s"'<>]+/gi;
+const CREDENTIAL_START_PATTERN =
+  /["']?\b(?:password|secret|token|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|private[_-]?key|authorization|cookie|dsn)\b["']?\s*[:=]/i;
 
 /** Removes credentials and query data while retaining a useful URL origin/path. */
 function sanitizeURL(raw: string): string {
@@ -46,6 +48,29 @@ function sanitizeURL(raw: string): string {
   } catch {
     return `[REDACTED_URL]${trailing}`;
   }
+}
+
+/**
+ *
+ */
+/** Truncates text to a UTF-8 byte limit without splitting a code point. */
+function truncateUTF8(value: string, maximumBytes: number): string {
+  const encoder = new TextEncoder();
+  if (encoder.encode(value).byteLength <= maximumBytes) {
+    return value;
+  }
+
+  let result = '';
+  let byteLength = 0;
+  for (const codePoint of value) {
+    const codePointBytes = encoder.encode(codePoint).byteLength;
+    if (byteLength + codePointBytes > maximumBytes) {
+      break;
+    }
+    result += codePoint;
+    byteLength += codePointBytes;
+  }
+  return result;
 }
 
 /**
@@ -65,9 +90,15 @@ export function publicLogMessage(firstArgument: unknown): string {
   }
 
   const withoutPrivateURLs = message.replace(URL_PATTERN, sanitizeURL);
-  return withoutPrivateURLs
-    .replace(CREDENTIAL_PATTERN, '$1=[REDACTED]')
-    .slice(0, MAX_MESSAGE_LENGTH);
+  const credentialStart = CREDENTIAL_START_PATTERN.exec(withoutPrivateURLs);
+  if (credentialStart?.index !== undefined) {
+    const prefix = withoutPrivateURLs.slice(0, credentialStart.index).trimEnd();
+    return truncateUTF8(
+      `${prefix}${prefix ? ' ' : ''}[REDACTED_CREDENTIAL]`,
+      MAX_MESSAGE_BYTES
+    );
+  }
+  return truncateUTF8(withoutPrivateURLs, MAX_MESSAGE_BYTES);
 }
 
 /**
@@ -87,6 +118,8 @@ export class LogStreamingService {
   private sampled = false;
   private records: PendingRecord[] = [];
   private pending: PendingRecord[][] = [];
+  private retryBatch: PendingRecord[] | null = null;
+  private inFlightBatch: PendingRecord[] | null = null;
   private delivering = false;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private maximumTimer: ReturnType<typeof setTimeout> | null = null;
@@ -140,6 +173,28 @@ export class LogStreamingService {
     this.finishSession();
   }
 
+  /** Hands the newest session to the browser keepalive queue during page exit. */
+  public flushForPageExit(): void {
+    this.finishSession(false);
+    const records =
+      this.pending.pop() ?? this.inFlightBatch ?? this.retryBatch ?? null;
+    if (!records) {
+      return;
+    }
+    const body = this.keepalivePayload(records);
+    // A string body uses the CORS-safelisted text/plain content type, avoiding
+    // a new preflight during unload. Controld still parses and validates JSON.
+    try {
+      void this.fetcher(LOG_PROXY_ENDPOINT, {
+        method: 'POST',
+        body,
+        keepalive: true,
+      }).catch(() => undefined);
+    } catch {
+      // Page exit and observability must never block browser teardown.
+    }
+  }
+
   private startSession(emittedAt: number): void {
     this.sessionID = uuidv4();
     this.sessionStartedAt = emittedAt;
@@ -159,7 +214,7 @@ export class LogStreamingService {
     }, IDLE_TIMEOUT_MS);
   }
 
-  private finishSession(): void {
+  private finishSession(deliver = true): void {
     if (!this.sessionID) {
       return;
     }
@@ -179,7 +234,9 @@ export class LogStreamingService {
     this.sessionID = null;
     this.sessionStartedAt = 0;
     this.lastRecordAt = 0;
-    void this.deliver();
+    if (deliver) {
+      void this.deliver();
+    }
   }
 
   private enqueueRecords(records: PendingRecord[]): void {
@@ -190,38 +247,90 @@ export class LogStreamingService {
   }
 
   private async deliver(): Promise<void> {
-    if (this.delivering || this.pending.length === 0) {
+    if (
+      this.delivering ||
+      this.retryTimer ||
+      (!this.retryBatch && this.pending.length === 0)
+    ) {
       return;
     }
     this.delivering = true;
     try {
-      while (this.pending.length > 0) {
-        const response = await this.fetcher(LOG_PROXY_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(this.pending[0]),
-        });
+      while (this.retryBatch || this.pending.length > 0) {
+        const batch = this.retryBatch ?? this.pending.shift();
+        this.retryBatch = null;
+        if (!batch) {
+          return;
+        }
+        this.inFlightBatch = batch;
+        let response: Response;
+        try {
+          response = await this.postBatch(batch);
+        } catch {
+          this.retryBatch = batch;
+          this.scheduleRetry();
+          return;
+        } finally {
+          this.inFlightBatch = null;
+        }
         if (!response.ok) {
           if (
             response.status === 408 ||
             response.status === 429 ||
             response.status >= 500
           ) {
+            this.retryBatch = batch;
             this.scheduleRetry();
             return;
           }
           // Invalid batches cannot become valid through retry and must not
           // block every newer session behind them.
-          this.pending.shift();
           continue;
         }
-        this.pending.shift();
       }
-    } catch {
-      this.scheduleRetry();
     } finally {
       this.delivering = false;
     }
+  }
+
+  private async postBatch(records: PendingRecord[]): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, UPLOAD_TIMEOUT_MS);
+    try {
+      return await this.fetcher(LOG_PROXY_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(records),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private keepalivePayload(records: PendingRecord[]): string {
+    const encoder = new TextEncoder();
+    const complete = JSON.stringify(records);
+    if (encoder.encode(complete).byteLength <= MAX_KEEPALIVE_BYTES) {
+      return complete;
+    }
+
+    let lower = 1;
+    let upper = records.length - 1;
+    let best = JSON.stringify(records.slice(-1));
+    while (lower <= upper) {
+      const firstRecord = Math.floor((lower + upper) / 2);
+      const candidate = JSON.stringify(records.slice(firstRecord));
+      if (encoder.encode(candidate).byteLength <= MAX_KEEPALIVE_BYTES) {
+        best = candidate;
+        upper = firstRecord - 1;
+      } else {
+        lower = firstRecord + 1;
+      }
+    }
+    return best;
   }
 
   private scheduleRetry(): void {
@@ -286,6 +395,6 @@ export function installLogStreaming(): void {
     };
   }
   window.addEventListener('pagehide', () => {
-    stream.flush();
+    stream.flushForPageExit();
   });
 }

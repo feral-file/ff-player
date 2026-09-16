@@ -178,6 +178,121 @@ describe('LogStreamingService delivery', () => {
   });
 });
 
+describe('LogStreamingService stalled delivery', () => {
+  it('aborts a stalled upload and retries it', async () => {
+    vi.useFakeTimers();
+    let attempts = 0;
+    const fetcher = vi.fn((_input: URL | RequestInfo, init?: RequestInit) => {
+      attempts += 1;
+      if (attempts > 1) {
+        return Promise.resolve(new Response(null, { status: 202 }));
+      }
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('aborted', 'AbortError'));
+        });
+      });
+    }) as typeof fetch;
+    const stream = new LogStreamingService({
+      environment: 'test',
+      sampleRate: 1,
+      fetcher,
+      now: () => 0,
+      random: () => 0,
+    });
+
+    stream.record('error', 'stalled');
+    stream.flush();
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(attempts).toBe(1);
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(attempts).toBe(2);
+  });
+
+  it('does not evict the batch currently being uploaded', async () => {
+    vi.useFakeTimers();
+    const posts: unknown[][] = [];
+    let releaseFirst: ((response: Response) => void) | undefined;
+    const fetcher = vi.fn((_input: URL | RequestInfo, init?: RequestInit) => {
+      posts.push(requestRecords(init));
+      if (posts.length === 1) {
+        return new Promise<Response>(resolve => {
+          releaseFirst = resolve;
+        });
+      }
+      return Promise.resolve(new Response(null, { status: 202 }));
+    }) as typeof fetch;
+    let now = 0;
+    const stream = new LogStreamingService({
+      environment: 'test',
+      sampleRate: 1,
+      fetcher,
+      now: () => now,
+      random: () => 0,
+    });
+
+    stream.record('info', 'in flight');
+    stream.flush();
+    await vi.advanceTimersByTimeAsync(0);
+    for (let index = 0; index < 33; index += 1) {
+      now += 10_000;
+      stream.record('info', `queued-${String(index)}`);
+      stream.flush();
+    }
+    releaseFirst?.(new Response(null, { status: 202 }));
+    await vi.advanceTimersByTimeAsync(0);
+
+    const messages = posts.map(
+      batch => (batch[0] as { message: string }).message
+    );
+    expect(messages).toHaveLength(33);
+    expect(messages[0]).toBe('in flight');
+    expect(messages).not.toContain('queued-0');
+    expect(messages.slice(1)).toEqual(
+      Array.from(
+        { length: 32 },
+        (_value, index) => `queued-${String(index + 1)}`
+      )
+    );
+  });
+});
+
+describe('LogStreamingService page exit', () => {
+  it('uses a bounded keepalive request for the newest page-exit logs', async () => {
+    vi.useFakeTimers();
+    const calls: RequestInit[] = [];
+    const fetcher = vi.fn((_input: URL | RequestInfo, init?: RequestInit) => {
+      calls.push(init ?? {});
+      return Promise.resolve(new Response(null, { status: 202 }));
+    }) as typeof fetch;
+    const stream = new LogStreamingService({
+      environment: 'test',
+      sampleRate: 1,
+      fetcher,
+      now: () => 0,
+      random: () => 0,
+    });
+    for (let index = 0; index < 40; index += 1) {
+      stream.record('info', `${String(index)}-${'x'.repeat(2_048)}`);
+    }
+
+    stream.flushForPageExit();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].keepalive).toBe(true);
+    expect(calls[0].headers).toBeUndefined();
+    const body = calls[0].body;
+    expect(typeof body).toBe('string');
+    expect(
+      new TextEncoder().encode(body as string).byteLength
+    ).toBeLessThanOrEqual(60 * 1_024);
+    const records = JSON.parse(body as string) as { message: string }[];
+    expect(records.at(-1)?.message.startsWith('39-')).toBe(true);
+  });
+});
+
 describe('publicLogMessage', () => {
   it('keeps open-ended console data out of the public stream', () => {
     expect(publicLogMessage({ ssid: 'home-network' })).toBe(
@@ -187,6 +302,24 @@ describe('publicLogMessage', () => {
       publicLogMessage(
         'fetch https://user:pass@example.com/art?token=url-secret apiKey=message-secret'
       )
-    ).toBe('fetch https://example.com/art apiKey=[REDACTED]');
+    ).toBe('fetch https://example.com/art [REDACTED_CREDENTIAL]');
+    expect(publicLogMessage('Authorization: Bearer secret-token')).toBe(
+      '[REDACTED_CREDENTIAL]'
+    );
+    expect(publicLogMessage('payload {"apiKey":"secret"}')).toBe(
+      'payload { [REDACTED_CREDENTIAL]'
+    );
+    expect(
+      publicLogMessage(
+        'connect wss://user:secret@example.com/socket?token=query-secret'
+      )
+    ).toBe('connect wss://example.com/socket');
+  });
+
+  it('caps multibyte messages by the proxy UTF-8 byte limit', () => {
+    const message = publicLogMessage('😀'.repeat(1_024));
+
+    expect(new TextEncoder().encode(message).byteLength).toBe(2_048);
+    expect(message).toBe('😀'.repeat(512));
   });
 });
