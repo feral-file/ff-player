@@ -35,6 +35,25 @@ npm run build
 
 By default, `npm run verify` lints changed files against `origin/main`. To verify against a different base, run either `VERIFY_BASE_REF=origin/develop npm run verify` or `npm run verify -- --base=origin/develop`.
 
+## Paired player-log proxy contract
+
+Player unit tests verify session batching and the two browser request shapes,
+but the matching `feral-controld` repository owns the loopback proxy, CORS,
+trusted device attribution, and upstream forwarding. For changes to either side
+of `POST http://127.0.0.1:1111/api/logs`, check out the intended paired
+`ffos-user` ref beside this repository and run its real-handler browser test:
+
+```bash
+cd ../ffos-user/components/feral-controld
+FFOS_REQUIRE_LOG_BROWSER=1 go test ./hub -run '^TestHandlePlayerLogsBrowserContract$'
+```
+
+The test requires Chrome or Chromium and covers the preflighted JSON batch from
+`http://127.0.0.1:8080` plus the `pagehide` keepalive batch. In the PR handoff,
+record both tested commit SHAs and the successful CI job. The paired FFOS image
+must use those merged refs or descendants; publishing that image remains a
+human release operation.
+
 ## When to run it
 
 - Run `npm run post-implement-check` immediately after implementation changes.
