@@ -219,7 +219,10 @@ interface CastKey { id?: string; items: DP1Item[] }
 class CanvasService {
   private castInfo: CastInfo | null = null;
   private renderStatus: RenderStatus | undefined;
-  private rejectedCachedCastInfo: CastInfo | null = null;
+  // DeviceManager parses persisted JSON on every read, so object identity is
+  // unstable. Keep the serialized value to avoid retrying the same rejected
+  // cast on each status poll while still retrying when persistence changes.
+  private rejectedCachedCastFingerprint: string | null = null;
   private rejectedCachedCastEpoch: number | null = null;
   private static instance: CanvasService | null;
   private originalPlaylistItems: DP1Item[] | null = null;
@@ -1240,10 +1243,13 @@ class CanvasService {
 
       const storedCastInfo = DeviceManager.getCachedCastInfo();
       const policyEpoch = contentPolicyStore.getSnapshot().epoch;
+      const storedCastFingerprint = storedCastInfo
+        ? JSON.stringify(storedCastInfo)
+        : null;
       if (
         !this.castInfo &&
         storedCastInfo &&
-        (storedCastInfo !== this.rejectedCachedCastInfo ||
+        (storedCastFingerprint !== this.rejectedCachedCastFingerprint ||
           policyEpoch !== this.rejectedCachedCastEpoch)
       ) {
         // Hydrate playlist/index only. renderStatus is live-only and must wait
@@ -1251,10 +1257,10 @@ class CanvasService {
         // Use the shared strip helper so future ephemeral fields stay aligned
         // with AppContext boot and useCastInfo persistence.
         this.setCastInfo(stripEphemeralCastInfoFields(storedCastInfo), false);
-        this.rejectedCachedCastInfo = this.renderableCastInfo()
+        this.rejectedCachedCastFingerprint = this.renderableCastInfo()
           ? null
-          : storedCastInfo;
-        this.rejectedCachedCastEpoch = this.rejectedCachedCastInfo
+          : storedCastFingerprint;
+        this.rejectedCachedCastEpoch = this.rejectedCachedCastFingerprint
           ? policyEpoch
           : null;
       }

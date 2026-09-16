@@ -43,11 +43,14 @@ describe('checkStatus and content policy admission', () => {
 
   it('does not repeatedly hydrate a cached cast rejected by policy', async () => {
     await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
-    vi.spyOn(DeviceManager, 'getCachedCastInfo').mockReturnValue({
+    const persistedCast = {
       castCommand: CastCommand.displayPlaylist,
       index: 0,
       playlist: { dpVersion: '1.1.0', title: 'Set', items: [item('blocked')] },
-    });
+    };
+    vi.spyOn(DeviceManager, 'getCachedCastInfo').mockImplementation(
+      () => structuredClone(persistedCast)
+    );
     canvasService.setCastInfo(null, false);
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
