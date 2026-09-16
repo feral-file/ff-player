@@ -89,6 +89,10 @@ export function publicLogMessage(firstArgument: unknown): string {
     message = '[non-string console message]';
   }
 
+  if (message.trim() === '') {
+    message = '[empty console message]';
+  }
+
   const withoutPrivateURLs = message.replace(URL_PATTERN, sanitizeURL);
   const credentialStart = CREDENTIAL_START_PATTERN.exec(withoutPrivateURLs);
   if (credentialStart?.index !== undefined) {

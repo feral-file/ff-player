@@ -295,6 +295,7 @@ describe('LogStreamingService page exit', () => {
 
 describe('publicLogMessage', () => {
   it('keeps open-ended console data out of the public stream', () => {
+    expect(publicLogMessage('   ')).toBe('[empty console message]');
     expect(publicLogMessage({ ssid: 'home-network' })).toBe(
       '[non-string console message]'
     );
