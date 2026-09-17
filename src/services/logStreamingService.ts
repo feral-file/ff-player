@@ -24,10 +24,8 @@ interface PendingRecord {
 
 interface LogStreamingOptions {
   environment: string;
-  sampleRate: number;
   fetcher?: typeof fetch;
   now?: () => number;
-  random?: () => number;
 }
 
 const URL_PATTERN = /(?:https?|wss?):\/\/[^\s"'<>]+/gi;
@@ -138,20 +136,18 @@ export function publicLogMessage(firstArgument: unknown): string | null {
 }
 
 /**
- * Groups browser console entries into sampled activity sessions. A session
- * closes after five seconds idle or one minute total, and delivery is kept off
- * the console call path so a slow Cloudflare request cannot affect playback.
+ * Groups browser console entries into activity sessions. A session closes
+ * after five seconds idle or one minute total, and delivery is kept off the
+ * console call path so a slow proxy request cannot affect playback. Controld
+ * owns the sole sampling decision after receiving the complete session.
  */
 export class LogStreamingService {
   private readonly environment: string;
-  private readonly sampleRate: number;
   private readonly fetcher: typeof fetch;
   private readonly now: () => number;
-  private readonly random: () => number;
   private sessionID: string | null = null;
   private sessionStartedAt = 0;
   private lastRecordAt = 0;
-  private sampled = false;
   private records: PendingRecord[] = [];
   private pending: PendingRecord[][] = [];
   private retryBatch: PendingRecord[] | null = null;
@@ -163,13 +159,11 @@ export class LogStreamingService {
 
   public constructor(options: LogStreamingOptions) {
     this.environment = options.environment || 'production';
-    this.sampleRate = Math.min(1, Math.max(0, options.sampleRate));
     this.fetcher = options.fetcher ?? fetch;
     this.now = options.now ?? Date.now;
-    this.random = options.random ?? Math.random;
   }
 
-  /** Records one console call while preserving whole-session sampling. */
+  /** Records one console call while preserving server-side session boundaries. */
   public record(level: LogLevel, firstArgument: unknown): void {
     const message = publicLogMessage(firstArgument);
     if (message === null) {
@@ -192,18 +186,16 @@ export class LogStreamingService {
     }
 
     this.lastRecordAt = emittedAt;
-    if (this.sampled) {
-      this.records.push({
-        timestamp: new Date(emittedAt).toISOString(),
-        level,
-        environment: this.environment,
-        message,
-        context: { session_id: sessionID },
-      });
-      if (this.records.length >= MAX_RECORDS_PER_REQUEST) {
-        this.enqueueRecords(this.records.splice(0, MAX_RECORDS_PER_REQUEST));
-        void this.deliver();
-      }
+    this.records.push({
+      timestamp: new Date(emittedAt).toISOString(),
+      level,
+      environment: this.environment,
+      message,
+      context: { session_id: sessionID },
+    });
+    if (this.records.length >= MAX_RECORDS_PER_REQUEST) {
+      this.enqueueRecords(this.records.splice(0, MAX_RECORDS_PER_REQUEST));
+      void this.deliver();
     }
     this.resetIdleTimer();
   }
@@ -239,7 +231,6 @@ export class LogStreamingService {
     this.sessionID = uuidv4();
     this.sessionStartedAt = emittedAt;
     this.lastRecordAt = emittedAt;
-    this.sampled = this.random() < this.sampleRate;
     this.maximumTimer = setTimeout(() => {
       this.finishSession();
     }, MAX_SESSION_MS);
@@ -384,12 +375,6 @@ export class LogStreamingService {
   }
 }
 
-/** Reads and normalizes the build-time whole-session sampling setting. */
-function configuredSampleRate(): number {
-  const parsed = Number(process.env.NEXT_PUBLIC_LOG_SAMPLE_RATE ?? '1');
-  return Number.isFinite(parsed) ? parsed : 1;
-}
-
 const consoleLevels: Record<ConsoleMethod, LogLevel> = {
   trace: 'trace',
   debug: 'debug',
@@ -417,7 +402,6 @@ export function installLogStreaming(): void {
 
   const stream = new LogStreamingService({
     environment: process.env.NEXT_PUBLIC_ENVIRONMENT ?? 'production',
-    sampleRate: configuredSampleRate(),
   });
   const target = console as unknown as Record<
     ConsoleMethod,

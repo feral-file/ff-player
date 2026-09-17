@@ -38,10 +38,8 @@ describe('LogStreamingService session boundaries', () => {
     const posts: unknown[][] = [];
     const stream = new LogStreamingService({
       environment: 'test',
-      sampleRate: 1,
       fetcher: successfulFetcher(posts),
       now: () => now,
-      random: () => 0,
     });
 
     record(stream, 'info', 'one');
@@ -64,30 +62,6 @@ describe('LogStreamingService session boundaries', () => {
       timestamp: new Date(0).toISOString(),
     });
   });
-
-  it('samples once for each complete session', async () => {
-    vi.useFakeTimers();
-    let now = 0;
-    const posts: unknown[][] = [];
-    const decisions = [0.9, 0.1];
-    const stream = new LogStreamingService({
-      environment: 'test',
-      sampleRate: 0.5,
-      fetcher: successfulFetcher(posts),
-      now: () => now,
-      random: () => decisions.shift() ?? 1,
-    });
-
-    record(stream, 'info', 'not sampled');
-    await vi.advanceTimersByTimeAsync(5_000);
-    now = 5_000;
-    record(stream, 'info', 'sampled');
-    stream.flush();
-    await vi.advanceTimersByTimeAsync(0);
-
-    expect(posts).toHaveLength(1);
-    expect(posts[0]).toMatchObject([{ message: '[CanvasService] sampled' }]);
-  });
 });
 
 describe('LogStreamingService maximum session duration', () => {
@@ -97,10 +71,8 @@ describe('LogStreamingService maximum session duration', () => {
     const posts: unknown[][] = [];
     const stream = new LogStreamingService({
       environment: 'test',
-      sampleRate: 1,
       fetcher: successfulFetcher(posts),
       now: () => now,
-      random: () => 0,
     });
 
     record(stream, 'info', 'first');
@@ -139,10 +111,8 @@ describe('LogStreamingService delivery', () => {
     }) as typeof fetch;
     const stream = new LogStreamingService({
       environment: 'test',
-      sampleRate: 1,
       fetcher,
       now: () => 0,
-      random: () => 0,
     });
 
     record(stream, 'error', 'queued');
@@ -169,10 +139,8 @@ describe('LogStreamingService delivery', () => {
     let now = 0;
     const stream = new LogStreamingService({
       environment: 'test',
-      sampleRate: 1,
       fetcher,
       now: () => now,
-      random: () => 0,
     });
 
     record(stream, 'error', 'bad batch');
@@ -204,10 +172,8 @@ describe('LogStreamingService stalled delivery', () => {
     }) as typeof fetch;
     const stream = new LogStreamingService({
       environment: 'test',
-      sampleRate: 1,
       fetcher,
       now: () => 0,
-      random: () => 0,
     });
 
     record(stream, 'error', 'stalled');
@@ -235,10 +201,8 @@ describe('LogStreamingService stalled delivery', () => {
     let now = 0;
     const stream = new LogStreamingService({
       environment: 'test',
-      sampleRate: 1,
       fetcher,
       now: () => now,
-      random: () => 0,
     });
 
     record(stream, 'info', 'in flight');
@@ -277,10 +241,8 @@ describe('LogStreamingService page exit', () => {
     }) as typeof fetch;
     const stream = new LogStreamingService({
       environment: 'test',
-      sampleRate: 1,
       fetcher,
       now: () => 0,
-      random: () => 0,
     });
     for (let index = 0; index < 40; index += 1) {
       record(stream, 'info', `${String(index)}-${'x'.repeat(2_048)}`);
