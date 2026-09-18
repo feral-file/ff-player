@@ -9,7 +9,6 @@ import {
   SchedulePlaylistReply,
   UpdateDefaultDurationRequest,
 } from '@/models/cast_request_reply.model';
-import * as Sentry from '@sentry/nextjs';
 import {
   CastCommand,
   CastInfo,
@@ -220,6 +219,11 @@ interface CastKey { id?: string; items: DP1Item[] }
 class CanvasService {
   private castInfo: CastInfo | null = null;
   private renderStatus: RenderStatus | undefined;
+  // DeviceManager parses persisted JSON on every read, so object identity is
+  // unstable. Keep the serialized value to avoid retrying the same rejected
+  // cast on each status poll while still retrying when persistence changes.
+  private rejectedCachedCastFingerprint: string | null = null;
+  private rejectedCachedCastEpoch: number | null = null;
   private static instance: CanvasService | null;
   private originalPlaylistItems: DP1Item[] | null = null;
   private queuedPlaylistPending = false;
@@ -1149,19 +1153,17 @@ class CanvasService {
 
     const command = CastCommand[commandStr as keyof typeof CastCommand];
 
-    Sentry.addBreadcrumb({
-      data: { command },
-      category: 'CanvasService',
-      message: 'Received command',
-    });
-
     const requestJson = messageData.request;
     const reply = this.commandHandler(command, requestJson);
     return reply;
   }
 
   private commandHandler(command: CastCommand, requestJson: unknown): Reply {
-    console.log('[CAST] commandHandler:', JSON.stringify(command));
+    // checkStatus is the daemon's five-second health poll. Keeping that local
+    // loop silent prevents it from manufacturing permanent remote sessions.
+    if (command !== CastCommand.checkStatus) {
+      console.log('[CAST] commandHandler:', JSON.stringify(command));
+    }
     try {
       if (
         command === CastCommand.displayPlaylist ||
@@ -1240,12 +1242,27 @@ class CanvasService {
       }
 
       const storedCastInfo = DeviceManager.getCachedCastInfo();
-      if (!this.castInfo && storedCastInfo) {
+      const policyEpoch = contentPolicyStore.getSnapshot().epoch;
+      const storedCastFingerprint = storedCastInfo
+        ? JSON.stringify(storedCastInfo)
+        : null;
+      if (
+        !this.castInfo &&
+        storedCastInfo &&
+        (storedCastFingerprint !== this.rejectedCachedCastFingerprint ||
+          policyEpoch !== this.rejectedCachedCastEpoch)
+      ) {
         // Hydrate playlist/index only. renderStatus is live-only and must wait
         // for ArtworkPlayer (or an explicit setRenderStatus) after recovery.
         // Use the shared strip helper so future ephemeral fields stay aligned
         // with AppContext boot and useCastInfo persistence.
         this.setCastInfo(stripEphemeralCastInfoFields(storedCastInfo), false);
+        this.rejectedCachedCastFingerprint = this.renderableCastInfo()
+          ? null
+          : storedCastFingerprint;
+        this.rejectedCachedCastEpoch = this.rejectedCachedCastFingerprint
+          ? policyEpoch
+          : null;
       }
 
       // Deliberately NOT `?? storedCastInfo`: the hydration above runs the
@@ -1256,11 +1273,6 @@ class CanvasService {
       // be told is active. A null result here IS the answer, and so is the
       // unavailable-policy case renderableCastInfo covers.
       const activeCastInfo = this.renderableCastInfo();
-
-      console.log(
-        '[CanvasService getStatus] Reply ok. Current index:',
-        activeCastInfo?.index ?? 'N/A'
-      );
 
       return {
         ok: true,
@@ -1633,11 +1645,6 @@ class CanvasService {
     }
 
     console.log('[CanvasService] display playlist: ', action);
-    Sentry.addBreadcrumb({
-      data: { action },
-      category: 'CanvasService',
-      message: 'Received DP1 command',
-    });
 
     if (request.refresh) {
       return this.refreshUnderPolicy(request, dp1CallData, contentContext);

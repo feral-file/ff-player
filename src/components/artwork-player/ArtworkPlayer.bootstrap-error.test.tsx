@@ -39,12 +39,6 @@ vi.mock('@google/model-viewer', () => {
   throw new Error('model-viewer chunk failed');
 });
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
-}));
-
 const MODEL_URL =
   'https://ipfs.filebase.io/ipfs/bafybeiht7hyohzvnje3aozwfkoqowuvmb7fooqh4pbyigzv6qm2dolwgxu';
 const IMAGE_URL = 'https://example.com/image.png';

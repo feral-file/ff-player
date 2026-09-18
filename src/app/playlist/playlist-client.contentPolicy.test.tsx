@@ -15,7 +15,6 @@ import PlaylistClient from './playlist-client';
 const { getItemRef, unmounted, onCastInfo } = vi.hoisted(() => ({
   getItemRef: vi.fn(), unmounted: vi.fn(), onCastInfo: vi.fn() }));
 vi.mock('@/services/DP1Service', () => ({ DP1Service: { getItemRef, getPlaylist: vi.fn() } }));
-vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn(), captureMessage: vi.fn(), addBreadcrumb: vi.fn() }));
 // Reports a visual commit on mount, the way ArtworkPlayer does once media is
 // ready. Without it nothing is ever on screen and the on-screen-vs-selected
 // paths under test cannot be reached at all.

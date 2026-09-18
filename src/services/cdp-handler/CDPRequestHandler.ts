@@ -133,7 +133,6 @@ export class CDPRequestHandler {
     wsMessage: Record<string, unknown>,
     messageID?: string
   ) {
-    console.log('[CDP Handler] Command request received');
     const command = wsMessage.command as string;
     if (command === 'getContentPolicy' || command === 'setContentPolicy') {
       return contentPolicyCommand(command, wsMessage.request, messageID);

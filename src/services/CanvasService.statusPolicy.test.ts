@@ -30,6 +30,38 @@ afterEach(async () => {
 });
 
 describe('checkStatus and content policy admission', () => {
+  it('does not log recurring status polls as player activity', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    canvasService.processMessage({ command: CastCommand.checkStatus });
+    canvasService.processMessage({ command: CastCommand.checkStatus });
+
+    expect(
+      log.mock.calls.filter(([message]) => message === '[CAST] commandHandler:')
+    ).toHaveLength(0);
+  });
+
+  it('does not repeatedly hydrate a cached cast rejected by policy', async () => {
+    await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
+    const persistedCast = {
+      castCommand: CastCommand.displayPlaylist,
+      index: 0,
+      playlist: { dpVersion: '1.1.0', title: 'Set', items: [item('blocked')] },
+    };
+    vi.spyOn(DeviceManager, 'getCachedCastInfo').mockImplementation(
+      () => structuredClone(persistedCast)
+    );
+    canvasService.setCastInfo(null, false);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    canvasService.processMessage({ command: CastCommand.checkStatus });
+    canvasService.processMessage({ command: CastCommand.checkStatus });
+
+    expect(
+      log.mock.calls.filter(([message]) => message === '[CanvasService] Setting castInfo:')
+    ).toHaveLength(1);
+  });
+
   it('never reports a persisted cast the policy filtered away as active', async () => {
     await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
     vi.spyOn(DeviceManager, 'getCachedCastInfo').mockReturnValue({

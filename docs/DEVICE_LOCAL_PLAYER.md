@@ -9,7 +9,7 @@ This document describes how the static export of `ff-player` is intended to run 
 
 ## Serve URL (canonical)
 
-- Serve the bundle at the **root** of the local origin, for example `http://127.0.0.1:<PORT>/`.
+- Serve the bundle at the **root** of the canonical FF1 kiosk origin: `http://127.0.0.1:8080/`. The logging proxy deliberately accepts this exact origin only.
 - Avoid subpaths such as `/player/` unless `basePath` is added in Next config and the app is smoke-tested for assets and routing.
 
 ## Why HTTP, not `file://`

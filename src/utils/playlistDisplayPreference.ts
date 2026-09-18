@@ -1,5 +1,3 @@
-import * as Sentry from '@sentry/nextjs';
-
 import {
   defaultDP1DisplayPreference,
   type DP1Defaults,
@@ -11,7 +9,7 @@ import {
 import { DP1Service } from '@/services/DP1Service';
 
 /**
- * Log and report an error raised while resolving a playlist item's display
+ * Log an error raised while resolving a playlist item's display
  * preference. Extracted from PlaylistClient to keep that playback surface
  * under its line budget (see ArtworkPlayer's note on preferring utils).
  */
@@ -25,18 +23,11 @@ export function reportPlaylistDisplayPreferenceError(
     message,
     error instanceof Error ? error.message : String(error)
   );
-  if (error instanceof Error) {
-    Sentry.captureException(error, {
-      extra: { phase, ...extra },
-    });
-  } else {
-    Sentry.captureMessage(message, {
-      extra: {
-        error: String(error),
-        phase,
-        ...extra,
-      },
-    });
+
+  // Preserve the local detail while the public console tee intentionally
+  // uploads only the stable first argument.
+  if (extra) {
+    console.debug('[PlaylistClient] Display preference context:', extra);
   }
 }
 

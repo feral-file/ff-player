@@ -59,12 +59,6 @@ vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
   },
 }));
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
-}));
-
 function countUpdateIndexCalls(spy: ReturnType<typeof vi.spyOn>): number {
   return spy.mock.calls.filter(
     args =>
