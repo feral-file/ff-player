@@ -128,3 +128,26 @@ describe('useArtworkSettings', () => {
     expect(result.current.displaySettings).toEqual(fillPreference);
   });
 });
+
+describe('useArtworkSettings listener lifetime', () => {
+  it('registers one stable listener across showings and files a write under the selected key', () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const add = vi.spyOn(canvasService, 'addDisplaySettingsChangedListener');
+    const { result, rerender } = renderHook(
+      ({ identity }: { identity: string }) => useArtworkSettings(fillPreference, identity),
+      { initialProps: { identity: 'work-a' } }
+    );
+    rerender({ identity: 'work-b' });
+    // One registration for the hook's lifetime: a per-key re-registration
+    // left a passive-effect gap in which the previous showing's listener
+    // answered and filed a keyless legacy write under the old key.
+    expect(add).toHaveBeenCalledTimes(1);
+    sendDisplaySettings({ ...fillPreference, scaling: Scaling.Fit, isSaved: false });
+    expect(result.current.displaySettings?.scaling).toBe(Scaling.Fit);
+    // A same-key re-render keeps the adjustment; only a new key drops it.
+    rerender({ identity: 'work-b' });
+    expect(result.current.displaySettings?.scaling).toBe(Scaling.Fit);
+    rerender({ identity: 'work-c' });
+    expect(result.current.displaySettings?.scaling).toBe(Scaling.Fill);
+  });
+});
