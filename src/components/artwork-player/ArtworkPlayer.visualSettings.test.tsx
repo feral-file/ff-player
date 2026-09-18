@@ -127,8 +127,22 @@ function stageOf(container: HTMLElement): HTMLElement {
   return stage;
 }
 
-/** Fire `load` on every rendered img; stale slots are dropped by URL guards. */
-function fireAllImageLoads(container: HTMLElement): void {
+/**
+ * Fire `load` on every rendered img; stale slots are dropped by URL guards.
+ *
+ * The player assigns `img.onload` inside a passive effect after the element
+ * mounts, so a synthetic load dispatched as soon as the img exists can land
+ * before the handler is attached and is then lost for good (the first-commit
+ * wait hung this way on CI). Wait for every img to carry its handler first.
+ */
+async function fireAllImageLoads(container: HTMLElement): Promise<void> {
+  await waitFor(() => {
+    const imgs = Array.from(container.querySelectorAll('img'));
+    expect(imgs.length).toBeGreaterThan(0);
+    imgs.forEach(img => {
+      expect(img.onload).toBeTypeOf('function');
+    });
+  }, { timeout: TRANSITION_WAIT_MS });
   act(() => {
     container.querySelectorAll('img').forEach(img => {
       img.dispatchEvent(new Event('load'));
@@ -153,7 +167,7 @@ async function renderCommittedImageA(background: string, sessionKey?: string): P
   await waitFor(() => {
     expect(container.querySelector('img')).toBeTruthy();
   });
-  fireAllImageLoads(container);
+  await fireAllImageLoads(container);
   await waitFor(() => {
     expect(stageOf(container).style.backgroundColor).toBe('rgb(17, 17, 17)');
     expect(canvasService.getStatus().deviceSettings).toMatchObject({
@@ -212,7 +226,7 @@ describe('ArtworkPlayer — showing identity', () => {
     expect(canvasService.getStatus().deviceSettings?.showingKey).toBe(previousKey);
     await waitFor(() => { expect(container.querySelectorAll('img')).toHaveLength(2); });
     expect(canvasService.getStatus().deviceSettings?.margin).toBe('10%');
-    fireAllImageLoads(container);
+    await fireAllImageLoads(container);
     await waitFor(() => {
       const current = canvasService.getStatus().deviceSettings;
       expect(current?.showingKey).not.toBe(previousKey);
@@ -237,7 +251,7 @@ describe('ArtworkPlayer — background latch across item advance', () => {
     expect(pending?.showingKey).toBeUndefined();
     expect(pending?.compositionRevision).toBeUndefined();
     expect(pending?.margin).toBeUndefined();
-    fireAllImageLoads(container);
+    await fireAllImageLoads(container);
     await waitFor(() => {
       expect(canvasService.getStatus().deviceSettings?.showingKey).toBeTypeOf(
         'string'
@@ -276,7 +290,7 @@ describe('ArtworkPlayer — background latch across item advance', () => {
     ).toBe(false);
 
     // Item B ready -> crossfade -> commit swaps the stage to B's background.
-    fireAllImageLoads(container);
+    await fireAllImageLoads(container);
     await waitFor(
       () => {
         expect(stageOf(container).style.backgroundColor).toBe(
@@ -420,7 +434,7 @@ describe('ArtworkPlayer — image pre-decode gate', () => {
       expect(container.querySelector('img')).toBeTruthy();
     });
     expect(decodeMock).not.toHaveBeenCalled();
-    fireAllImageLoads(container);
+    await fireAllImageLoads(container);
     await waitFor(() => {
       expect(decodeMock).toHaveBeenCalled();
     });
@@ -464,7 +478,7 @@ describe('ArtworkPlayer — deferred outgoing HLS teardown', () => {
 
     // Incoming image ready -> fade starts -> outgoing HLS is stopLoad'd but
     // NOT destroyed (destroy in this pre-paint phase is the fade jank).
-    fireAllImageLoads(container);
+    await fireAllImageLoads(container);
     await waitFor(() => {
       expect(hlsTest.stopLoad).toHaveBeenCalled();
     });
