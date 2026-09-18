@@ -162,7 +162,7 @@ async function renderCommittedImageA(background: string, sessionKey?: string): P
     expect(canvasService.getStatus().deviceSettings?.showingKey).toBeTypeOf(
       'string'
     );
-  });
+  }, { timeout: TRANSITION_WAIT_MS });
   return { container, rerender };
 }
 
