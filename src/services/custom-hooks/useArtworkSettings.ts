@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { canvasService } from '../CanvasService';
 import { DP1DisplayPreference } from '@/models/dp1.model';
 
@@ -41,12 +41,22 @@ export function useArtworkSettings(
   sessionKey = ''
 ) {
   const [sessionAdjustment, setSessionAdjustment] =
-    useState<Partial<DP1DisplayPreference> | null>(null);
+    useState<{ key: string; settings: Partial<DP1DisplayPreference> } | null>(null);
+
+  // The listener below is registered once and reads the selected showing
+  // from this layout-updated ref. Re-registering per sessionKey left a gap
+  // before the passive effects in which the old listener filed a keyless
+  // legacy write under the old key, where the new render and reset lost it.
+  const sessionKeyRef = useRef(sessionKey);
+  useLayoutEffect(() => {
+    sessionKeyRef.current = sessionKey;
+  }, [sessionKey]);
 
   // A new showing replaces the whole stack, including any adjustment made
-  // to the previous one.
+  // to the previous one. An adjustment already filed under the new key is
+  // the new showing's own and survives.
   useEffect(() => {
-    setSessionAdjustment(null);
+    setSessionAdjustment(prev => (prev?.key === sessionKey ? prev : null));
   }, [sessionKey]);
 
   // Session-scoped viewer adjustments from the mobile app. Persistent
@@ -62,7 +72,14 @@ export function useArtworkSettings(
       }
 
       console.log('[useArtworkSettings] Updating artist settings', newSettings);
-      setSessionAdjustment(prev => ({ ...prev, ...newSettings }));
+      const key = sessionKeyRef.current;
+      setSessionAdjustment(prev => ({
+        key,
+        settings: {
+          ...(prev?.key === key ? prev.settings : undefined),
+          ...newSettings,
+        },
+      }));
     };
     canvasService.addDisplaySettingsChangedListener(onSettingsChanged);
     return () => {
@@ -73,11 +90,13 @@ export function useArtworkSettings(
   const displaySettings = useMemo(():
     | TokenDisplaySettingWithChanged
     | undefined => {
-    if (!sessionAdjustment) {
+    // Ignore the old slot's adjustment during the first render of a new
+    // showing, before the passive reset above has run.
+    if (sessionAdjustment?.key !== sessionKey) {
       return displayPreferences;
     }
-    return { ...displayPreferences, ...sessionAdjustment, changed: true };
-  }, [displayPreferences, sessionAdjustment]);
+    return { ...displayPreferences, ...sessionAdjustment.settings, changed: true };
+  }, [displayPreferences, sessionAdjustment, sessionKey]);
 
   return {
     displaySettings,

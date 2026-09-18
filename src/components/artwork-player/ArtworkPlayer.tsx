@@ -44,9 +44,7 @@ import {
   ContentTypeDetectionError,
 } from '@/utils/helper';
 import CursorLayer, { CursorLayerHandle } from '../CursorLayer';
-import {
-  RenderStatus,
-} from '@/models';
+import { RenderStatus } from '@/models';
 import { useArtworkSettings } from '@/services/custom-hooks/useArtworkSettings';
 import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
 import ModelViewerScreen from '../model-viewer/ModelViewerScreen';
@@ -71,12 +69,14 @@ interface SlotLayer {
   // them); itemIdentity discriminates so the onEnded gate can reject events
   // from the previous item even when previewURL alone cannot.
   itemIdentity: string;
+  // Distinguishes adjacent slots even when their work ID and source match.
+  showingKey: string;
 }
 
 function createSlotLayer(
   previewURL: string,
   iframeKey: number,
-  itemIdentity: string
+  identity: Pick<SlotLayer, 'itemIdentity' | 'showingKey'>
 ): SlotLayer {
   return {
     previewURL,
@@ -87,7 +87,7 @@ function createSlotLayer(
     isStreaming: false,
     loading: true,
     iframeKey,
-    itemIdentity,
+    ...identity,
   };
 }
 
@@ -152,6 +152,7 @@ const ArtworkPlayer = ({
   onItemPlayed?: (itemIdentity: string) => void;
 }) => {
   const FADE_IN_OUT_DURATION_MS = 650;
+  const showingKey = sessionKey ?? itemIdentity ?? previewURL;
   const { context } = useAppContext();
   const [artworkReloadTick, setArtworkReloadTick] = useState(0);
   const performArtworkReload = useCallback(() => {
@@ -218,7 +219,7 @@ const ArtworkPlayer = ({
 
   const { displaySettings } = useArtworkSettings(
     displayPreferences,
-    sessionKey ?? itemIdentity
+    showingKey
   );
   const showRenderLoadingOverlay =
     context.appRemoteConfig.showRenderLoadingOverlay ?? true;
@@ -333,24 +334,55 @@ const ArtworkPlayer = ({
   // the outgoing item's scaling. That is bounded (FADE_IN_OUT_DURATION_MS,
   // at partial opacity) and strictly less visible than the old behavior —
   // the fully-visible outgoing artwork restyling seconds before the swap.
-  const [committedVisualSettings, setCommittedVisualSettings] =
-    useState(displaySettings);
-  const displaySettingsRef = useRef(displaySettings);
+  const compositionOwner = useRef({});
+  const displaySettingsRef = useRef({
+    showingKey,
+    settings: displaySettings,
+  });
+  const [committedComposition, setCommittedComposition] =
+    useState<typeof displaySettingsRef.current>();
+  const committedVisualSettings = committedComposition
+    ? committedComposition.settings
+    : displaySettings;
   useLayoutEffect(() => {
-    displaySettingsRef.current = displaySettings;
-  }, [displaySettings]);
+    displaySettingsRef.current = { showingKey, settings: displaySettings };
+  }, [displaySettings, showingKey]);
   const commitVisualSettings = useCallback(() => {
-    setCommittedVisualSettings(displaySettingsRef.current);
+    setCommittedComposition(displaySettingsRef.current);
   }, []);
-  useEffect(() => {
+  // Status follows the same latch as the pixels. Incoming preferences and
+  // identity must not reach another controller while the old work is visible.
+  useLayoutEffect(() => {
+    if (!committedComposition) {return;}
+    return canvasService.registerDisplaySettingsReporter(
+      () => ({
+        ...committedComposition,
+        // The settings hook already follows the selected incoming work. Reject
+        // writes while it differs from the committed showing a controller saw.
+        acceptsUpdates:
+          displaySettingsRef.current.showingKey === committedComposition.showingKey,
+      }),
+      compositionOwner.current
+    );
+  }, [committedComposition]);
+  // Same-showing settings must finish latching in the layout phase. A later
+  // command can otherwise be accepted while this composition is still waiting
+  // in a passive effect, allowing the older composition to receive a revision
+  // above that command's acceptance floor. Layout effects and their state
+  // updates finish before the browser can deliver the next command; commands
+  // accepted in one task are batched into the same committed composition.
+  useLayoutEffect(() => {
     const activeLayer = slotsRef.current[activeSlotRef.current];
     const transitionPending =
       incomingSlotRef.current !== null ||
-      (activeLayer !== null && activeLayer.previewURL !== previewURLRef.current);
-    if (!transitionPending) {
-      setCommittedVisualSettings(displaySettings);
+      (activeLayer !== null &&
+        (activeLayer.previewURL !== previewURL ||
+          activeLayer.showingKey !== showingKey ||
+          activeLayer.itemIdentity !== (itemIdentity ?? '')));
+    if (committedComposition && !transitionPending) {
+      setCommittedComposition(displaySettingsRef.current);
     }
-  }, [displaySettings]);
+  }, [displaySettings, showingKey, previewURL, itemIdentity, committedComposition]);
 
   const clearLoadingDelay = useCallback(() => {
     if (!loadingDelayRef.current) {
@@ -447,6 +479,7 @@ const ArtworkPlayer = ({
         expectedLayer &&
         (slot.previewURL !== expectedLayer.previewURL ||
           slot.itemIdentity !== expectedLayer.itemIdentity ||
+          slot.showingKey !== expectedLayer.showingKey ||
           slot.iframeKey !== expectedLayer.iframeKey)
       ) {
         return false;
@@ -457,12 +490,16 @@ const ArtworkPlayer = ({
       if (slot.itemIdentity !== itemIdentityRef.current) {
         return false;
       }
+      if (slot.showingKey !== displaySettingsRef.current.showingKey) {
+        return false;
+      }
 
       const currentIncoming = incomingSlotRef.current;
       if (currentIncoming !== null && currentIncoming !== slotIndex) {
         const incomingLayer = slotsRef.current[currentIncoming];
         if (
           incomingLayer?.previewURL === currentURL &&
+          incomingLayer.showingKey === displaySettingsRef.current.showingKey &&
           incomingLayer.itemIdentity === itemIdentityRef.current
         ) {
           return false;
@@ -619,7 +656,9 @@ const ArtworkPlayer = ({
     (slotIndex: SlotIndex, patch: Partial<SlotLayer>) => {
       setSlots(prev => {
         const cur = prev[slotIndex];
-        if (!cur) {return prev;}
+        if (!cur) {
+          return prev;
+        }
         const next = [...prev] as [SlotLayer | null, SlotLayer | null];
         next[slotIndex] = { ...cur, ...patch };
         return next;
@@ -634,7 +673,9 @@ const ArtworkPlayer = ({
       pendingReadySlotRef.current = slotIndex;
       setSlots(prev => {
         const layer = prev[slotIndex];
-        if (layer?.previewURL !== currentURL || !layer.loading) {return prev;}
+        if (layer?.previewURL !== currentURL || !layer.loading) {
+          return prev;
+        }
         const next = [...prev] as [SlotLayer | null, SlotLayer | null];
         next[slotIndex] = { ...layer, loading: false };
         return next;
@@ -818,7 +859,9 @@ const ArtworkPlayer = ({
 
   useLayoutEffect(() => {
     const readySlot = pendingReadySlotRef.current;
-    if (readySlot === null) {return;}
+    if (readySlot === null) {
+      return;
+    }
 
     const currentURL = previewURLRef.current;
     const incomingLayer = slots[readySlot];
@@ -826,7 +869,9 @@ const ArtworkPlayer = ({
       pendingReadySlotRef.current = null;
       return;
     }
-    if (incomingLayer.loading) {return;}
+    if (incomingLayer.loading) {
+      return;
+    }
 
     pendingReadySlotRef.current = null;
     // Disarm the slow-load timer the moment the incoming slot commits, not at
@@ -863,7 +908,9 @@ const ArtworkPlayer = ({
 
     const outgoing = activeSlotRef.current;
     const incoming = readySlot;
-    if (outgoing === incoming) {return;}
+    if (outgoing === incoming) {
+      return;
+    }
 
     const outLayer = slots[outgoing];
     const outgoingType = outLayer?.previewType ?? null;
@@ -873,8 +920,9 @@ const ArtworkPlayer = ({
 
     transitionTokenRef.current += 1;
     const token = transitionTokenRef.current;
-    if (transitionTimeoutRef.current)
-      {clearTimeout(transitionTimeoutRef.current);}
+    if (transitionTimeoutRef.current) {
+      clearTimeout(transitionTimeoutRef.current);
+    }
 
     // Pause-only here (not pauseAndTeardownSlot): the sync Hls.destroy()
     // used to run in this pre-paint phase and jank the fade's first frames.
@@ -891,7 +939,24 @@ const ArtworkPlayer = ({
         return op;
       });
       transitionTimeoutRef.current = setTimeout(() => {
-        if (token !== transitionTokenRef.current) {return;}
+        if (token !== transitionTokenRef.current) {
+          return;
+        }
+        // The token is only bumped by the passive previewURL effect, which runs
+        // a task after the layout effects that already moved displaySettingsRef,
+        // previewURLRef and itemIdentityRef to a newer selection. A timer that
+        // fires in that gap would commit this slot's pixels while publishing the
+        // newer selection's composition and UUID, and the reporter would then
+        // accept writes for a showing that has not rendered. Verify the incoming
+        // layer is still the selected showing; the newer selection's own effect
+        // cancels and restarts the transition.
+        if (
+          incomingLayer.previewURL !== previewURLRef.current ||
+          incomingLayer.showingKey !== displaySettingsRef.current.showingKey ||
+          incomingLayer.itemIdentity !== itemIdentityRef.current
+        ) {
+          return;
+        }
         setSlots(prev => {
           const next = [...prev] as [SlotLayer | null, SlotLayer | null];
           next[outgoing] = null;
@@ -929,7 +994,24 @@ const ArtworkPlayer = ({
       onItemPlayed?.(incomingLayer.itemIdentity);
     }
     transitionTimeoutRef.current = setTimeout(() => {
-      if (token !== transitionTokenRef.current) {return;}
+      if (token !== transitionTokenRef.current) {
+        return;
+      }
+      // The token is only bumped by the passive previewURL effect, which runs
+      // a task after the layout effects that already moved displaySettingsRef,
+      // previewURLRef and itemIdentityRef to a newer selection. A timer that
+      // fires in that gap would commit this slot's pixels while publishing the
+      // newer selection's composition and UUID, and the reporter would then
+      // accept writes for a showing that has not rendered. Verify the incoming
+      // layer is still the selected showing; the newer selection's own effect
+      // cancels and restarts the transition.
+      if (
+        incomingLayer.previewURL !== previewURLRef.current ||
+        incomingLayer.showingKey !== displaySettingsRef.current.showingKey ||
+        incomingLayer.itemIdentity !== itemIdentityRef.current
+      ) {
+        return;
+      }
       setSlots(prev => {
         const next = [...prev] as [SlotLayer | null, SlotLayer | null];
         next[outgoing] = null;
@@ -1022,7 +1104,9 @@ const ArtworkPlayer = ({
   useEffect(() => {
     let cancelled = false;
     const url = previewURL;
-    if (!url) {return;}
+    if (!url) {
+      return;
+    }
 
     // Cancel any in-flight transition and collapse to a single active layer.
     // This prevents stale overlays from previous tokens blocking the next artwork.
@@ -1038,7 +1122,9 @@ const ArtworkPlayer = ({
     pauseAndTeardownSlot(staleSlot);
     setSlotOpacity(currentActive === 0 ? [1, 0] : [0, 1]);
     setSlots(prev => {
-      if (!prev[staleSlot]) {return prev;}
+      if (!prev[staleSlot]) {
+        return prev;
+      }
       const next = [...prev] as [SlotLayer | null, SlotLayer | null];
       next[staleSlot] = null;
       return next;
@@ -1056,7 +1142,7 @@ const ArtworkPlayer = ({
       }
     }, RENDER_LOADING_DELAY_MS);
 
-    const identity = itemIdentityRef.current;
+    const identity = { itemIdentity: itemIdentityRef.current, showingKey };
     // Derived from activeSlotRef/slotsRef, not from the setSlots updater's
     // `prev` — the updater must stay a pure function of its argument, and
     // `incomingSlotRef`/`mountFailedRef` are refs, not state, so writing
@@ -1099,12 +1185,18 @@ const ArtworkPlayer = ({
 
     detectPreviewType()
       .then(cfg => {
-        if (cancelled || previewURLRef.current !== url) {return;}
+        if (cancelled || previewURLRef.current !== url) {
+          return;
+        }
         const incoming = incomingSlotRef.current;
         setSlots(prev => {
-          if (incoming === null) {return prev;}
+          if (incoming === null) {
+            return prev;
+          }
           const layer = prev[incoming];
-          if (layer?.previewURL !== url) {return prev;}
+          if (layer?.previewURL !== url) {
+            return prev;
+          }
           const next = [...prev] as [SlotLayer | null, SlotLayer | null];
           next[incoming] = {
             ...layer,
@@ -1178,9 +1270,13 @@ const ArtworkPlayer = ({
         }
         setSlots(prev => {
           const incoming = incomingSlotRef.current;
-          if (incoming === null) {return prev;}
+          if (incoming === null) {
+            return prev;
+          }
           const layer = prev[incoming];
-          if (layer?.previewURL !== url) {return prev;}
+          if (layer?.previewURL !== url) {
+            return prev;
+          }
           const next = [...prev] as [SlotLayer | null, SlotLayer | null];
           next[incoming] = {
             ...layer,
@@ -1196,13 +1292,14 @@ const ArtworkPlayer = ({
 
     return () => {
       cancelled = true;
-      if (loadingDelayRef.current) {clearTimeout(loadingDelayRef.current);}
+      if (loadingDelayRef.current) {
+        clearTimeout(loadingDelayRef.current);
+      }
     };
-    // itemIdentity is in the deps so adjacent playlist items that share the
-    // same previewURL still trigger a fresh slot setup. Without this, the
-    // effect would short-circuit on equal previewURL and the second item
-    // would inherit the prior item's paused-at-end media frame.
-  }, [previewURL, artworkPreviewMIMEType, artworkReloadTick, itemIdentity]);
+    // showingKey distinguishes adjacent slots even when both the work ID and
+    // source match. Each slot needs fresh media and session settings; work
+    // identity alone would retain the previous slot's frame and adjustments.
+  }, [previewURL, artworkPreviewMIMEType, artworkReloadTick, itemIdentity, showingKey]);
 
   useEffect(() => {
     const layer = slots[activeSlot];
@@ -1247,7 +1344,9 @@ const ArtworkPlayer = ({
    */
   const setupMediaForSlot = useCallback(
     (slotIndex: SlotIndex, layer: SlotLayer | null) => {
-      if (!layer?.displayPreviewURL) {return undefined;}
+      if (!layer?.displayPreviewURL) {
+        return undefined;
+      }
 
       let isCancelled = false;
       const abortController = new AbortController();
@@ -1281,7 +1380,9 @@ const ArtworkPlayer = ({
         };
 
       const loadMedia = async () => {
-        if (isCancelled) {return;}
+        if (isCancelled) {
+          return;
+        }
         if (
           layer.previewType === PreviewHTMLTag.image &&
           imageRefs[slotIndex].current
@@ -1291,7 +1392,9 @@ const ArtworkPlayer = ({
             let decoded: Promise<unknown>;
             try {
               decoded =
-                typeof el.decode === 'function' ? el.decode() : Promise.resolve();
+                typeof el.decode === 'function'
+                  ? el.decode()
+                  : Promise.resolve();
             } catch {
               decoded = Promise.resolve();
             }
@@ -1435,6 +1538,7 @@ const ArtworkPlayer = ({
     slots[0]?.previewType,
     slots[0]?.isStreaming,
     slots[0]?.itemIdentity,
+    slots[0]?.showingKey,
     setupMediaForSlot,
   ]);
 
@@ -1445,6 +1549,7 @@ const ArtworkPlayer = ({
     slots[1]?.previewType,
     slots[1]?.isStreaming,
     slots[1]?.itemIdentity,
+    slots[1]?.showingKey,
     setupMediaForSlot,
   ]);
 
@@ -1471,7 +1576,8 @@ const ArtworkPlayer = ({
       // Non-streaming video failures are already surfaced through the
       // element's own `onerror` -> `handleMediaError('video')` path, so we
       // don't need a connectivity-based pre-emptive pause for it here.
-      const blockedByConnectivity = Boolean(layer?.isStreaming) && !context.isOnline;
+      const blockedByConnectivity =
+        Boolean(layer?.isStreaming) && !context.isOnline;
       const shouldPlay =
         isVideoLayer &&
         video &&
@@ -1495,13 +1601,17 @@ const ArtworkPlayer = ({
   }, [context.isOnline, slots, slotOpacity, topSlotIndex]);
 
   useEffect(() => {
-    if (!displaySettings || !context.deviceRotation?.viewMode) {return;}
+    if (!displaySettings || !context.deviceRotation?.viewMode) {
+      return;
+    }
     setSlots(prev => {
       const next = [...prev] as [SlotLayer | null, SlotLayer | null];
       let changedCount = 0;
       SLOT_INDICES.forEach(i => {
         const slot = next[i];
-        if (!slot?.displayPreviewURL) {return;}
+        if (!slot?.displayPreviewURL) {
+          return;
+        }
         let softwareURL = slot.displayPreviewURL;
         if (
           slot.previewType === PreviewHTMLTag.iframe &&
@@ -1543,7 +1653,9 @@ const ArtworkPlayer = ({
           changedCount += 1;
         }
       });
-      if (changedCount === 0) {return prev;}
+      if (changedCount === 0) {
+        return prev;
+      }
       return next;
     });
   }, [
@@ -1570,7 +1682,9 @@ const ArtworkPlayer = ({
   const reloadIframe = (slotIndex: SlotIndex) => {
     setSlots(prev => {
       const slot = prev[slotIndex];
-      if (!slot) {return prev;}
+      if (!slot) {
+        return prev;
+      }
       const next = [...prev] as [SlotLayer | null, SlotLayer | null];
       next[slotIndex] = {
         ...slot,
@@ -1867,6 +1981,7 @@ const ArtworkPlayer = ({
                 slot &&
                 slot.itemIdentity.length > 0 &&
                 slot.itemIdentity === itemIdentityRef.current &&
+                slot.showingKey === displaySettingsRef.current.showingKey &&
                 slot.previewURL === previewURLRef.current
               ) {
                 onSourceEnded?.(slot.itemIdentity);
@@ -1886,6 +2001,7 @@ const ArtworkPlayer = ({
                 slot &&
                 slot.itemIdentity.length > 0 &&
                 slot.itemIdentity === itemIdentityRef.current &&
+                slot.showingKey === displaySettingsRef.current.showingKey &&
                 slot.previewURL === previewURLRef.current
               ) {
                 onSourceEnded?.(slot.itemIdentity);

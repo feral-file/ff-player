@@ -11,7 +11,7 @@ import type { DP1DisplayPreference } from '@/models/dp1.model';
 import type { UpdateDisplaySettingsRequest } from '@/models/cast_request_reply.model';
 import { canvasService } from '@/services/CanvasService';
 import { act, cleanup, renderHook } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useArtworkSettings } from './useArtworkSettings';
 
 const fillPreference: DP1DisplayPreference = {
@@ -25,12 +25,22 @@ function sendDisplaySettings(
 ) {
   act(() => {
     canvasService.updateDisplaySettings(
-      request as UpdateDisplaySettingsRequest
+      { ...request, showingKey: canvasService.getStatus().deviceSettings?.showingKey } as UpdateDisplaySettingsRequest
     );
   });
 }
 
+let removeComposition: () => void;
+beforeEach(() => {
+  // These hook-only tests stand in for the committed ArtworkPlayer stage.
+  removeComposition = canvasService.registerDisplaySettingsReporter(() => ({
+    showingKey: 'hook-harness',
+    settings: fillPreference,
+  }), {});
+});
+
 afterEach(() => {
+  removeComposition();
   cleanup();
   vi.restoreAllMocks();
 });
@@ -44,9 +54,13 @@ describe('useArtworkSettings', () => {
 
   it('applies a session write on top and forgets it when the work changes', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const renders: { identity: string; scaling: Scaling | undefined }[] = [];
     const { result, rerender } = renderHook(
-      ({ identity }: { identity: string }) =>
-        useArtworkSettings(fillPreference, identity),
+      ({ identity }: { identity: string }) => {
+        const value = useArtworkSettings(fillPreference, identity);
+        renders.push({ identity, scaling: value.displaySettings?.scaling });
+        return value;
+      },
       { initialProps: { identity: 'A' } }
     );
 
@@ -56,6 +70,7 @@ describe('useArtworkSettings', () => {
 
     // Next work: its own merged preference replaces the whole stack.
     rerender({ identity: 'B' });
+    expect(renders.find(render => render.identity === 'B')?.scaling).toBe(Scaling.Fill);
     expect(result.current.displaySettings?.scaling).toBe(Scaling.Fill);
     expect(result.current.displaySettings?.changed).toBeUndefined();
   });
@@ -111,5 +126,28 @@ describe('useArtworkSettings', () => {
 
     rerender({ identity: 'B' });
     expect(result.current.displaySettings).toEqual(fillPreference);
+  });
+});
+
+describe('useArtworkSettings listener lifetime', () => {
+  it('registers one stable listener across showings and files a write under the selected key', () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const add = vi.spyOn(canvasService, 'addDisplaySettingsChangedListener');
+    const { result, rerender } = renderHook(
+      ({ identity }: { identity: string }) => useArtworkSettings(fillPreference, identity),
+      { initialProps: { identity: 'work-a' } }
+    );
+    rerender({ identity: 'work-b' });
+    // One registration for the hook's lifetime: a per-key re-registration
+    // left a passive-effect gap in which the previous showing's listener
+    // answered and filed a keyless legacy write under the old key.
+    expect(add).toHaveBeenCalledTimes(1);
+    sendDisplaySettings({ ...fillPreference, scaling: Scaling.Fit, isSaved: false });
+    expect(result.current.displaySettings?.scaling).toBe(Scaling.Fit);
+    // A same-key re-render keeps the adjustment; only a new key drops it.
+    rerender({ identity: 'work-b' });
+    expect(result.current.displaySettings?.scaling).toBe(Scaling.Fit);
+    rerender({ identity: 'work-c' });
+    expect(result.current.displaySettings?.scaling).toBe(Scaling.Fill);
   });
 });

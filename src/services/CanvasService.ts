@@ -17,6 +17,7 @@ import {
   UpdateArtFramingRequest,
   UpdateCursorPositionsRequest,
   UpdateDisplaySettingsRequest,
+  UpdateDisplaySettingsReply,
   UpdateCursorPositionsReply,
   TokenDisplaySettings,
   DisplayPlaylistRequest,
@@ -75,6 +76,7 @@ import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
 import { contentPolicyStore, policyInForce } from './ContentPolicyStore';
 import { admitUnfiltered, allowsContent, ContentContext, ContentPolicy, filterContent, hasValidContentLabels, parseContentContext, stripPlaylistSignature } from './contentPolicy';
+import { v4 as uuidv4 } from 'uuid';
 
 const PLAYLIST_SOURCE_PROTOCOLS = new Set(['http:', 'https:', 'data:']);
 const ARTWORK_SOURCE_RESOLVE_BASE = 'https://ff-player.local/';
@@ -99,8 +101,11 @@ function isValidDataUrl(url: URL): boolean {
   }
 
   try {
-    const base64Payload = decodeURIComponent(payload).replace(/[\t\n\f\r ]/g, '');
-    const paddingLength = (/=+$/.exec(base64Payload))?.[0].length ?? 0;
+    const base64Payload = decodeURIComponent(payload).replace(
+      /[\t\n\f\r ]/g,
+      ''
+    );
+    const paddingLength = /=+$/.exec(base64Payload)?.[0].length ?? 0;
     const unpaddedLength = base64Payload.length - paddingLength;
     return (
       /^[A-Za-z0-9+/]*={0,2}$/.test(base64Payload) &&
@@ -224,6 +229,13 @@ class CanvasService {
   // cast on each status poll while still retrying when persistence changes.
   private rejectedCachedCastFingerprint: string | null = null;
   private rejectedCachedCastEpoch: number | null = null;
+  private compositionRevision = 0;
+  private committedShowing?: { identity: string; id: string; owner: object };
+  private displaySettingsReporter?: () => {
+    showingKey: string;
+    settings: DP1DisplayPreference | undefined;
+    acceptsUpdates?: boolean;
+  };
   private static instance: CanvasService | null;
   private originalPlaylistItems: DP1Item[] | null = null;
   private queuedPlaylistPending = false;
@@ -1230,6 +1242,33 @@ class CanvasService {
     }
   }
 
+  /** The mounted stage owns composition truth; never persist this snapshot. */
+  public registerDisplaySettingsReporter(
+    reporter: NonNullable<CanvasService['displaySettingsReporter']>,
+    owner: object
+  ): () => void {
+    const { showingKey } = reporter();
+    // The renderer's identity contains the source URL, which can carry signed
+    // credentials. Export only a random ID. Keep it through effect cleanup and
+    // settings-only commits so controllers do not discard their pending writes.
+    // The owner marks one mounted stage. Waking/remounting the same source is
+    // a new showing, while replacing that stage's layout effect is not.
+    if (
+      this.committedShowing?.identity !== showingKey ||
+      this.committedShowing.owner !== owner
+    ) {
+      this.committedShowing = { identity: showingKey, id: uuidv4(), owner };
+    }
+    this.displaySettingsReporter = reporter;
+    this.compositionRevision++;
+    return () => {
+      // A retiring stage must not clear its replacement's report.
+      if (this.displaySettingsReporter === reporter) {
+        this.displaySettingsReporter = undefined;
+      }
+    };
+  }
+
   public getStatus(): CheckDeviceStatusReply {
     try {
       const criticalTempValue = DeviceManager.getCachedItem(
@@ -1273,6 +1312,7 @@ class CanvasService {
       // be told is active. A null result here IS the answer, and so is the
       // unavailable-policy case renderableCastInfo covers.
       const activeCastInfo = this.renderableCastInfo();
+      const composition = this.displaySettingsReporter?.();
 
       return {
         ok: true,
@@ -1305,9 +1345,18 @@ class CanvasService {
           '',
 
         deviceSettings: {
-          scaling:
-            DeviceManager.getCachedDeviceDisplaySettings()?.scaling ??
-            DisplaySettings.defaultScaling,
+          showingKey: composition ? this.committedShowing?.id : undefined,
+          compositionRevision: composition
+            ? this.compositionRevision
+            : undefined,
+          scaling: composition
+            ? (composition.settings?.scaling ?? Scaling.Fit)
+            : (DeviceManager.getCachedDeviceDisplaySettings()?.scaling ??
+              DisplaySettings.defaultScaling),
+          margin: composition ? (composition.settings?.margin ?? 0) : undefined,
+          background: composition
+            ? (composition.settings?.background ?? '#000000')
+            : undefined,
           orientation: DeviceManager.getCachedViewMode() ?? ViewMode.landscape,
           defaultDuration:
             DeviceManager.getCachedDefaultItemDurationSeconds() ?? undefined,
@@ -1616,14 +1665,48 @@ class CanvasService {
     return { ok: true };
   }
 
-  public updateDisplaySettings(request: UpdateDisplaySettingsRequest): Reply {
+  public updateDisplaySettings(
+    request: UpdateDisplaySettingsRequest
+  ): UpdateDisplaySettingsReply {
+    const { showingKey, ...settings } = request;
+    const composition = this.displaySettingsReporter?.();
+    // Ephemeral writes belong to the showing the controller observed. During
+    // a transition the hook follows the incoming selection before it is visible;
+    // do not apply an outgoing or delayed command to that different showing.
+    //
+    // A request with no showingKey at all comes from a controller that predates
+    // composition status (app builds through 1.8.6 send ephemeral Fit/Fill and
+    // matting writes without one). Firmware reaches every wall before those
+    // phones update, so a keyless write keeps the earlier contract and applies
+    // unconditionally; the stale-target check only exists once a key is sent.
+    const legacyClient = showingKey === undefined;
+    if (
+      !request.isSaved &&
+      !legacyClient &&
+      (!composition ||
+        composition.acceptsUpdates === false ||
+        showingKey !== this.committedShowing?.id)
+    ) {
+      return { ok: false, error: 'The showing changed or is still loading.' };
+    }
     console.log(
       '[CanvasService] updateDisplaySettings: ',
       JSON.stringify(request)
     );
 
-    this.notifyDisplaySettingsChanged(request.isSaved, request);
-    return { ok: true };
+    // Capture before notifying React. This is the causal floor for the command:
+    // a status at or below it was already committed before this write and
+    // cannot confirm the requested field, even if the controller saw it later.
+    const acceptedCompositionRevision = request.isSaved
+      ? undefined
+      : this.compositionRevision;
+    this.notifyDisplaySettingsChanged(request.isSaved, settings);
+    return {
+      ok: true,
+      ...(acceptedCompositionRevision === undefined
+        ? {}
+        : { acceptedCompositionRevision }),
+    };
   }
 
   // DP1 Handlers
@@ -2159,14 +2242,12 @@ class CanvasService {
     }
 
     console.log('[CanvasService] updateDefaultDuration', raw);
-    DeviceManager.setDefaultItemDurationSeconds(raw).catch(
-      (error: unknown) => {
-        console.error(
-          '[CanvasService] Error persisting default duration:',
-          error
-        );
-      }
-    );
+    DeviceManager.setDefaultItemDurationSeconds(raw).catch((error: unknown) => {
+      console.error(
+        '[CanvasService] Error persisting default duration:',
+        error
+      );
+    });
 
     if (this.castInfo) {
       this.setCastInfo({
