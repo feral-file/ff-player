@@ -942,6 +942,21 @@ const ArtworkPlayer = ({
         if (token !== transitionTokenRef.current) {
           return;
         }
+        // The token is only bumped by the passive previewURL effect, which runs
+        // a task after the layout effects that already moved displaySettingsRef,
+        // previewURLRef and itemIdentityRef to a newer selection. A timer that
+        // fires in that gap would commit this slot's pixels while publishing the
+        // newer selection's composition and UUID, and the reporter would then
+        // accept writes for a showing that has not rendered. Verify the incoming
+        // layer is still the selected showing; the newer selection's own effect
+        // cancels and restarts the transition.
+        if (
+          incomingLayer.previewURL !== previewURLRef.current ||
+          incomingLayer.showingKey !== displaySettingsRef.current.showingKey ||
+          incomingLayer.itemIdentity !== itemIdentityRef.current
+        ) {
+          return;
+        }
         setSlots(prev => {
           const next = [...prev] as [SlotLayer | null, SlotLayer | null];
           next[outgoing] = null;
@@ -980,6 +995,21 @@ const ArtworkPlayer = ({
     }
     transitionTimeoutRef.current = setTimeout(() => {
       if (token !== transitionTokenRef.current) {
+        return;
+      }
+      // The token is only bumped by the passive previewURL effect, which runs
+      // a task after the layout effects that already moved displaySettingsRef,
+      // previewURLRef and itemIdentityRef to a newer selection. A timer that
+      // fires in that gap would commit this slot's pixels while publishing the
+      // newer selection's composition and UUID, and the reporter would then
+      // accept writes for a showing that has not rendered. Verify the incoming
+      // layer is still the selected showing; the newer selection's own effect
+      // cancels and restarts the transition.
+      if (
+        incomingLayer.previewURL !== previewURLRef.current ||
+        incomingLayer.showingKey !== displaySettingsRef.current.showingKey ||
+        incomingLayer.itemIdentity !== itemIdentityRef.current
+      ) {
         return;
       }
       setSlots(prev => {
