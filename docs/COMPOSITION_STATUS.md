@@ -16,10 +16,14 @@ composition until the stage commits. Controllers must not infer this boundary
 from work ID alone; consecutive slots may share an ID.
 
 Before the first renderer commit there is no reportable composition or revision.
-Ephemeral `updateDisplaySettings` requests must echo the observed UUID as
-`showingKey`. The player rejects missing or mismatched targets and all ephemeral
-writes while no showing is committed or the selected settings hook belongs to
-an incoming showing. Persistent device-default writes remain device-scoped.
+Ephemeral `updateDisplaySettings` requests echo the observed UUID as
+`showingKey`. When a key is present the player rejects a mismatched target and
+all ephemeral writes while no showing is committed or the selected settings hook
+belongs to an incoming showing. A request with no `showingKey` comes from a
+controller that predates composition status (app builds through 1.8.6); it keeps
+the earlier contract and applies unconditionally, so a firmware update never
+breaks Fit/Fill or matting on a phone that has not updated yet. Persistent
+device-default writes remain device-scoped.
 
 Adjacent playlist slots get distinct renderer transitions even when their work
 ID and source match. Session adjustments are ignored on the first render of a

@@ -80,7 +80,10 @@ describe('CanvasService display settings target', () => {
     const listener = vi.fn();
     canvasService.addDisplaySettingsChangedListener(listener);
     const request = { isSaved: false, margin: '10%' };
-    expect(canvasService.updateDisplaySettings(request).ok).toBe(false);
+    // A keyless write is a pre-composition-status controller: it keeps the
+    // earlier contract and applies even before any showing is committed.
+    expect(canvasService.updateDisplaySettings(request).ok).toBe(true);
+    expect(listener).toHaveBeenLastCalledWith(false, request);
     let acceptsUpdates = true;
     canvasService.registerDisplaySettingsReporter(() => ({
       showingKey: 'work-a',
@@ -88,7 +91,9 @@ describe('CanvasService display settings target', () => {
       acceptsUpdates,
     }), owner);
     const showingKey = canvasService.getStatus().deviceSettings?.showingKey;
-    expect(canvasService.updateDisplaySettings(request).ok).toBe(false);
+    expect(
+      canvasService.updateDisplaySettings({ ...request, showingKey: 'stale' }).ok
+    ).toBe(false);
     const acceptedRevision =
       canvasService.getStatus().deviceSettings?.compositionRevision;
     expect(
@@ -102,8 +107,11 @@ describe('CanvasService display settings target', () => {
     expect(
       canvasService.updateDisplaySettings({ ...request, showingKey }).ok
     ).toBe(false);
-    expect(canvasService.updateDisplaySettings(request).ok).toBe(false);
-    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledTimes(2);
+    // The legacy path is not transition-aware either: a keyless write during a
+    // transition applies exactly as it did before composition status existed.
+    expect(canvasService.updateDisplaySettings(request).ok).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(3);
     // Device defaults have device scope and remain writable during a transition.
     expect(
       canvasService.updateDisplaySettings({ ...request, isSaved: true }).ok

@@ -1673,11 +1673,19 @@ class CanvasService {
     // Ephemeral writes belong to the showing the controller observed. During
     // a transition the hook follows the incoming selection before it is visible;
     // do not apply an outgoing or delayed command to that different showing.
+    //
+    // A request with no showingKey at all comes from a controller that predates
+    // composition status (app builds through 1.8.6 send ephemeral Fit/Fill and
+    // matting writes without one). Firmware reaches every wall before those
+    // phones update, so a keyless write keeps the earlier contract and applies
+    // unconditionally; the stale-target check only exists once a key is sent.
+    const legacyClient = showingKey === undefined;
     if (
       !request.isSaved &&
+      !legacyClient &&
       (!composition ||
         composition.acceptsUpdates === false ||
-        (!showingKey || showingKey !== this.committedShowing?.id))
+        showingKey !== this.committedShowing?.id)
     ) {
       return { ok: false, error: 'The showing changed or is still loading.' };
     }
