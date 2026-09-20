@@ -78,3 +78,8 @@ The app presents these three choices only in Art Computer Settings. Controld mus
 preserve `framing` in both full and lightweight status; older firmware omits it,
 which the app treats as unsupported. `scaling` continues to describe what is
 actually on screen, so a locked artwork can report scaling different from framing.
+
+Saved device settings hydrate before persistence starts. Commands received while
+that read is pending take precedence over the stored snapshot; fields untouched
+by those commands retain their stored values. A read failure still allows later
+saved commands and does not prevent cast recovery.

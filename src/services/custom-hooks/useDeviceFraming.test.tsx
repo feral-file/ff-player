@@ -12,12 +12,14 @@ import { useDeviceSettings } from './useDeviceSettings';
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 it('saves an owner choice, applies it across works, and restores it after restart', async () => {
+  vi.spyOn(DeviceManager, 'getDeviceDisplaySettings').mockResolvedValue(null);
   const persisted = vi.spyOn(DeviceManager, 'setDeviceDisplaySettings').mockResolvedValue();
   const { result, rerender, unmount } = renderHook(({ work }: { work: string }) => {
     const device = useDeviceSettings();
     const artwork = useArtworkSettings({ scaling: Scaling.Fit }, work, device.displaySettings?.framing);
     return { device, artwork };
   }, { initialProps: { work: 'one' } });
+  await act(async () => { await result.current.device.initializeDisplaySettings(); });
   act(() => { canvasService.updateDisplaySettings({ isSaved: true, framing: 'fill' }); });
   await waitFor(() => { expect(persisted).toHaveBeenLastCalledWith(expect.objectContaining({ framing: 'fill' })); });
   expect(result.current.artwork.displaySettings?.scaling).toBe(Scaling.Fill);
@@ -51,4 +53,47 @@ it('reports the saved choice separately from effective scaling with no artwork',
 it('rejects malformed or temporary framing preferences', () => {
   expect(canvasService.updateDisplaySettings({ isSaved: false, framing: 'fill' }).ok).toBe(false);
   expect(canvasService.updateDisplaySettings({ isSaved: true, framing: 'stretch' as DeviceFraming }).ok).toBe(false);
+});
+
+
+it('preserves commands received during hydration and untouched stored settings', async () => {
+  let finishRead!: (settings: DisplaySettings) => void;
+  const read = vi.spyOn(DeviceManager, 'getDeviceDisplaySettings').mockReturnValue(
+    new Promise(resolve => { finishRead = resolve; })
+  );
+  const persist = vi.spyOn(DeviceManager, 'setDeviceDisplaySettings').mockResolvedValue();
+  const { result } = renderHook(() => useDeviceSettings());
+  let hydration!: Promise<void>;
+  act(() => { hydration = result.current.initializeDisplaySettings(); });
+  act(() => { canvasService.updateDisplaySettings({ isSaved: true, framing: 'fill' }); });
+  act(() => { canvasService.updateDisplaySettings({ isSaved: true, framing: 'fit' }); });
+  expect(persist).not.toHaveBeenCalled();
+  await act(async () => {
+    finishRead({ framing: 'artwork', tombstone: TombstoneMode.Off, scaling: Scaling.Fill });
+    await hydration;
+  });
+  expect(result.current.displaySettings).toMatchObject({
+    framing: 'fit', tombstone: TombstoneMode.Off, scaling: Scaling.Fill,
+  });
+  expect(persist).toHaveBeenCalledTimes(1);
+  expect(persist).toHaveBeenLastCalledWith(expect.objectContaining({
+    framing: 'fit', tombstone: TombstoneMode.Off, scaling: Scaling.Fill,
+  }));
+  // Restart from the record actually written, through the same hydration path.
+  const saved = persist.mock.calls[0][0];
+  read.mockResolvedValue(saved);
+  const restarted = renderHook(() => useDeviceSettings());
+  await act(async () => { await restarted.result.current.initializeDisplaySettings(); });
+  expect(restarted.result.current.displaySettings?.framing).toBe('fit');
+});
+
+it('still saves later commands when the initial settings read fails', async () => {
+  vi.spyOn(DeviceManager, 'getDeviceDisplaySettings').mockRejectedValue(new Error('read failed'));
+  const persist = vi.spyOn(DeviceManager, 'setDeviceDisplaySettings').mockResolvedValue();
+  const { result } = renderHook(() => useDeviceSettings());
+  await act(async () => {
+    await expect(result.current.initializeDisplaySettings()).rejects.toThrow('read failed');
+  });
+  act(() => { canvasService.updateDisplaySettings({ isSaved: true, framing: 'fill' }); });
+  await waitFor(() => { expect(persist).toHaveBeenLastCalledWith(expect.objectContaining({ framing: 'fill' })); });
 });

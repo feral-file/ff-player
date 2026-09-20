@@ -185,7 +185,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
   );
 
   const { castInfo, setCastInfo } = useCastInfo();
-  const { displaySettings, setDisplaySettings } = useDeviceSettings();
+  const { displaySettings, initializeDisplaySettings } = useDeviceSettings();
   const { cursorPositions } = useCursorPositions();
   const router = useRouter();
   const isOnline = useNetworkManger();
@@ -219,7 +219,7 @@ export const AppProvider = ({ children }: AppContextProps) => {
       // sets 'failed') — controld would then classify a wall that never
       // restored its cast as a succeeded boot.
       try {
-        await initialDisplaySettings();
+        await initializeDisplaySettings();
       } catch (error) {
         console.log('Error init display settings', error);
       }
@@ -243,14 +243,6 @@ export const AppProvider = ({ children }: AppContextProps) => {
       // authoritative. A stuck-open gate would silently drop claim-time
       // pushes forever, so this must not depend on initCastInfo succeeding.
       canvasService.completeBootCastHydration(bootHydrationOutcome);
-    }
-  };
-
-  const initialDisplaySettings = async () => {
-    console.log('[AppContext] initialDisplaySettings');
-    const displaySettings = await DeviceManager.getDeviceDisplaySettings();
-    if (displaySettings) {
-      setDisplaySettings(displaySettings);
     }
   };
 
