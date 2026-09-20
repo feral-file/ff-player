@@ -85,6 +85,16 @@ Use the real player in Chromium or on an FF1; jsdom cannot verify layout.
    must respect the same inset. A slow load's global overlay and the cursor
    must continue using the full screen.
 
+## Manual smoke: saved device framing
+
+Use a non-square image with explicit authored Fit. Send saved `framing: "fill"`
+and check cropping and `deviceSettings.framing`, then advance to another work
+and reload the player using the same browser profile. The saved Fill must remain.
+Switch to saved Fit against authored Fill, then to `artwork` and check that
+published Fill returns. A work with `userOverrides: false` keeps its authored
+scaling. Test another browser profile/device to confirm choices are independent.
+Keep matte, tombstone, duration, and the source playlist unchanged.
+
 ## Manual visual smoke: setup and pairing overlays
 
 Copy or layout changes to `SetupOverlay` / `MintPairingOverlay` cannot be

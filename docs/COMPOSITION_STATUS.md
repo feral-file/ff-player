@@ -2,7 +2,7 @@
 
 `checkStatus.deviceSettings` reports the committed stage's `scaling`, `margin`
 and `background`, after the DP-1 preference merge and current-showing Control
-Center adjustments. These fields describe the screen, not the saved machine
+Center adjustments, followed by the saved device framing override. These fields describe the screen, not the saved machine
 default. `orientation`, `defaultDuration` and `tombstone` remain device settings.
 
 `showingKey` is a random UUID generated for the committed showing. The renderer's
@@ -57,3 +57,24 @@ seeds controls from status, keeps local optimism while commands settle, rolls
 back rejected intents, and accepts fresh idle reports (including external
 reverts). Each partial write changes only its named field and remains
 `isSaved: false` in Control Center.
+
+
+## Persistent device framing
+
+`updateDisplaySettings` accepts `{framing: "artwork" | "fit" | "fill", isSaved: true}`.
+The saved `framing` preference is reported separately in `deviceSettings`, even
+without a playing artwork. Absent stored preferences report `artwork` (Follow
+artwork). Unknown modes and ephemeral framing writes are rejected. Existing
+partial settings are preserved when framing changes.
+
+An explicit Fit or Fill overrides the final authored scaling and current-showing
+scaling, unless `userOverrides: false` forbids it. Follow artwork releases this
+override and restores the normal DP-1 merge; legacy saved scaling remains only
+a fallback for documents without authored scaling. Playlist documents and
+signatures are unchanged. The preference is stored in the existing device display
+settings record and restored at boot, independently on each Art Computer.
+
+The app presents these three choices only in Art Computer Settings. Controld must
+preserve `framing` in both full and lightweight status; older firmware omits it,
+which the app treats as unsupported. `scaling` continues to describe what is
+actually on screen, so a locked artwork can report scaling different from framing.

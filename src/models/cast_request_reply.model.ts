@@ -4,6 +4,7 @@ import { ErrorType } from './error.model';
 import { DP1Call, DP1Intent, DP1Item, Scaling } from './dp1.model';
 import { CastCommand, LoopMode, RenderStatus, ViewMode } from '.';
 import type { ContentContext } from '@/services/contentPolicy';
+import type { DeviceFraming } from '@/utils/deviceFraming';
 
 export interface CursorOffset {
   dx: number;
@@ -95,6 +96,8 @@ export interface CheckDeviceStatusReply extends Reply {
     // Controld deduplicates notifications by status payload.
     compositionRevision?: number;
     scaling?: Scaling;
+    // Saved owner preference, independently reported even with nothing playing.
+    framing?: DeviceFraming;
     margin?: number | string;
     background?: string;
     orientation?: ViewMode;
