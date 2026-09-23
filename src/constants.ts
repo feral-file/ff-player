@@ -31,6 +31,7 @@ export const NO_DURATION_VALUE = 999999999;
 
 export const KNOWN_ORIGINS = new Set([
   'https://feralfile.com',
+  'https://cdn.feralfileassets.com',
   'https://cdn.artworks.feralfile.io',
   'https://ipfs.io',
   'https://imagedelivery.net',
