@@ -31,8 +31,7 @@ The value was easy to reintroduce because the rule lived only in a comment insid
 ## Deliberate exceptions
 
 - `0%` and `100%` are allowed: they mean "collapse" and "fill the parent", and the parent is already vmin-sized. The timer bar's track and depleting fill use them.
-- Percentages that **place** rather than size — `left: '50%'` with `transform: 'translateX(-50%)'` on the toast — are allowed. They centre correctly in either orientation.
-- `TombstoneToast`'s `maxWidth: '80%'` is an inert safety net: the toast's fixed strings are `nowrap` and never approach it. It is allowlisted by value in the scan, so changing it fails the test.
+- Percentages that **place** rather than size — are allowed. They centre correctly in either orientation.
 
 ## Enforcement
 

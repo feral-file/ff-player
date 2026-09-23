@@ -1710,13 +1710,9 @@ const ArtworkPlayer = ({
     markArtworkFailed();
     console.log('[ArtworkPlayer] WebGL context lost!');
     setMessageModalText(
-      'This artwork appears to be especially demanding and may have caused a GPU crash. ' +
-        'The system is now working to restore the display environment.<br/><br/>' +
-        'This may take a moment. If the issue repeats, we recommend trying a different artwork ' +
-        'or viewing this one on a higher-performance device.<br/><br/>' +
-        'Thanks for your patience.'
+      'Please wait while your Art Computer restores the artwork.'
     );
-    setMessageModalTitle('Artwork Recovery in Progress');
+    setMessageModalTitle('Restoring artwork');
     setShowMessageModal(true);
     setSlotOpacity([0, 0]);
     startWebGLRecovery();
@@ -1741,7 +1737,7 @@ const ArtworkPlayer = ({
         console.log('[ArtworkPlayer] WebGL recovery timed out');
         setMessageModalText(null);
         setMessageModalTitle(
-          'Unfortunately, the system was unable to automatically recover the display environment.'
+          'Couldn’t restore this artwork. Try another work.'
         );
         return;
       }

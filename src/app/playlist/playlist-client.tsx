@@ -4,7 +4,6 @@
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import TombstoneOverlay from '@/components/tombstone/TombstoneOverlay';
 import { useAppContext } from '@/context/AppContext';
-import TombstoneToast from '@/components/tombstone/TombstoneToast';
 import { useTombstone } from './useTombstone';
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
@@ -633,14 +632,13 @@ export default function PlaylistClient() {
     canvasService.getCastInfo(), getShowing(), castPreviewURL, contentPolicy);
 
   // Tombstone state (feral-file#3452): committed-item tracking, label
-  // resolution, mode coercion, and the FF1-side toast — see useTombstone.
+  // resolution and mode coercion — see useTombstone.
   const {
     handleItemCommitted,
     mode: tombstoneMode,
     itemKey: tombstoneItemKey,
     title: tombstoneTitle,
     artistName: tombstoneArtist,
-    toastText: tombstoneToast,
   } = useTombstone(playlist, deviceDisplaySettings);
   handleItemCommittedRef.current = handleItemCommitted;
 
@@ -673,7 +671,6 @@ export default function PlaylistClient() {
           artistName={tombstoneArtist}
           curatorName={castInfo.playlist?.curator}
         />}
-        {permitted && <TombstoneToast text={tombstoneToast} />}
       </div>
     </>
   );

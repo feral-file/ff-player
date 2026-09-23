@@ -78,7 +78,8 @@ describe('ArtworkPlayer — model bootstrap error handling', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+      expect(screen.getByText('The artwork cannot be displayed correctly on this device.')).toBeTruthy();
+      expect(screen.queryByText('Unable to load 3D model')).toBeNull();
     });
 
     expect(screen.queryByText('Loading 3D model')).toBeNull();
@@ -109,7 +110,8 @@ describe('ArtworkPlayer — model bootstrap error handling', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+      expect(screen.getByText('The artwork cannot be displayed correctly on this device.')).toBeTruthy();
+      expect(screen.queryByText('Unable to load 3D model')).toBeNull();
     });
 
     await waitFor(() => {

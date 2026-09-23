@@ -7,8 +7,6 @@ import {
   CustomEventName,
   MintPairingDisplayDetail,
   MintPairingDisplayState,
-  PlayerToastDetail,
-  PlayerToastNotice,
   SetupDisplayDetail,
   SetupDisplayState,
   WatchdogEvent,
@@ -21,14 +19,11 @@ import {
 const pingCommand = 'ping';
 const mintPairingDisplayCommand = 'mintPairingDisplay';
 const setupDisplayCommand = 'setupDisplay';
-const playerToastCommand = 'playerToast';
 
 /** Bridges native CDP callbacks into player services and browser events. */
 export class CDPRequestHandler {
   private static instance: CDPRequestHandler | null = null;
   private isInitialized = false;
-  // See PlayerToastDetail.seq.
-  private toastSeq = 0;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -163,14 +158,6 @@ export class CDPRequestHandler {
         break;
       }
 
-      case playerToastCommand: {
-        reply = {
-          messageID,
-          message: this.handlePlayerToast(wsMessage.request),
-        };
-        break;
-      }
-
       default: {
         const responseMessage = canvasService.processMessage(wsMessage);
         reply = {
@@ -206,27 +193,6 @@ export class CDPRequestHandler {
     window.dispatchEvent(
       new CustomEvent<SetupDisplayDetail>(CustomEventName.SetupDisplay, {
         detail: request,
-      })
-    );
-    return { ok: true };
-  }
-
-  /**
-   * `playerToast`: show a transient notice over the current screen. The
-   * request names a notice from the closed `PlayerToastNotice` set; anything
-   * else is rejected so a daemon build that predates a notice this player
-   * does not know gets an explicit `{ok:false}` rather than a silent no-op —
-   * the manifest lists exactly the notices accepted here.
-   */
-  private handlePlayerToast(request: unknown) {
-    if (!isPlayerToastRequest(request)) {
-      return { ok: false, error: 'Invalid player toast request' };
-    }
-
-    this.toastSeq += 1;
-    window.dispatchEvent(
-      new CustomEvent<PlayerToastDetail>(CustomEventName.PlayerToast, {
-        detail: { notice: request.notice, seq: this.toastSeq },
       })
     );
     return { ok: true };
@@ -322,20 +288,6 @@ function isMintPairingDisplayDetail(
   }
 
   return true;
-}
-
-/** Validate a `playerToast` request: a known notice, nothing else. */
-function isPlayerToastRequest(
-  request: unknown
-): request is { notice: PlayerToastNotice } {
-  if (!request || typeof request !== 'object') {
-    return false;
-  }
-  const { notice } = request as { notice?: unknown };
-  return (
-    typeof notice === 'string' &&
-    Object.values(PlayerToastNotice).includes(notice as PlayerToastNotice)
-  );
 }
 
 /**
