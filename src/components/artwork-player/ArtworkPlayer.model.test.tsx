@@ -185,16 +185,14 @@ describe('ArtworkPlayer — relative iframe display settings', () => {
       />
     );
 
-    const iframe = await waitFor(() => {
+    // The iframe mounts with its source before the display-settings effect
+    // resolves the URL and appends display_mode. Wait for that outcome, not
+    // just the element: a busy CI runner can observe the intermediate render.
+    await waitFor(() => {
       const node = container.querySelector('iframe');
-      if (!node) {
-        throw new Error('iframe element was not rendered');
-      }
-      return node;
+      expect(node?.getAttribute('src')).toContain('/artwork.html');
+      expect(node?.getAttribute('src')).toContain('display_mode=crop');
     });
-
-    expect(iframe.getAttribute('src')).toContain('/artwork.html');
-    expect(iframe.getAttribute('src')).toContain('display_mode=crop');
   });
 });
 

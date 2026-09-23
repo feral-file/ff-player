@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { canvasService } from '../CanvasService';
 import { DP1DisplayPreference } from '@/models/dp1.model';
+import { applyDeviceFraming, type DeviceFraming } from '@/utils/deviceFraming';
 
 export type TokenDisplaySettingWithChanged = DP1DisplayPreference & {
   changed?: boolean;
@@ -13,32 +14,22 @@ export type TokenDisplaySettingWithChanged = DP1DisplayPreference & {
  * item's merged DP-1 preference, plus any viewer adjustment made to THIS
  * showing from the Control Center.
  *
- * Two layers, in order. The base is [displayPreferences], the merged DP-1
- * preference for the item (mergeItemDisplayPreference: baked-in → device
- * machine default → playlist defaults → manifests → item). On top sit
- * `updateDisplaySettings` writes with `isSaved: false` — the viewer's live
- * Fit/Fill or matting choice for the artwork on screen.
+ * The base is the merged DP-1 preference (baked-in → legacy device
+ * fallback → playlist → manifests → item). Current-showing adjustments sit
+ * above it and reset when sessionKey changes. A saved explicit device framing
+ * choice is applied last, unless the authored preference forbids user overrides.
+ * Follow artwork removes this final override; legacy scaling stays only a
+ * fallback for documents with no authored scaling.
  *
- * The adjustment is scoped to [sessionKey] (useShowingKey: slot, item
- * identity and source), not to the preference object: the same showing can
- * receive a fresh merged preference without changing work (the device
- * scaling record landing after the slot was entered, or a late ref
- * manifest), and a Fit chosen for this work must survive that. It is
- * forgotten when the key changes — the next slot, even one sharing the
- * item's id — which is what makes it session-scoped.
- *
- * The device's PERSISTED settings (`isSaved: true`, AppContext
- * `displaySettings`) are deliberately not read here any more. They used to
- * be spread over the finished merge, so a device that had ever stored
- * `scaling: fit` rendered every playlist at `fit` regardless of what its
- * documents said — and once the app retired the Canvas row that wrote the
- * value, nothing could change it. The persisted record now enters the merge
- * as its lowest DP-1 layer (usePlaylistItemDisplayPreference), so it still
- * fills the gap when a playlist is silent, but never overrides a curator.
+ * The session key tracks the slot/work/source, not the preference object: a
+ * late manifest or hydrated device record must not erase the current showing's
+ * matting. Persistent framing comes from AppContext; this hook only listens
+ * for ephemeral adjustments and never changes the signed document.
  */
 export function useArtworkSettings(
   displayPreferences: DP1DisplayPreference,
-  sessionKey = ''
+  sessionKey = '',
+  framing: DeviceFraming = 'artwork'
 ) {
   const [sessionAdjustment, setSessionAdjustment] =
     useState<{ key: string; settings: Partial<DP1DisplayPreference> } | null>(null);
@@ -60,8 +51,7 @@ export function useArtworkSettings(
   }, [sessionKey]);
 
   // Session-scoped viewer adjustments from the mobile app. Persistent
-  // writes (`isSaved: true`) are the device layer of the merge, not an
-  // override of it, so they are ignored here.
+  // writes are handled by useDeviceSettings and arrive through AppContext.
   useEffect(() => {
     const onSettingsChanged = (
       isSaveToDevice: boolean,
@@ -93,10 +83,13 @@ export function useArtworkSettings(
     // Ignore the old slot's adjustment during the first render of a new
     // showing, before the passive reset above has run.
     if (sessionAdjustment?.key !== sessionKey) {
-      return displayPreferences;
+      return applyDeviceFraming(displayPreferences, framing);
     }
-    return { ...displayPreferences, ...sessionAdjustment.settings, changed: true };
-  }, [displayPreferences, sessionAdjustment, sessionKey]);
+    return {
+      ...applyDeviceFraming({ ...displayPreferences, ...sessionAdjustment.settings }, framing),
+      changed: true,
+    };
+  }, [displayPreferences, sessionAdjustment, sessionKey, framing]);
 
   return {
     displaySettings,

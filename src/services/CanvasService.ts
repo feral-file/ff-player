@@ -9,6 +9,7 @@ import {
   SchedulePlaylistReply,
   UpdateDefaultDurationRequest,
 } from '@/models/cast_request_reply.model';
+import { deviceFraming } from '@/utils/deviceFraming';
 import {
   CastCommand,
   CastInfo,
@@ -1345,6 +1346,7 @@ class CanvasService {
           '',
 
         deviceSettings: {
+          framing: deviceFraming(DeviceManager.getCachedDeviceDisplaySettings()?.framing),
           showingKey: composition ? this.committedShowing?.id : undefined,
           compositionRevision: composition
             ? this.compositionRevision
@@ -1668,6 +1670,10 @@ class CanvasService {
   public updateDisplaySettings(
     request: UpdateDisplaySettingsRequest
   ): UpdateDisplaySettingsReply {
+    if (request.framing !== undefined &&
+      (!request.isSaved || !['artwork', 'fit', 'fill'].includes(request.framing))) {
+      return { ok: false, error: 'Framing must be a saved artwork, fit, or fill preference.' };
+    }
     const { showingKey, ...settings } = request;
     const composition = this.displaySettingsReporter?.();
     // Ephemeral writes belong to the showing the controller observed. During

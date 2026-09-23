@@ -67,7 +67,7 @@ vi.mock('@/services/custom-hooks/useCastInfo', () => ({
 vi.mock('@/services/custom-hooks/useDeviceSettings', () => ({
   useDeviceSettings: vi.fn(() => ({
     displaySettings: null,
-    setDisplaySettings: vi.fn(),
+    initializeDisplaySettings: async () => { await deviceManager.getDeviceDisplaySettings(); },
   })),
 }));
 

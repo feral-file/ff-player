@@ -219,7 +219,8 @@ const ArtworkPlayer = ({
 
   const { displaySettings } = useArtworkSettings(
     displayPreferences,
-    showingKey
+    showingKey,
+    context.displaySettings?.framing
   );
   const showRenderLoadingOverlay =
     context.appRemoteConfig.showRenderLoadingOverlay ?? true;

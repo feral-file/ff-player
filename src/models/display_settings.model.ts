@@ -1,4 +1,5 @@
 import { Scaling } from './dp1.model';
+import type { DeviceFraming } from '@/utils/deviceFraming';
 
 /**
  * Device-level tombstone (museum label) state for feral-file#3452.
@@ -30,6 +31,8 @@ interface AssetConfiguration {
 
 export class DisplaySettings {
   scaling?: Scaling;
+  // Explicit owner preference; unlike scaling this is not a legacy fallback.
+  framing?: DeviceFraming;
   // Optional so persisted pre-tombstone settings deserialize unchanged; read
   // sites resolve absence to `TombstoneMode.Timed` (the product default).
   tombstone?: TombstoneMode;
