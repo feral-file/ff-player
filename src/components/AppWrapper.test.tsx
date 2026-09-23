@@ -40,10 +40,6 @@ vi.mock('@/services/DP1ScheduleService', () => ({
   },
 }));
 
-vi.mock('./ScheduleDisplay', () => ({
-  default: () => null,
-}));
-
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: vi.fn(),

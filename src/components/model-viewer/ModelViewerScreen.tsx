@@ -131,11 +131,7 @@ export default function ModelViewerScreen({
           </div>
         </div>
       )}
-      {(hasError || hasBootstrapError) && (
-        <div style={overlayStyle}>
-          <div>Unable to load 3D model</div>
-        </div>
-      )}
+      {/* ArtworkPlayer owns failure feedback; a second overlay obscures it. */}
     </main>
   );
 }
