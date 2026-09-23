@@ -29,9 +29,14 @@ export const CLIENT_BANDWIDTH_HINT = 16; // Mbps
 
 export const NO_DURATION_VALUE = 999999999;
 
+/**
+ * Media origins that can stream directly without a full Blob download.
+ * Keep the old asset host while published playlists still contain its URLs.
+ */
 export const KNOWN_ORIGINS = new Set([
   'https://feralfile.com',
   'https://cdn.feralfileassets.com',
+  'https://cdn.artworks.feralfile.io',
   'https://ipfs.io',
   'https://imagedelivery.net',
 ]);
