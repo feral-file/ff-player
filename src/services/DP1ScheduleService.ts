@@ -123,11 +123,6 @@ class DP1ScheduleService {
           this.executeScheduledTask(task);
         }, executionTime);
 
-        window.dispatchEvent(
-          new CustomEvent('dp1ScheduleTimeoutSet', {
-            detail: { scheduleTime: task.scheduleTime },
-          })
-        );
       }
     } catch (error) {
       console.error('[DP1ScheduleService] Error in scheduling logic:', error);
@@ -158,7 +153,6 @@ class DP1ScheduleService {
       clearTimeout(this.timeoutId);
       this.timeoutId = null;
 
-      window.dispatchEvent(new CustomEvent('dp1ScheduleTimeoutCleared'));
     }
   }
 }

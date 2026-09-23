@@ -23,9 +23,7 @@ const TOMBSTONE_DIR = path.join(process.cwd(), 'src/components/tombstone');
  * Properties whose value is a *size*. A percentage here resolves against an
  * ancestor's box, which is the long axis in one orientation and the short one
  * in the other — the bug. Position offsets (`top`/`left`/…) and `transform`
- * are deliberately absent: a percentage there places rather than sizes, and
- * the toast's `left: '50%'` + `translateX(-50%)` centres correctly either way
- * up. Viewport-axis units are still banned everywhere, including those.
+ * are deliberately absent: a percentage there places rather than sizes, so `left: '50%'` remains valid. Viewport-axis units are still banned everywhere, including those.
  */
 const DIMENSION_PROPERTIES = new Set([
   'width',
@@ -66,10 +64,9 @@ const SCALE_FREE_PERCENTAGES = new Set(['0', '100']);
 
 /**
  * Conscious exceptions, keyed `file:property:value` so that *changing* an
- * allowed value fails the scan and has to be argued again. The toast's cap is
- * inert: its fixed confirmation strings are `nowrap` and never reach it.
+ * allowed value fails the scan and has to be argued again. There are currently no exceptions.
  */
-const ALLOWED = new Set(['TombstoneToast.tsx:maxWidth:80%']);
+const ALLOWED = new Set<string>();
 
 const VIEWPORT_AXIS_UNIT = /-?\d+(?:\.\d+)?(vw|vh)\b/;
 const PERCENTAGE = /-?\d+(?:\.\d+)?%/g;
@@ -241,14 +238,5 @@ describe('tombstone sizing contract', () => {
     expect(findSizingViolations('Ok.tsx', source)).toEqual([]);
   });
 
-  it('holds the toast exception to its exact value', () => {
-    const allowed = "const s = { maxWidth: '80%' };";
-    const changed = "const s = { maxWidth: '70%' };";
-    expect(findSizingViolations('TombstoneToast.tsx', allowed)).toEqual([]);
-    expect(findSizingViolations('TombstoneToast.tsx', changed)).toHaveLength(1);
-    // The exception is per-file: the same cap on the label is still a bug.
-    expect(findSizingViolations('TombstoneOverlay.tsx', allowed)).toHaveLength(
-      1
-    );
-  });
+
 });

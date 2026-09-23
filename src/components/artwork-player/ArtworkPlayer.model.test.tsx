@@ -300,7 +300,8 @@ describe('ArtworkPlayer — model runtime error handling', () => {
     modelViewerEl.dispatchEvent(new Event('error'));
 
     await waitFor(() => {
-      expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+      expect(screen.getByText('The artwork cannot be displayed correctly on this device.')).toBeTruthy();
+      expect(screen.queryByText('Unable to load 3D model')).toBeNull();
     });
 
     await waitFor(() => {
