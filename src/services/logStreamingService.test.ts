@@ -29,6 +29,7 @@ function record(
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 describe('LogStreamingService session boundaries', () => {
@@ -98,6 +99,36 @@ describe('LogStreamingService maximum session duration', () => {
 });
 
 describe('LogStreamingService delivery', () => {
+  it('calls the browser fetch default with its required global receiver', async () => {
+    vi.useFakeTimers();
+    const fetcher = vi.fn(function (
+      this: unknown,
+      input: URL | RequestInfo,
+      init?: RequestInit
+    ) {
+      if (this !== globalThis) {
+        return Promise.reject(new TypeError('Illegal invocation'));
+      }
+      expect(input).toBe('http://127.0.0.1:1111/api/logs');
+      expect(requestRecords(init)).toMatchObject([
+        { message: '[CanvasService] browser default' },
+      ]);
+      return Promise.resolve(new Response(null, { status: 202 }));
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const stream = new LogStreamingService({
+      environment: 'test',
+      now: () => 0,
+    });
+
+    record(stream, 'info', 'browser default');
+    stream.flush();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.instances[0]).toBe(globalThis);
+  });
+
   it('retries transient proxy failures', async () => {
     vi.useFakeTimers();
     let attempts = 0;

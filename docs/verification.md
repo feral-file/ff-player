@@ -38,7 +38,11 @@ By default, `npm run verify` lints changed files against `origin/main`. To verif
 ## Paired player-log proxy contract
 
 Player unit tests verify session batching and the two browser request shapes,
-but the matching `feral-controld` repository owns the loopback proxy, CORS,
+including that the default `Window.fetch` keeps its browser receiver (Chromium
+otherwise rejects the upload with `Illegal invocation` before any request
+reaches the proxy). A production-bundle smoke should confirm an allowed player
+console message produces `POST /api/logs` after the five-second idle boundary.
+The matching `feral-controld` repository owns the loopback proxy, CORS,
 trusted device attribution, and upstream forwarding. For changes to either side
 of `POST http://127.0.0.1:1111/api/logs`, check out the intended paired
 `ffos-user` ref beside this repository and run its real-handler browser test:

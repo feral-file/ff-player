@@ -159,7 +159,10 @@ export class LogStreamingService {
 
   public constructor(options: LogStreamingOptions) {
     this.environment = options.environment || 'production';
-    this.fetcher = options.fetcher ?? fetch;
+    // Chromium's Window.fetch rejects a different receiver with "Illegal
+    // invocation". Keep the browser default bound when delivery calls it
+    // through this service; injected test fetchers retain their own behavior.
+    this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
     this.now = options.now ?? Date.now;
   }
 
