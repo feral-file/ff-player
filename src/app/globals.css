@@ -20,7 +20,7 @@
   font-style: italic;
 }
 
-/* Upright bold, for <strong> in the setup overlay (the ff1.config fallback
+/* Upright bold, for <strong> in the setup overlay (the direct portal fallback
    address, the pairing frame name). Same reasoning as BoldItalic above: with
    only the 400 face registered, upright 700 falls back to Regular plus a
    synthesized weight, which is visibly wrong at wall sizes. Converted from

@@ -3,9 +3,8 @@
 // - Attempts blob conversion
 // - Falls back to direct loading
 // - Manages object URLs
-// - Logs errors to Sentry
+// - Logs errors through the player-wide console stream
 
-import * as Sentry from '@sentry/nextjs';
 import { KNOWN_ORIGINS } from '@/constants';
 
 export type BlobLoadedMediaType = 'image' | 'video' | 'audio' | 'object';
@@ -30,23 +29,87 @@ export interface MediaLoadResult {
   error?: Error;
 }
 
+const abortResult = (): MediaLoadResult => ({
+  success: false,
+  usedBlob: false,
+  error: new DOMException('Media load aborted', 'AbortError'),
+});
+
+/** Assigns the original media URL and converts thrown values into a result. */
+function loadDirect(options: MediaLoadOptions): MediaLoadResult {
+  const { element, mediaType, onError, signal, url } = options;
+  if (signal?.aborted) {
+    return abortResult();
+  }
+  try {
+    setMediaSource(element, mediaType, url);
+    return { success: true, usedBlob: false };
+  } catch (error) {
+    const failure = error instanceof Error ? error : new Error(String(error));
+    onError?.(failure);
+    return { success: false, usedBlob: false, error: failure };
+  }
+}
+
+/** Tries a CORS blob conversion and falls back to the original URL. */
+async function loadViaBlob(
+  options: MediaLoadOptions
+): Promise<MediaLoadResult> {
+  const { element, mediaType, signal, url } = options;
+  try {
+    console.log(
+      `[MediaLoader] Fetching ${mediaType} for blob conversion:`,
+      url
+    );
+    const response = await fetch(url, {
+      mode: 'cors',
+      cache: 'no-store',
+      referrerPolicy: 'no-referrer',
+      signal,
+    });
+    if (!response.ok) {
+      throw new Error(
+        `HTTP ${String(response.status)}: ${response.statusText}`
+      );
+    }
+    if (signal?.aborted) {
+      return abortResult();
+    }
+
+    const objectURL = URL.createObjectURL(await response.blob());
+    if (signal?.aborted) {
+      URL.revokeObjectURL(objectURL);
+      return abortResult();
+    }
+    setMediaSource(element, mediaType, objectURL);
+    console.log(
+      `[MediaLoader] Successfully converted ${mediaType} to blob URL`
+    );
+    return { success: true, usedBlob: true };
+  } catch (error) {
+    console.error(
+      `[MediaLoader] Error fetching ${mediaType} for blob conversion:`,
+      error
+    );
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return abortResult();
+    }
+    console.log(
+      `[MediaLoader] Falling back to direct loading for ${mediaType}`
+    );
+    return loadDirect(options);
+  }
+}
+
 /**
  * Universal CORS handling for all media types
- * Handles trusted origins with direct loading and unknown origins with blob conversion
+ * Handles trusted origins with direct loading and unknown origins with blob conversion.
  */
 export const loadMediaWithCORS = async (
   options: MediaLoadOptions
 ): Promise<MediaLoadResult> => {
-  const { url, mediaType, element, onError, signal } = options;
-
-  const isAborted = () => signal?.aborted ?? false;
-  const abortResult = (): MediaLoadResult => ({
-    success: false,
-    usedBlob: false,
-    error: new DOMException('Media load aborted', 'AbortError'),
-  });
-
-  if (isAborted()) {
+  const { url, mediaType, signal } = options;
+  if (signal?.aborted) {
     return abortResult();
   }
 
@@ -66,120 +129,21 @@ export const loadMediaWithCORS = async (
       origin
     );
 
-    try {
-      if (isAborted()) {
-        return abortResult();
-      }
-      setMediaSource(element, mediaType, url);
-      return { success: true, usedBlob: false };
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      onError?.(err);
-      return { success: false, usedBlob: false, error: err };
-    }
+    return loadDirect(options);
   }
 
   const supportsBlobConversion =
     mediaType === 'image' || mediaType === 'object' || mediaType === 'video';
 
   if (!supportsBlobConversion) {
-    // For media types that require streaming (video/audio), fall back to direct loading.
-    try {
-      if (isAborted()) {
-        return abortResult();
-      }
-      setMediaSource(element, mediaType, url);
-      return { success: true, usedBlob: false };
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      onError?.(err);
-      return { success: false, usedBlob: false, error: err };
-    }
+    return loadDirect(options);
   }
 
-  // For unknown origins that support blob conversion (images/objects), try blob conversion
-  try {
-    console.log(
-      `[MediaLoader] Fetching ${mediaType} for blob conversion:`,
-      url
-    );
-
-    const res = await fetch(url, {
-      mode: 'cors',
-      cache: 'no-store',
-      referrerPolicy: 'no-referrer',
-      signal,
-    });
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${String(res.status)}: ${res.statusText}`);
-    }
-
-    if (isAborted()) {
-      return abortResult();
-    }
-
-    const blob = await res.blob();
-    const obj = URL.createObjectURL(blob);
-
-    if (isAborted()) {
-      URL.revokeObjectURL(obj);
-      return abortResult();
-    }
-
-    setMediaSource(element, mediaType, obj);
-
-    console.log(
-      `[MediaLoader] Successfully converted ${mediaType} to blob URL`
-    );
-
-    return { success: true, usedBlob: true };
-  } catch (error) {
-    console.error(
-      `[MediaLoader] Error fetching ${mediaType} for blob conversion:`,
-      error
-    );
-
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      return abortResult();
-    }
-
-    Sentry.captureMessage(
-      `[MediaLoader] Error fetching ${mediaType} for blob conversion`,
-      {
-        level: 'error',
-        extra: {
-          error: error instanceof Error ? error.message : String(error),
-          url,
-          mediaType,
-        },
-      }
-    );
-
-    // Fallback to direct loading
-    console.log(
-      `[MediaLoader] Falling back to direct loading for ${mediaType}`
-    );
-
-    try {
-      if (isAborted()) {
-        return abortResult();
-      }
-      setMediaSource(element, mediaType, url);
-      return { success: true, usedBlob: false };
-    } catch (fallbackError) {
-      const err =
-        fallbackError instanceof Error
-          ? fallbackError
-          : new Error(String(fallbackError));
-      onError?.(err);
-      return { success: false, usedBlob: false, error: err };
-    }
-  }
+  return loadViaBlob(options);
 };
 
 /**
- * Sets the appropriate source attribute based on media type
+ * Sets the appropriate source attribute based on media type.
  */
 const setMediaSource = (
   element: MediaElement,
@@ -196,7 +160,7 @@ const setMediaSource = (
 };
 
 /**
- * Creates a media loader hook for React components
+ * Creates a media loader hook for React components.
  */
 export const createMediaLoader = () => {
   let currentObjectURL: string | null = null;

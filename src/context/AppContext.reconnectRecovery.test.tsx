@@ -41,6 +41,7 @@ const {
         (playlistURL: string, shouldAbort?: () => boolean) => Promise<boolean>
       >(() => Promise.resolve(true)),
       completeBootCastHydration: vi.fn(),
+      primeRecentlyPlayed: vi.fn().mockResolvedValue(undefined),
       getCastInfo: vi.fn<() => CastInfo | null>(() => null),
       setCastInfo: vi.fn<(castInfo: CastInfo | null, notify?: boolean) => void>(),
       requestArtworkRefresh: vi.fn<() => boolean>(() => true),
@@ -62,10 +63,6 @@ vi.mock('axios', () => ({
   },
 }));
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-}));
-
 vi.mock('@/services/custom-hooks/useNetworkManager', () => ({
   default: useNetworkMangerMock,
 }));
@@ -81,7 +78,7 @@ vi.mock('@/services/custom-hooks/useCastInfo', () => ({
 vi.mock('@/services/custom-hooks/useDeviceSettings', () => ({
   useDeviceSettings: vi.fn(() => ({
     displaySettings: null,
-    setDisplaySettings: vi.fn(),
+    initializeDisplaySettings: async () => { await deviceManager.getDeviceDisplaySettings(); },
   })),
 }));
 
@@ -104,6 +101,7 @@ vi.mock('@/services/CanvasService', () => ({
   canvasService: {
     castPlaylistByURL: canvasServiceMocks.castPlaylistByURL,
     completeBootCastHydration: canvasServiceMocks.completeBootCastHydration,
+    primeRecentlyPlayed: canvasServiceMocks.primeRecentlyPlayed,
     getCastInfo: canvasServiceMocks.getCastInfo,
     setCastInfo: canvasServiceMocks.setCastInfo,
     requestArtworkRefresh: canvasServiceMocks.requestArtworkRefresh,

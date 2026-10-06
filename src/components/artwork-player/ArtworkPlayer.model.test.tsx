@@ -26,12 +26,6 @@ vi.mock('@google/model-viewer', () => {
   return {};
 });
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
-}));
-
 const MODEL_URL =
   'https://ipfs.filebase.io/ipfs/bafybeiht7hyohzvnje3aozwfkoqowuvmb7fooqh4pbyigzv6qm2dolwgxu';
 const MODEL_URL_B =
@@ -54,7 +48,11 @@ function renderWithContext(ui: React.ReactElement): ReturnType<typeof render> {
   );
 }
 
-/** Renders the player in the display-settings path that rewrites iframe URLs. */
+/**
+ * Renders the player with a persisted device record of `fit`. Scaling reaches
+ * the iframe URL from the item's merged preference; the device record is the
+ * merge's lowest layer, not an override, so it must not win over the item.
+ */
 function renderWithDisplaySettings(
   ui: React.ReactElement
 ): ReturnType<typeof render> {
@@ -63,7 +61,7 @@ function renderWithDisplaySettings(
       isInitialized: true,
       isOnline: true,
       appRemoteConfig: {},
-      displaySettings: { scaling: Scaling.Fill },
+      displaySettings: { scaling: Scaling.Fit },
       deviceRotation: { viewMode: 'landscape' },
       cursorPositions: null,
       castInfo: null,
@@ -180,20 +178,21 @@ describe('ArtworkPlayer — relative iframe display settings', () => {
     const { container } = renderWithDisplaySettings(
       <ArtworkPlayer
         previewURL="artwork.html"
-        displayPreferences={defaultDP1DisplayPreference}
+        displayPreferences={{
+          ...defaultDP1DisplayPreference,
+          scaling: Scaling.Fill,
+        }}
       />
     );
 
-    const iframe = await waitFor(() => {
+    // The iframe mounts with its source before the display-settings effect
+    // resolves the URL and appends display_mode. Wait for that outcome, not
+    // just the element: a busy CI runner can observe the intermediate render.
+    await waitFor(() => {
       const node = container.querySelector('iframe');
-      if (!node) {
-        throw new Error('iframe element was not rendered');
-      }
-      return node;
+      expect(node?.getAttribute('src')).toContain('/artwork.html');
+      expect(node?.getAttribute('src')).toContain('display_mode=crop');
     });
-
-    expect(iframe.getAttribute('src')).toContain('/artwork.html');
-    expect(iframe.getAttribute('src')).toContain('display_mode=crop');
   });
 });
 
@@ -299,7 +298,8 @@ describe('ArtworkPlayer — model runtime error handling', () => {
     modelViewerEl.dispatchEvent(new Event('error'));
 
     await waitFor(() => {
-      expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+      expect(screen.getByText('The artwork cannot be displayed correctly on this device.')).toBeTruthy();
+      expect(screen.queryByText('Unable to load 3D model')).toBeNull();
     });
 
     await waitFor(() => {

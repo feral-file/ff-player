@@ -1,16 +1,15 @@
-import * as Sentry from '@sentry/nextjs';
-
 import {
   defaultDP1DisplayPreference,
   type DP1Defaults,
   type DP1DisplayPreference,
   type DP1Item,
   type RefManifest,
+  Scaling,
 } from '@/models/dp1.model';
 import { DP1Service } from '@/services/DP1Service';
 
 /**
- * Log and report an error raised while resolving a playlist item's display
+ * Log an error raised while resolving a playlist item's display
  * preference. Extracted from PlaylistClient to keep that playback surface
  * under its line budget (see ArtworkPlayer's note on preferring utils).
  */
@@ -24,37 +23,76 @@ export function reportPlaylistDisplayPreferenceError(
     message,
     error instanceof Error ? error.message : String(error)
   );
-  if (error instanceof Error) {
-    Sentry.captureException(error, {
-      extra: { phase, ...extra },
-    });
-  } else {
-    Sentry.captureMessage(message, {
-      extra: {
-        error: String(error),
-        phase,
-        ...extra,
-      },
-    });
+
+  // Preserve the local detail while the public console tee intentionally
+  // uploads only the stable first argument.
+  if (extra) {
+    console.debug('[PlaylistClient] Display preference context:', extra);
   }
 }
 
 /**
+ * The display layer a device's persisted machine default contributes to
+ * every item merge, or undefined when the device holds no usable value.
+ *
+ * Only `scaling` is carried. It is the one field the retired Art Computer
+ * Settings "Canvas" row ever persisted (`updateArtFraming`, and
+ * `updateDisplaySettings` with `isSaved: true`), and devices that chose
+ * Crop to Fill back then still hold it. The persisted record also carries
+ * `tombstone`, which is not a DP-1 display field and has its own consumer
+ * (useTombstone), so it must not leak into the artwork preference. Unknown
+ * or absent values contribute nothing rather than an explicit `undefined`,
+ * which a spread would otherwise let clobber the baked-in default.
+ */
+export function deviceDefaultDisplay(
+  deviceScaling: unknown
+): DP1DisplayPreference | undefined {
+  const known = Object.values(Scaling) as unknown[];
+  if (!known.includes(deviceScaling)) {
+    return undefined;
+  }
+  return { scaling: deviceScaling as Scaling };
+}
+
+/**
  * Pure DP-1 display-preference merge for a playlist item, lowest to highest
- * priority: baked-in defaults → playlist defaults.display → ref-manifest
- * controls.display (pass via [refDisplay] when loaded) → item.override.display
- * → item.display. Synchronous so no-ref items can resolve their preference in
- * the same tick they enter the slot; the async ref-manifest layer is loaded
- * separately via [loadRefManifestDisplay].
+ * priority: baked-in defaults → device machine default ([deviceDefaults],
+ * see deviceDefaultDisplay) → playlist defaults.display → item
+ * inlineManifest.controls.display → ref-manifest controls.display (pass via
+ * [refDisplay] when loaded) → item.override.display → item.display.
+ * Synchronous so no-ref items can resolve their preference in the same tick
+ * they enter the slot; the async ref-manifest layer is loaded separately via
+ * [loadRefManifestDisplay].
+ *
+ * The device layer sits BELOW every DP-1 layer on purpose. A machine default
+ * fills the gap when no DP-1 document says anything about a field; it never
+ * beats a value a curator or artist wrote. The viewer's live choice (the
+ * Control Center's Fit/Fill, sent with `isSaved: false`) is not this layer:
+ * it is applied on top of the merged preference by useArtworkSettings for
+ * the current showing only, which is what DP-1 §4 `userOverrides` permits.
+ * Before this ordering the persisted value was spread over the finished
+ * merge, so a device that had ever stored `fit` rendered every playlist at
+ * `fit` — including ones whose `defaults.display.scaling` was `fill` — and,
+ * with the Canvas row gone from the app, nothing could change it.
+ *
+ * The inlineManifest layer is read off the item here rather than passed in,
+ * which is what makes two behaviors fall out with no branching of their own:
+ * an item carrying only an inlineManifest resolves fully synchronously (it
+ * takes the no-ref path and never waits on REF_MANIFEST_GATE_TIMEOUT_MS), and
+ * a ref whose fetch fails leaves [refDisplay] undefined, so the inline copy
+ * below it simply stands — the §3.6 degraded fallback, for free.
  */
 export function mergeItemDisplayPreference(
   dp1Item: DP1Item,
   playlistDefaults: DP1Defaults | null,
-  refDisplay?: DP1DisplayPreference
+  refDisplay?: DP1DisplayPreference,
+  deviceDefaults?: DP1DisplayPreference
 ): DP1DisplayPreference {
   return {
     ...defaultDP1DisplayPreference,
+    ...(deviceDefaults ?? {}),
     ...(playlistDefaults?.display ?? {}),
+    ...(dp1Item.inlineManifest?.controls?.display ?? {}),
     ...(refDisplay ?? {}),
     ...(dp1Item.override?.display ?? {}),
     ...(dp1Item.display ?? {}),
@@ -206,11 +244,50 @@ export function loadRefManifestDisplay(
 }
 
 /**
- * Narrows a manifest metadata block into the tombstone's label fields.
+ * One artists[] entry narrowed to a usable display name, or null.
+ *
+ * Takes `unknown` rather than the declared element type on purpose: the
+ * RefManifestMetadata type describes what a conforming manifest looks like,
+ * not what actually arrives, and every entry here came from JSON we did not
+ * write. Reading it through the declared type would let a `null` element —
+ * which no schema check downstream of this file guarantees against — throw on
+ * property access.
+ *
+ * That throw is not survivable where it happens. A fetched manifest is read
+ * inside a promise chain, so a throw is contained; an item's inlineManifest is
+ * read in a useMemo during render (useTombstoneInfo), where it escapes to the
+ * nearest error boundary — and this app has none below app/global-error.tsx.
+ * One malformed manifest would replace the artwork on the wall with an error
+ * page. A wrong manifest must cost a missing label line, nothing more.
+ */
+function artistDisplayName(artist: unknown): string | null {
+  if (typeof artist !== 'object' || artist === null) {
+    return null;
+  }
+  const name = (artist as { name?: unknown }).name;
+  return typeof name === 'string' && name !== '' ? name : null;
+}
+
+/**
+ * Narrows a manifest metadata block into the tombstone's label fields, or
+ * undefined when it yields no usable line.
+ *
  * Defensive despite the RefManifestMetadata type: manifests are remote JSON
- * and a malformed artists array must degrade to a missing line, not a crash.
- * Exported because the same block shape can ride inline on a playlist item
- * (`DP1Item.metadata`, the tolerant read for ref-less playlists).
+ * and a malformed artists array must degrade to a missing line, not a crash
+ * (see artistDisplayName for why a crash here is not recoverable).
+ * Exported because the same block shape can ride inline on a playlist item,
+ * either as a full §3.6 `inlineManifest` or as the older `DP1Item.metadata`
+ * tolerant read for ref-less playlists.
+ *
+ * "No usable line" collapses to undefined rather than to an object of
+ * undefined fields, because callers select a whole document by truthiness
+ * (useTombstoneInfo picks one carriage outright, per §3.6). Returning an
+ * empty-but-truthy label would let a fetched manifest carrying `metadata: {}`
+ * beat an inline manifest that actually has a title and artist, and send the
+ * tombstone all the way down to item.title — two near-identical manifests
+ * producing different labels purely because one had an empty object present.
+ * An empty title string is treated as absent for the same reason: it would
+ * otherwise win the `??` chain and render a blank line.
  */
 export function extractManifestLabel(
   metadata: RefManifest['metadata']
@@ -218,15 +295,20 @@ export function extractManifestLabel(
   if (!metadata) {
     return undefined;
   }
-  const names = Array.isArray(metadata.artists)
-    ? metadata.artists
-        .map(artist => (typeof artist.name === 'string' ? artist.name : null))
-        .filter((name): name is string => Boolean(name))
+  const names: string[] = Array.isArray(metadata.artists)
+    ? (metadata.artists as unknown[])
+        .map(artistDisplayName)
+        .filter((name): name is string => name !== null)
     : [];
-  return {
-    artistNames: names.length > 0 ? names.join(', ') : undefined,
-    title: typeof metadata.title === 'string' ? metadata.title : undefined,
-  };
+  const artistNames = names.length > 0 ? names.join(', ') : undefined;
+  const title =
+    typeof metadata.title === 'string' && metadata.title !== ''
+      ? metadata.title
+      : undefined;
+  if (artistNames === undefined && title === undefined) {
+    return undefined;
+  }
+  return { artistNames, title };
 }
 
 /**
@@ -258,16 +340,26 @@ export async function loadRefManifestLabel(
  * original fetch is kept alive: a manifest that resolves late is re-applied
  * so its display preferences (veto, loop, scaling, background, interaction)
  * still take effect for the slot. [apply] is invoked once or twice and must
- * guard against stale slots itself.
+ * guard against stale slots itself. [deviceDefaults] is the device's
+ * persisted machine default (deviceDefaultDisplay), layered beneath every
+ * DP-1 document in each merge.
  */
 export async function resolveAndApplyItemDisplayPreference(
   dp1Item: DP1Item,
   playlistDefaults: DP1Defaults | null,
-  apply: (merged: DP1DisplayPreference) => void
+  apply: (merged: DP1DisplayPreference) => void,
+  deviceDefaults?: DP1DisplayPreference
 ): Promise<void> {
   try {
     if (!dp1Item.ref) {
-      apply(mergeItemDisplayPreference(dp1Item, playlistDefaults));
+      apply(
+        mergeItemDisplayPreference(
+          dp1Item,
+          playlistDefaults,
+          undefined,
+          deviceDefaults
+        )
+      );
       return;
     }
 
@@ -286,16 +378,37 @@ export async function resolveAndApplyItemDisplayPreference(
     });
 
     if (raced !== timedOut) {
-      apply(mergeItemDisplayPreference(dp1Item, playlistDefaults, raced));
+      apply(
+        mergeItemDisplayPreference(
+          dp1Item,
+          playlistDefaults,
+          raced,
+          deviceDefaults
+        )
+      );
       return;
     }
 
     // Bounded merge now so the slot timer is not stranded...
-    apply(mergeItemDisplayPreference(dp1Item, playlistDefaults));
+    apply(
+      mergeItemDisplayPreference(
+        dp1Item,
+        playlistDefaults,
+        undefined,
+        deviceDefaults
+      )
+    );
     // ...but keep listening: a late manifest still owns display authority.
     const late = await refPromise;
     if (late !== undefined) {
-      apply(mergeItemDisplayPreference(dp1Item, playlistDefaults, late));
+      apply(
+        mergeItemDisplayPreference(
+          dp1Item,
+          playlistDefaults,
+          late,
+          deviceDefaults
+        )
+      );
     }
   } catch (error: unknown) {
     reportPlaylistDisplayPreferenceError('mergeOrApplyDisplayPreference', error, {

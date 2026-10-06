@@ -34,12 +34,6 @@ vi.mock('@/utils/mediaLoader', async importOriginal => {
   };
 });
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
-}));
-
 const hlsTest = vi.hoisted(() => ({
   loadSource: vi.fn(),
   instances: [] as {

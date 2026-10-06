@@ -16,12 +16,6 @@ import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
-}));
-
 // Trusted origin (KNOWN_ORIGINS) + explicit MIME: the loader assigns
 // `img.src` directly with no HEAD probe and no blob fetch, so the only
 // load/error events are the ones these tests dispatch.

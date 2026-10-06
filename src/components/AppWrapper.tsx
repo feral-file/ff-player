@@ -12,9 +12,11 @@ import {
   NavigateEventDetail,
 } from '@/models/custom_event';
 import DP1ScheduleService from '@/services/DP1ScheduleService';
-import ScheduleDisplay from './ScheduleDisplay';
 import MintPairingOverlay from './mint-pairing/MintPairingOverlay';
 import SetupOverlay from './setup/SetupOverlay';
+import { installLogStreaming } from '@/services/logStreamingService';
+
+installLogStreaming();
 
 const enum CastState {
   None, // Not casting
@@ -173,7 +175,6 @@ const InitializedAppWrapper: React.FC<{ children: React.ReactNode }> = ({
         height: '100vh',
       }}>
       {children}
-      <ScheduleDisplay />
     </div>
   );
 };

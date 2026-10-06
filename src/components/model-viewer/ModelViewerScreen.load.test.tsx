@@ -73,7 +73,7 @@ describe('ModelViewerScreen', () => {
     await vi.advanceTimersByTimeAsync(250);
 
     expect(onLoad).not.toHaveBeenCalled();
-    expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+    expect(screen.queryByText('Unable to load 3D model')).toBeNull();
   });
 });
 

@@ -22,12 +22,6 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
-}));
-
 const PROGRESSIVE_VIDEO_URL = 'https://feralfile.com/test/cached-progressive.mp4';
 const HLS_VIDEO_URL = 'https://feralfile.com/test/live.m3u8';
 const ITEM_A = 'item-a';

@@ -35,6 +35,29 @@ npm run build
 
 By default, `npm run verify` lints changed files against `origin/main`. To verify against a different base, run either `VERIFY_BASE_REF=origin/develop npm run verify` or `npm run verify -- --base=origin/develop`.
 
+## Paired player-log proxy contract
+
+Player unit tests verify session batching and the two browser request shapes,
+including that the default `Window.fetch` keeps its browser receiver (Chromium
+otherwise rejects the upload with `Illegal invocation` before any request
+reaches the proxy). A production-bundle smoke should confirm an allowed player
+console message produces `POST /api/logs` after the five-second idle boundary.
+The matching `feral-controld` repository owns the loopback proxy, CORS,
+trusted device attribution, and upstream forwarding. For changes to either side
+of `POST http://127.0.0.1:1111/api/logs`, check out the intended paired
+`ffos-user` ref beside this repository and run its real-handler browser test:
+
+```bash
+cd ../ffos-user/components/feral-controld
+FFOS_REQUIRE_LOG_BROWSER=1 go test ./hub -run '^TestHandlePlayerLogsBrowserContract$'
+```
+
+The test requires Chrome or Chromium and covers the preflighted JSON batch from
+`http://127.0.0.1:8080` plus the `pagehide` keepalive batch. In the PR handoff,
+record both tested commit SHAs and the successful CI job. The paired FFOS image
+must use those merged refs or descendants; publishing that image remains a
+human release operation.
+
 ## When to run it
 
 - Run `npm run post-implement-check` immediately after implementation changes.
@@ -45,6 +68,36 @@ By default, `npm run verify` lints changed files against `origin/main`. To verif
 - Re-run `npm run verify` after addressing any valid review feedback.
 - If the change touches playback, cast recovery, display settings, or route behavior, pair verification with a manual smoke pass for the affected flow.
 - **Playlist route / repeat-off hold:** With loop `none`, advance to the last timed slot so playback holds on the final artwork; confirm a queued shuffle or refresh **promotes the new playlist on cast** only in that hold (not when the final item has no finite slot timer); leaving `none` via `setLoop` should resume the slot timer from the held frame. Expect the current artwork to stay selected after shuffle (anchor at index `0`) until its slot timer completes before advancing.
+
+## Manual visual smoke: matting and Fit/Fill
+
+Use the real player in Chromium or on an FF1; jsdom cannot verify layout.
+
+1. Display a static image with the panel's aspect ratio so letterboxing cannot
+   be mistaken for matting. Send `updateDisplaySettings` with
+   `{margin: "10%", background: "#ffffff", isSaved: false, showingKey}` using
+   the UUID from the latest `checkStatus.deviceSettings.showingKey`. Confirm a visible
+   inset on all four sides and an artwork viewport 80% of the screen's width
+   and height. At 0%, the artwork must reach the original bounds again.
+2. Display a non-square static image. Select Fill, then Fit, with the matte
+   active. Confirm cropping changes within the same inset viewport. Repeat
+   after a saved machine default of Fill to cover the precedence fix (#290).
+3. Advance between images with different margins and background colors. The
+   outgoing work must retain its settings until the transition commits, and
+   the two fade layers must occupy the same inner viewport.
+4. Check a video and a responsive iframe with a nonzero margin. Their bounds
+   must respect the same inset. A slow load's global overlay and the cursor
+   must continue using the full screen.
+
+## Manual smoke: saved device framing
+
+Use a non-square image with explicit authored Fit. Send saved `framing: "fill"`
+and check cropping and `deviceSettings.framing`, then advance to another work
+and reload the player using the same browser profile. The saved Fill must remain.
+Switch to saved Fit against authored Fill, then to `artwork` and check that
+published Fill returns. A work with `userOverrides: false` keeps its authored
+scaling. Test another browser profile/device to confirm choices are independent.
+Keep matte, tombstone, duration, and the source playlist unchanged.
 
 ## Manual visual smoke: setup and pairing overlays
 
@@ -70,10 +123,13 @@ procedure, runnable entirely in a browser:
 
    ```js
    setup('scanning');
-   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623'});
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1'});
    setup('softap_qr', {ssid:'FF1-DEMO4242'});               // open network
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', client_attached:true}); // phone joined: portal-address QR
    setup('joining');
    setup('join_failed', {reason:'Wrong Wi-Fi password. Please check it and try again.'});
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', reason:'Wrong Wi-Fi password. Please check it and try again.'}); // re-raised join QR with the failure line under the title
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', reason:'Your phone left the setup Wi-Fi. Scan the code to join again.'}); // join QR back after the attached phone dropped off the hotspot
    // Provisioned-device boot/offline narration (not part of the OOBE story):
    // neutral title, prose body from controld.
    setup('connecting', {reason:'Looking for your Wi-Fi network… Setup mode will start in a few minutes if the connection does not return.'});
@@ -105,9 +161,21 @@ procedure, runnable entirely in a browser:
      rendering.
    - **2160x3840** — portrait. Sizes key off the short edge; nothing may
      track viewport height.
-5. Look specifically at `<strong>` runs (the ff1.config address, the frame
+5. Look specifically at `<strong>` runs (the direct portal address, the frame
    name): they must render the real PPMori-Bold face, not a synthesized
    smear — compare stroke weight against the pairing-code digits.
+6. On `softap_qr`, confirm the platform-neutral heading carries the complete
+   happy path and the single recovery block keeps the code-changes wait cue,
+   Wi-Fi Settings, password, keep-connected, mobile-data/VPN, and direct-IP
+   cues legible without crowding the QR.
+7. On the re-raised `softap_qr` variants carrying `reason`, confirm the line
+   sits under the title at its own size, the QR is not pushed off the
+   panel, and the recovery block below stays legible — this is the densest
+   join-phase layout.
+8. On the `client_attached` repaint, confirm the panel shows ONE code (the
+   portal address, not the WIFI: payload), the "Finish setup on your phone"
+   heading, and a recovery block that keeps scan-again, mobile-data/VPN,
+   direct-IP, Wi-Fi name, password, and keep-connected cues legible.
 
 Report the pass (viewports checked, anything off) in the PR body; review
 agents treat its absence as a missing-verification finding.

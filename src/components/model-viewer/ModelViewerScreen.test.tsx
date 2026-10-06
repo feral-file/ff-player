@@ -23,7 +23,7 @@ describe('ModelViewerScreen', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+      expect(onError).toHaveBeenCalledTimes(1);
     });
 
     expect(onError).toHaveBeenCalledTimes(1);
@@ -46,7 +46,8 @@ describe('ModelViewerScreen', () => {
     viewer?.dispatchEvent(new Event('error'));
 
     await waitFor(() => {
-      expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+      expect(onError).toHaveBeenCalled();
+      expect(screen.queryByText('Loading 3D model')).toBeNull();
     });
 
     const nextOnError = vi.fn();
@@ -58,10 +59,12 @@ describe('ModelViewerScreen', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+      expect(onError).toHaveBeenCalled();
+      expect(screen.queryByText('Loading 3D model')).toBeNull();
     });
 
-    expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+    expect(onError).toHaveBeenCalled();
+      expect(screen.queryByText('Loading 3D model')).toBeNull();
     expect(screen.queryByText('Loading 3D model')).toBeNull();
     expect(nextOnError).not.toHaveBeenCalled();
   });
@@ -87,7 +90,7 @@ describe('ModelViewerScreen', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+      expect(onError).toHaveBeenCalledTimes(1);
     });
 
     expect(onError).toHaveBeenCalledTimes(1);

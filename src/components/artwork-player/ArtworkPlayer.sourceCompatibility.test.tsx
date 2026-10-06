@@ -10,12 +10,6 @@ import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
-}));
-
 const relativeSources = [
   ['relative', 'artwork.html', 'http://localhost:3000/artwork.html'],
   ['protocol-relative', '//cdn.example.com/artwork.html', 'http://cdn.example.com/artwork.html'],
@@ -69,13 +63,18 @@ const base64MediaSources = [
   ['audio', 'audio', 'data:audio/mpeg;base64,SUQz'],
 ] as const;
 
+/**
+ * Fill arrives as the item's merged DP-1 preference. The device's persisted
+ * record deliberately says `fit` here: it is the merge's lowest layer, not
+ * an override, so it must not reach the iframe URL over the item's value.
+ */
 function renderArtwork(source: string, artworkPreviewMIMEType?: string) {
   const value = {
     context: {
       isInitialized: true,
       isOnline: true,
       appRemoteConfig: {},
-      displaySettings: { scaling: Scaling.Fill },
+      displaySettings: { scaling: Scaling.Fit },
       deviceRotation: { viewMode: 'landscape' },
       cursorPositions: null,
       castInfo: null,
@@ -86,7 +85,10 @@ function renderArtwork(source: string, artworkPreviewMIMEType?: string) {
       <ArtworkPlayer
         previewURL={source}
         artworkPreviewMIMEType={artworkPreviewMIMEType}
-        displayPreferences={defaultDP1DisplayPreference}
+        displayPreferences={{
+          ...defaultDP1DisplayPreference,
+          scaling: Scaling.Fill,
+        }}
       />
     </AppContext.Provider>
   );

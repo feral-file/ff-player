@@ -17,8 +17,10 @@ export const TOMBSTONE_AUTO_DISMISS_SECONDS = 30;
 // The timer bar is a 1px #E3E3E3 track across the label's top whose #A0A0A0
 // fill depletes over the auto-dismiss window — the visible countdown.
 //
-// Frame px are converted to vh by `designPx` (see ./designPx) so the label
-// holds its designed proportion at any output resolution.
+// Frame px are converted to vmin by `designPx` (see ./designPx) so the label
+// holds its designed proportion at any output resolution and orientation —
+// vmin, not vh, because a rotated portrait wall reports a viewport whose
+// height is the artwork's long side (see designPx.test.ts for the contract).
 
 const containerStyle: CSSProperties = {
   position: 'absolute',
@@ -38,7 +40,15 @@ const containerStyle: CSSProperties = {
   fontWeight: 400,
   lineHeight: 1.4,
   color: '#000000',
-  maxWidth: '60%',
+  // Text-wrap cap, sized by the viewport's short edge like every other
+  // dimension here. A viewport-width `60%` binds to the *long* axis on a
+  // rotated portrait wall — 648px of a 1080x1920 viewport — while the type it
+  // wraps stays vmin, so long artist/title/curator strings wrapped far earlier
+  // in portrait than in landscape. 640 frame px is half the 1280 design frame
+  // (so landscape is visually unchanged) and, at 88.8889vmin, can never exceed
+  // the viewport width in either orientation: vmin <= vw by definition.
+  // The label's own width still hugs its content; this only bounds the wrap.
+  maxWidth: designPx(640),
   pointerEvents: 'none',
   zIndex: 20,
   transition: 'opacity 300ms ease',

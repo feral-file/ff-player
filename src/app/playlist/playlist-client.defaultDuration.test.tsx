@@ -13,6 +13,9 @@ import DeviceManager from '@/utils/DeviceManager';
 import { render } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { prepareContentPolicy } from '@/services/contentPolicy.testkit';
+
+beforeEach(prepareContentPolicy);
 import {
   PlaylistHarness,
   advanceMs,
@@ -28,12 +31,6 @@ vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
     g.__artworkPlayerProps = props;
     return null;
   },
-}));
-
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
 }));
 
 const { getItemRefMock } = vi.hoisted(() => ({ getItemRefMock: vi.fn() }));

@@ -272,6 +272,30 @@ describe('device default duration gates', () => {
     ).toBe(NO_DURATION_VALUE);
   });
 
+  it('honors an inline manifest veto in the gate merge', () => {
+    // The pre-manifest fallback merge is a second, hand-maintained copy of
+    // mergeItemDisplayPreference's layer order (see the LOCKSTEP note on
+    // resolveSlotDurationSeconds). Its only caller today never reaches it, so
+    // this is what makes deleting that layer fail loudly instead of silently
+    // letting the device default override an artist's veto.
+    const vetoedInline = {
+      ...timedItem('A', 300),
+      inlineManifest: {
+        refVersion: '1.1.0',
+        id: 'm1',
+        created: '2026-01-01T00:00:00Z',
+        controls: { display: { userOverrides: false } },
+      },
+    } as unknown as DP1Item;
+    expect(
+      resolveSlotDurationSeconds({
+        item: vetoedInline,
+        playlistDefaults: noDefaults,
+        deviceDefaultDurationSeconds: 600,
+      })
+    ).toBe(300);
+  });
+
   it('honors playlist defaults.display in the gate merge', () => {
     const defaults = {
       display: { userOverrides: false },
