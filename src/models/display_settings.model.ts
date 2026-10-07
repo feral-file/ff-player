@@ -70,44 +70,6 @@ export class TokenDisplaySettings extends DisplaySettings {
   looping?: boolean;
   interactable?: boolean;
   overridable?: boolean;
-}
-
-export class DisplaySettings {
-  scaling?: Scaling;
-  // Explicit owner preference; unlike scaling this is not a legacy fallback.
-  framing?: DeviceFraming;
-  // Optional so persisted pre-tombstone settings deserialize unchanged; read
-  // sites resolve absence to `TombstoneMode.Timed` (the product default).
-  tombstone?: TombstoneMode;
-
-  constructor(scaling?: Scaling) {
-    this.scaling = scaling;
-  }
-
-  static defaultScaling: Scaling = Scaling.Fit;
-
-  static defaultSettings() {
-    return new DisplaySettings(DisplaySettings.defaultScaling);
-  }
-}
-
-export class TokenDisplaySettings extends DisplaySettings {
-  // NOTE for integrators: `backgroundColor` and the per-side `margin*`
-  // fields below are NOT consumed by the render path. ArtworkPlayer reads
-  // the DP-1 display-preference vocabulary instead — `background` (hex
-  // string) and `margin` (number px, or 'N%' rendered as vh/vw) — merged
-  // through the display-settings listeners. An `updateDisplaySettings`
-  // cast payload must carry the DP-1 names to have any visible effect
-  // (ff-app's matting control does; see feral-file/ff-app#635).
-  backgroundColor?: string;
-  marginLeft?: number;
-  marginRight?: number;
-  marginTop?: number;
-  marginBottom?: number;
-  autoPlay?: boolean;
-  looping?: boolean;
-  interactable?: boolean;
-  overridable?: boolean;
 
   // Options-object constructor (the positional 10-parameter form predated
   // the changed-file max-params gate); `fromAssetConfiguration` remains the
