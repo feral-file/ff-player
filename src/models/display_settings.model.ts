@@ -49,6 +49,18 @@ export class DisplaySettings {
 }
 
 export class TokenDisplaySettings extends DisplaySettings {
+  // NOTE for integrators: `backgroundColor` and the per-side `margin*`
+  // fields below are NOT consumed by the render path. ArtworkPlayer reads
+  // the DP-1 display-preference vocabulary instead, merged through the
+  // display-settings listeners: `background` is assigned unchanged to the
+  // container's CSS `backgroundColor`, so any CSS color string works (hex,
+  // rgb()/rgba(), named); `margin` is a number (px) or a string, where 'N%'
+  // renders as `N vh N vw` and any other string is forwarded unchanged as CSS
+  // `padding` (e.g. '1rem', '8px 16px'). The player does not validate either
+  // value. `UpdateDisplaySettingsRequest` declares `background` and `margin`
+  // directly. An `updateDisplaySettings` cast payload must carry the DP-1
+  // names to have any visible effect (ff-app's matting control does; see
+  // feral-file/ff-app#635).
   backgroundColor?: string;
   marginLeft?: number;
   marginRight?: number;
