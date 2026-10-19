@@ -60,6 +60,20 @@ const SLOT_INDICES = [0, 1] as const;
 // in place, the last one hands off to the playlist via onArtworkExhausted.
 const ARTWORK_FAILURE_RETRY_LIMIT = 3;
 const ARTWORK_FAILURE_RETRY_DELAY_MS = 3000;
+// Not every load mechanism produces an onLoad/onError signal to retry on in
+// the first place (feral-file/ff-player#307, PR #310 review F1): the
+// content-type HEAD probe now times out, but the media fetch behind it
+// (mediaLoader's loadViaBlob, for any origin outside KNOWN_ORIGINS) carries
+// no timeout of its own, and a gateway that accepts the connection but never
+// replies — the exact behavior the issue's support bundle showed — hangs it
+// identically. A per-slot watchdog closes the whole class at once: if a
+// mount is still neither ready nor failed after this long, it is treated as
+// a failure regardless of which underlying mechanism (blob fetch, direct
+// element src, iframe navigation, model-viewer init) is stuck, and flows
+// through the same bounded retry-then-skip budget as any other failure.
+// Longer than CONTENT_TYPE_HEAD_TIMEOUT_MS so a HEAD timeout's own fallback
+// attempt has time to start before this also engages.
+const ARTWORK_LOAD_WATCHDOG_MS = 15000;
 
 type SlotIndex = 0 | 1;
 
@@ -271,6 +285,8 @@ const ArtworkPlayer = ({
   // Bounded retry-then-skip counter/timer — see ARTWORK_FAILURE_RETRY_LIMIT.
   const artworkFailureCountRef = useRef(0);
   const artworkFailureRetryTimeoutRef = useRef<NodeJS.Timeout>();
+  // Per-mount "stuck loading" watchdog — see ARTWORK_LOAD_WATCHDOG_MS.
+  const artworkLoadWatchdogRef = useRef<NodeJS.Timeout>();
   const notePlaybackOutcome = useCallback(
     (url: string, failed: boolean) => {
       // Staleness is checked in two halves, and callers must satisfy both.
@@ -1211,6 +1227,22 @@ const ArtworkPlayer = ({
     }
     setTopSlotIndex(null);
 
+    // A mount triggered by anything OTHER than our own scheduled retry —
+    // refreshArtwork, setLoop's resume, a manual reload — does not change
+    // previewURL/itemIdentity for an unchanged item, so the degraded-signal
+    // cleanup effect's reset never runs. Without clearing it here too, a
+    // retry timer armed by an earlier failure stays pending and fires its
+    // OWN performArtworkReload() later, on top of an item that may have
+    // already recovered via this very mount — a stale, redundant extra
+    // reload. Clearing the timer (not the attempt count — this effect also
+    // re-runs for our own retry's reload, and resetting the count here
+    // would make every retry look like attempt 1 forever) is enough: this
+    // mount is itself the attempt the stale timer would have made.
+    if (artworkFailureRetryTimeoutRef.current) {
+      clearTimeout(artworkFailureRetryTimeoutRef.current);
+      artworkFailureRetryTimeoutRef.current = undefined;
+    }
+
     const currentActive = activeSlotRef.current;
     const staleSlot = (currentActive === 0 ? 1 : 0) as SlotIndex;
     pauseAndTeardownSlot(staleSlot);
@@ -1250,6 +1282,30 @@ const ArtworkPlayer = ({
     // Fresh mount: give it a clean one-shot latch (see the Layer-1 damping
     // comment above).
     mountFailedRef.current[targetSlot] = false;
+
+    // Stuck-load watchdog — see ARTWORK_LOAD_WATCHDOG_MS. Guards every
+    // mount, not just ones that happen to reach an onError callback: a load
+    // mechanism that never calls onLoad or onError (an unbound media fetch,
+    // a navigation to an unresponsive host) would otherwise sit in
+    // pending/loading forever with nothing to retry or skip it.
+    if (artworkLoadWatchdogRef.current) {
+      clearTimeout(artworkLoadWatchdogRef.current);
+    }
+    const watchdogIdentity = itemIdentityRef.current;
+    artworkLoadWatchdogRef.current = setTimeout(() => {
+      artworkLoadWatchdogRef.current = undefined;
+      if (
+        cancelled ||
+        previewURLRef.current !== url ||
+        itemIdentityRef.current !== watchdogIdentity ||
+        (renderStatusRef.current !== RenderStatus.pending &&
+          renderStatusRef.current !== RenderStatus.loading)
+      ) {
+        return;
+      }
+      handleArtworkRenderFailure(targetSlot);
+    }, ARTWORK_LOAD_WATCHDOG_MS);
+
     setSlots(prev => {
       if (!hasAny) {
         const k = ++iframeKeyCounterRef.current;
@@ -1388,6 +1444,10 @@ const ArtworkPlayer = ({
       cancelled = true;
       if (loadingDelayRef.current) {
         clearTimeout(loadingDelayRef.current);
+      }
+      if (artworkLoadWatchdogRef.current) {
+        clearTimeout(artworkLoadWatchdogRef.current);
+        artworkLoadWatchdogRef.current = undefined;
       }
     };
     // showingKey distinguishes adjacent slots even when both the work ID and
