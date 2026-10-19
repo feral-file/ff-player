@@ -410,6 +410,30 @@ export default function PlaylistClient() {
     advanceFromSlot(normalizedIndex, snapshot, 'sourceEnd');
   }, [advanceFromSlot]);
 
+  // Triggered by ArtworkPlayer once a work has failed to render
+  // ARTWORK_FAILURE_RETRY_LIMIT times in a row (feral-file/ff-player#307): a
+  // stuck/broken work must not hold the playlist (or the device) forever.
+  // Reuses advanceFromSlot's 'sourceEnd' cause — the same identity-gated
+  // advance onSourceEnded drives — so a normal playlist/shuffle loop moves
+  // to the next item exactly as it would for natural end-of-stream. Under
+  // LoopMode.one this instead reloads the same (still looped-on-purpose)
+  // item via replayCurrentSlot, which is deliberate: the curator/user asked
+  // to loop this one work, so giving up on it entirely would override that
+  // choice rather than honor it; the retry still cannot hang the device
+  // (see the HEAD-probe timeout in src/utils/helper.ts).
+  const handleArtworkExhausted = useCallback((failedIdentity: string) => {
+    const idx = currentIndexRef.current;
+    const snapshot = playlistRef.current;
+    if (idx < 0 || !snapshot.length) {
+      return;
+    }
+    const normalizedIndex = normalizePlaylistIndex(idx, snapshot.length);
+    if (itemIdentityFor(snapshot, normalizedIndex) !== failedIdentity) {
+      return;
+    }
+    advanceFromSlot(normalizedIndex, snapshot, 'sourceEnd');
+  }, [advanceFromSlot]);
+
   useEffect(() => {
     if (currentIndex < 0 || playlist.length === 0) {
       holdAfterFinalSlotRef.current = false;
@@ -660,6 +684,7 @@ export default function PlaylistClient() {
             sessionKey={currentShowingKey}
             onRegisterArtworkReload={registerArtworkReload}
             onSourceEnded={handleSourceEnded}
+            onArtworkExhausted={handleArtworkExhausted}
             onItemCommitted={notePreviewCommitted}
             onItemPlayed={handleArtworkCommitted}
           />

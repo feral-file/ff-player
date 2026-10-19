@@ -52,6 +52,14 @@ import ModelViewerScreen from '../model-viewer/ModelViewerScreen';
 const MAX_RECOVERY_TIME = 60000 * 10;
 const RENDER_LOADING_DELAY_MS = 2000;
 const SLOT_INDICES = [0, 1] as const;
+// Bounded retry-then-skip for a work that terminally fails to render
+// (feral-file/ff-player#307): a stuck/broken artwork must not hold the
+// playlist forever. Counts real pending/loading/ready -> failed transitions
+// for the CURRENT item (see the per-identity reset in the degraded-signal
+// cleanup effect); the first ARTWORK_FAILURE_RETRY_LIMIT - 1 failures retry
+// in place, the last one hands off to the playlist via onArtworkExhausted.
+const ARTWORK_FAILURE_RETRY_LIMIT = 3;
+const ARTWORK_FAILURE_RETRY_DELAY_MS = 3000;
 
 type SlotIndex = 0 | 1;
 
@@ -113,6 +121,7 @@ const ArtworkPlayer = ({
   sessionKey,
   onRegisterArtworkReload,
   onSourceEnded,
+  onArtworkExhausted,
   onItemCommitted,
   onItemPlayed,
 }: {
@@ -139,6 +148,12 @@ const ArtworkPlayer = ({
   // The argument is the firing slot's itemIdentity so the consumer can
   // drop events that arrive after the playlist has already moved past them.
   onSourceEnded?: (itemIdentity: string) => void;
+  // Fired once a work has failed to render ARTWORK_FAILURE_RETRY_LIMIT times
+  // in a row (feral-file/ff-player#307): the player gave up retrying this
+  // item in place, and the consumer (PlaylistClient) should move on to the
+  // next item the same way it does for onSourceEnded. The argument is the
+  // failing slot's itemIdentity, gated the same way onSourceEnded's is.
+  onArtworkExhausted?: (itemIdentity: string) => void;
   // Fired when an incoming slot actually becomes the visible artwork — at
   // first paint of an initial slot, at crossfade start, or at the sequential
   // handoff's fade-in. Selection state (currentIndex) moves ahead of this on
@@ -253,6 +268,9 @@ const ArtworkPlayer = ({
   // so repeated failures on the same artwork cost no re-render.
   const { setPlaybackDegraded } = context;
   const degradedURLRef = useRef<string | null>(null);
+  // Bounded retry-then-skip counter/timer — see ARTWORK_FAILURE_RETRY_LIMIT.
+  const artworkFailureCountRef = useRef(0);
+  const artworkFailureRetryTimeoutRef = useRef<NodeJS.Timeout>();
   const notePlaybackOutcome = useCallback(
     (url: string, failed: boolean) => {
       // Staleness is checked in two halves, and callers must satisfy both.
@@ -312,6 +330,15 @@ const ArtworkPlayer = ({
   // fails again stays degraded and only a real success clears it.
   useEffect(() => {
     return () => {
+      // A new item (or unmount) gets a fresh retry budget — see
+      // ARTWORK_FAILURE_RETRY_LIMIT. A same-item remount (reconnect-recovery,
+      // the in-place retry below) must NOT reset this, or a work that keeps
+      // failing would never reach the limit.
+      if (artworkFailureRetryTimeoutRef.current) {
+        clearTimeout(artworkFailureRetryTimeoutRef.current);
+        artworkFailureRetryTimeoutRef.current = undefined;
+      }
+      artworkFailureCountRef.current = 0;
       if (degradedURLRef.current === null) {
         return;
       }
@@ -456,6 +483,10 @@ const ArtworkPlayer = ({
     setShowMessageModal(false);
     setMessageModalText(null);
     setMessageModalTitle(null);
+    // A genuine success earns this item a fresh retry budget: a LATER
+    // failure (e.g. mid-playback media error) is a new problem, not a
+    // continuation of a load that already succeeded once.
+    artworkFailureCountRef.current = 0;
   }, [clearLoadingDelay]);
 
   const markArtworkFailed = useCallback(() => {
@@ -468,6 +499,46 @@ const ArtworkPlayer = ({
     setShowLoading(false);
     clearLoadingDelay();
   }, [clearLoadingDelay]);
+
+  /**
+   * Bounded retry-then-skip (feral-file/ff-player#307): retry this same item
+   * in place a bounded number of times before asking the playlist to move
+   * on, so one broken work cannot park the playlist (or the device) forever.
+   *
+   * Deliberately NOT wired into `markArtworkFailed` itself — two of its
+   * other callers already own their own bounded recovery and must not race
+   * a second one: `handleWebGLLost` (WebGL context loss, recovered via
+   * `startWebGLRecovery`'s own MAX_RECOVERY_TIME-gated poll) and the
+   * corroborated-offline branch of the content-type effect (recovered via
+   * AppContext's M7 `REFRESH_BUDGET_MAX_ATTEMPTS`, re-armed on reconnect —
+   * skipping to the next item while genuinely offline would not help, since
+   * every item would fail identically). Call this explicitly from a failure
+   * site that has no other recovery path of its own instead.
+   */
+  const scheduleArtworkFailureRetryOrSkip = useCallback(() => {
+    artworkFailureCountRef.current += 1;
+    if (artworkFailureRetryTimeoutRef.current) {
+      clearTimeout(artworkFailureRetryTimeoutRef.current);
+    }
+    if (artworkFailureCountRef.current < ARTWORK_FAILURE_RETRY_LIMIT) {
+      const retryIdentity = itemIdentityRef.current;
+      const retryURL = previewURLRef.current;
+      artworkFailureRetryTimeoutRef.current = setTimeout(() => {
+        artworkFailureRetryTimeoutRef.current = undefined;
+        // Stale guard: the playlist may have already moved on to a
+        // different item during the backoff delay.
+        if (
+          itemIdentityRef.current !== retryIdentity ||
+          previewURLRef.current !== retryURL
+        ) {
+          return;
+        }
+        performArtworkReload();
+      }, ARTWORK_FAILURE_RETRY_DELAY_MS);
+    } else {
+      onArtworkExhausted?.(itemIdentityRef.current);
+    }
+  }, [onArtworkExhausted, performArtworkReload]);
 
   const isCurrentArtworkSlot = useCallback(
     (slotIndex: SlotIndex, expectedLayer?: SlotLayer) => {
@@ -726,13 +797,20 @@ const ArtworkPlayer = ({
         return;
       }
       markArtworkFailed();
+      scheduleArtworkFailureRetryOrSkip();
       setMessageModalText(null);
       setMessageModalTitle(
         'The artwork cannot be displayed correctly on this device.'
       );
       setShowMessageModal(true);
     },
-    [isCurrentArtworkSlot, loadedSource, markArtworkFailed, updateSlot]
+    [
+      isCurrentArtworkSlot,
+      loadedSource,
+      markArtworkFailed,
+      scheduleArtworkFailureRetryOrSkip,
+      updateSlot,
+    ]
   );
 
   const playVideoForSlot = useCallback(
@@ -1095,6 +1173,7 @@ const ArtworkPlayer = ({
     notePlaybackOutcome(slotPreviewURL(slotIndex), true);
     clearLoadingIndicators();
     markArtworkFailed();
+    scheduleArtworkFailureRetryOrSkip();
     setMessageModalText(null);
     setMessageModalTitle(
       'The artwork cannot be displayed correctly on this device.'
