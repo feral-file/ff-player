@@ -536,6 +536,20 @@ const ArtworkPlayer = ({
         performArtworkReload();
       }, ARTWORK_FAILURE_RETRY_DELAY_MS);
     } else {
+      // Reset BEFORE calling out: onArtworkExhausted is not guaranteed to
+      // change previewURL/itemIdentity — under LoopMode.one, or a
+      // single-item playlist, the consumer replays this SAME item
+      // (advanceFromSlot's 'sourceEnd' cause -> replayCurrentSlot ->
+      // performArtworkReload) rather than moving to a different one, and a
+      // same-item remount does NOT clear the per-identity failure counter
+      // (see the degraded-signal cleanup effect above). Without this reset,
+      // the very next failure on that replay finds the counter already at
+      // the limit and calls onArtworkExhausted again immediately — no 3s
+      // pacing, an unbounded reload loop defeating the whole budget (and,
+      // on-device, the exact runaway-reload shape feral-file/ff-player#307
+      // reported). Resetting here starts a fresh, paced 3-attempt cycle for
+      // whatever comes next, same item or not.
+      artworkFailureCountRef.current = 0;
       onArtworkExhausted?.(itemIdentityRef.current);
     }
   }, [onArtworkExhausted, performArtworkReload]);
