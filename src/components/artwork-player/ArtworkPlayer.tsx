@@ -285,8 +285,15 @@ const ArtworkPlayer = ({
   // Bounded retry-then-skip counter/timer — see ARTWORK_FAILURE_RETRY_LIMIT.
   const artworkFailureCountRef = useRef(0);
   const artworkFailureRetryTimeoutRef = useRef<NodeJS.Timeout>();
-  // Per-mount "stuck loading" watchdog — see ARTWORK_LOAD_WATCHDOG_MS.
-  const artworkLoadWatchdogRef = useRef<NodeJS.Timeout>();
+  // Per-load-attempt "stuck loading" watchdog — see ARTWORK_LOAD_WATCHDOG_MS
+  // (armed in setupMediaForSlot, not at mount — see its own comment). Keyed
+  // per slot, not a single shared timer: setupMediaForSlot's two per-slot
+  // effects (slot 0, slot 1) each own their own cleanup, and a shared ref
+  // let one slot's cleanup clear the OTHER slot's just-armed watchdog
+  // whenever both effects happened to run in the same commit.
+  const artworkLoadWatchdogRef = useRef<
+    [NodeJS.Timeout | undefined, NodeJS.Timeout | undefined]
+  >([undefined, undefined]);
   const notePlaybackOutcome = useCallback(
     (url: string, failed: boolean) => {
       // Staleness is checked in two halves, and callers must satisfy both.
@@ -1202,6 +1209,13 @@ const ArtworkPlayer = ({
 
     notePlaybackOutcome(slotPreviewURL(slotIndex), true);
     clearLoadingIndicators();
+    // Mirrors handleArtworkRenderFailure's own guard: once this mount is
+    // already failed (e.g. the load watchdog got there first), a later
+    // model-viewer onError for the same stuck attempt must not count a
+    // second time against the retry-then-skip budget.
+    if (renderStatusRef.current === RenderStatus.failed) {
+      return;
+    }
     markArtworkFailed();
     scheduleArtworkFailureRetryOrSkip();
     setMessageModalText(null);
@@ -1282,29 +1296,6 @@ const ArtworkPlayer = ({
     // Fresh mount: give it a clean one-shot latch (see the Layer-1 damping
     // comment above).
     mountFailedRef.current[targetSlot] = false;
-
-    // Stuck-load watchdog — see ARTWORK_LOAD_WATCHDOG_MS. Guards every
-    // mount, not just ones that happen to reach an onError callback: a load
-    // mechanism that never calls onLoad or onError (an unbound media fetch,
-    // a navigation to an unresponsive host) would otherwise sit in
-    // pending/loading forever with nothing to retry or skip it.
-    if (artworkLoadWatchdogRef.current) {
-      clearTimeout(artworkLoadWatchdogRef.current);
-    }
-    const watchdogIdentity = itemIdentityRef.current;
-    artworkLoadWatchdogRef.current = setTimeout(() => {
-      artworkLoadWatchdogRef.current = undefined;
-      if (
-        cancelled ||
-        previewURLRef.current !== url ||
-        itemIdentityRef.current !== watchdogIdentity ||
-        (renderStatusRef.current !== RenderStatus.pending &&
-          renderStatusRef.current !== RenderStatus.loading)
-      ) {
-        return;
-      }
-      handleArtworkRenderFailure(targetSlot);
-    }, ARTWORK_LOAD_WATCHDOG_MS);
 
     setSlots(prev => {
       if (!hasAny) {
@@ -1445,10 +1436,6 @@ const ArtworkPlayer = ({
       if (loadingDelayRef.current) {
         clearTimeout(loadingDelayRef.current);
       }
-      if (artworkLoadWatchdogRef.current) {
-        clearTimeout(artworkLoadWatchdogRef.current);
-        artworkLoadWatchdogRef.current = undefined;
-      }
     };
     // showingKey distinguishes adjacent slots even when both the work ID and
     // source match. Each slot needs fresh media and session settings; work
@@ -1505,6 +1492,41 @@ const ArtworkPlayer = ({
       let isCancelled = false;
       const abortController = new AbortController();
       const mediaCleanupFns: (() => void)[] = [];
+
+      // Stuck-load watchdog — see ARTWORK_LOAD_WATCHDOG_MS. Armed here, once
+      // this slot has an actual load mechanism to attempt (previewType
+      // resolved, URL known), not at the top of the mount effect: arming it
+      // before detectPreviewType has even run would make it share its whole
+      // budget with that probe's own (now-bounded, but still up to ~13s)
+      // resolution time, leaving too little for a merely slow — not
+      // stuck — media fetch on top. Guards every load attempt, not just
+      // ones that happen to reach an onLoad/onError callback: a load
+      // mechanism that never calls either (an unbound media fetch, a
+      // navigation to an unresponsive host) would otherwise sit in
+      // pending/loading forever with nothing to retry or skip it. Does not
+      // fire while a WebGL-recovery cycle owns this slot's reload — that
+      // recovery is intentionally outside this budget (see
+      // scheduleArtworkFailureRetryOrSkip's doc) and reloads via
+      // reloadIframe, which does not re-run this effect to re-arm the watch.
+      if (artworkLoadWatchdogRef.current[slotIndex]) {
+        clearTimeout(artworkLoadWatchdogRef.current[slotIndex]);
+      }
+      const watchdogURL = layer.previewURL;
+      const watchdogIdentity = layer.itemIdentity;
+      artworkLoadWatchdogRef.current[slotIndex] = setTimeout(() => {
+        artworkLoadWatchdogRef.current[slotIndex] = undefined;
+        if (
+          isCancelled ||
+          isWebGLContextLost.current ||
+          previewURLRef.current !== watchdogURL ||
+          itemIdentityRef.current !== watchdogIdentity ||
+          (renderStatusRef.current !== RenderStatus.pending &&
+            renderStatusRef.current !== RenderStatus.loading)
+        ) {
+          return;
+        }
+        handleArtworkRenderFailure(slotIndex, layer);
+      }, ARTWORK_LOAD_WATCHDOG_MS);
 
       const handleMediaError =
         (mediaType: BlobLoadedMediaType) => (error: Error) => {
@@ -1674,6 +1696,10 @@ const ArtworkPlayer = ({
           c();
         });
         mediaLoaders.current[slotIndex].cleanup();
+        if (artworkLoadWatchdogRef.current[slotIndex]) {
+          clearTimeout(artworkLoadWatchdogRef.current[slotIndex]);
+          artworkLoadWatchdogRef.current[slotIndex] = undefined;
+        }
       };
     },
     [
