@@ -794,7 +794,11 @@ const ArtworkPlayer = ({
   );
 
   const loadedSource = useCallback(
-    (slotIndex: SlotIndex, expectedLayer?: SlotLayer): boolean => {
+    (
+      slotIndex: SlotIndex,
+      expectedLayer?: SlotLayer,
+      isSuccess = true
+    ): boolean => {
       if (!isCurrentArtworkSlot(slotIndex, expectedLayer)) {
         return false;
       }
@@ -811,6 +815,28 @@ const ArtworkPlayer = ({
 
       incomingSlotRef.current = slotIndex;
       markSlotReady(slotIndex);
+      // A genuine success claim here is the browser's own load-completion
+      // signal, authoritative regardless of what renderStatusRef already
+      // says. Without this, a success that lands AFTER the stuck-load
+      // watchdog has already fired (watchdog marks failed and schedules a
+      // paced retry, see scheduleArtworkFailureRetryOrSkip) is swallowed:
+      // markArtworkReady's own reset (below) bails as soon as it sees
+      // RenderStatus.failed, so neither the pending retry nor the failure
+      // counter would otherwise be touched, forcing a gratuitous reload of
+      // content that just finished loading fine — and, on a repeating
+      // pattern, risking wrongful exhaustion of a merely-slow (not broken)
+      // artwork (run-reviewer pass 5, F2). `isSuccess=false` is passed only
+      // by the failure call sites that route through this same commit path
+      // (handleArtworkRenderFailure, handleModelLoadError,
+      // handleLoadIframeError's onError branch) — those must not clear a
+      // retry that is about to legitimately fire.
+      if (isSuccess) {
+        if (artworkFailureRetryTimeoutRef.current) {
+          clearTimeout(artworkFailureRetryTimeoutRef.current);
+          artworkFailureRetryTimeoutRef.current = undefined;
+        }
+        artworkFailureCountRef.current = 0;
+      }
       return true;
     },
     [isCurrentArtworkSlot, markSlotReady]
@@ -827,7 +853,7 @@ const ArtworkPlayer = ({
       if (slotIndex !== undefined) {
         // Treat a current failure as terminal readiness for transition
         // purposes, so the failed incoming slot replaces the outgoing one.
-        loadedSource(slotIndex, expectedLayer);
+        loadedSource(slotIndex, expectedLayer, false);
         updateSlot(slotIndex, { loading: false });
       }
       if (renderStatusRef.current === RenderStatus.failed) {
@@ -1203,7 +1229,7 @@ const ArtworkPlayer = ({
    * Also publish RenderStatus.failed so status polls match the error UI.
    */
   const handleModelLoadError = (slotIndex: SlotIndex, layer?: SlotLayer) => {
-    if (!loadedSource(slotIndex, layer)) {
+    if (!loadedSource(slotIndex, layer, false)) {
       return;
     }
 
@@ -1551,7 +1577,7 @@ const ArtworkPlayer = ({
           // every later settings update reads as "transition pending", and
           // the artwork on screen stops receiving settings until the next
           // artwork request. loadedSource's layer guard drops stale failures.
-          if (loadedSource(slotIndex, layer)) {
+          if (loadedSource(slotIndex, layer, false)) {
             handleArtworkRenderFailure(slotIndex, layer);
             // Only a failure loadedSource actually accepted describes what
             // the device is trying to show; a rejected one belongs to a
@@ -1860,7 +1886,7 @@ const ArtworkPlayer = ({
     // Failure still consumes the current incoming slot. Without this, an
     // iframe/object error leaves the transition claim active and permanently
     // holds visual settings on the outgoing artwork.
-    if (!loadedSource(slotIndex, layer)) {
+    if (!loadedSource(slotIndex, layer, false)) {
       return;
     }
     notePlaybackOutcome(slotPreviewURL(slotIndex), true);

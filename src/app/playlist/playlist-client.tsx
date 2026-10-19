@@ -211,7 +211,10 @@ export default function PlaylistClient() {
   // again after the slot has already moved.
   const advanceFromSlot = useCallback(
     function advanceFromSlot(
-      fromIndex: number, snapshot: DP1Item[], cause: AdvanceCause = 'timer'
+      fromIndex: number,
+      snapshot: DP1Item[],
+      cause: AdvanceCause = 'timer',
+      retryOnFinalHold = false
     ): void {
       if (!snapshot.length) {
         return;
@@ -256,11 +259,22 @@ export default function PlaylistClient() {
       });
       if (nextIndex === null) {
         // Repeat-off holds the final artwork on screen until another command
-        // changes playback. Do not wrap or reschedule from this slot.
+        // changes playback. Do not wrap or reschedule from this slot — unless
+        // the caller is reporting a FAILURE (retryOnFinalHold), not a natural
+        // end: there is nothing to skip to here, so retry in place instead of
+        // parking on the error modal forever (run-reviewer pass 4, F2). The
+        // applyQueuedPlaylistIfExists() call above already ran before this
+        // branch, so a queued refresh/shuffle still takes over exactly as it
+        // would for any other advance — this only changes what happens when
+        // none is pending.
         if (
           loopModeRef.current === LoopMode.none &&
           fromIndex === snapshot.length - 1
         ) {
+          if (retryOnFinalHold) {
+            replayCurrentSlot(fromIndex, snapshot, cause);
+            return;
+          }
           holdAfterFinalSlotRef.current = true;
         }
         return;
@@ -428,11 +442,18 @@ export default function PlaylistClient() {
   // is meant for a *successful* natural end, not a failure ArtworkPlayer
   // already gave up retrying on. Reusing it for exhaustion would park the
   // device on the error modal forever with no further attempt (run-reviewer
-  // pass 4, F2) — so this retries in place instead, mirroring LoopMode.one's
-  // own "keep trying" treatment for the one case where "skipped" has no
-  // target. Still bounded/paced, not a tight loop: ArtworkPlayer resets its
-  // own retry budget before calling out, so each cycle gets the same
-  // 3-attempt, 3s-apart budget as every other failure.
+  // pass 4, F2) — so advanceFromSlot's own null-nextIndex branch retries in
+  // place instead when told this call is a failure (retryOnFinalHold=true),
+  // mirroring LoopMode.one's "keep trying" treatment for the one case where
+  // "skipped" has no target. This goes through advanceFromSlot rather than
+  // calling replayCurrentSlot directly (an earlier version of this fix did,
+  // and run-reviewer pass 5 F1/F2 independently caught that it skipped
+  // applyQueuedPlaylistIfExists — a shuffle/refresh command sent while the
+  // final item is stuck retrying would silently never apply): going through
+  // advanceFromSlot keeps that check exactly as every other advance gets it.
+  // Still bounded/paced, not a tight loop: ArtworkPlayer resets its own
+  // retry budget before calling out, so each cycle gets the same 3-attempt,
+  // 3s-apart budget as every other failure.
   const handleArtworkExhausted = useCallback((failedIdentity: string) => {
     const idx = currentIndexRef.current;
     const snapshot = playlistRef.current;
@@ -443,15 +464,8 @@ export default function PlaylistClient() {
     if (itemIdentityFor(snapshot, normalizedIndex) !== failedIdentity) {
       return;
     }
-    if (
-      loopModeRef.current === LoopMode.none &&
-      normalizedIndex === snapshot.length - 1
-    ) {
-      replayCurrentSlot(normalizedIndex, snapshot, 'sourceEnd');
-      return;
-    }
-    advanceFromSlot(normalizedIndex, snapshot, 'sourceEnd');
-  }, [advanceFromSlot, replayCurrentSlot]);
+    advanceFromSlot(normalizedIndex, snapshot, 'sourceEnd', true);
+  }, [advanceFromSlot]);
 
   useEffect(() => {
     if (currentIndex < 0 || playlist.length === 0) {

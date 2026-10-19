@@ -17,7 +17,8 @@ import ArtworkPlayer from './ArtworkPlayer';
 
 const loaderState = vi.hoisted(() => ({
   loadCalls: 0,
-  mode: 'fail' as 'fail' | 'hang',
+  mode: 'fail' as 'fail' | 'hang' | 'lateSuccess',
+  lastOnLoad: undefined as (() => void) | undefined,
 }));
 
 vi.mock('@/utils/mediaLoader', async importOriginal => {
@@ -25,13 +26,20 @@ vi.mock('@/utils/mediaLoader', async importOriginal => {
   return {
     ...mod,
     createMediaLoader: () => ({
-      loadMedia: (options: { onError?: (error: Error) => void }) => {
+      loadMedia: (options: {
+        onLoad?: () => void;
+        onError?: (error: Error) => void;
+      }) => {
         loaderState.loadCalls += 1;
         if (loaderState.mode === 'fail') {
           // Every attempt fails immediately — the item never recovers on
           // its own, so the retry-then-skip budget is the only thing that
           // can move the playlist past it.
           options.onError?.(new Error('load failed'));
+        } else if (loaderState.mode === 'lateSuccess') {
+          // Neither onLoad nor onError fires yet — the test calls onLoad
+          // itself once it wants the "real load" to finally settle.
+          loaderState.lastOnLoad = options.onLoad;
         }
         // 'hang' mode calls neither onLoad nor onError — simulating a
         // mediaLoader fetch that never settles (feral-file/ff-player#307's
@@ -81,6 +89,7 @@ afterEach(() => {
   cleanup();
   loaderState.loadCalls = 0;
   loaderState.mode = 'fail';
+  loaderState.lastOnLoad = undefined;
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
@@ -146,6 +155,38 @@ describe('ArtworkPlayer — stuck-load watchdog drives the same retry-then-skip 
     // synchronous-onError path calls.
     await advanceTimersBy(3000);
     expect(loaderState.loadCalls).toBe(2);
+    expect(onArtworkExhausted).not.toHaveBeenCalled();
+  });
+});
+
+describe('ArtworkPlayer — a late real success cancels a watchdog-scheduled retry', () => {
+  it('does not force a reload when the real load succeeds between the watchdog firing and the scheduled retry', async () => {
+    // run-reviewer pass 5, F2: the watchdog fires at 15s (slot still
+    // pending), marks the slot failed, and schedules a retry
+    // ARTWORK_FAILURE_RETRY_DELAY_MS (3s) later. If the REAL load was only
+    // slow — not actually stuck — and its own onLoad arrives in that 3s
+    // window, the scheduled retry must not fire a second, gratuitous reload
+    // on top of content that just finished loading fine.
+    vi.useFakeTimers();
+    loaderState.mode = 'lateSuccess';
+    const onArtworkExhausted = vi.fn();
+    render(playerNode(onArtworkExhausted));
+    await advanceTimersBy(0);
+    expect(loaderState.loadCalls).toBe(1);
+
+    // Watchdog fires: marks failed, schedules the retry.
+    await advanceTimersBy(15000);
+
+    // The real load finally succeeds, inside the retry's 3s backoff window.
+    await act(async () => {
+      loaderState.lastOnLoad?.();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // The scheduled retry must have been cancelled by the late success —
+    // no second, gratuitous reload of content that already loaded fine.
+    await advanceTimersBy(3000);
+    expect(loaderState.loadCalls).toBe(1);
     expect(onArtworkExhausted).not.toHaveBeenCalled();
   });
 });
