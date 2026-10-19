@@ -138,4 +138,27 @@ describe('PlaylistClient + ArtworkPlayer — same-item exhaustion replay stays p
     assertNoBurst(loaderState.attemptTimestamps, 2900);
     expect(canvasService.getCastInfo()?.index).toBe(0);
   });
+
+  /**
+   * Regression for run-reviewer pass 4, F2: LoopMode.none at the final (or
+   * only) slot has nowhere for advanceFromSlot to skip to
+   * (resolveSequentialPlaylistAdvance returns null), so reusing the plain
+   * hold-the-last-frame branch for an exhausted FAILURE — rather than a
+   * successful natural end — would park the device on the error modal
+   * forever with no further attempt. handleArtworkExhausted must retry in
+   * place here instead, same budget, same pacing.
+   */
+  it('keeps retrying in place after exhaustion in LoopMode.none at the final item, instead of holding forever', async () => {
+    const items = [item('stuck', 300)];
+    canvasService.setCastInfo(displayCast(items, 0, LoopMode.none), false);
+    render(
+      <PlaylistHarness castInfo={displayCast(items, 0, LoopMode.none)} />
+    );
+
+    await advanceInSteps(19000, 500);
+
+    assertNoBurst(loaderState.attemptTimestamps, 2900);
+    // Nothing to skip to under LoopMode.none with a single item — stays put.
+    expect(canvasService.getCastInfo()?.index).toBe(0);
+  });
 });

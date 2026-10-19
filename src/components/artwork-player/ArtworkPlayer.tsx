@@ -1488,6 +1488,17 @@ const ArtworkPlayer = ({
       if (!layer?.displayPreviewURL) {
         return undefined;
       }
+      // HLS/live streaming has its own load mechanism (setupStreamingVideoForSlot)
+      // and its own non-fatal-tolerant recovery via hls.js's error handler — a
+      // live stream merely slow to buffer (congested network, cold CDN edge) is
+      // not "stuck" the way this watchdog assumes. None of loadMedia()'s
+      // branches below match previewType===video && isStreaming either, so
+      // this function has nothing else to do for a streaming layer (run-reviewer
+      // pass 4, F1): skip it entirely rather than let the watchdog race hls.js's
+      // own terminality the way the branch already avoids doing for WebGL/M7.
+      if (layer.isStreaming) {
+        return undefined;
+      }
 
       let isCancelled = false;
       const abortController = new AbortController();

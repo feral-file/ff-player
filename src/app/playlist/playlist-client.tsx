@@ -421,6 +421,18 @@ export default function PlaylistClient() {
   // to loop this one work, so giving up on it entirely would override that
   // choice rather than honor it; the retry still cannot hang the device
   // (see the HEAD-probe timeout in src/utils/helper.ts).
+  //
+  // LoopMode.none at the final (or only) slot is the one other case
+  // advanceFromSlot cannot skip from: resolveSequentialPlaylistAdvance
+  // returns null there, and the plain hold-the-last-frame branch it takes
+  // is meant for a *successful* natural end, not a failure ArtworkPlayer
+  // already gave up retrying on. Reusing it for exhaustion would park the
+  // device on the error modal forever with no further attempt (run-reviewer
+  // pass 4, F2) — so this retries in place instead, mirroring LoopMode.one's
+  // own "keep trying" treatment for the one case where "skipped" has no
+  // target. Still bounded/paced, not a tight loop: ArtworkPlayer resets its
+  // own retry budget before calling out, so each cycle gets the same
+  // 3-attempt, 3s-apart budget as every other failure.
   const handleArtworkExhausted = useCallback((failedIdentity: string) => {
     const idx = currentIndexRef.current;
     const snapshot = playlistRef.current;
@@ -431,8 +443,15 @@ export default function PlaylistClient() {
     if (itemIdentityFor(snapshot, normalizedIndex) !== failedIdentity) {
       return;
     }
+    if (
+      loopModeRef.current === LoopMode.none &&
+      normalizedIndex === snapshot.length - 1
+    ) {
+      replayCurrentSlot(normalizedIndex, snapshot, 'sourceEnd');
+      return;
+    }
     advanceFromSlot(normalizedIndex, snapshot, 'sourceEnd');
-  }, [advanceFromSlot]);
+  }, [advanceFromSlot, replayCurrentSlot]);
 
   useEffect(() => {
     if (currentIndex < 0 || playlist.length === 0) {

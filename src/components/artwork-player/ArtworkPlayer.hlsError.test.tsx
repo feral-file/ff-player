@@ -193,6 +193,65 @@ describe('ArtworkPlayer — non-fatal HLS errors', () => {
   );
 });
 
+describe('ArtworkPlayer — generic load watchdog exemption for streaming', () => {
+  let playSpy: ReturnType<typeof vi.spyOn>;
+  let pauseSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    hlsTest.instances.length = 0;
+    hlsTest.errorHandlers.length = 0;
+    playSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'play')
+      .mockImplementation(() => Promise.resolve());
+    pauseSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'pause')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    playSpy.mockRestore();
+    pauseSpy.mockRestore();
+    hlsTest.instances.length = 0;
+    hlsTest.errorHandlers.length = 0;
+    canvasService.setCastInfo(null, false);
+    canvasService.setRenderStatus(undefined);
+    cleanup();
+  });
+
+  /**
+   * Regression for run-reviewer pass 4, F1: the generic ARTWORK_LOAD_WATCHDOG_MS
+   * (15s) stuck-load watchdog armed for every slot, including streaming video
+   * — whose own load mechanism (setupStreamingVideoForSlot + hls.js) is
+   * neither started nor finished by anything the watchdog can see. A live
+   * stream merely slow to buffer (congested network, cold CDN edge) would be
+   * falsely treated as stuck and retried/skipped out from under hls.js's own
+   * non-fatal-tolerant recovery. Here mediaAttached never fires and no error
+   * ever arrives — the watchdog must stay silent regardless.
+   */
+  it('does not fail a streaming slot still waiting to attach after the generic load watchdog window', async () => {
+    render(renderArtworkPlayer());
+
+    await waitFor(() => {
+      expect(hlsTest.instances.length).toBeGreaterThan(0);
+    });
+
+    vi.useFakeTimers();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(16000);
+    });
+
+    expect(canvasService.getStatus().renderStatus).not.toBe(
+      RenderStatus.failed
+    );
+    expect(
+      screen.queryByText(
+        'The artwork cannot be displayed correctly on this device.'
+      )
+    ).toBeNull();
+  });
+});
+
 describe('ArtworkPlayer — HLS error handling', () => {
   let playSpy: ReturnType<typeof vi.spyOn>;
   let pauseSpy: ReturnType<typeof vi.spyOn>;
