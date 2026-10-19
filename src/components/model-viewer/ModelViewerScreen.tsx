@@ -113,9 +113,11 @@ export default function ModelViewerScreen({
           ref={viewerRef}
           alt="3D artwork preview"
           autoplay
+          auto-rotate
           camera-controls
           crossorigin="anonymous"
           exposure="1"
+          interaction-prompt="none"
           loading="eager"
           reveal="auto"
           style={{ ...viewerStyle, cursor: 'none' }}
