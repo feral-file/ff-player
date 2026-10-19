@@ -9,9 +9,11 @@ declare global {
       > & {
         alt?: string;
         autoplay?: boolean;
+        'auto-rotate'?: boolean;
         'camera-controls'?: boolean;
         crossorigin?: string;
         exposure?: string | number;
+        'interaction-prompt'?: string;
         loading?: string;
         reveal?: string;
         'shadow-intensity'?: string | number;
