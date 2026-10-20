@@ -107,7 +107,8 @@ vi.mock('hls.js', () => {
 function renderArtworkPlayer(
   itemIdentity = 'hls-error-item',
   onItemCommitted?: (identity: string) => void,
-  onItemPlayed?: (identity: string) => void
+  onItemPlayed?: (identity: string) => void,
+  onArtworkExhausted?: (identity: string) => void
 ) {
   const value = {
     context: {
@@ -128,6 +129,7 @@ function renderArtworkPlayer(
         itemIdentity={itemIdentity}
         onItemCommitted={onItemCommitted}
         onItemPlayed={onItemPlayed}
+        onArtworkExhausted={onArtworkExhausted}
       />
     </AppContext.Provider>
   );
@@ -398,6 +400,75 @@ describe('ArtworkPlayer — current-slot fatal HLS failures', () => {
       expect(onItemPlayed).not.toHaveBeenCalled();
     }
   );
+});
+
+describe('ArtworkPlayer — fatal HLS errors feed the retry-then-skip budget', () => {
+  let playSpy: ReturnType<typeof vi.spyOn>;
+  let pauseSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    clearHlsTestState();
+    playSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'play')
+      .mockImplementation(() => Promise.resolve());
+    pauseSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'pause')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    playSpy.mockRestore();
+    pauseSpy.mockRestore();
+    clearHlsTestState();
+    canvasService.setCastInfo(null, false);
+    canvasService.setRenderStatus(undefined);
+    cleanup();
+  });
+
+  /**
+   * Regression for run-reviewer bot-round-2 F1: a fatal hls.js error reaches
+   * `handleArtworkRenderFailure` via the pre-existing `failSlotAndTeardownHls`
+   * teardown path, which — since this branch — also calls
+   * `scheduleArtworkFailureRetryOrSkip()`. Fatal HLS errors therefore now get
+   * the same bounded retry (remount, recreating the Hls instance) instead of
+   * the pre-existing behavior of publishing `failed` and parking on the
+   * modal forever. One retry cycle is enough to prove the integration — the
+   * full 3-attempt counting and exhaustion behavior itself is already
+   * covered end to end by ArtworkPlayer.failureRetrySkip.test.tsx, which this
+   * must feed the exact same way.
+   */
+  it('schedules a retry (new Hls instance) after a fatal error, via the same budget other failures use', async () => {
+    const onArtworkExhausted = vi.fn();
+    render(
+      renderArtworkPlayer(
+        'hls-fatal-retry-item',
+        undefined,
+        undefined,
+        onArtworkExhausted
+      )
+    );
+
+    await waitFor(() => {
+      expect(hlsTest.errorHandlers.length).toBeGreaterThan(0);
+    });
+
+    vi.useFakeTimers();
+    act(() => {
+      hlsTest.errorHandlers[0]('error', { fatal: true, type: 'networkError' });
+    });
+    expect(hlsTest.instances[0].destroy).toHaveBeenCalledTimes(1);
+    expect(onArtworkExhausted).not.toHaveBeenCalled();
+
+    // A retry fires after ARTWORK_FAILURE_RETRY_DELAY_MS (3s) — only
+    // reachable if the fatal error called scheduleArtworkFailureRetryOrSkip,
+    // the same function every other render-failure path calls.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(hlsTest.instances.length).toBe(2);
+    expect(onArtworkExhausted).not.toHaveBeenCalled();
+  });
 });
 
 /** Clears shared HLS mock state between describes so length assertions stay stable. */

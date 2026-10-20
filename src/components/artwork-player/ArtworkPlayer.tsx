@@ -285,6 +285,14 @@ const ArtworkPlayer = ({
   // Bounded retry-then-skip counter/timer — see ARTWORK_FAILURE_RETRY_LIMIT.
   const artworkFailureCountRef = useRef(0);
   const artworkFailureRetryTimeoutRef = useRef<NodeJS.Timeout>();
+  // Per-slot: did this slot's most recent `loadedSource` commit describe a
+  // FAILURE (isSuccess=false) rather than a genuine success? markArtworkReady
+  // reads this to tell apart "this exact commit was a failure, transition
+  // completion must not overwrite it with ready" from "renderStatusRef still
+  // reads failed from an EARLIER, now-superseded failure (e.g. the stuck-load
+  // watchdog), but this slot's current commit is a real success that must be
+  // let through" — see markArtworkReady's own comment.
+  const committedAsFailureRef = useRef<[boolean, boolean]>([false, false]);
   // Per-load-attempt "stuck loading" watchdog — see ARTWORK_LOAD_WATCHDOG_MS
   // (armed in setupMediaForSlot, not at mount — see its own comment). Keyed
   // per slot, not a single shared timer: setupMediaForSlot's two per-slot
@@ -489,13 +497,24 @@ const ArtworkPlayer = ({
    * controller than an occasional optimistic `ready`. Failures that DO surface
    * an error event still reach `failed` through handleLoadIframeError.
    */
-  const markArtworkReady = useCallback(() => {
+  const markArtworkReady = useCallback((slotIndex: SlotIndex) => {
     if (renderStatusRef.current === RenderStatus.ready) {
       return;
     }
-    // Model-viewer failures commit the slot via loadedSource then mark failed.
-    // Transition completion must not overwrite that failed status with ready.
-    if (renderStatusRef.current === RenderStatus.failed) {
+    // Model-viewer failures commit the slot via loadedSource(..., false) then
+    // mark failed; transition completion must not overwrite THAT failed
+    // status with ready. But renderStatusRef reading `failed` does not by
+    // itself mean this commit is one — the stuck-load watchdog can mark
+    // failed and schedule a retry, and then the REAL load succeeds late
+    // (loadedSource(..., true) via this same slot): that must restore ready
+    // and clear the modal, not be swallowed the way "has this slot been
+    // marked failed, ever" would (feralfile-bot review of PR #310, round 2).
+    // committedAsFailureRef tracks which of the two this slot's most recent
+    // commit actually was.
+    if (
+      renderStatusRef.current === RenderStatus.failed &&
+      committedAsFailureRef.current[slotIndex]
+    ) {
       return;
     }
     renderStatusRef.current = RenderStatus.ready;
@@ -814,32 +833,49 @@ const ArtworkPlayer = ({
       }
 
       incomingSlotRef.current = slotIndex;
+      // Record BEFORE markSlotReady so committedAsFailureRef is already
+      // correct for any markArtworkReady call this commit triggers, below
+      // or via the pendingReadySlotRef effect.
+      committedAsFailureRef.current[slotIndex] = !isSuccess;
+      const wasFailed = renderStatusRef.current === RenderStatus.failed;
       markSlotReady(slotIndex);
       // A genuine success claim here is the browser's own load-completion
       // signal, authoritative regardless of what renderStatusRef already
       // says. Without this, a success that lands AFTER the stuck-load
       // watchdog has already fired (watchdog marks failed and schedules a
       // paced retry, see scheduleArtworkFailureRetryOrSkip) is swallowed:
-      // markArtworkReady's own reset (below) bails as soon as it sees
+      // markArtworkReady's own guard bails as soon as it sees
       // RenderStatus.failed, so neither the pending retry nor the failure
       // counter would otherwise be touched, forcing a gratuitous reload of
       // content that just finished loading fine — and, on a repeating
       // pattern, risking wrongful exhaustion of a merely-slow (not broken)
-      // artwork (run-reviewer pass 5, F2). `isSuccess=false` is passed only
-      // by the failure call sites that route through this same commit path
-      // (handleArtworkRenderFailure, handleModelLoadError,
-      // handleLoadIframeError's onError branch) — those must not clear a
-      // retry that is about to legitimately fire.
+      // artwork (run-reviewer pass 5, F2).
       if (isSuccess) {
         if (artworkFailureRetryTimeoutRef.current) {
           clearTimeout(artworkFailureRetryTimeoutRef.current);
           artworkFailureRetryTimeoutRef.current = undefined;
         }
         artworkFailureCountRef.current = 0;
+        // Cancelling the retry is not enough on its own: the slot was
+        // already committed `failed` by the watchdog (`updateSlot(slotIndex,
+        // { loading: false })`), so markSlotReady's own `!layer.loading`
+        // no-op guard means its setSlots call above does NOT change state —
+        // no new render, so the pendingReadySlotRef layout effect never
+        // re-runs to notice this success and call markArtworkReady itself.
+        // Restore readiness directly here instead (feralfile-bot review of
+        // PR #310, round 2): this is recovering the ALREADY-active slot from
+        // a stale failure, not a new incoming transition, so none of the
+        // crossfade/activeSlot bookkeeping that effect otherwise owns
+        // applies — only the status/modal state markArtworkReady itself
+        // resets.
+        if (wasFailed) {
+          markArtworkReady(slotIndex);
+          incomingSlotRef.current = null;
+        }
       }
       return true;
     },
-    [isCurrentArtworkSlot, markSlotReady]
+    [isCurrentArtworkSlot, markArtworkReady, markSlotReady]
   );
 
   const handleArtworkRenderFailure = useCallback(
@@ -945,6 +981,18 @@ const ArtworkPlayer = ({
           }
           playVideoForSlot(slotIndex, layer, videoElement);
         });
+        // A fatal hls.js error has no recovery mechanism of its own to race
+        // against (unlike WebGL/M7, which are deliberately excluded from the
+        // retry-then-skip budget below) — hls.js itself has already declared
+        // this stream unrecoverable. handleArtworkRenderFailure's
+        // scheduleArtworkFailureRetryOrSkip call therefore applies here too:
+        // a fatal HLS error now gets the same bounded retry (remount via
+        // performArtworkReload, recreating the Hls instance) before skipping
+        // via onArtworkExhausted, instead of the pre-existing behavior of
+        // publishing `failed` and parking on the modal forever (run-reviewer
+        // bot-round-2 F1, Moderate — accepted as a feature, not a bug: it is
+        // strictly closer to issue #307's required outcome than the
+        // park-forever shape it replaces).
         const failSlotAndTeardownHls = () => {
           handleArtworkRenderFailure(slotIndex, layer);
           hlsInstance?.destroy();
@@ -1036,7 +1084,7 @@ const ArtworkPlayer = ({
       setActiveSlot(readySlot);
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
-      markArtworkReady();
+      markArtworkReady(readySlot);
       onItemCommitted?.(incomingLayer.itemIdentity);
       if (renderStatusRef.current !== RenderStatus.failed) {
         onItemPlayed?.(incomingLayer.itemIdentity);
@@ -1112,7 +1160,7 @@ const ArtworkPlayer = ({
         setActiveSlot(incoming);
         incomingSlotRef.current = null;
         setTopSlotIndex(null);
-        markArtworkReady();
+        markArtworkReady(incoming);
         onItemCommitted?.(incomingLayer.itemIdentity);
         if (renderStatusRef.current !== RenderStatus.failed) {
           // Deliberately the ref, not the captured prop: see onItemPlayedRef.
@@ -1166,7 +1214,7 @@ const ArtworkPlayer = ({
       setActiveSlot(incoming);
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
-      markArtworkReady();
+      markArtworkReady(incoming);
     }, FADE_IN_OUT_DURATION_MS);
   }, [
     clearLoadingDelay,

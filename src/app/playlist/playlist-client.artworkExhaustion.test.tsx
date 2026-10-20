@@ -161,4 +161,27 @@ describe('PlaylistClient + ArtworkPlayer — same-item exhaustion replay stays p
     // Nothing to skip to under LoopMode.none with a single item — stays put.
     expect(canvasService.getCastInfo()?.index).toBe(0);
   });
+
+  /**
+   * Regression for run-reviewer bot-round-2 F2: the single-item test above
+   * cannot distinguish the correct guard (`fromIndex === snapshot.length - 1`)
+   * from a plausible wrong one (e.g. `fromIndex === 0`), since index 0 is
+   * simultaneously "first" and "last" in a length-1 playlist. A multi-item
+   * playlist, failing on the LAST (not only) item under LoopMode.none, is
+   * the one case that actually proves `advanceFromSlot`'s `retryOnFinalHold`
+   * branch — not a wrap-to-0 — is what fires.
+   */
+  it('keeps retrying in place on the last item of a multi-item LoopMode.none playlist, instead of wrapping to the first', async () => {
+    const items = [item('first', 300), item('stuck', 300)];
+    canvasService.setCastInfo(displayCast(items, 1, LoopMode.none), false);
+    render(
+      <PlaylistHarness castInfo={displayCast(items, 1, LoopMode.none)} />
+    );
+
+    await advanceInSteps(19000, 500);
+
+    assertNoBurst(loaderState.attemptTimestamps, 2900);
+    // Must stay on the last item — a wrap-to-0 bug would move this to 0.
+    expect(canvasService.getCastInfo()?.index).toBe(1);
+  });
 });

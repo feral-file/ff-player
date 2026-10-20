@@ -9,8 +9,10 @@
  * calls `onArtworkExhausted` so the consumer (PlaylistClient) moves on.
  */
 import { AppContext } from '@/context/AppContext';
+import { RenderStatus } from '@/models';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
-import { act, cleanup, render } from '@testing-library/react';
+import { canvasService } from '@/services/CanvasService';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
@@ -92,6 +94,8 @@ afterEach(() => {
   loaderState.lastOnLoad = undefined;
   vi.restoreAllMocks();
   vi.useRealTimers();
+  canvasService.setCastInfo(null, false);
+  canvasService.setRenderStatus(undefined);
 });
 
 describe('ArtworkPlayer — bounded retry-then-skip on repeated render failure', () => {
@@ -177,11 +181,25 @@ describe('ArtworkPlayer — a late real success cancels a watchdog-scheduled ret
     // Watchdog fires: marks failed, schedules the retry.
     await advanceTimersBy(15000);
 
+    // Watchdog fired: the slot reads failed and shows the error modal.
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+
     // The real load finally succeeds, inside the retry's 3s backoff window.
     await act(async () => {
       loaderState.lastOnLoad?.();
       await vi.advanceTimersByTimeAsync(0);
     });
+
+    // feralfile-bot review of PR #310, round 2: cancelling the retry is not
+    // enough on its own — the late success must actually restore `ready`
+    // and clear the error modal, or the device is left showing a failure
+    // for content that is, underneath, loaded and fine.
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    expect(
+      screen.queryByText(
+        'The artwork cannot be displayed correctly on this device.'
+      )
+    ).toBeNull();
 
     // The scheduled retry must have been cancelled by the late success —
     // no second, gratuitous reload of content that already loaded fine.
