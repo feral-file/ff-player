@@ -1760,11 +1760,14 @@ const ArtworkPlayer = ({
       // ones that happen to reach an onLoad/onError callback: a load
       // mechanism that never calls either (an unbound media fetch, a
       // navigation to an unresponsive host) would otherwise sit in
-      // pending/loading forever with nothing to retry or skip it. Does not
-      // fire while a WebGL-recovery cycle owns this slot's reload — that
-      // recovery is intentionally outside this budget (see
-      // scheduleArtworkFailureRetryOrSkip's doc) and reloads via
-      // reloadIframe, which does not re-run this effect to re-arm the watch.
+      // pending/loading forever with nothing to retry or skip it. When a
+      // WebGL-recovery cycle owns THIS slot's own reload, the timer's own
+      // renderStatus guard (below) already bails — handleWebGLLost's
+      // markArtworkFailed moved status away from pending/loading before
+      // this timer could fire for it. That reload is intentionally outside
+      // this budget (see scheduleArtworkFailureRetryOrSkip's doc) and goes
+      // via reloadIframe, which does not re-run this effect to re-arm the
+      // watch.
       if (artworkLoadWatchdogRef.current[slotIndex]) {
         clearTimeout(artworkLoadWatchdogRef.current[slotIndex]);
       }
@@ -1789,7 +1792,6 @@ const ArtworkPlayer = ({
         artworkLoadWatchdogRef.current[slotIndex] = undefined;
         if (
           isCancelled ||
-          isWebGLContextLost.current ||
           previewURLRef.current !== watchdogURL ||
           itemIdentityRef.current !== watchdogIdentity ||
           (renderStatusRef.current !== RenderStatus.pending &&
@@ -1797,6 +1799,24 @@ const ArtworkPlayer = ({
         ) {
           return;
         }
+        // Deliberately NOT bailing on isWebGLContextLost here (unlike
+        // armScheduledRetry's own bail, below) — that flag is page-wide,
+        // not scoped to this slot, and bailing on it unconditionally left
+        // THIS item permanently stranded whenever an unrelated WebGL
+        // recovery for a DIFFERENT item happened to still be in progress
+        // when this watchdog fired: nothing records it as stuck (only
+        // armScheduledRetry's bail does that), so nothing ever resumes it
+        // (run-reviewer bot-round-3 pass-5 F2, Major). The slot this
+        // watchdog actually guards against racing WebGL recovery is
+        // already covered by the renderStatus check above: when THIS
+        // slot's own reload is the one WebGL recovery owns,
+        // handleWebGLLost's markArtworkFailed already moved renderStatus
+        // away from pending/loading before this timer could still be
+        // armed for it. Committing the failure unconditionally here
+        // routes it through the normal scheduleArtworkFailureRetryOrSkip
+        // -> armScheduledRetry path, whose own WebGL-aware bail (see
+        // below) correctly records and resumes it if GL is still down
+        // when the scheduled retry fires.
         handleArtworkRenderFailure(slotIndex, layer);
       }, watchdogDurationMs);
 

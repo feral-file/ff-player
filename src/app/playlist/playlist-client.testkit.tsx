@@ -121,6 +121,20 @@ export function callSourceEnded(endedIdentity: string): void {
   });
 }
 
+export function callArtworkExhausted(failedIdentity: string): void {
+  const onArtworkExhausted = (
+    globalThis as { __artworkPlayerProps?: Record<string, unknown> }
+  ).__artworkPlayerProps?.onArtworkExhausted as
+    | ((identity: string) => void)
+    | undefined;
+  if (!onArtworkExhausted) {
+    throw new Error('onArtworkExhausted was not wired through to ArtworkPlayer');
+  }
+  act(() => {
+    onArtworkExhausted(failedIdentity);
+  });
+}
+
 export function callOnSourceEndedRaw(identity: string): void {
   const onSourceEnded = (
     globalThis as { __artworkPlayerProps?: Record<string, unknown> }

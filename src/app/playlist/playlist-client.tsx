@@ -272,6 +272,17 @@ export default function PlaylistClient() {
           fromIndex === snapshot.length - 1
         ) {
           if (retryOnFinalHold) {
+            // Same end state as the natural-end branch below (nothing to
+            // skip to, held on this slot) — flag it the same way, or a
+            // later setLoop-away-from-none / queued shuffle-refresh, both
+            // gated on this flag (shouldResumeSlotTimerAfterSetLoop /
+            // shouldApplyQueuedPlaylistOnShuffleOrRefresh in
+            // src/utils/playlist.ts), is silently dropped forever for this
+            // one item once the retry eventually succeeds — nothing else
+            // ever calls advanceFromSlot again for a no-duration item with
+            // no further timer armed (run-reviewer bot-round-3 pass-5 F1,
+            // Major).
+            holdAfterFinalSlotRef.current = true;
             replayCurrentSlot(fromIndex, snapshot, cause);
             return;
           }

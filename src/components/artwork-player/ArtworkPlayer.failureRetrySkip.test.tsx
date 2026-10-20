@@ -626,3 +626,73 @@ describe('ArtworkPlayer — model-viewer failures feed the same retry-then-skip 
     expect(onArtworkExhausted).toHaveBeenCalledWith(ITEM_IDENTITY);
   });
 });
+
+describe('ArtworkPlayer — the stuck-load watchdog resumes through WebGL loss too, not just the scheduled retry', () => {
+  /**
+   * Regression for run-reviewer bot-round-3 pass-5 F2: the watchdog used to
+   * bail outright on isWebGLContextLost (a page-wide flag, not scoped to
+   * this slot) and never recorded the item as stuck — unlike
+   * armScheduledRetry's own identically-shaped bail, which does. A later,
+   * UNRELATED item whose own load genuinely hangs, caught only by this
+   * watchdog while a DIFFERENT item's WebGL recovery is still in progress,
+   * was therefore left stranded forever: nothing ever resumed it. Fixed by
+   * having the watchdog commit the failure unconditionally, routing it
+   * through the same armScheduledRetry bail/resume path every other
+   * failure already uses.
+   */
+  it('resumes a later, unrelated item whose watchdog fired while an earlier WebGL recovery was still in progress', async () => {
+    const webglLost = captureWebglContextLostListener();
+
+    vi.useFakeTimers();
+    loaderState.mode = 'hang';
+    const onArtworkExhausted = vi.fn();
+    const { rerender } = render(playerNode(onArtworkExhausted));
+    await advanceTimersBy(0);
+    expect(loaderState.loadCalls).toBe(1);
+
+    // WebGL is lost (for an entirely unrelated reason) while item 1 is
+    // still hanging. Recovery starts polling but will not succeed in jsdom.
+    await act(async () => {
+      webglLost.get()?.(new Event('webglcontextlost', { cancelable: true }));
+      await Promise.resolve();
+    });
+
+    // A later, unrelated item mounts — same onArtworkExhausted identity as
+    // production's stable PlaylistClient callback (see the sibling test's
+    // own comment for why a fresh one here would cascade incorrectly).
+    rerender(
+      playerNode(
+        onArtworkExhausted,
+        undefined,
+        'https://feralfile.com/test/next-item.jpg',
+        'tezos:mainnet:fa2:KT1next:1'
+      )
+    );
+    await advanceTimersBy(0);
+    expect(loaderState.loadCalls).toBe(2);
+
+    // Item 2's own 15s watchdog fires WHILE the unrelated WebGL recovery is
+    // still in progress (well inside MAX_RECOVERY_TIME) — must still commit
+    // the failure, not silently do nothing.
+    await advanceTimersBy(15000);
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+
+    // That commit schedules its own 3s retry, which bails on the
+    // still-lost WebGL and records item 2 as stuck.
+    await advanceTimersBy(3000);
+    expect(loaderState.loadCalls).toBe(2);
+
+    // Recovery never succeeds in jsdom; advance past MAX_RECOVERY_TIME
+    // (605000 total; 18000 of it already elapsed above) so it gives up.
+    await advanceTimersBy(587000);
+    expect(
+      screen.getByText('Couldn’t restore this artwork. Try another work.')
+    ).toBeTruthy();
+    expect(onArtworkExhausted).not.toHaveBeenCalled();
+
+    // Give-up must have resumed item 2's own budget — a fresh retry, paced
+    // the normal 3s, not a silent, permanent stall.
+    await advanceTimersBy(3000);
+    expect(loaderState.loadCalls).toBe(3);
+  });
+});
