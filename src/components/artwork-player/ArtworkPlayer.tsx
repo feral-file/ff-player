@@ -52,6 +52,38 @@ import ModelViewerScreen from '../model-viewer/ModelViewerScreen';
 const MAX_RECOVERY_TIME = 60000 * 10;
 const RENDER_LOADING_DELAY_MS = 2000;
 const SLOT_INDICES = [0, 1] as const;
+// Bounded retry-then-skip for a work that terminally fails to render
+// (feral-file/ff-player#307): a stuck/broken artwork must not hold the
+// playlist forever. Counts real pending/loading/ready -> failed transitions
+// for the CURRENT item (see the per-identity reset in the degraded-signal
+// cleanup effect); the first ARTWORK_FAILURE_RETRY_LIMIT - 1 failures retry
+// in place, the last one hands off to the playlist via onArtworkExhausted.
+const ARTWORK_FAILURE_RETRY_LIMIT = 3;
+const ARTWORK_FAILURE_RETRY_DELAY_MS = 3000;
+// Not every load mechanism produces an onLoad/onError signal to retry on in
+// the first place (feral-file/ff-player#307, PR #310 review F1): the
+// content-type HEAD probe now times out, but the media fetch behind it
+// (mediaLoader's loadViaBlob, for any origin outside KNOWN_ORIGINS) carries
+// no timeout of its own, and a gateway that accepts the connection but never
+// replies — the exact behavior the issue's support bundle showed — hangs it
+// identically. A per-slot watchdog closes the whole class at once: if a
+// mount is still neither ready nor failed after this long, it is treated as
+// a failure regardless of which underlying mechanism (blob fetch, direct
+// element src, iframe navigation, model-viewer init) is stuck, and flows
+// through the same bounded retry-then-skip budget as any other failure.
+// Longer than CONTENT_TYPE_HEAD_TIMEOUT_MS so a HEAD timeout's own fallback
+// attempt has time to start before this also engages.
+const ARTWORK_LOAD_WATCHDOG_MS = 15000;
+// iframe/object/model-viewer loads (isEmbeddedHeavy) had NO time bound at all
+// before this branch — unlike image/video/audio, which go through
+// mediaLoader's own bounded blob fetch, these are heavier, more variable
+// initializations (a full HTML document, an embedded object, a 3D model
+// parse) that the base 15s window can false-positive on for content that is
+// merely slow, not stuck (run-reviewer bot-round-2 pass-2 F1, Major). 3x the
+// base window, matching the existing 3-attempt retry budget's own
+// precedent-over-measurement sizing, rather than leaving these content types
+// unbounded again or forcing them into a window sized for a blob fetch.
+const ARTWORK_LOAD_WATCHDOG_EMBEDDED_MS = 45000;
 
 type SlotIndex = 0 | 1;
 
@@ -113,6 +145,7 @@ const ArtworkPlayer = ({
   sessionKey,
   onRegisterArtworkReload,
   onSourceEnded,
+  onArtworkExhausted,
   onItemCommitted,
   onItemPlayed,
 }: {
@@ -139,6 +172,12 @@ const ArtworkPlayer = ({
   // The argument is the firing slot's itemIdentity so the consumer can
   // drop events that arrive after the playlist has already moved past them.
   onSourceEnded?: (itemIdentity: string) => void;
+  // Fired once a work has failed to render ARTWORK_FAILURE_RETRY_LIMIT times
+  // in a row (feral-file/ff-player#307): the player gave up retrying this
+  // item in place, and the consumer (PlaylistClient) should move on to the
+  // next item the same way it does for onSourceEnded. The argument is the
+  // failing slot's itemIdentity, gated the same way onSourceEnded's is.
+  onArtworkExhausted?: (itemIdentity: string) => void;
   // Fired when an incoming slot actually becomes the visible artwork — at
   // first paint of an initial slot, at crossfade start, or at the sequential
   // handoff's fade-in. Selection state (currentIndex) moves ahead of this on
@@ -253,6 +292,72 @@ const ArtworkPlayer = ({
   // so repeated failures on the same artwork cost no re-render.
   const { setPlaybackDegraded } = context;
   const degradedURLRef = useRef<string | null>(null);
+  // Bounded retry-then-skip counter/timer — see ARTWORK_FAILURE_RETRY_LIMIT.
+  const artworkFailureCountRef = useRef(0);
+  const artworkFailureRetryTimeoutRef = useRef<NodeJS.Timeout>();
+  // Identity/URL of the item whose scheduled retry most recently bailed
+  // because isWebGLContextLost was true at fire time. Read by
+  // startWebGLRecovery's give-up branch so it can resume THIS item's own
+  // bounded budget — scoped by identity/URL, not a bare "is something
+  // currently failed" check, so a coincidental, unrelated item that happens
+  // to be mid-retry when the 10-minute give-up fires is not charged an
+  // extra attempt it did nothing to earn (run-reviewer bot-round-3 pass-2
+  // F1, Major). Cleared on a genuine success or on exhaustion — either way
+  // this item's own budget has already been settled through the normal
+  // path by then.
+  const artworkFailureStuckByWebGLRef = useRef<{
+    identity: string;
+    url: string;
+  } | null>(null);
+  // Per-slot: did this slot's most recent `loadedSource` commit describe a
+  // FAILURE (isSuccess=false) rather than a genuine success? markArtworkReady
+  // reads this to tell apart "this exact commit was a failure, transition
+  // completion must not overwrite it with ready" from "renderStatusRef still
+  // reads failed from an EARLIER, now-superseded failure (e.g. the stuck-load
+  // watchdog), but this slot's current commit is a real success that must be
+  // let through" — see markArtworkReady's own comment.
+  const committedAsFailureRef = useRef<[boolean, boolean]>([false, false]);
+  // Per-slot: has onItemPlayed already fired for the showing currently
+  // mounted in this slot? One showing records one recently-played entry, but
+  // it has up to two callers that can both reach it: the transition commit
+  // (first-load, crossfade, or the deferred "sequential" timeout) and
+  // loadedSource's late-success recovery of a watchdog-failed slot. The
+  // sequential (isEmbeddedHeavy) branch defers its call into a setTimeout,
+  // so a recovery inside that FADE_IN_OUT_DURATION_MS window would otherwise
+  // be followed by a second call for the same showing (run-reviewer
+  // bot-round-3 pass-3 F1); and an iframe that fires `load` again (it
+  // navigates) or fails and recovers again during that window re-enters
+  // loadedSource, so a flag reset per loadedSource call dropped the
+  // suppression before the deferred commit read it (feralfile-bot review of
+  // PR #310, round 4). Every call site checks and sets this latch; it is
+  // reset only where a new showing is mounted into the slot (the mount
+  // effect, next to mountFailedRef), so no number of repeated load/failure
+  // events within one showing can re-arm it, and a stale `true` can never
+  // reach a later showing.
+  const itemPlayedFiredRef = useRef<[boolean, boolean]>([
+    false,
+    false,
+  ]);
+  // Per-load-attempt "stuck loading" watchdog — see ARTWORK_LOAD_WATCHDOG_MS
+  // (armed in setupMediaForSlot, not at mount — see its own comment). Keyed
+  // per slot, not a single shared timer: setupMediaForSlot's two per-slot
+  // effects (slot 0, slot 1) each own their own cleanup, and a shared ref
+  // let one slot's cleanup clear the OTHER slot's just-armed watchdog
+  // whenever both effects happened to run in the same commit.
+  const artworkLoadWatchdogRef = useRef<
+    [NodeJS.Timeout | undefined, NodeJS.Timeout | undefined]
+  >([undefined, undefined]);
+  // Per-slot: the AbortController `setupMediaForSlot` created for that
+  // slot's current blob fetch, if any (image/video/audio only — iframe and
+  // model-viewer loads don't go through this fetch at all). Read by
+  // handleArtworkRenderFailure so a watchdog-timeout failure aborts the
+  // still-in-flight fetch immediately, rather than leaving a connection
+  // already known dead open until an unrelated later commit nulls this slot
+  // and the effect cleanup finally calls abort() (run-reviewer bot-round-2
+  // pass-3 F2, Moderate).
+  const mediaAbortControllerRef = useRef<
+    [AbortController | undefined, AbortController | undefined]
+  >([undefined, undefined]);
   const notePlaybackOutcome = useCallback(
     (url: string, failed: boolean) => {
       // Staleness is checked in two halves, and callers must satisfy both.
@@ -312,6 +417,15 @@ const ArtworkPlayer = ({
   // fails again stays degraded and only a real success clears it.
   useEffect(() => {
     return () => {
+      // A new item (or unmount) gets a fresh retry budget — see
+      // ARTWORK_FAILURE_RETRY_LIMIT. A same-item remount (reconnect-recovery,
+      // the in-place retry below) must NOT reset this, or a work that keeps
+      // failing would never reach the limit.
+      if (artworkFailureRetryTimeoutRef.current) {
+        clearTimeout(artworkFailureRetryTimeoutRef.current);
+        artworkFailureRetryTimeoutRef.current = undefined;
+      }
+      artworkFailureCountRef.current = 0;
       if (degradedURLRef.current === null) {
         return;
       }
@@ -439,13 +553,24 @@ const ArtworkPlayer = ({
    * controller than an occasional optimistic `ready`. Failures that DO surface
    * an error event still reach `failed` through handleLoadIframeError.
    */
-  const markArtworkReady = useCallback(() => {
+  const markArtworkReady = useCallback((slotIndex: SlotIndex) => {
     if (renderStatusRef.current === RenderStatus.ready) {
       return;
     }
-    // Model-viewer failures commit the slot via loadedSource then mark failed.
-    // Transition completion must not overwrite that failed status with ready.
-    if (renderStatusRef.current === RenderStatus.failed) {
+    // Model-viewer failures commit the slot via loadedSource(..., false) then
+    // mark failed; transition completion must not overwrite THAT failed
+    // status with ready. But renderStatusRef reading `failed` does not by
+    // itself mean this commit is one — the stuck-load watchdog can mark
+    // failed and schedule a retry, and then the REAL load succeeds late
+    // (loadedSource(..., true) via this same slot): that must restore ready
+    // and clear the modal, not be swallowed the way "has this slot been
+    // marked failed, ever" would (feralfile-bot review of PR #310, round 2).
+    // committedAsFailureRef tracks which of the two this slot's most recent
+    // commit actually was.
+    if (
+      renderStatusRef.current === RenderStatus.failed &&
+      committedAsFailureRef.current[slotIndex]
+    ) {
       return;
     }
     renderStatusRef.current = RenderStatus.ready;
@@ -456,6 +581,10 @@ const ArtworkPlayer = ({
     setShowMessageModal(false);
     setMessageModalText(null);
     setMessageModalTitle(null);
+    // A genuine success earns this item a fresh retry budget: a LATER
+    // failure (e.g. mid-playback media error) is a new problem, not a
+    // continuation of a load that already succeeded once.
+    artworkFailureCountRef.current = 0;
   }, [clearLoadingDelay]);
 
   const markArtworkFailed = useCallback(() => {
@@ -468,6 +597,92 @@ const ArtworkPlayer = ({
     setShowLoading(false);
     clearLoadingDelay();
   }, [clearLoadingDelay]);
+
+  /**
+   * Bounded retry-then-skip (feral-file/ff-player#307): retry this same item
+   * in place a bounded number of times before asking the playlist to move
+   * on, so one broken work cannot park the playlist (or the device) forever.
+   *
+   * Deliberately NOT wired into `markArtworkFailed` itself — two of its
+   * other callers already own their own bounded recovery and must not race
+   * a second one: `handleWebGLLost` (WebGL context loss, recovered via
+   * `startWebGLRecovery`'s own MAX_RECOVERY_TIME-gated poll) and the
+   * corroborated-offline branch of the content-type effect (recovered via
+   * AppContext's M7 `REFRESH_BUDGET_MAX_ATTEMPTS`, re-armed on reconnect —
+   * skipping to the next item while genuinely offline would not help, since
+   * every item would fail identically). Call this explicitly from a failure
+   * site that has no other recovery path of its own instead.
+   */
+  // Arms the paced retry timer alone, with no effect on
+  // artworkFailureCountRef — the counter is the budget's ledger of real
+  // attempts, and arming a timer is not itself an attempt. Shared by
+  // scheduleArtworkFailureRetryOrSkip's own increment-then-arm path below
+  // and by startWebGLRecovery's give-up branch, which re-arms a retry that
+  // already bailed without ever reloading (run-reviewer bot-round-3 pass-4
+  // F1, Moderate) — calling the increment-then-arm function there instead
+  // would charge the budget for an attempt that never actually happened.
+  const armScheduledRetry = useCallback(() => {
+    const retryIdentity = itemIdentityRef.current;
+    const retryURL = previewURLRef.current;
+    artworkFailureRetryTimeoutRef.current = setTimeout(() => {
+      artworkFailureRetryTimeoutRef.current = undefined;
+      // Stale guard: the playlist may have already moved on to a
+      // different item during the backoff delay.
+      if (
+        itemIdentityRef.current !== retryIdentity ||
+        previewURLRef.current !== retryURL
+      ) {
+        return;
+      }
+      // Unlike the watchdog's own arm-time check, this timer has no
+      // WebGL-awareness of its own — a failure unrelated to WebGL can
+      // still have an already-scheduled retry land while a context loss
+      // is independently in progress, reloading into a GPU that is not
+      // back yet and wasting (or exhausting) this budget on an attempt
+      // doomed by a condition that has nothing to do with the original
+      // failure (run-reviewer bot-round-2 pass-2 F2, Major). Bail instead
+      // of reloading: `startWebGLRecovery`'s own `reloadIframe` is
+      // independently working to revive this slot once GL returns, and
+      // `loadedSource`'s `isSuccess` handling already cancels any stale
+      // pending retry and resets the counter once that reload lands — so
+      // bailing here is self-healing, not a dropped attempt.
+      if (isWebGLContextLost.current) {
+        artworkFailureStuckByWebGLRef.current = {
+          identity: retryIdentity,
+          url: retryURL,
+        };
+        return;
+      }
+      performArtworkReload();
+    }, ARTWORK_FAILURE_RETRY_DELAY_MS);
+  }, [performArtworkReload]);
+
+  const scheduleArtworkFailureRetryOrSkip = useCallback(() => {
+    artworkFailureCountRef.current += 1;
+    if (artworkFailureRetryTimeoutRef.current) {
+      clearTimeout(artworkFailureRetryTimeoutRef.current);
+    }
+    if (artworkFailureCountRef.current < ARTWORK_FAILURE_RETRY_LIMIT) {
+      armScheduledRetry();
+    } else {
+      // Reset BEFORE calling out: onArtworkExhausted is not guaranteed to
+      // change previewURL/itemIdentity — under LoopMode.one, or a
+      // single-item playlist, the consumer replays this SAME item
+      // (advanceFromSlot's 'sourceEnd' cause -> replayCurrentSlot ->
+      // performArtworkReload) rather than moving to a different one, and a
+      // same-item remount does NOT clear the per-identity failure counter
+      // (see the degraded-signal cleanup effect above). Without this reset,
+      // the very next failure on that replay finds the counter already at
+      // the limit and calls onArtworkExhausted again immediately — no 3s
+      // pacing, an unbounded reload loop defeating the whole budget (and,
+      // on-device, the exact runaway-reload shape feral-file/ff-player#307
+      // reported). Resetting here starts a fresh, paced 3-attempt cycle for
+      // whatever comes next, same item or not.
+      artworkFailureCountRef.current = 0;
+      artworkFailureStuckByWebGLRef.current = null;
+      onArtworkExhausted?.(itemIdentityRef.current);
+    }
+  }, [armScheduledRetry, onArtworkExhausted]);
 
   const isCurrentArtworkSlot = useCallback(
     (slotIndex: SlotIndex, expectedLayer?: SlotLayer) => {
@@ -671,12 +886,25 @@ const ArtworkPlayer = ({
   const markSlotReady = useCallback(
     (slotIndex: SlotIndex) => {
       const currentURL = previewURLRef.current;
-      pendingReadySlotRef.current = slotIndex;
       setSlots(prev => {
         const layer = prev[slotIndex];
         if (layer?.previewURL !== currentURL || !layer.loading) {
           return prev;
         }
+        // Set only on the actual loading->not-loading transition below, not
+        // unconditionally on every call: a second call for the same slot
+        // (e.g. loadedSource's own late-success recovery, after the watchdog
+        // already committed this slot's failure) hits the no-op branch
+        // above and must leave this ref alone. Setting it unconditionally
+        // left a stale non-null value that a LATER, unrelated re-render
+        // (the deferred sequential-transition timeout's own setSlots call,
+        // nulling the outgoing slot) would pick back up — re-running the
+        // whole commit effect a second time for a slot already fully
+        // handled by the recovery above, and this time with the outgoing
+        // slot already null, so it took the first-load (!otherLayer) branch
+        // and fired onItemCommitted/onItemPlayed yet again (run-reviewer
+        // bot-round-3 pass-3 F1, Moderate).
+        pendingReadySlotRef.current = slotIndex;
         const next = [...prev] as [SlotLayer | null, SlotLayer | null];
         next[slotIndex] = { ...layer, loading: false };
         return next;
@@ -686,7 +914,11 @@ const ArtworkPlayer = ({
   );
 
   const loadedSource = useCallback(
-    (slotIndex: SlotIndex, expectedLayer?: SlotLayer): boolean => {
+    (
+      slotIndex: SlotIndex,
+      expectedLayer?: SlotLayer,
+      isSuccess = true
+    ): boolean => {
       if (!isCurrentArtworkSlot(slotIndex, expectedLayer)) {
         return false;
       }
@@ -702,12 +934,102 @@ const ArtworkPlayer = ({
       }
 
       incomingSlotRef.current = slotIndex;
+      // Record BEFORE markSlotReady so committedAsFailureRef is already
+      // correct for any markArtworkReady call this commit triggers, below
+      // or via the pendingReadySlotRef effect.
+      committedAsFailureRef.current[slotIndex] = !isSuccess;
+      const wasFailed = renderStatusRef.current === RenderStatus.failed;
       markSlotReady(slotIndex);
+      // A genuine success claim here is the browser's own load-completion
+      // signal, authoritative regardless of what renderStatusRef already
+      // says. Without this, a success that lands AFTER the stuck-load
+      // watchdog has already fired (watchdog marks failed and schedules a
+      // paced retry, see scheduleArtworkFailureRetryOrSkip) is swallowed:
+      // markArtworkReady's own guard bails as soon as it sees
+      // RenderStatus.failed, so neither the pending retry nor the failure
+      // counter would otherwise be touched, forcing a gratuitous reload of
+      // content that just finished loading fine — and, on a repeating
+      // pattern, risking wrongful exhaustion of a merely-slow (not broken)
+      // artwork (run-reviewer pass 5, F2).
+      if (isSuccess) {
+        if (artworkFailureRetryTimeoutRef.current) {
+          clearTimeout(artworkFailureRetryTimeoutRef.current);
+          artworkFailureRetryTimeoutRef.current = undefined;
+        }
+        artworkFailureCountRef.current = 0;
+        artworkFailureStuckByWebGLRef.current = null;
+        // Cancelling the retry is not enough on its own: the slot was
+        // already committed `failed` by the watchdog (`updateSlot(slotIndex,
+        // { loading: false })`), so markSlotReady's own `!layer.loading`
+        // no-op guard means its setSlots call above does NOT change state —
+        // no new render, so the pendingReadySlotRef layout effect never
+        // re-runs to notice this success and call markArtworkReady itself.
+        // Restore readiness directly here instead (feralfile-bot review of
+        // PR #310, round 2): this is recovering the ALREADY-active slot from
+        // a stale failure, not a new incoming transition, so none of the
+        // crossfade/activeSlot bookkeeping that effect otherwise owns
+        // applies — only the status/modal state markArtworkReady itself
+        // resets.
+        if (wasFailed) {
+          markArtworkReady(slotIndex);
+          incomingSlotRef.current = null;
+          // The original failure commit already called onItemCommitted
+          // (unlike onItemPlayed, it fires even for a failed transition —
+          // see its own doc comment), but never onItemPlayed: that call is
+          // gated on renderStatusRef !== failed, which was false at the
+          // time. For the already-active slot (no incoming transition) and
+          // the crossfade transition type, nothing else will ever call it
+          // for this showing — PlaylistClient's recently-played history
+          // would otherwise never record a work that, in the end, did play
+          // (feralfile-bot review of PR #310, round 3). Via the ref, not
+          // the captured prop, matching the sequential-transition call
+          // site's own reasoning: this fires from inside a callback, not
+          // the render that captured the prop.
+          //
+          // The ONE exception to "nothing else will ever call it": the
+          // SEQUENTIAL (isEmbeddedHeavy) transition type defers its own
+          // onItemCommitted/onItemPlayed pair into a setTimeout already
+          // scheduled by the failure commit above, which this recovery does
+          // not cancel (it owns the slot swap/activeSlot bookkeeping). The
+          // shared per-showing latch makes whichever of the two runs second
+          // — and any repeat recovery within this showing — a no-op; see
+          // itemPlayedFiredRef.
+          if (!itemPlayedFiredRef.current[slotIndex]) {
+            itemPlayedFiredRef.current[slotIndex] = true;
+            onItemPlayedRef.current?.(
+              expectedLayer?.itemIdentity ?? itemIdentityRef.current
+            );
+          }
+        }
+      }
       return true;
     },
-    [isCurrentArtworkSlot, markSlotReady]
+    [isCurrentArtworkSlot, markArtworkReady, markSlotReady]
   );
 
+  /**
+   * Commits a terminal render failure through the transition pipeline and
+   * feeds it into the retry-then-skip budget (scheduleArtworkFailureRetryOrSkip).
+   *
+   * KNOWN GAP (run-reviewer bot-round-2 pass-3 F1, Major — Decision needed,
+   * not fixed in this branch): handleMediaError, handleLoadIframeError, and
+   * handleModelLoadError each call both this function AND
+   * notePlaybackOutcome(url, true) for the SAME failure. notePlaybackOutcome
+   * feeds `setPlaybackDegraded`, which AppContext's pre-existing M7 effect
+   * watches to fire its OWN independent recovery reload
+   * (`requestArtworkRefresh` -> `refreshArtwork` -> `performArtworkReload`,
+   * the identical primitive this budget's own setTimeout calls) — and that
+   * effect fires essentially immediately on the first playbackDegraded=true,
+   * well inside this budget's 3s pacing window. A straightforward fix
+   * (dropping the three notePlaybackOutcome(..., true) calls, mirroring the
+   * watchdog/fatal-HLS paths, which never call it) was tried and reverted:
+   * it silently disables M7 Layer-1 damping (§4.4 of the cross-repo recovery
+   * design, ArtworkPlayer.m7damping.test.tsx) for video/audio render
+   * failures, a deliberately-designed, separately-tested cross-repo
+   * contract no reviewer or lead in this chain checked against. Changing
+   * that contract is the owner's call, not this run's — see the PR's status
+   * comment and `Decision needed` line.
+   */
   const handleArtworkRenderFailure = useCallback(
     (slotIndex?: SlotIndex, expectedLayer?: SlotLayer) => {
       if (
@@ -719,20 +1041,37 @@ const ArtworkPlayer = ({
       if (slotIndex !== undefined) {
         // Treat a current failure as terminal readiness for transition
         // purposes, so the failed incoming slot replaces the outgoing one.
-        loadedSource(slotIndex, expectedLayer);
+        loadedSource(slotIndex, expectedLayer, false);
         updateSlot(slotIndex, { loading: false });
+        // Abort this slot's own in-flight blob fetch immediately — most
+        // relevant for the watchdog-timeout path, where the fetch is still
+        // pending (that's why the watchdog fired) and would otherwise stay
+        // open until an unrelated later commit nulls this slot and the
+        // setupMediaForSlot effect cleanup finally aborts it (run-reviewer
+        // bot-round-2 pass-3 F2, Moderate). A no-op for a failure that
+        // already settled (a real onError) or for a slot type with no
+        // fetch of its own (iframe/model-viewer).
+        mediaAbortControllerRef.current[slotIndex]?.abort();
+        mediaAbortControllerRef.current[slotIndex] = undefined;
       }
       if (renderStatusRef.current === RenderStatus.failed) {
         return;
       }
       markArtworkFailed();
+      scheduleArtworkFailureRetryOrSkip();
       setMessageModalText(null);
       setMessageModalTitle(
         'The artwork cannot be displayed correctly on this device.'
       );
       setShowMessageModal(true);
     },
-    [isCurrentArtworkSlot, loadedSource, markArtworkFailed, updateSlot]
+    [
+      isCurrentArtworkSlot,
+      loadedSource,
+      markArtworkFailed,
+      scheduleArtworkFailureRetryOrSkip,
+      updateSlot,
+    ]
   );
 
   const playVideoForSlot = useCallback(
@@ -804,6 +1143,18 @@ const ArtworkPlayer = ({
           }
           playVideoForSlot(slotIndex, layer, videoElement);
         });
+        // A fatal hls.js error has no recovery mechanism of its own to race
+        // against (unlike WebGL/M7, which are deliberately excluded from the
+        // retry-then-skip budget below) — hls.js itself has already declared
+        // this stream unrecoverable. handleArtworkRenderFailure's
+        // scheduleArtworkFailureRetryOrSkip call therefore applies here too:
+        // a fatal HLS error now gets the same bounded retry (remount via
+        // performArtworkReload, recreating the Hls instance) before skipping
+        // via onArtworkExhausted, instead of the pre-existing behavior of
+        // publishing `failed` and parking on the modal forever (run-reviewer
+        // bot-round-2 F1, Moderate — accepted as a feature, not a bug: it is
+        // strictly closer to issue #307's required outcome than the
+        // park-forever shape it replaces).
         const failSlotAndTeardownHls = () => {
           handleArtworkRenderFailure(slotIndex, layer);
           hlsInstance?.destroy();
@@ -895,9 +1246,13 @@ const ArtworkPlayer = ({
       setActiveSlot(readySlot);
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
-      markArtworkReady();
+      markArtworkReady(readySlot);
       onItemCommitted?.(incomingLayer.itemIdentity);
-      if (renderStatusRef.current !== RenderStatus.failed) {
+      if (
+        renderStatusRef.current !== RenderStatus.failed &&
+        !itemPlayedFiredRef.current[readySlot]
+      ) {
+        itemPlayedFiredRef.current[readySlot] = true;
         onItemPlayed?.(incomingLayer.itemIdentity);
       }
       return;
@@ -971,9 +1326,17 @@ const ArtworkPlayer = ({
         setActiveSlot(incoming);
         incomingSlotRef.current = null;
         setTopSlotIndex(null);
-        markArtworkReady();
+        markArtworkReady(incoming);
         onItemCommitted?.(incomingLayer.itemIdentity);
-        if (renderStatusRef.current !== RenderStatus.failed) {
+        // onItemCommitted above still fires (its only call site for the
+        // sequential transition type); onItemPlayed is skipped when
+        // loadedSource's late-success recovery already fired it for this
+        // showing during the fade — see itemPlayedFiredRef.
+        if (
+          renderStatusRef.current !== RenderStatus.failed &&
+          !itemPlayedFiredRef.current[incoming]
+        ) {
+          itemPlayedFiredRef.current[incoming] = true;
           // Deliberately the ref, not the captured prop: see onItemPlayedRef.
           onItemPlayedRef.current?.(incomingLayer.itemIdentity);
         }
@@ -991,7 +1354,11 @@ const ArtworkPlayer = ({
     // the viewer-truth commit even though slot bookkeeping settles at fade
     // end in the timeout below.
     onItemCommitted?.(incomingLayer.itemIdentity);
-    if (renderStatusRef.current !== RenderStatus.failed) {
+    if (
+      renderStatusRef.current !== RenderStatus.failed &&
+      !itemPlayedFiredRef.current[incoming]
+    ) {
+      itemPlayedFiredRef.current[incoming] = true;
       onItemPlayed?.(incomingLayer.itemIdentity);
     }
     transitionTimeoutRef.current = setTimeout(() => {
@@ -1025,7 +1392,7 @@ const ArtworkPlayer = ({
       setActiveSlot(incoming);
       incomingSlotRef.current = null;
       setTopSlotIndex(null);
-      markArtworkReady();
+      markArtworkReady(incoming);
     }, FADE_IN_OUT_DURATION_MS);
   }, [
     clearLoadingDelay,
@@ -1088,13 +1455,21 @@ const ArtworkPlayer = ({
    * Also publish RenderStatus.failed so status polls match the error UI.
    */
   const handleModelLoadError = (slotIndex: SlotIndex, layer?: SlotLayer) => {
-    if (!loadedSource(slotIndex, layer)) {
+    if (!loadedSource(slotIndex, layer, false)) {
       return;
     }
 
     notePlaybackOutcome(slotPreviewURL(slotIndex), true);
     clearLoadingIndicators();
+    // Mirrors handleArtworkRenderFailure's own guard: once this mount is
+    // already failed (e.g. the load watchdog got there first), a later
+    // model-viewer onError for the same stuck attempt must not count a
+    // second time against the retry-then-skip budget.
+    if (renderStatusRef.current === RenderStatus.failed) {
+      return;
+    }
     markArtworkFailed();
+    scheduleArtworkFailureRetryOrSkip();
     setMessageModalText(null);
     setMessageModalTitle(
       'The artwork cannot be displayed correctly on this device.'
@@ -1117,6 +1492,22 @@ const ArtworkPlayer = ({
       transitionTimeoutRef.current = undefined;
     }
     setTopSlotIndex(null);
+
+    // A mount triggered by anything OTHER than our own scheduled retry —
+    // refreshArtwork, setLoop's resume, a manual reload — does not change
+    // previewURL/itemIdentity for an unchanged item, so the degraded-signal
+    // cleanup effect's reset never runs. Without clearing it here too, a
+    // retry timer armed by an earlier failure stays pending and fires its
+    // OWN performArtworkReload() later, on top of an item that may have
+    // already recovered via this very mount — a stale, redundant extra
+    // reload. Clearing the timer (not the attempt count — this effect also
+    // re-runs for our own retry's reload, and resetting the count here
+    // would make every retry look like attempt 1 forever) is enough: this
+    // mount is itself the attempt the stale timer would have made.
+    if (artworkFailureRetryTimeoutRef.current) {
+      clearTimeout(artworkFailureRetryTimeoutRef.current);
+      artworkFailureRetryTimeoutRef.current = undefined;
+    }
 
     const currentActive = activeSlotRef.current;
     const staleSlot = (currentActive === 0 ? 1 : 0) as SlotIndex;
@@ -1157,6 +1548,10 @@ const ArtworkPlayer = ({
     // Fresh mount: give it a clean one-shot latch (see the Layer-1 damping
     // comment above).
     mountFailedRef.current[targetSlot] = false;
+    // New showing in this slot: it has not recorded a play yet (see
+    // itemPlayedFiredRef — this is its only reset).
+    itemPlayedFiredRef.current[targetSlot] = false;
+
     setSlots(prev => {
       if (!hasAny) {
         const k = ++iframeKeyCounterRef.current;
@@ -1348,10 +1743,92 @@ const ArtworkPlayer = ({
       if (!layer?.displayPreviewURL) {
         return undefined;
       }
+      // HLS/live streaming has its own load mechanism (setupStreamingVideoForSlot)
+      // and its own non-fatal-tolerant recovery via hls.js's error handler — a
+      // live stream merely slow to buffer (congested network, cold CDN edge) is
+      // not "stuck" the way this watchdog assumes. None of loadMedia()'s
+      // branches below match previewType===video && isStreaming either, so
+      // this function has nothing else to do for a streaming layer (run-reviewer
+      // pass 4, F1): skip it entirely rather than let the watchdog race hls.js's
+      // own terminality the way the branch already avoids doing for WebGL/M7.
+      if (layer.isStreaming) {
+        return undefined;
+      }
 
       let isCancelled = false;
       const abortController = new AbortController();
+      mediaAbortControllerRef.current[slotIndex] = abortController;
       const mediaCleanupFns: (() => void)[] = [];
+
+      // Stuck-load watchdog — see ARTWORK_LOAD_WATCHDOG_MS. Armed here, once
+      // this slot has an actual load mechanism to attempt (previewType
+      // resolved, URL known), not at the top of the mount effect: arming it
+      // before detectPreviewType has even run would make it share its whole
+      // budget with that probe's own (now-bounded, but still up to ~13s)
+      // resolution time, leaving too little for a merely slow — not
+      // stuck — media fetch on top. Guards every load attempt, not just
+      // ones that happen to reach an onLoad/onError callback: a load
+      // mechanism that never calls either (an unbound media fetch, a
+      // navigation to an unresponsive host) would otherwise sit in
+      // pending/loading forever with nothing to retry or skip it. When a
+      // WebGL-recovery cycle owns THIS slot's own reload, the timer's own
+      // renderStatus guard (below) already bails — handleWebGLLost's
+      // markArtworkFailed moved status away from pending/loading before
+      // this timer could fire for it. That reload is intentionally outside
+      // this budget (see scheduleArtworkFailureRetryOrSkip's doc) and goes
+      // via reloadIframe, which does not re-run this effect to re-arm the
+      // watch.
+      if (artworkLoadWatchdogRef.current[slotIndex]) {
+        clearTimeout(artworkLoadWatchdogRef.current[slotIndex]);
+      }
+      const watchdogURL = layer.previewURL;
+      const watchdogIdentity = layer.itemIdentity;
+      // iframePDF deliberately checked here, not added to isEmbeddedHeavy
+      // itself: that helper is also read at the crossfade-vs-sequential-fade
+      // transition-style decision below, and folding iframePDF into it would
+      // silently flip every PDF transition to sequential fade-through-black
+      // too — an unrequested, untested, undocumented presentation change
+      // (run-reviewer bot-round-2 pass-4 F1, Major; found independently by
+      // both reviewers after an earlier version of this fix did exactly
+      // that). iframePDF renders through the identical <iframe> mechanism as
+      // `iframe` and needs the same longer watchdog window for the same
+      // reason, but only here.
+      const watchdogDurationMs =
+        isEmbeddedHeavy(layer.previewType) ||
+        layer.previewType === PreviewHTMLTag.iframePDF
+          ? ARTWORK_LOAD_WATCHDOG_EMBEDDED_MS
+          : ARTWORK_LOAD_WATCHDOG_MS;
+      artworkLoadWatchdogRef.current[slotIndex] = setTimeout(() => {
+        artworkLoadWatchdogRef.current[slotIndex] = undefined;
+        if (
+          isCancelled ||
+          previewURLRef.current !== watchdogURL ||
+          itemIdentityRef.current !== watchdogIdentity ||
+          (renderStatusRef.current !== RenderStatus.pending &&
+            renderStatusRef.current !== RenderStatus.loading)
+        ) {
+          return;
+        }
+        // Deliberately NOT bailing on isWebGLContextLost here (unlike
+        // armScheduledRetry's own bail, below) — that flag is page-wide,
+        // not scoped to this slot, and bailing on it unconditionally left
+        // THIS item permanently stranded whenever an unrelated WebGL
+        // recovery for a DIFFERENT item happened to still be in progress
+        // when this watchdog fired: nothing records it as stuck (only
+        // armScheduledRetry's bail does that), so nothing ever resumes it
+        // (run-reviewer bot-round-3 pass-5 F2, Major). The slot this
+        // watchdog actually guards against racing WebGL recovery is
+        // already covered by the renderStatus check above: when THIS
+        // slot's own reload is the one WebGL recovery owns,
+        // handleWebGLLost's markArtworkFailed already moved renderStatus
+        // away from pending/loading before this timer could still be
+        // armed for it. Committing the failure unconditionally here
+        // routes it through the normal scheduleArtworkFailureRetryOrSkip
+        // -> armScheduledRetry path, whose own WebGL-aware bail (see
+        // below) correctly records and resumes it if GL is still down
+        // when the scheduled retry fires.
+        handleArtworkRenderFailure(slotIndex, layer);
+      }, watchdogDurationMs);
 
       const handleMediaError =
         (mediaType: BlobLoadedMediaType) => (error: Error) => {
@@ -1365,7 +1842,7 @@ const ArtworkPlayer = ({
           // every later settings update reads as "transition pending", and
           // the artwork on screen stops receiving settings until the next
           // artwork request. loadedSource's layer guard drops stale failures.
-          if (loadedSource(slotIndex, layer)) {
+          if (loadedSource(slotIndex, layer, false)) {
             handleArtworkRenderFailure(slotIndex, layer);
             // Only a failure loadedSource actually accepted describes what
             // the device is trying to show; a rejected one belongs to a
@@ -1517,10 +1994,17 @@ const ArtworkPlayer = ({
       return () => {
         isCancelled = true;
         abortController.abort();
+        if (mediaAbortControllerRef.current[slotIndex] === abortController) {
+          mediaAbortControllerRef.current[slotIndex] = undefined;
+        }
         mediaCleanupFns.forEach(c => {
           c();
         });
         mediaLoaders.current[slotIndex].cleanup();
+        if (artworkLoadWatchdogRef.current[slotIndex]) {
+          clearTimeout(artworkLoadWatchdogRef.current[slotIndex]);
+          artworkLoadWatchdogRef.current[slotIndex] = undefined;
+        }
       };
     },
     [
@@ -1670,7 +2154,7 @@ const ArtworkPlayer = ({
     // Failure still consumes the current incoming slot. Without this, an
     // iframe/object error leaves the transition claim active and permanently
     // holds visual settings on the outgoing artwork.
-    if (!loadedSource(slotIndex, layer)) {
+    if (!loadedSource(slotIndex, layer, false)) {
       return;
     }
     notePlaybackOutcome(slotPreviewURL(slotIndex), true);
@@ -1722,6 +2206,36 @@ const ArtworkPlayer = ({
     console.log('[ArtworkPlayer] WebGL context restored!');
   };
 
+  // Resumes the specific item whose own scheduled retry bailed on
+  // isWebGLContextLost (see armScheduledRetry's bail) once recovery ends,
+  // on EITHER branch of startWebGLRecovery — give-up (run-reviewer
+  // bot-round-3 pass-2 F1, Major) and success (fix-review of PR #310 round
+  // 4, pass 1 F1, Major). Nothing else re-drives that item: the success
+  // branch's own reloadIframe only bumps the active slot's iframeKey, which
+  // is not in setupMediaForSlot's deps, so an image/video/audio slot is
+  // never actually reloaded by it. Must run while renderStatus still reads
+  // the bail's `failed`, i.e. before the success branch's markArtworkPending.
+  // Scoped by identity/URL, not a bare "is something currently failed"
+  // check, so an unrelated item that happens to be mid-retry for its own
+  // reason isn't charged an extra attempt it did nothing to earn. Calls
+  // armScheduledRetry directly, NOT scheduleArtworkFailureRetryOrSkip: the
+  // bail this resumes never incremented artworkFailureCountRef (bailing is
+  // not itself an attempt), so re-arming through the increment-then-arm
+  // function would charge the budget a second time for a single real
+  // attempt that still hasn't happened yet (run-reviewer bot-round-3 pass-4
+  // F1, Moderate).
+  const resumeRetryStuckByWebGL = () => {
+    const stuckItem = artworkFailureStuckByWebGLRef.current;
+    if (
+      stuckItem?.identity === itemIdentityRef.current &&
+      stuckItem.url === previewURLRef.current &&
+      renderStatusRef.current === RenderStatus.failed
+    ) {
+      artworkFailureStuckByWebGLRef.current = null;
+      armScheduledRetry();
+    }
+  };
+
   const startWebGLRecovery = () => {
     console.log('[ArtworkPlayer] startWebGLRecovery');
     if (webGLRecoveryIntervalRef.current) {
@@ -1735,10 +2249,27 @@ const ArtworkPlayer = ({
           clearInterval(webGLRecoveryIntervalRef.current);
         }
         console.log('[ArtworkPlayer] WebGL recovery timed out');
+        // Pre-existing gap, exposed by this branch (run-reviewer bot-round-3
+        // pass-1 F1, Major): this give-up branch never reset
+        // isWebGLContextLost, unlike its success sibling below. On `main`
+        // that flag's only other consumer was handleWebGLLost's own
+        // re-entry guard, so a stuck-true flag had no reachable
+        // consequence. This branch's new stuck-load watchdog and scheduled
+        // retry both bail whenever the flag reads true — so once recovery
+        // gives up, EVERY later, unrelated playlist item's render failures
+        // would permanently lose both mechanisms issue #307 exists to add,
+        // for the rest of this component's lifetime. Reset here, matching
+        // the success branch, so recovery genuinely giving up stops being
+        // mistaken for "still in progress" by anything reading this flag.
+        isWebGLContextLost.current = false;
         setMessageModalText(null);
         setMessageModalTitle(
           'Couldn’t restore this artwork. Try another work.'
         );
+        // Resetting the flag alone only helps LATER items — resume the
+        // item stranded by this exact flag too (see
+        // resumeRetryStuckByWebGL).
+        resumeRetryStuckByWebGL();
         return;
       }
 
@@ -1748,6 +2279,11 @@ const ArtworkPlayer = ({
         }
 
         isWebGLContextLost.current = false;
+        // Before the timeout below publishes pending — see
+        // resumeRetryStuckByWebGL. If the reloadIframe below does recover
+        // the slot first, loadedSource's success handling cancels this
+        // re-armed retry.
+        resumeRetryStuckByWebGL();
         setTimeout(() => {
           // handleWebGLLost publishes failed; markArtworkReady intentionally
           // ignores failed→ready (model-viewer commit). Clear failed before
