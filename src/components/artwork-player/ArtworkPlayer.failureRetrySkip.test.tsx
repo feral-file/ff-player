@@ -21,6 +21,7 @@ const loaderState = vi.hoisted(() => ({
   loadCalls: 0,
   mode: 'fail' as 'fail' | 'hang' | 'lateSuccess',
   lastOnLoad: undefined as (() => void) | undefined,
+  lastSignal: undefined as AbortSignal | undefined,
 }));
 
 vi.mock('@/utils/mediaLoader', async importOriginal => {
@@ -31,8 +32,10 @@ vi.mock('@/utils/mediaLoader', async importOriginal => {
       loadMedia: (options: {
         onLoad?: () => void;
         onError?: (error: Error) => void;
+        signal?: AbortSignal;
       }) => {
         loaderState.loadCalls += 1;
+        loaderState.lastSignal = options.signal;
         if (loaderState.mode === 'fail') {
           // Every attempt fails immediately — the item never recovers on
           // its own, so the retry-then-skip budget is the only thing that
@@ -118,6 +121,7 @@ afterEach(() => {
   loaderState.loadCalls = 0;
   loaderState.mode = 'fail';
   loaderState.lastOnLoad = undefined;
+  loaderState.lastSignal = undefined;
   vi.restoreAllMocks();
   vi.useRealTimers();
   canvasService.setCastInfo(null, false);
@@ -175,9 +179,14 @@ describe('ArtworkPlayer — stuck-load watchdog drives the same retry-then-skip 
     await advanceTimersBy(0);
 
     // Nothing ever settles. Only the watchdog can notice.
+    const firstSignal = loaderState.lastSignal;
     await advanceTimersBy(15000);
     expect(loaderState.loadCalls).toBe(1);
     expect(onArtworkExhausted).not.toHaveBeenCalled();
+    // run-reviewer bot-round-2 pass-3 F2: the still-in-flight fetch for this
+    // now-failed attempt must be aborted immediately, not left open until an
+    // unrelated later commit nulls this slot.
+    expect(firstSignal?.aborted).toBe(true);
 
     // A retry fires after the normal ARTWORK_FAILURE_RETRY_DELAY_MS — only
     // reachable if the watchdog's failure called

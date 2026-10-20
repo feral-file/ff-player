@@ -126,6 +126,7 @@ function createSlotLayer(
 function isEmbeddedHeavy(t: PreviewHTMLTag | null): boolean {
   return (
     t === PreviewHTMLTag.iframe ||
+    t === PreviewHTMLTag.iframePDF ||
     t === PreviewHTMLTag.object ||
     t === PreviewHTMLTag.model
   );
@@ -311,6 +312,17 @@ const ArtworkPlayer = ({
   // whenever both effects happened to run in the same commit.
   const artworkLoadWatchdogRef = useRef<
     [NodeJS.Timeout | undefined, NodeJS.Timeout | undefined]
+  >([undefined, undefined]);
+  // Per-slot: the AbortController `setupMediaForSlot` created for that
+  // slot's current blob fetch, if any (image/video/audio only — iframe and
+  // model-viewer loads don't go through this fetch at all). Read by
+  // handleArtworkRenderFailure so a watchdog-timeout failure aborts the
+  // still-in-flight fetch immediately, rather than leaving a connection
+  // already known dead open until an unrelated later commit nulls this slot
+  // and the effect cleanup finally calls abort() (run-reviewer bot-round-2
+  // pass-3 F2, Moderate).
+  const mediaAbortControllerRef = useRef<
+    [AbortController | undefined, AbortController | undefined]
   >([undefined, undefined]);
   const notePlaybackOutcome = useCallback(
     (url: string, failed: boolean) => {
@@ -903,6 +915,29 @@ const ArtworkPlayer = ({
     [isCurrentArtworkSlot, markArtworkReady, markSlotReady]
   );
 
+  /**
+   * Commits a terminal render failure through the transition pipeline and
+   * feeds it into the retry-then-skip budget (scheduleArtworkFailureRetryOrSkip).
+   *
+   * KNOWN GAP (run-reviewer bot-round-2 pass-3 F1, Major — Decision needed,
+   * not fixed in this branch): handleMediaError, handleLoadIframeError, and
+   * handleModelLoadError each call both this function AND
+   * notePlaybackOutcome(url, true) for the SAME failure. notePlaybackOutcome
+   * feeds `setPlaybackDegraded`, which AppContext's pre-existing M7 effect
+   * watches to fire its OWN independent recovery reload
+   * (`requestArtworkRefresh` -> `refreshArtwork` -> `performArtworkReload`,
+   * the identical primitive this budget's own setTimeout calls) — and that
+   * effect fires essentially immediately on the first playbackDegraded=true,
+   * well inside this budget's 3s pacing window. A straightforward fix
+   * (dropping the three notePlaybackOutcome(..., true) calls, mirroring the
+   * watchdog/fatal-HLS paths, which never call it) was tried and reverted:
+   * it silently disables M7 Layer-1 damping (§4.4 of the cross-repo recovery
+   * design, ArtworkPlayer.m7damping.test.tsx) for video/audio render
+   * failures, a deliberately-designed, separately-tested cross-repo
+   * contract no reviewer or lead in this chain checked against. Changing
+   * that contract is the owner's call, not this run's — see the PR's status
+   * comment and `Decision needed` line.
+   */
   const handleArtworkRenderFailure = useCallback(
     (slotIndex?: SlotIndex, expectedLayer?: SlotLayer) => {
       if (
@@ -916,6 +951,16 @@ const ArtworkPlayer = ({
         // purposes, so the failed incoming slot replaces the outgoing one.
         loadedSource(slotIndex, expectedLayer, false);
         updateSlot(slotIndex, { loading: false });
+        // Abort this slot's own in-flight blob fetch immediately — most
+        // relevant for the watchdog-timeout path, where the fetch is still
+        // pending (that's why the watchdog fired) and would otherwise stay
+        // open until an unrelated later commit nulls this slot and the
+        // setupMediaForSlot effect cleanup finally aborts it (run-reviewer
+        // bot-round-2 pass-3 F2, Moderate). A no-op for a failure that
+        // already settled (a real onError) or for a slot type with no
+        // fetch of its own (iframe/model-viewer).
+        mediaAbortControllerRef.current[slotIndex]?.abort();
+        mediaAbortControllerRef.current[slotIndex] = undefined;
       }
       if (renderStatusRef.current === RenderStatus.failed) {
         return;
@@ -1601,6 +1646,7 @@ const ArtworkPlayer = ({
 
       let isCancelled = false;
       const abortController = new AbortController();
+      mediaAbortControllerRef.current[slotIndex] = abortController;
       const mediaCleanupFns: (() => void)[] = [];
 
       // Stuck-load watchdog — see ARTWORK_LOAD_WATCHDOG_MS. Armed here, once
@@ -1805,6 +1851,9 @@ const ArtworkPlayer = ({
       return () => {
         isCancelled = true;
         abortController.abort();
+        if (mediaAbortControllerRef.current[slotIndex] === abortController) {
+          mediaAbortControllerRef.current[slotIndex] = undefined;
+        }
         mediaCleanupFns.forEach(c => {
           c();
         });
