@@ -60,7 +60,10 @@ vi.mock('@/utils/mediaLoader', async importOriginal => {
 const ITEM_IDENTITY = 'tezos:mainnet:fa2:KT1stuck:1';
 const PREVIEW_URL = 'https://feralfile.com/test/stuck-work.jpg';
 
-function playerNode(onArtworkExhausted: (itemIdentity: string) => void) {
+function playerNode(
+  onArtworkExhausted: (itemIdentity: string) => void,
+  onItemPlayed?: (itemIdentity: string) => void
+) {
   const value = {
     context: {
       isInitialized: true,
@@ -79,6 +82,7 @@ function playerNode(onArtworkExhausted: (itemIdentity: string) => void) {
         displayPreferences={defaultDP1DisplayPreference}
         itemIdentity={ITEM_IDENTITY}
         onArtworkExhausted={onArtworkExhausted}
+        onItemPlayed={onItemPlayed}
       />
     </AppContext.Provider>
   );
@@ -235,7 +239,8 @@ describe('ArtworkPlayer — a late real success cancels a watchdog-scheduled ret
     vi.useFakeTimers();
     loaderState.mode = 'lateSuccess';
     const onArtworkExhausted = vi.fn();
-    render(playerNode(onArtworkExhausted));
+    const onItemPlayed = vi.fn();
+    render(playerNode(onArtworkExhausted, onItemPlayed));
     await advanceTimersBy(0);
     expect(loaderState.loadCalls).toBe(1);
 
@@ -262,11 +267,28 @@ describe('ArtworkPlayer — a late real success cancels a watchdog-scheduled ret
       )
     ).toBeNull();
 
+    // feralfile-bot review of PR #310, round 3: the original failure commit
+    // never calls onItemPlayed (gated on renderStatus !== failed), and this
+    // recovery bypasses the only other call site (the
+    // pendingReadySlotRef-driven transition-commit effect) — so without a
+    // call here, PlaylistClient's recently-played history would never learn
+    // this work actually played.
+    expect(onItemPlayed).toHaveBeenCalledTimes(1);
+    expect(onItemPlayed).toHaveBeenCalledWith(ITEM_IDENTITY);
+
     // The scheduled retry must have been cancelled by the late success —
     // no second, gratuitous reload of content that already loaded fine.
     await advanceTimersBy(3000);
     expect(loaderState.loadCalls).toBe(1);
     expect(onArtworkExhausted).not.toHaveBeenCalled();
+
+    // A stray second success signal for the same, already-recovered mount
+    // (e.g. a late loadeddata) must not double-record it.
+    await act(async () => {
+      loaderState.lastOnLoad?.();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(onItemPlayed).toHaveBeenCalledTimes(1);
   });
 });
 

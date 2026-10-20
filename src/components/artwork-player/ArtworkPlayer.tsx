@@ -907,6 +907,21 @@ const ArtworkPlayer = ({
         if (wasFailed) {
           markArtworkReady(slotIndex);
           incomingSlotRef.current = null;
+          // The original failure commit already called onItemCommitted
+          // (unlike onItemPlayed, it fires even for a failed transition —
+          // see its own doc comment), but never onItemPlayed: that call is
+          // gated on renderStatusRef !== failed, which was false at the
+          // time. This recovery bypasses the pendingReadySlotRef effect
+          // entirely (see above), so nothing else will ever call it for
+          // this showing — PlaylistClient's recently-played history would
+          // otherwise never record a work that, in the end, did play
+          // (feralfile-bot review of PR #310, round 3). Via the ref, not
+          // the captured prop, matching the sequential-transition call
+          // site's own reasoning: this fires from inside a callback, not
+          // the render that captured the prop.
+          onItemPlayedRef.current?.(
+            expectedLayer?.itemIdentity ?? itemIdentityRef.current
+          );
         }
       }
       return true;
