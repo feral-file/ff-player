@@ -15,7 +15,7 @@ import { CastCommand } from '@/models';
 import type { CastInfo } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import { canvasService } from '@/services/CanvasService';
-import { act, render } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prepareContentPolicy } from '@/services/contentPolicy.testkit';
