@@ -12,10 +12,17 @@ import { AppContext } from '@/context/AppContext';
 import { RenderStatus } from '@/models';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
+
+vi.mock('@google/model-viewer', () => {
+  if (!customElements.get('model-viewer')) {
+    customElements.define('model-viewer', class extends HTMLElement {});
+  }
+  return {};
+});
 
 const loaderState = vi.hoisted(() => ({
   loadCalls: 0,
@@ -142,10 +149,64 @@ function pdfPlayerNode(onArtworkExhausted: (itemIdentity: string) => void) {
   );
 }
 
+const MODEL_PREVIEW_URL = 'https://feralfile.com/test/stuck-model.glb';
+
+function modelPlayerNode(onArtworkExhausted: (itemIdentity: string) => void) {
+  const value = {
+    context: {
+      isInitialized: true,
+      isOnline: true,
+      appRemoteConfig: {},
+      displaySettings: null,
+      cursorPositions: null,
+      castInfo: null,
+    },
+  };
+  return (
+    <AppContext.Provider value={value as never}>
+      <ArtworkPlayer
+        previewURL={MODEL_PREVIEW_URL}
+        artworkPreviewMIMEType="model/gltf-binary"
+        displayPreferences={defaultDP1DisplayPreference}
+        itemIdentity={ITEM_IDENTITY}
+        onArtworkExhausted={onArtworkExhausted}
+      />
+    </AppContext.Provider>
+  );
+}
+
 async function advanceTimersBy(ms: number) {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms);
   });
+}
+
+// Captures the 'webglcontextlost' listener the component registers on its
+// (detached, lazily-created) canvas — the canvas is never attached to the
+// document, so it cannot be found via querySelector; this mirrors the
+// pattern already proven in ArtworkPlayer.renderStatus.test.tsx's "WebGL
+// recovery" describe block.
+function captureWebglContextLostListener(): {
+  get: () => ((event: Event) => void) | undefined;
+} {
+  let lostListener: ((event: Event) => void) | undefined;
+  const originalAddEventListener =
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- prototype method saved before spy
+    HTMLCanvasElement.prototype.addEventListener;
+  vi.spyOn(HTMLCanvasElement.prototype, 'addEventListener').mockImplementation(
+    function (
+      this: HTMLCanvasElement,
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions
+    ) {
+      if (type === 'webglcontextlost' && typeof listener === 'function') {
+        lostListener = listener;
+      }
+      originalAddEventListener.call(this, type, listener, options);
+    }
+  );
+  return { get: () => lostListener };
 }
 
 afterEach(() => {
@@ -358,28 +419,7 @@ describe('ArtworkPlayer — a scheduled retry bails while WebGL context is lost'
    * `reloadIframe` to revive the slot once GL returns.
    */
   it('skips the scheduled reload when WebGL context is lost at retry time', async () => {
-    // Capture the 'webglcontextlost' listener the component registers on its
-    // (detached, lazily-created) canvas — mirrors the pattern already proven
-    // in ArtworkPlayer.renderStatus.test.tsx's "WebGL recovery" describe
-    // block, since the canvas is never attached to the document and so
-    // cannot be found via querySelector.
-    let lostListener: ((event: Event) => void) | undefined;
-    const originalAddEventListener =
-      // eslint-disable-next-line @typescript-eslint/unbound-method -- prototype method saved before spy
-      HTMLCanvasElement.prototype.addEventListener;
-    vi.spyOn(HTMLCanvasElement.prototype, 'addEventListener').mockImplementation(
-      function (
-        this: HTMLCanvasElement,
-        type: string,
-        listener: EventListenerOrEventListenerObject,
-        options?: boolean | AddEventListenerOptions
-      ) {
-        if (type === 'webglcontextlost' && typeof listener === 'function') {
-          lostListener = listener;
-        }
-        originalAddEventListener.call(this, type, listener, options);
-      }
-    );
+    const webglLost = captureWebglContextLostListener();
 
     vi.useFakeTimers();
     const onArtworkExhausted = vi.fn();
@@ -388,11 +428,11 @@ describe('ArtworkPlayer — a scheduled retry bails while WebGL context is lost'
     // Initial attempt fails, scheduling a retry 3s out.
     await advanceTimersBy(0);
     expect(loaderState.loadCalls).toBe(1);
-    expect(lostListener).toBeTypeOf('function');
+    expect(webglLost.get()).toBeTypeOf('function');
 
     // An unrelated WebGL context loss happens before the retry fires.
     await act(async () => {
-      lostListener?.(new Event('webglcontextlost', { cancelable: true }));
+      webglLost.get()?.(new Event('webglcontextlost', { cancelable: true }));
       await Promise.resolve();
     });
 
@@ -415,23 +455,7 @@ describe('ArtworkPlayer — a scheduled retry bails while WebGL context is lost'
    * still fires normally, instead of silently bailing on a stale flag.
    */
   it('restores the watchdog/retry budget for a later item once WebGL recovery gives up', async () => {
-    let lostListener: ((event: Event) => void) | undefined;
-    const originalAddEventListener =
-      // eslint-disable-next-line @typescript-eslint/unbound-method -- prototype method saved before spy
-      HTMLCanvasElement.prototype.addEventListener;
-    vi.spyOn(HTMLCanvasElement.prototype, 'addEventListener').mockImplementation(
-      function (
-        this: HTMLCanvasElement,
-        type: string,
-        listener: EventListenerOrEventListenerObject,
-        options?: boolean | AddEventListenerOptions
-      ) {
-        if (type === 'webglcontextlost' && typeof listener === 'function') {
-          lostListener = listener;
-        }
-        originalAddEventListener.call(this, type, listener, options);
-      }
-    );
+    const webglLost = captureWebglContextLostListener();
 
     vi.useFakeTimers();
     loaderState.mode = 'hang';
@@ -441,7 +465,7 @@ describe('ArtworkPlayer — a scheduled retry bails while WebGL context is lost'
     expect(loaderState.loadCalls).toBe(1);
 
     await act(async () => {
-      lostListener?.(new Event('webglcontextlost', { cancelable: true }));
+      webglLost.get()?.(new Event('webglcontextlost', { cancelable: true }));
       await Promise.resolve();
     });
 
@@ -472,5 +496,119 @@ describe('ArtworkPlayer — a scheduled retry bails while WebGL context is lost'
     // Its own watchdog must fire normally, not bail on the stale flag.
     await advanceTimersBy(15000);
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+  });
+
+  /**
+   * Regression for run-reviewer bot-round-3 pass-2 F1: resetting
+   * isWebGLContextLost on give-up only helps LATER items — the specific
+   * item whose own scheduled retry bailed on that exact flag was otherwise
+   * left stranded in RenderStatus.failed forever, since nothing else
+   * re-drives it (reloadIframe only runs on the success branch). Give-up
+   * must resume THAT item's own bounded budget too.
+   */
+  it('resumes the specific item whose retry bailed, once WebGL recovery gives up', async () => {
+    const webglLost = captureWebglContextLostListener();
+
+    vi.useFakeTimers();
+    loaderState.mode = 'fail';
+    const onArtworkExhausted = vi.fn();
+    render(playerNode(onArtworkExhausted));
+
+    // Real failure: schedules its own retry 3s out.
+    await advanceTimersBy(0);
+    expect(loaderState.loadCalls).toBe(1);
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+
+    // WebGL is lost before that retry fires.
+    await act(async () => {
+      webglLost.get()?.(new Event('webglcontextlost', { cancelable: true }));
+      await Promise.resolve();
+    });
+
+    // The scheduled retry bails on the lost context — no reload yet.
+    await advanceTimersBy(3000);
+    expect(loaderState.loadCalls).toBe(1);
+
+    // Recovery never succeeds in jsdom; advance past MAX_RECOVERY_TIME so it
+    // gives up (605000 total; 3000 of it already elapsed above).
+    await advanceTimersBy(602000);
+    expect(
+      screen.getByText('Couldn’t restore this artwork. Try another work.')
+    ).toBeTruthy();
+
+    // Give-up must have resumed this exact item's own budget — a fresh
+    // retry, paced the normal 3s, not a silent, permanent stall.
+    expect(onArtworkExhausted).not.toHaveBeenCalled();
+    await advanceTimersBy(3000);
+    expect(loaderState.loadCalls).toBe(2);
+  });
+});
+
+describe('ArtworkPlayer — model-viewer failures feed the same retry-then-skip budget', () => {
+  /**
+   * Regression for run-reviewer bot-round-3 pass-2 F2: handleModelLoadError
+   * has carried its own scheduleArtworkFailureRetryOrSkip() call since this
+   * branch's very first round, but nothing exercised a model-viewer failure
+   * through to the retry/skip budget — unlike every other content type,
+   * which ArtworkPlayer.model.test.tsx's own error-handling tests never
+   * drive past the FIRST failure either (no fake timers there). Proves the
+   * same 3-attempt, 3s-apart, then-onArtworkExhausted shape already proven
+   * for image/iframe/PDF/HLS applies here too.
+   */
+  it('retries a model-viewer load error in place, then hands off to onArtworkExhausted', async () => {
+    const onArtworkExhausted = vi.fn();
+    const { container } = render(modelPlayerNode(onArtworkExhausted));
+
+    const firstModelViewerEl = await waitFor(() => {
+      const node = container.querySelector('model-viewer');
+      if (!node) {
+        throw new Error('model-viewer element was not rendered');
+      }
+      return node;
+    });
+
+    vi.useFakeTimers();
+
+    // First failure.
+    act(() => {
+      firstModelViewerEl.dispatchEvent(new Event('error'));
+    });
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+    expect(onArtworkExhausted).not.toHaveBeenCalled();
+
+    // Retry 1 (3s later): performArtworkReload remounts into the OTHER
+    // slot — a fresh <model-viewer> element, per this branch's own reload
+    // contract. advanceTimersBy already flushes React's state updates
+    // inside act(), so the fresh element is queried synchronously right
+    // after — waitFor's own polling uses real setTimeout and would hang
+    // forever once fake timers are active, since nothing ever advances it.
+    await advanceTimersBy(3000);
+    const secondNodes = container.querySelectorAll('model-viewer');
+    const secondModelViewerEl = Array.from(secondNodes).find(
+      n => n !== firstModelViewerEl
+    );
+    if (!secondModelViewerEl) {
+      throw new Error('retried model-viewer element was not rendered');
+    }
+    act(() => {
+      secondModelViewerEl.dispatchEvent(new Event('error'));
+    });
+    expect(onArtworkExhausted).not.toHaveBeenCalled();
+
+    // Retry 2 is the 3rd attempt overall — the limit. Must hand off instead
+    // of retrying again.
+    await advanceTimersBy(3000);
+    const thirdNodes = container.querySelectorAll('model-viewer');
+    const thirdModelViewerEl = Array.from(thirdNodes).find(
+      n => n !== firstModelViewerEl && n !== secondModelViewerEl
+    );
+    if (!thirdModelViewerEl) {
+      throw new Error('second retried model-viewer element was not rendered');
+    }
+    act(() => {
+      thirdModelViewerEl.dispatchEvent(new Event('error'));
+    });
+    expect(onArtworkExhausted).toHaveBeenCalledTimes(1);
+    expect(onArtworkExhausted).toHaveBeenCalledWith(ITEM_IDENTITY);
   });
 });

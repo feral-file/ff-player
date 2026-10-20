@@ -295,6 +295,20 @@ const ArtworkPlayer = ({
   // Bounded retry-then-skip counter/timer — see ARTWORK_FAILURE_RETRY_LIMIT.
   const artworkFailureCountRef = useRef(0);
   const artworkFailureRetryTimeoutRef = useRef<NodeJS.Timeout>();
+  // Identity/URL of the item whose scheduled retry most recently bailed
+  // because isWebGLContextLost was true at fire time. Read by
+  // startWebGLRecovery's give-up branch so it can resume THIS item's own
+  // bounded budget — scoped by identity/URL, not a bare "is something
+  // currently failed" check, so a coincidental, unrelated item that happens
+  // to be mid-retry when the 10-minute give-up fires is not charged an
+  // extra attempt it did nothing to earn (run-reviewer bot-round-3 pass-2
+  // F1, Major). Cleared on a genuine success or on exhaustion — either way
+  // this item's own budget has already been settled through the normal
+  // path by then.
+  const artworkFailureStuckByWebGLRef = useRef<{
+    identity: string;
+    url: string;
+  } | null>(null);
   // Per-slot: did this slot's most recent `loadedSource` commit describe a
   // FAILURE (isSuccess=false) rather than a genuine success? markArtworkReady
   // reads this to tell apart "this exact commit was a failure, transition
@@ -609,6 +623,10 @@ const ArtworkPlayer = ({
         // pending retry and resets the counter once that reload lands — so
         // bailing here is self-healing, not a dropped attempt.
         if (isWebGLContextLost.current) {
+          artworkFailureStuckByWebGLRef.current = {
+            identity: retryIdentity,
+            url: retryURL,
+          };
           return;
         }
         performArtworkReload();
@@ -628,6 +646,7 @@ const ArtworkPlayer = ({
       // reported). Resetting here starts a fresh, paced 3-attempt cycle for
       // whatever comes next, same item or not.
       artworkFailureCountRef.current = 0;
+      artworkFailureStuckByWebGLRef.current = null;
       onArtworkExhausted?.(itemIdentityRef.current);
     }
   }, [onArtworkExhausted, performArtworkReload]);
@@ -892,6 +911,7 @@ const ArtworkPlayer = ({
           artworkFailureRetryTimeoutRef.current = undefined;
         }
         artworkFailureCountRef.current = 0;
+        artworkFailureStuckByWebGLRef.current = null;
         // Cancelling the retry is not enough on its own: the slot was
         // already committed `failed` by the watchdog (`updateSlot(slotIndex,
         // { loading: false })`), so markSlotReady's own `!layer.loading`
@@ -2119,6 +2139,26 @@ const ArtworkPlayer = ({
         setMessageModalTitle(
           'Couldn’t restore this artwork. Try another work.'
         );
+        // Resetting the flag alone only helps LATER items — the specific
+        // item whose own scheduled retry bailed on this exact flag (see
+        // scheduleArtworkFailureRetryOrSkip's bail above) is otherwise left
+        // stranded in RenderStatus.failed forever: nothing else re-drives
+        // it, since reloadIframe (below) only runs on the success branch
+        // (run-reviewer bot-round-3 pass-2 F1, Major). Resume THAT item's
+        // own bounded budget here — scoped by identity/URL, not a bare
+        // "is something currently failed" check, so an unrelated item that
+        // happens to be mid-retry for its own reason when this 10-minute
+        // give-up fires isn't charged an extra attempt it did nothing to
+        // earn.
+        const stuckItem = artworkFailureStuckByWebGLRef.current;
+        if (
+          stuckItem?.identity === itemIdentityRef.current &&
+          stuckItem.url === previewURLRef.current &&
+          renderStatusRef.current === RenderStatus.failed
+        ) {
+          artworkFailureStuckByWebGLRef.current = null;
+          scheduleArtworkFailureRetryOrSkip();
+        }
         return;
       }
 
