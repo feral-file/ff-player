@@ -558,6 +558,59 @@ describe('ArtworkPlayer — a scheduled retry bails while WebGL context is lost'
   });
 });
 
+describe('ArtworkPlayer — WebGL recovery success resumes a retry that bailed on the lost context', () => {
+  /**
+   * Regression for fix-review of PR #310 round 4, pass 1 F1 (Major): only
+   * the give-up branch of startWebGLRecovery resumed the item whose
+   * scheduled retry bailed on isWebGLContextLost. When GL came back (the
+   * common case), the success branch only called reloadIframe on the active
+   * slot — which does not reload an image/video/audio slot at all — so that
+   * item was left neither retried nor skipped.
+   */
+  it('re-arms the stuck item\'s retry once WebGL becomes available again', async () => {
+    const webglLost = captureWebglContextLostListener();
+
+    vi.useFakeTimers();
+    loaderState.mode = 'fail';
+    const onArtworkExhausted = vi.fn();
+    render(playerNode(onArtworkExhausted));
+
+    await advanceTimersBy(0);
+    expect(loaderState.loadCalls).toBe(1);
+
+    await act(async () => {
+      webglLost.get()?.(new Event('webglcontextlost', { cancelable: true }));
+      await Promise.resolve();
+    });
+
+    // The scheduled retry bails on the lost context.
+    await advanceTimersBy(3000);
+    expect(loaderState.loadCalls).toBe(1);
+
+    // GL comes back before the recovery poll's next 5s tick.
+    vi.stubGlobal('WebGLRenderingContext', function WebGLRenderingContext() {
+      return undefined;
+    });
+    vi.stubGlobal('WebGL2RenderingContext', function WebGL2RenderingContext() {
+      return undefined;
+    });
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+      {} as RenderingContext
+    );
+    await advanceTimersBy(2000);
+
+    // The resumed retry runs a real reload, paced the normal 3s, and is
+    // not itself charged against the 3-attempt budget.
+    await advanceTimersBy(3000);
+    expect(loaderState.loadCalls).toBe(2);
+    expect(onArtworkExhausted).not.toHaveBeenCalled();
+    await advanceTimersBy(3000);
+    expect(loaderState.loadCalls).toBe(3);
+    expect(onArtworkExhausted).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+});
+
 describe('ArtworkPlayer — model-viewer failures feed the same retry-then-skip budget', () => {
   /**
    * Regression for run-reviewer bot-round-3 pass-2 F2: handleModelLoadError

@@ -99,6 +99,96 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/**
+ * Mounts item A, advances to item B, and stalls B past the embedded-heavy
+ * watchdog so its failure commit has scheduled the sequential transition's
+ * deferred commit. Returns item B's iframe with onItemPlayed cleared.
+ */
+async function mountWatchdogFailedIncomingSlot(
+  onItemPlayed: ReturnType<typeof vi.fn>
+): Promise<HTMLIFrameElement> {
+  ensureWebGLConstructors();
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+    {} as RenderingContext
+  );
+  const { container, rerender } = render(
+    iframePlayerNode({
+      previewURL: ITEM_A_URL,
+      itemIdentity: ITEM_A_IDENTITY,
+      onItemPlayed,
+    })
+  );
+  const iframeA = await findIframeForURL(container, ITEM_A_URL);
+  await act(async () => {
+    iframeA.dispatchEvent(new Event('load'));
+    await Promise.resolve();
+  });
+  onItemPlayed.mockClear();
+  vi.useFakeTimers();
+  act(() => {
+    rerender(
+      iframePlayerNode({
+        previewURL: ITEM_B_URL,
+        itemIdentity: ITEM_B_IDENTITY,
+        onItemPlayed,
+      })
+    );
+  });
+  await advanceTimersBy(0);
+  const iframeB = Array.from(container.querySelectorAll('iframe')).find(
+    f => f.getAttribute('src') === ITEM_B_URL
+  );
+  if (!iframeB) {
+    throw new Error('iframe for item B was not rendered');
+  }
+  await advanceTimersBy(45000);
+  expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+  expect(onItemPlayed).not.toHaveBeenCalled();
+  return iframeB;
+}
+
+describe('ArtworkPlayer — repeated load events while recovering mid-sequential-transition', () => {
+  // feralfile-bot review of PR #310, round 4: the iframe navigates again
+  // (a second `load`) inside the fade window, re-entering loadedSource
+  // after the recovery. The suppression must survive until the deferred
+  // commit, not be reset by that second call.
+  it('fires onItemPlayed once when the iframe loads again before the deferred commit', async () => {
+    const onItemPlayed = vi.fn();
+    const iframeB = await mountWatchdogFailedIncomingSlot(onItemPlayed);
+
+    act(() => {
+      iframeB.dispatchEvent(new Event('load'));
+    });
+    act(() => {
+      iframeB.dispatchEvent(new Event('load'));
+    });
+    await advanceTimersBy(650);
+    expect(onItemPlayed).toHaveBeenCalledTimes(1);
+    expect(onItemPlayed).toHaveBeenCalledWith(ITEM_B_IDENTITY);
+  });
+
+  // Sibling shape of the same mechanism: the recovered iframe fails and
+  // recovers again inside the window, so loadedSource's recovery branch
+  // (wasFailed) runs a second time for the same showing.
+  it('fires onItemPlayed once when the iframe fails and recovers again before the deferred commit', async () => {
+    const onItemPlayed = vi.fn();
+    const iframeB = await mountWatchdogFailedIncomingSlot(onItemPlayed);
+
+    act(() => {
+      iframeB.dispatchEvent(new Event('load'));
+    });
+    act(() => {
+      iframeB.dispatchEvent(new Event('error'));
+    });
+    act(() => {
+      iframeB.dispatchEvent(new Event('load'));
+    });
+    await advanceTimersBy(650);
+    expect(onItemPlayed).toHaveBeenCalledTimes(1);
+    expect(onItemPlayed).toHaveBeenCalledWith(ITEM_B_IDENTITY);
+  });
+});
+
 describe('ArtworkPlayer — a late success recovering an incoming slot mid-sequential-transition', () => {
   it('fires onItemPlayed exactly once, not once from the recovery and once from the deferred transition commit', async () => {
     ensureWebGLConstructors();

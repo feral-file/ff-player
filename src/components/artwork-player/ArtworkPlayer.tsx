@@ -317,20 +317,24 @@ const ArtworkPlayer = ({
   // watchdog), but this slot's current commit is a real success that must be
   // let through" — see markArtworkReady's own comment.
   const committedAsFailureRef = useRef<[boolean, boolean]>([false, false]);
-  // Per-slot: did loadedSource's own late-success recovery (below) already
-  // call onItemPlayedRef for this slot's current commit? Only the deferred
-  // "sequential" (isEmbeddedHeavy) transition-commit branch defers its own
-  // onItemCommitted/onItemPlayed calls into a setTimeout rather than firing
-  // them synchronously at failure time the way the first-load and crossfade
-  // branches do (see each branch's own comment) — so a late success that
-  // recovers a slot mid-sequential-transition can have its own immediate
-  // onItemPlayedRef call followed, ~FADE_IN_OUT_DURATION_MS later, by that
-  // same deferred timeout's unconditional one for the same showing
-  // (run-reviewer bot-round-3 pass-3 F1, Moderate). Reset at the top of every
-  // loadedSource call so a later, unrelated commit on this slot never reads a
-  // stale `true` left behind by a timeout whose own staleness/token guard
-  // bailed before consuming it.
-  const lateRecoverySuppressOnItemPlayedRef = useRef<[boolean, boolean]>([
+  // Per-slot: has onItemPlayed already fired for the showing currently
+  // mounted in this slot? One showing records one recently-played entry, but
+  // it has up to two callers that can both reach it: the transition commit
+  // (first-load, crossfade, or the deferred "sequential" timeout) and
+  // loadedSource's late-success recovery of a watchdog-failed slot. The
+  // sequential (isEmbeddedHeavy) branch defers its call into a setTimeout,
+  // so a recovery inside that FADE_IN_OUT_DURATION_MS window would otherwise
+  // be followed by a second call for the same showing (run-reviewer
+  // bot-round-3 pass-3 F1); and an iframe that fires `load` again (it
+  // navigates) or fails and recovers again during that window re-enters
+  // loadedSource, so a flag reset per loadedSource call dropped the
+  // suppression before the deferred commit read it (feralfile-bot review of
+  // PR #310, round 4). Every call site checks and sets this latch; it is
+  // reset only where a new showing is mounted into the slot (the mount
+  // effect, next to mountFailedRef), so no number of repeated load/failure
+  // events within one showing can re-arm it, and a stale `true` can never
+  // reach a later showing.
+  const itemPlayedFiredRef = useRef<[boolean, boolean]>([
     false,
     false,
   ]);
@@ -930,11 +934,6 @@ const ArtworkPlayer = ({
       }
 
       incomingSlotRef.current = slotIndex;
-      // Reset for every commit on this slot, success or failure, before this
-      // call might set it below — see lateRecoverySuppressOnItemPlayedRef's
-      // own comment for why a stale `true` must never survive past the one
-      // commit it was set for.
-      lateRecoverySuppressOnItemPlayedRef.current[slotIndex] = false;
       // Record BEFORE markSlotReady so committedAsFailureRef is already
       // correct for any markArtworkReady call this commit triggers, below
       // or via the pendingReadySlotRef effect.
@@ -986,22 +985,21 @@ const ArtworkPlayer = ({
           // the captured prop, matching the sequential-transition call
           // site's own reasoning: this fires from inside a callback, not
           // the render that captured the prop.
-          onItemPlayedRef.current?.(
-            expectedLayer?.itemIdentity ?? itemIdentityRef.current
-          );
+          //
           // The ONE exception to "nothing else will ever call it": the
           // SEQUENTIAL (isEmbeddedHeavy) transition type defers its own
-          // onItemCommitted/onItemPlayed pair entirely into a setTimeout
-          // already scheduled by the failure commit above (see that
-          // branch's own comment) — unlike crossfade/first-load, which
-          // fire synchronously at failure time and so can never still be
-          // pending here. That timeout isn't cancelled by this recovery
-          // (it still needs to run — it owns the slot swap/activeSlot
-          // bookkeeping) and would otherwise call onItemPlayedRef a SECOND
-          // time once it sees renderStatusRef read `ready` again
-          // (run-reviewer bot-round-3 pass-3 F1, Moderate). Tell it to skip
-          // just that one call.
-          lateRecoverySuppressOnItemPlayedRef.current[slotIndex] = true;
+          // onItemCommitted/onItemPlayed pair into a setTimeout already
+          // scheduled by the failure commit above, which this recovery does
+          // not cancel (it owns the slot swap/activeSlot bookkeeping). The
+          // shared per-showing latch makes whichever of the two runs second
+          // — and any repeat recovery within this showing — a no-op; see
+          // itemPlayedFiredRef.
+          if (!itemPlayedFiredRef.current[slotIndex]) {
+            itemPlayedFiredRef.current[slotIndex] = true;
+            onItemPlayedRef.current?.(
+              expectedLayer?.itemIdentity ?? itemIdentityRef.current
+            );
+          }
         }
       }
       return true;
@@ -1250,7 +1248,11 @@ const ArtworkPlayer = ({
       setTopSlotIndex(null);
       markArtworkReady(readySlot);
       onItemCommitted?.(incomingLayer.itemIdentity);
-      if (renderStatusRef.current !== RenderStatus.failed) {
+      if (
+        renderStatusRef.current !== RenderStatus.failed &&
+        !itemPlayedFiredRef.current[readySlot]
+      ) {
+        itemPlayedFiredRef.current[readySlot] = true;
         onItemPlayed?.(incomingLayer.itemIdentity);
       }
       return;
@@ -1326,14 +1328,15 @@ const ArtworkPlayer = ({
         setTopSlotIndex(null);
         markArtworkReady(incoming);
         onItemCommitted?.(incomingLayer.itemIdentity);
-        if (lateRecoverySuppressOnItemPlayedRef.current[incoming]) {
-          // loadedSource's own late-success recovery already fired
-          // onItemPlayedRef for this exact commit, before this deferred
-          // timeout ran — see that call site's own comment. Still let
-          // onItemCommitted above fire (this is its only call site for the
-          // sequential transition type), just skip the second onItemPlayed.
-          lateRecoverySuppressOnItemPlayedRef.current[incoming] = false;
-        } else if (renderStatusRef.current !== RenderStatus.failed) {
+        // onItemCommitted above still fires (its only call site for the
+        // sequential transition type); onItemPlayed is skipped when
+        // loadedSource's late-success recovery already fired it for this
+        // showing during the fade — see itemPlayedFiredRef.
+        if (
+          renderStatusRef.current !== RenderStatus.failed &&
+          !itemPlayedFiredRef.current[incoming]
+        ) {
+          itemPlayedFiredRef.current[incoming] = true;
           // Deliberately the ref, not the captured prop: see onItemPlayedRef.
           onItemPlayedRef.current?.(incomingLayer.itemIdentity);
         }
@@ -1351,7 +1354,11 @@ const ArtworkPlayer = ({
     // the viewer-truth commit even though slot bookkeeping settles at fade
     // end in the timeout below.
     onItemCommitted?.(incomingLayer.itemIdentity);
-    if (renderStatusRef.current !== RenderStatus.failed) {
+    if (
+      renderStatusRef.current !== RenderStatus.failed &&
+      !itemPlayedFiredRef.current[incoming]
+    ) {
+      itemPlayedFiredRef.current[incoming] = true;
       onItemPlayed?.(incomingLayer.itemIdentity);
     }
     transitionTimeoutRef.current = setTimeout(() => {
@@ -1541,6 +1548,9 @@ const ArtworkPlayer = ({
     // Fresh mount: give it a clean one-shot latch (see the Layer-1 damping
     // comment above).
     mountFailedRef.current[targetSlot] = false;
+    // New showing in this slot: it has not recorded a play yet (see
+    // itemPlayedFiredRef — this is its only reset).
+    itemPlayedFiredRef.current[targetSlot] = false;
 
     setSlots(prev => {
       if (!hasAny) {
@@ -2196,6 +2206,36 @@ const ArtworkPlayer = ({
     console.log('[ArtworkPlayer] WebGL context restored!');
   };
 
+  // Resumes the specific item whose own scheduled retry bailed on
+  // isWebGLContextLost (see armScheduledRetry's bail) once recovery ends,
+  // on EITHER branch of startWebGLRecovery — give-up (run-reviewer
+  // bot-round-3 pass-2 F1, Major) and success (fix-review of PR #310 round
+  // 4, pass 1 F1, Major). Nothing else re-drives that item: the success
+  // branch's own reloadIframe only bumps the active slot's iframeKey, which
+  // is not in setupMediaForSlot's deps, so an image/video/audio slot is
+  // never actually reloaded by it. Must run while renderStatus still reads
+  // the bail's `failed`, i.e. before the success branch's markArtworkPending.
+  // Scoped by identity/URL, not a bare "is something currently failed"
+  // check, so an unrelated item that happens to be mid-retry for its own
+  // reason isn't charged an extra attempt it did nothing to earn. Calls
+  // armScheduledRetry directly, NOT scheduleArtworkFailureRetryOrSkip: the
+  // bail this resumes never incremented artworkFailureCountRef (bailing is
+  // not itself an attempt), so re-arming through the increment-then-arm
+  // function would charge the budget a second time for a single real
+  // attempt that still hasn't happened yet (run-reviewer bot-round-3 pass-4
+  // F1, Moderate).
+  const resumeRetryStuckByWebGL = () => {
+    const stuckItem = artworkFailureStuckByWebGLRef.current;
+    if (
+      stuckItem?.identity === itemIdentityRef.current &&
+      stuckItem.url === previewURLRef.current &&
+      renderStatusRef.current === RenderStatus.failed
+    ) {
+      artworkFailureStuckByWebGLRef.current = null;
+      armScheduledRetry();
+    }
+  };
+
   const startWebGLRecovery = () => {
     console.log('[ArtworkPlayer] startWebGLRecovery');
     if (webGLRecoveryIntervalRef.current) {
@@ -2226,32 +2266,10 @@ const ArtworkPlayer = ({
         setMessageModalTitle(
           'Couldn’t restore this artwork. Try another work.'
         );
-        // Resetting the flag alone only helps LATER items — the specific
-        // item whose own scheduled retry bailed on this exact flag (see
-        // armScheduledRetry's bail above) is otherwise left stranded in
-        // RenderStatus.failed forever: nothing else re-drives it, since
-        // reloadIframe (below) only runs on the success branch
-        // (run-reviewer bot-round-3 pass-2 F1, Major). Resume THAT item's
-        // own bounded budget here — scoped by identity/URL, not a bare
-        // "is something currently failed" check, so an unrelated item that
-        // happens to be mid-retry for its own reason when this 10-minute
-        // give-up fires isn't charged an extra attempt it did nothing to
-        // earn. Calls armScheduledRetry directly, NOT
-        // scheduleArtworkFailureRetryOrSkip: the bail this is resuming
-        // never incremented artworkFailureCountRef (bailing is not itself
-        // an attempt), so re-arming through the increment-then-arm
-        // function would charge the budget a second time for a single
-        // real attempt that still hasn't happened yet (run-reviewer
-        // bot-round-3 pass-4 F1, Moderate).
-        const stuckItem = artworkFailureStuckByWebGLRef.current;
-        if (
-          stuckItem?.identity === itemIdentityRef.current &&
-          stuckItem.url === previewURLRef.current &&
-          renderStatusRef.current === RenderStatus.failed
-        ) {
-          artworkFailureStuckByWebGLRef.current = null;
-          armScheduledRetry();
-        }
+        // Resetting the flag alone only helps LATER items — resume the
+        // item stranded by this exact flag too (see
+        // resumeRetryStuckByWebGL).
+        resumeRetryStuckByWebGL();
         return;
       }
 
@@ -2261,6 +2279,11 @@ const ArtworkPlayer = ({
         }
 
         isWebGLContextLost.current = false;
+        // Before the timeout below publishes pending — see
+        // resumeRetryStuckByWebGL. If the reloadIframe below does recover
+        // the slot first, loadedSource's success handling cancels this
+        // re-armed retry.
+        resumeRetryStuckByWebGL();
         setTimeout(() => {
           // handleWebGLLost publishes failed; markArtworkReady intentionally
           // ignores failed→ready (model-viewer commit). Clear failed before
