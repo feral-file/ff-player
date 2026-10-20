@@ -317,6 +317,23 @@ const ArtworkPlayer = ({
   // watchdog), but this slot's current commit is a real success that must be
   // let through" — see markArtworkReady's own comment.
   const committedAsFailureRef = useRef<[boolean, boolean]>([false, false]);
+  // Per-slot: did loadedSource's own late-success recovery (below) already
+  // call onItemPlayedRef for this slot's current commit? Only the deferred
+  // "sequential" (isEmbeddedHeavy) transition-commit branch defers its own
+  // onItemCommitted/onItemPlayed calls into a setTimeout rather than firing
+  // them synchronously at failure time the way the first-load and crossfade
+  // branches do (see each branch's own comment) — so a late success that
+  // recovers a slot mid-sequential-transition can have its own immediate
+  // onItemPlayedRef call followed, ~FADE_IN_OUT_DURATION_MS later, by that
+  // same deferred timeout's unconditional one for the same showing
+  // (run-reviewer bot-round-3 pass-3 F1, Moderate). Reset at the top of every
+  // loadedSource call so a later, unrelated commit on this slot never reads a
+  // stale `true` left behind by a timeout whose own staleness/token guard
+  // bailed before consuming it.
+  const lateRecoverySuppressOnItemPlayedRef = useRef<[boolean, boolean]>([
+    false,
+    false,
+  ]);
   // Per-load-attempt "stuck loading" watchdog — see ARTWORK_LOAD_WATCHDOG_MS
   // (armed in setupMediaForSlot, not at mount — see its own comment). Keyed
   // per slot, not a single shared timer: setupMediaForSlot's two per-slot
@@ -853,12 +870,25 @@ const ArtworkPlayer = ({
   const markSlotReady = useCallback(
     (slotIndex: SlotIndex) => {
       const currentURL = previewURLRef.current;
-      pendingReadySlotRef.current = slotIndex;
       setSlots(prev => {
         const layer = prev[slotIndex];
         if (layer?.previewURL !== currentURL || !layer.loading) {
           return prev;
         }
+        // Set only on the actual loading->not-loading transition below, not
+        // unconditionally on every call: a second call for the same slot
+        // (e.g. loadedSource's own late-success recovery, after the watchdog
+        // already committed this slot's failure) hits the no-op branch
+        // above and must leave this ref alone. Setting it unconditionally
+        // left a stale non-null value that a LATER, unrelated re-render
+        // (the deferred sequential-transition timeout's own setSlots call,
+        // nulling the outgoing slot) would pick back up — re-running the
+        // whole commit effect a second time for a slot already fully
+        // handled by the recovery above, and this time with the outgoing
+        // slot already null, so it took the first-load (!otherLayer) branch
+        // and fired onItemCommitted/onItemPlayed yet again (run-reviewer
+        // bot-round-3 pass-3 F1, Moderate).
+        pendingReadySlotRef.current = slotIndex;
         const next = [...prev] as [SlotLayer | null, SlotLayer | null];
         next[slotIndex] = { ...layer, loading: false };
         return next;
@@ -888,6 +918,11 @@ const ArtworkPlayer = ({
       }
 
       incomingSlotRef.current = slotIndex;
+      // Reset for every commit on this slot, success or failure, before this
+      // call might set it below — see lateRecoverySuppressOnItemPlayedRef's
+      // own comment for why a stale `true` must never survive past the one
+      // commit it was set for.
+      lateRecoverySuppressOnItemPlayedRef.current[slotIndex] = false;
       // Record BEFORE markSlotReady so committedAsFailureRef is already
       // correct for any markArtworkReady call this commit triggers, below
       // or via the pendingReadySlotRef effect.
@@ -931,10 +966,10 @@ const ArtworkPlayer = ({
           // (unlike onItemPlayed, it fires even for a failed transition —
           // see its own doc comment), but never onItemPlayed: that call is
           // gated on renderStatusRef !== failed, which was false at the
-          // time. This recovery bypasses the pendingReadySlotRef effect
-          // entirely (see above), so nothing else will ever call it for
-          // this showing — PlaylistClient's recently-played history would
-          // otherwise never record a work that, in the end, did play
+          // time. For the already-active slot (no incoming transition) and
+          // the crossfade transition type, nothing else will ever call it
+          // for this showing — PlaylistClient's recently-played history
+          // would otherwise never record a work that, in the end, did play
           // (feralfile-bot review of PR #310, round 3). Via the ref, not
           // the captured prop, matching the sequential-transition call
           // site's own reasoning: this fires from inside a callback, not
@@ -942,6 +977,19 @@ const ArtworkPlayer = ({
           onItemPlayedRef.current?.(
             expectedLayer?.itemIdentity ?? itemIdentityRef.current
           );
+          // The ONE exception to "nothing else will ever call it": the
+          // SEQUENTIAL (isEmbeddedHeavy) transition type defers its own
+          // onItemCommitted/onItemPlayed pair entirely into a setTimeout
+          // already scheduled by the failure commit above (see that
+          // branch's own comment) — unlike crossfade/first-load, which
+          // fire synchronously at failure time and so can never still be
+          // pending here. That timeout isn't cancelled by this recovery
+          // (it still needs to run — it owns the slot swap/activeSlot
+          // bookkeeping) and would otherwise call onItemPlayedRef a SECOND
+          // time once it sees renderStatusRef read `ready` again
+          // (run-reviewer bot-round-3 pass-3 F1, Moderate). Tell it to skip
+          // just that one call.
+          lateRecoverySuppressOnItemPlayedRef.current[slotIndex] = true;
         }
       }
       return true;
@@ -1266,7 +1314,14 @@ const ArtworkPlayer = ({
         setTopSlotIndex(null);
         markArtworkReady(incoming);
         onItemCommitted?.(incomingLayer.itemIdentity);
-        if (renderStatusRef.current !== RenderStatus.failed) {
+        if (lateRecoverySuppressOnItemPlayedRef.current[incoming]) {
+          // loadedSource's own late-success recovery already fired
+          // onItemPlayedRef for this exact commit, before this deferred
+          // timeout ran — see that call site's own comment. Still let
+          // onItemCommitted above fire (this is its only call site for the
+          // sequential transition type), just skip the second onItemPlayed.
+          lateRecoverySuppressOnItemPlayedRef.current[incoming] = false;
+        } else if (renderStatusRef.current !== RenderStatus.failed) {
           // Deliberately the ref, not the captured prop: see onItemPlayedRef.
           onItemPlayedRef.current?.(incomingLayer.itemIdentity);
         }
