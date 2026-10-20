@@ -110,6 +110,32 @@ function iframePlayerNode(onArtworkExhausted: (itemIdentity: string) => void) {
   );
 }
 
+const PDF_PREVIEW_URL = 'https://feralfile.com/test/stuck-document.pdf';
+
+function pdfPlayerNode(onArtworkExhausted: (itemIdentity: string) => void) {
+  const value = {
+    context: {
+      isInitialized: true,
+      isOnline: true,
+      appRemoteConfig: {},
+      displaySettings: null,
+      cursorPositions: null,
+      castInfo: null,
+    },
+  };
+  return (
+    <AppContext.Provider value={value as never}>
+      <ArtworkPlayer
+        previewURL={PDF_PREVIEW_URL}
+        artworkPreviewMIMEType="application/pdf"
+        displayPreferences={defaultDP1DisplayPreference}
+        itemIdentity={ITEM_IDENTITY}
+        onArtworkExhausted={onArtworkExhausted}
+      />
+    </AppContext.Provider>
+  );
+}
+
 async function advanceTimersBy(ms: number) {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms);
@@ -269,6 +295,29 @@ describe('ArtworkPlayer — embedded-heavy content gets a longer stuck-load watc
     expect(onArtworkExhausted).not.toHaveBeenCalled();
 
     // Past the new, longer bound — a genuinely stuck iframe is still caught.
+    await advanceTimersBy(25000);
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+  });
+
+  /**
+   * Regression for run-reviewer bot-round-2 pass-5 F1: PreviewHTMLTag.iframePDF
+   * gets the same longer watchdog window via a check at the watchdog's own
+   * call site, kept deliberately separate from isEmbeddedHeavy (folding it
+   * in there once already caused a silent transition-style regression —
+   * pass-4 F1). Nothing in the suite exercised this specific branch, so a
+   * regression that re-folds iframePDF into isEmbeddedHeavy, or drops the
+   * carve-out entirely, would ship green without this test.
+   */
+  it('does not fail a PDF artwork at the old 15s bound, but does at the new 45s one', async () => {
+    vi.useFakeTimers();
+    const onArtworkExhausted = vi.fn();
+    render(pdfPlayerNode(onArtworkExhausted));
+    await advanceTimersBy(0);
+
+    await advanceTimersBy(20000);
+    expect(canvasService.getStatus().renderStatus).not.toBe(RenderStatus.failed);
+    expect(onArtworkExhausted).not.toHaveBeenCalled();
+
     await advanceTimersBy(25000);
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
   });
