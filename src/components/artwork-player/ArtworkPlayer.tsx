@@ -126,7 +126,6 @@ function createSlotLayer(
 function isEmbeddedHeavy(t: PreviewHTMLTag | null): boolean {
   return (
     t === PreviewHTMLTag.iframe ||
-    t === PreviewHTMLTag.iframePDF ||
     t === PreviewHTMLTag.object ||
     t === PreviewHTMLTag.model
   );
@@ -1669,9 +1668,21 @@ const ArtworkPlayer = ({
       }
       const watchdogURL = layer.previewURL;
       const watchdogIdentity = layer.itemIdentity;
-      const watchdogDurationMs = isEmbeddedHeavy(layer.previewType)
-        ? ARTWORK_LOAD_WATCHDOG_EMBEDDED_MS
-        : ARTWORK_LOAD_WATCHDOG_MS;
+      // iframePDF deliberately checked here, not added to isEmbeddedHeavy
+      // itself: that helper is also read at the crossfade-vs-sequential-fade
+      // transition-style decision below, and folding iframePDF into it would
+      // silently flip every PDF transition to sequential fade-through-black
+      // too — an unrequested, untested, undocumented presentation change
+      // (run-reviewer bot-round-2 pass-4 F1, Major; found independently by
+      // both reviewers after an earlier version of this fix did exactly
+      // that). iframePDF renders through the identical <iframe> mechanism as
+      // `iframe` and needs the same longer watchdog window for the same
+      // reason, but only here.
+      const watchdogDurationMs =
+        isEmbeddedHeavy(layer.previewType) ||
+        layer.previewType === PreviewHTMLTag.iframePDF
+          ? ARTWORK_LOAD_WATCHDOG_EMBEDDED_MS
+          : ARTWORK_LOAD_WATCHDOG_MS;
       artworkLoadWatchdogRef.current[slotIndex] = setTimeout(() => {
         artworkLoadWatchdogRef.current[slotIndex] = undefined;
         if (
