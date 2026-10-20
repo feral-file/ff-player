@@ -541,6 +541,20 @@ describe('ArtworkPlayer — a scheduled retry bails while WebGL context is lost'
     expect(onArtworkExhausted).not.toHaveBeenCalled();
     await advanceTimersBy(3000);
     expect(loaderState.loadCalls).toBe(2);
+
+    // Regression for run-reviewer bot-round-3 pass-4 F1: the give-up
+    // resume above must not itself have consumed a unit of the 3-attempt
+    // budget — only a REAL load attempt should count against it. This was
+    // the FIRST real attempt (the original failure + its bailed retry
+    // never reached mediaLoader at all); mode stays 'fail', so it fails
+    // immediately and must still get a second paced retry rather than
+    // exhausting here.
+    expect(onArtworkExhausted).not.toHaveBeenCalled();
+    await advanceTimersBy(3000);
+    expect(loaderState.loadCalls).toBe(3);
+
+    // Third real attempt is the limit — only now does it exhaust.
+    expect(onArtworkExhausted).toHaveBeenCalledTimes(1);
   });
 });
 

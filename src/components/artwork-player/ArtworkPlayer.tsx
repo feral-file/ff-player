@@ -609,45 +609,57 @@ const ArtworkPlayer = ({
    * every item would fail identically). Call this explicitly from a failure
    * site that has no other recovery path of its own instead.
    */
+  // Arms the paced retry timer alone, with no effect on
+  // artworkFailureCountRef — the counter is the budget's ledger of real
+  // attempts, and arming a timer is not itself an attempt. Shared by
+  // scheduleArtworkFailureRetryOrSkip's own increment-then-arm path below
+  // and by startWebGLRecovery's give-up branch, which re-arms a retry that
+  // already bailed without ever reloading (run-reviewer bot-round-3 pass-4
+  // F1, Moderate) — calling the increment-then-arm function there instead
+  // would charge the budget for an attempt that never actually happened.
+  const armScheduledRetry = useCallback(() => {
+    const retryIdentity = itemIdentityRef.current;
+    const retryURL = previewURLRef.current;
+    artworkFailureRetryTimeoutRef.current = setTimeout(() => {
+      artworkFailureRetryTimeoutRef.current = undefined;
+      // Stale guard: the playlist may have already moved on to a
+      // different item during the backoff delay.
+      if (
+        itemIdentityRef.current !== retryIdentity ||
+        previewURLRef.current !== retryURL
+      ) {
+        return;
+      }
+      // Unlike the watchdog's own arm-time check, this timer has no
+      // WebGL-awareness of its own — a failure unrelated to WebGL can
+      // still have an already-scheduled retry land while a context loss
+      // is independently in progress, reloading into a GPU that is not
+      // back yet and wasting (or exhausting) this budget on an attempt
+      // doomed by a condition that has nothing to do with the original
+      // failure (run-reviewer bot-round-2 pass-2 F2, Major). Bail instead
+      // of reloading: `startWebGLRecovery`'s own `reloadIframe` is
+      // independently working to revive this slot once GL returns, and
+      // `loadedSource`'s `isSuccess` handling already cancels any stale
+      // pending retry and resets the counter once that reload lands — so
+      // bailing here is self-healing, not a dropped attempt.
+      if (isWebGLContextLost.current) {
+        artworkFailureStuckByWebGLRef.current = {
+          identity: retryIdentity,
+          url: retryURL,
+        };
+        return;
+      }
+      performArtworkReload();
+    }, ARTWORK_FAILURE_RETRY_DELAY_MS);
+  }, [performArtworkReload]);
+
   const scheduleArtworkFailureRetryOrSkip = useCallback(() => {
     artworkFailureCountRef.current += 1;
     if (artworkFailureRetryTimeoutRef.current) {
       clearTimeout(artworkFailureRetryTimeoutRef.current);
     }
     if (artworkFailureCountRef.current < ARTWORK_FAILURE_RETRY_LIMIT) {
-      const retryIdentity = itemIdentityRef.current;
-      const retryURL = previewURLRef.current;
-      artworkFailureRetryTimeoutRef.current = setTimeout(() => {
-        artworkFailureRetryTimeoutRef.current = undefined;
-        // Stale guard: the playlist may have already moved on to a
-        // different item during the backoff delay.
-        if (
-          itemIdentityRef.current !== retryIdentity ||
-          previewURLRef.current !== retryURL
-        ) {
-          return;
-        }
-        // Unlike the watchdog's own arm-time check, this timer has no
-        // WebGL-awareness of its own — a failure unrelated to WebGL can
-        // still have an already-scheduled retry land while a context loss
-        // is independently in progress, reloading into a GPU that is not
-        // back yet and wasting (or exhausting) this budget on an attempt
-        // doomed by a condition that has nothing to do with the original
-        // failure (run-reviewer bot-round-2 pass-2 F2, Major). Bail instead
-        // of reloading: `startWebGLRecovery`'s own `reloadIframe` is
-        // independently working to revive this slot once GL returns, and
-        // `loadedSource`'s `isSuccess` handling already cancels any stale
-        // pending retry and resets the counter once that reload lands — so
-        // bailing here is self-healing, not a dropped attempt.
-        if (isWebGLContextLost.current) {
-          artworkFailureStuckByWebGLRef.current = {
-            identity: retryIdentity,
-            url: retryURL,
-          };
-          return;
-        }
-        performArtworkReload();
-      }, ARTWORK_FAILURE_RETRY_DELAY_MS);
+      armScheduledRetry();
     } else {
       // Reset BEFORE calling out: onArtworkExhausted is not guaranteed to
       // change previewURL/itemIdentity — under LoopMode.one, or a
@@ -666,7 +678,7 @@ const ArtworkPlayer = ({
       artworkFailureStuckByWebGLRef.current = null;
       onArtworkExhausted?.(itemIdentityRef.current);
     }
-  }, [onArtworkExhausted, performArtworkReload]);
+  }, [armScheduledRetry, onArtworkExhausted]);
 
   const isCurrentArtworkSlot = useCallback(
     (slotIndex: SlotIndex, expectedLayer?: SlotLayer) => {
@@ -2196,15 +2208,21 @@ const ArtworkPlayer = ({
         );
         // Resetting the flag alone only helps LATER items — the specific
         // item whose own scheduled retry bailed on this exact flag (see
-        // scheduleArtworkFailureRetryOrSkip's bail above) is otherwise left
-        // stranded in RenderStatus.failed forever: nothing else re-drives
-        // it, since reloadIframe (below) only runs on the success branch
+        // armScheduledRetry's bail above) is otherwise left stranded in
+        // RenderStatus.failed forever: nothing else re-drives it, since
+        // reloadIframe (below) only runs on the success branch
         // (run-reviewer bot-round-3 pass-2 F1, Major). Resume THAT item's
         // own bounded budget here — scoped by identity/URL, not a bare
         // "is something currently failed" check, so an unrelated item that
         // happens to be mid-retry for its own reason when this 10-minute
         // give-up fires isn't charged an extra attempt it did nothing to
-        // earn.
+        // earn. Calls armScheduledRetry directly, NOT
+        // scheduleArtworkFailureRetryOrSkip: the bail this is resuming
+        // never incremented artworkFailureCountRef (bailing is not itself
+        // an attempt), so re-arming through the increment-then-arm
+        // function would charge the budget a second time for a single
+        // real attempt that still hasn't happened yet (run-reviewer
+        // bot-round-3 pass-4 F1, Moderate).
         const stuckItem = artworkFailureStuckByWebGLRef.current;
         if (
           stuckItem?.identity === itemIdentityRef.current &&
@@ -2212,7 +2230,7 @@ const ArtworkPlayer = ({
           renderStatusRef.current === RenderStatus.failed
         ) {
           artworkFailureStuckByWebGLRef.current = null;
-          scheduleArtworkFailureRetryOrSkip();
+          armScheduledRetry();
         }
         return;
       }
