@@ -74,6 +74,16 @@ const ARTWORK_FAILURE_RETRY_DELAY_MS = 3000;
 // Longer than CONTENT_TYPE_HEAD_TIMEOUT_MS so a HEAD timeout's own fallback
 // attempt has time to start before this also engages.
 const ARTWORK_LOAD_WATCHDOG_MS = 15000;
+// iframe/object/model-viewer loads (isEmbeddedHeavy) had NO time bound at all
+// before this branch — unlike image/video/audio, which go through
+// mediaLoader's own bounded blob fetch, these are heavier, more variable
+// initializations (a full HTML document, an embedded object, a 3D model
+// parse) that the base 15s window can false-positive on for content that is
+// merely slow, not stuck (run-reviewer bot-round-2 pass-2 F1, Major). 3x the
+// base window, matching the existing 3-attempt retry budget's own
+// precedent-over-measurement sizing, rather than leaving these content types
+// unbounded again or forcing them into a window sized for a blob fetch.
+const ARTWORK_LOAD_WATCHDOG_EMBEDDED_MS = 45000;
 
 type SlotIndex = 0 | 1;
 
@@ -573,6 +583,21 @@ const ArtworkPlayer = ({
           itemIdentityRef.current !== retryIdentity ||
           previewURLRef.current !== retryURL
         ) {
+          return;
+        }
+        // Unlike the watchdog's own arm-time check, this timer has no
+        // WebGL-awareness of its own — a failure unrelated to WebGL can
+        // still have an already-scheduled retry land while a context loss
+        // is independently in progress, reloading into a GPU that is not
+        // back yet and wasting (or exhausting) this budget on an attempt
+        // doomed by a condition that has nothing to do with the original
+        // failure (run-reviewer bot-round-2 pass-2 F2, Major). Bail instead
+        // of reloading: `startWebGLRecovery`'s own `reloadIframe` is
+        // independently working to revive this slot once GL returns, and
+        // `loadedSource`'s `isSuccess` handling already cancels any stale
+        // pending retry and resets the counter once that reload lands — so
+        // bailing here is self-healing, not a dropped attempt.
+        if (isWebGLContextLost.current) {
           return;
         }
         performArtworkReload();
@@ -1598,6 +1623,9 @@ const ArtworkPlayer = ({
       }
       const watchdogURL = layer.previewURL;
       const watchdogIdentity = layer.itemIdentity;
+      const watchdogDurationMs = isEmbeddedHeavy(layer.previewType)
+        ? ARTWORK_LOAD_WATCHDOG_EMBEDDED_MS
+        : ARTWORK_LOAD_WATCHDOG_MS;
       artworkLoadWatchdogRef.current[slotIndex] = setTimeout(() => {
         artworkLoadWatchdogRef.current[slotIndex] = undefined;
         if (
@@ -1611,7 +1639,7 @@ const ArtworkPlayer = ({
           return;
         }
         handleArtworkRenderFailure(slotIndex, layer);
-      }, ARTWORK_LOAD_WATCHDOG_MS);
+      }, watchdogDurationMs);
 
       const handleMediaError =
         (mediaType: BlobLoadedMediaType) => (error: Error) => {
