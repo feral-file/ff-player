@@ -62,7 +62,9 @@ const PREVIEW_URL = 'https://feralfile.com/test/stuck-work.jpg';
 
 function playerNode(
   onArtworkExhausted: (itemIdentity: string) => void,
-  onItemPlayed?: (itemIdentity: string) => void
+  onItemPlayed?: (itemIdentity: string) => void,
+  previewURL: string = PREVIEW_URL,
+  itemIdentity: string = ITEM_IDENTITY
 ) {
   const value = {
     context: {
@@ -77,10 +79,10 @@ function playerNode(
   return (
     <AppContext.Provider value={value as never}>
       <ArtworkPlayer
-        previewURL={PREVIEW_URL}
+        previewURL={previewURL}
         artworkPreviewMIMEType="image/jpeg"
         displayPreferences={defaultDP1DisplayPreference}
-        itemIdentity={ITEM_IDENTITY}
+        itemIdentity={itemIdentity}
         onArtworkExhausted={onArtworkExhausted}
         onItemPlayed={onItemPlayed}
       />
@@ -398,5 +400,77 @@ describe('ArtworkPlayer — a scheduled retry bails while WebGL context is lost'
     await advanceTimersBy(3000);
     expect(loaderState.loadCalls).toBe(1);
     expect(onArtworkExhausted).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Regression for run-reviewer bot-round-3 pass-1 F1: when WebGL recovery
+   * gives up after MAX_RECOVERY_TIME (10 min) rather than succeeding, the
+   * give-up branch never reset `isWebGLContextLost` — only the success
+   * branch did. Since this flag is now read by BOTH the stuck-load watchdog
+   * and the scheduled retry timer (added this round), a stuck-true flag
+   * after a failed recovery would permanently disable both mechanisms for
+   * every later, unrelated playlist item — reopening #307's own "device
+   * stays controllable" requirement through a new trigger. This mounts a
+   * second, unrelated item AFTER give-up and confirms its own watchdog
+   * still fires normally, instead of silently bailing on a stale flag.
+   */
+  it('restores the watchdog/retry budget for a later item once WebGL recovery gives up', async () => {
+    let lostListener: ((event: Event) => void) | undefined;
+    const originalAddEventListener =
+      // eslint-disable-next-line @typescript-eslint/unbound-method -- prototype method saved before spy
+      HTMLCanvasElement.prototype.addEventListener;
+    vi.spyOn(HTMLCanvasElement.prototype, 'addEventListener').mockImplementation(
+      function (
+        this: HTMLCanvasElement,
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: boolean | AddEventListenerOptions
+      ) {
+        if (type === 'webglcontextlost' && typeof listener === 'function') {
+          lostListener = listener;
+        }
+        originalAddEventListener.call(this, type, listener, options);
+      }
+    );
+
+    vi.useFakeTimers();
+    loaderState.mode = 'hang';
+    const onArtworkExhausted = vi.fn();
+    const { rerender } = render(playerNode(onArtworkExhausted));
+    await advanceTimersBy(0);
+    expect(loaderState.loadCalls).toBe(1);
+
+    await act(async () => {
+      lostListener?.(new Event('webglcontextlost', { cancelable: true }));
+      await Promise.resolve();
+    });
+
+    // Recovery polls every 5s and never succeeds in jsdom (no real WebGL) —
+    // advance past MAX_RECOVERY_TIME (10 min) so it gives up.
+    await advanceTimersBy(605000);
+    expect(
+      screen.getByText('Couldn’t restore this artwork. Try another work.')
+    ).toBeTruthy();
+
+    // A later, unrelated item mounts — same as the playlist advancing. Reuse
+    // the same onArtworkExhausted identity (a stable useCallback in
+    // production, from PlaylistClient) so this rerender only changes the
+    // item, not the callback — a fresh callback here would itself cascade
+    // into setupMediaForSlot's own deps and re-trigger slot 0's load too,
+    // which is not what this test is isolating.
+    rerender(
+      playerNode(
+        onArtworkExhausted,
+        undefined,
+        'https://feralfile.com/test/next-item.jpg',
+        'tezos:mainnet:fa2:KT1next:1'
+      )
+    );
+    await advanceTimersBy(0);
+    expect(loaderState.loadCalls).toBe(2);
+
+    // Its own watchdog must fire normally, not bail on the stale flag.
+    await advanceTimersBy(15000);
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
   });
 });

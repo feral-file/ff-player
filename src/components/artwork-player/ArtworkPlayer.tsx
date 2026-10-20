@@ -2102,6 +2102,19 @@ const ArtworkPlayer = ({
           clearInterval(webGLRecoveryIntervalRef.current);
         }
         console.log('[ArtworkPlayer] WebGL recovery timed out');
+        // Pre-existing gap, exposed by this branch (run-reviewer bot-round-3
+        // pass-1 F1, Major): this give-up branch never reset
+        // isWebGLContextLost, unlike its success sibling below. On `main`
+        // that flag's only other consumer was handleWebGLLost's own
+        // re-entry guard, so a stuck-true flag had no reachable
+        // consequence. This branch's new stuck-load watchdog and scheduled
+        // retry both bail whenever the flag reads true — so once recovery
+        // gives up, EVERY later, unrelated playlist item's render failures
+        // would permanently lose both mechanisms issue #307 exists to add,
+        // for the rest of this component's lifetime. Reset here, matching
+        // the success branch, so recovery genuinely giving up stops being
+        // mistaken for "still in progress" by anything reading this flag.
+        isWebGLContextLost.current = false;
         setMessageModalText(null);
         setMessageModalTitle(
           'Couldn’t restore this artwork. Try another work.'
