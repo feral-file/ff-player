@@ -103,7 +103,7 @@ export function mergeItemDisplayPreference(
     userOverrides: mergeUserOverrides(
       defaultDP1DisplayPreference.userOverrides,
       deviceDefaults?.userOverrides,
-      playlistDefaults?.display.userOverrides,
+      playlistDefaults?.display?.userOverrides,
       dp1Item.inlineManifest?.controls?.display?.userOverrides,
       refDisplay?.userOverrides,
       dp1Item.override?.display?.userOverrides,

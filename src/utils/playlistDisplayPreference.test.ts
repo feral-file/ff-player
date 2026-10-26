@@ -207,6 +207,53 @@ describe('device machine-default layer', () => {
 });
 
 /**
+ * Regression guard (PR #312 review, run-reviewer F1): `defaults` is untyped
+ * wire JSON, and a `defaults` block present but lacking a nested `display`
+ * key is a valid shape the base branch always handled via `?? {}`. The
+ * `userOverrides` merge line must not be the one access that assumes
+ * `display` is there and throws, which `resolveAndApplyItemDisplayPreference`
+ * would otherwise swallow and silently reset the whole slot's display to the
+ * baked-in default.
+ */
+describe('playlist defaults without a nested display key', () => {
+  const bareDefaults = { duration: 30, license: {} } as DP1Defaults;
+
+  it('does not throw merging an item display over bare defaults', () => {
+    const item = {
+      id: 'a',
+      source: 'https://example.com/a.html',
+      license: DP1License.Open,
+      display: { scaling: Scaling.Fill, background: '#111111' },
+    } as DP1Item;
+    expect(() => mergeItemDisplayPreference(item, bareDefaults)).not.toThrow();
+  });
+
+  it("keeps the item's own display instead of resetting to the baked-in default", () => {
+    const item = {
+      id: 'a',
+      source: 'https://example.com/a.html',
+      license: DP1License.Open,
+      display: { scaling: Scaling.Fill, background: '#111111' },
+    } as DP1Item;
+    const merged = mergeItemDisplayPreference(item, bareDefaults);
+    expect(merged.scaling).toBe(Scaling.Fill);
+    expect(merged.background).toBe('#111111');
+  });
+
+  it('still merges a userOverrides veto set only on the item', () => {
+    const item = {
+      id: 'a',
+      source: 'https://example.com/a.html',
+      license: DP1License.Open,
+      display: { userOverrides: { duration: false } },
+    } as DP1Item;
+    expect(
+      mergeItemDisplayPreference(item, bareDefaults).userOverrides
+    ).toEqual({ duration: false });
+  });
+});
+
+/**
  * The layering above is pure; these cover how an inline manifest behaves once
  * it goes through the real resolve path, and what a malformed one costs.
  */

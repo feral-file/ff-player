@@ -297,6 +297,23 @@ describe('device default duration gates', () => {
     ).toBe(300);
   });
 
+});
+
+describe('device default duration gates: playlist defaults layer', () => {
+  it('does not throw when playlistDefaults has no display key (PR #312 review, run-reviewer F1)', () => {
+    // defaults is untyped wire JSON; a block that sets duration/license but
+    // no nested display is a valid shape the fallback cascade must survive
+    // without the item's own duration being lost to a swallowed throw.
+    const bareDefaults = { duration: 0, license: {} } as DP1Defaults;
+    expect(() =>
+      resolveSlotDurationSeconds({
+        item: timedItem('A', 300),
+        playlistDefaults: bareDefaults,
+        deviceDefaultDurationSeconds: 600,
+      })
+    ).not.toThrow();
+  });
+
   it('honors playlist defaults.display in the gate merge', () => {
     const defaults = {
       display: { userOverrides: { duration: false } },

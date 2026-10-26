@@ -35,7 +35,13 @@ export enum DP1Action {
 }
 
 export interface DP1Defaults {
-  display: DP1DisplayPreference;
+  // Optional, matching how every reader already treats it (`?? {}`): this is
+  // untyped wire JSON, and a `defaults` block with no `display` key is a
+  // valid document (PR #312 review, run-reviewer F1 — a prior `display:
+  // DP1DisplayPreference` here made ESLint's no-unnecessary-condition
+  // autofix drop a real `?.` as "impossible", which then threw on exactly
+  // this shape).
+  display?: DP1DisplayPreference;
   license: DP1License;
   duration: number;
 }

@@ -202,7 +202,7 @@ export function resolveSlotDurationSeconds({
     ...(item.display ?? {}),
     userOverrides: mergeUserOverrides(
       defaultDP1DisplayPreference.userOverrides,
-      playlistDefaults?.display.userOverrides,
+      playlistDefaults?.display?.userOverrides,
       item.inlineManifest?.controls?.display?.userOverrides,
       item.override?.display?.userOverrides,
       item.display?.userOverrides
