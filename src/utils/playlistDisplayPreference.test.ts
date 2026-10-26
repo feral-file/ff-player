@@ -308,13 +308,13 @@ describe('concurrent display and label loads share one fetch', () => {
     const labelPromise = loadRefManifestLabel(refItem('h1'));
 
     resolveManifest({
-      controls: { display: { userOverrides: false } },
+      controls: { display: { userOverrides: { duration: false } } },
       metadata: { title: 'Work (2026)', artists: [{ name: 'Artist' }] },
     });
 
     const [display, label] = await Promise.all([displayPromise, labelPromise]);
     expect(getItemRefMock).toHaveBeenCalledTimes(1);
-    expect(display?.userOverrides).toBe(false);
+    expect(display?.userOverrides).toEqual({ duration: false });
     expect(label?.title).toBe('Work (2026)');
     expect(label?.artistNames).toBe('Artist');
   });
@@ -328,42 +328,42 @@ describe('loadRefManifestDisplay session cache', () => {
 
   it('caches by ref for repeat visits', async () => {
     getItemRefMock.mockResolvedValue({
-      controls: { display: { userOverrides: false } },
+      controls: { display: { userOverrides: { duration: false } } },
     } as never);
 
     const first = await loadRefManifestDisplay(refItem('h1'));
     const second = await loadRefManifestDisplay(refItem('h1'));
 
-    expect(first?.userOverrides).toBe(false);
-    expect(second?.userOverrides).toBe(false);
+    expect(first?.userOverrides).toEqual({ duration: false });
+    expect(second?.userOverrides).toEqual({ duration: false });
     expect(getItemRefMock).toHaveBeenCalledTimes(1);
   });
 
   it('does not reuse a cached display across a different refHash', async () => {
     getItemRefMock.mockResolvedValueOnce({
-      controls: { display: { userOverrides: false } },
+      controls: { display: { userOverrides: { duration: false } } },
     } as never);
     getItemRefMock.mockResolvedValueOnce({
-      controls: { display: { userOverrides: true } },
+      controls: { display: { userOverrides: { duration: true } } },
     } as never);
 
     const v1 = await loadRefManifestDisplay(refItem('h1'));
     const v2 = await loadRefManifestDisplay(refItem('h2'));
 
-    expect(v1?.userOverrides).toBe(false);
-    expect(v2?.userOverrides).toBe(true);
+    expect(v1?.userOverrides).toEqual({ duration: false });
+    expect(v2?.userOverrides).toEqual({ duration: true });
     expect(getItemRefMock).toHaveBeenCalledTimes(2);
   });
 
   it('a fresh-cast boundary drops only hash-less entries', async () => {
     getItemRefMock.mockResolvedValueOnce({
-      controls: { display: { userOverrides: false } },
+      controls: { display: { userOverrides: { duration: false } } },
     } as never);
     getItemRefMock.mockResolvedValueOnce({
       controls: { display: { loop: false } },
     } as never);
     getItemRefMock.mockResolvedValueOnce({
-      controls: { display: { userOverrides: true } },
+      controls: { display: { userOverrides: { duration: true } } },
     } as never);
 
     await loadRefManifestDisplay(refItem());
@@ -372,7 +372,7 @@ describe('loadRefManifestDisplay session cache', () => {
 
     // Hash-less entry refetches (new manifest content honored)...
     const refetched = await loadRefManifestDisplay(refItem());
-    expect(refetched?.userOverrides).toBe(true);
+    expect(refetched?.userOverrides).toEqual({ duration: true });
     // ...while the hashed entry stays cached.
     const cached = await loadRefManifestDisplay(refItem('h1'));
     expect(cached?.loop).toBe(false);

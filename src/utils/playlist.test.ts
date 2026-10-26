@@ -3,6 +3,7 @@ import { LoopMode } from '@/models/cast_info.model';
 import { NO_DURATION_VALUE } from '@/constants';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  hasDecisiveSyncVeto,
   normalizePlaylistIndex,
   resolveItemIndexInNewItems,
   resolveQueuedPlaylistNextIndex,
@@ -244,10 +245,10 @@ describe('device default duration resolution', () => {
 });
 
 describe('device default duration gates', () => {
-  it('respects the artist veto (userOverrides=false) on the item', () => {
+  it('respects the artist veto (userOverrides.duration=false) on the item', () => {
     const vetoed = {
       ...timedItem('A', 300),
-      display: { userOverrides: false },
+      display: { userOverrides: { duration: false } },
     } as DP1Item;
     expect(
       resolveSlotDurationSeconds({
@@ -284,7 +285,7 @@ describe('device default duration gates', () => {
         refVersion: '1.1.0',
         id: 'm1',
         created: '2026-01-01T00:00:00Z',
-        controls: { display: { userOverrides: false } },
+        controls: { display: { userOverrides: { duration: false } } },
       },
     } as unknown as DP1Item;
     expect(
@@ -298,7 +299,7 @@ describe('device default duration gates', () => {
 
   it('honors playlist defaults.display in the gate merge', () => {
     const defaults = {
-      display: { userOverrides: false },
+      display: { userOverrides: { duration: false } },
       license: {},
       duration: 0,
     } as unknown as DP1Defaults;
@@ -313,13 +314,13 @@ describe('device default duration gates', () => {
 
   it('lets the item display win the gate merge over playlist defaults', () => {
     const defaults = {
-      display: { userOverrides: false },
+      display: { userOverrides: { duration: false } },
       license: {},
       duration: 0,
     } as unknown as DP1Defaults;
     const optedIn = {
       ...timedItem('A', 300),
-      display: { userOverrides: true },
+      display: { userOverrides: { duration: true } },
     } as DP1Item;
     expect(
       resolveSlotDurationSeconds({
@@ -338,7 +339,7 @@ describe('device default duration merged-display authority', () => {
         item: timedItem('A', 300),
         playlistDefaults: noDefaults,
         deviceDefaultDurationSeconds: 600,
-        mergedDisplay: { userOverrides: false },
+        mergedDisplay: { userOverrides: { duration: false } },
       })
     ).toBe(300);
   });
@@ -346,14 +347,14 @@ describe('device default duration merged-display authority', () => {
   it('merged display is authoritative over the synchronous item fields', () => {
     const syncVetoed = {
       ...timedItem('A', 300),
-      display: { userOverrides: false },
+      display: { userOverrides: { duration: false } },
     } as DP1Item;
     expect(
       resolveSlotDurationSeconds({
         item: syncVetoed,
         playlistDefaults: noDefaults,
         deviceDefaultDurationSeconds: 600,
-        mergedDisplay: { userOverrides: true, loop: true },
+        mergedDisplay: { userOverrides: { duration: true }, loop: true },
       })
     ).toBe(600);
   });
@@ -367,5 +368,47 @@ describe('device default duration merged-display authority', () => {
         mergedDisplay: { loop: false },
       })
     ).toBe(NO_DURATION_VALUE);
+  });
+});
+
+describe('hasDecisiveSyncVeto', () => {
+  it('is not decisive when neither layer sets any field at all', () => {
+    // Regression guard: userOverrides is a map (DP-1 §4), and a playlist
+    // that never mentions the `duration` key means the spec default
+    // (true, i.e. not vetoed) — an absent key must never read as a veto.
+    expect(hasDecisiveSyncVeto(timedItem('A', 300))).toBe(false);
+  });
+
+  it('is decisive when item.display vetoes duration', () => {
+    const vetoed = {
+      ...timedItem('A', 300),
+      display: { userOverrides: { duration: false } },
+    } as DP1Item;
+    expect(hasDecisiveSyncVeto(vetoed)).toBe(true);
+  });
+
+  it('is decisive when item.display declares loop=false', () => {
+    const naturalLength = {
+      ...timedItem('A', 300),
+      display: { loop: false },
+    } as DP1Item;
+    expect(hasDecisiveSyncVeto(naturalLength)).toBe(true);
+  });
+
+  it('lets item.display re-open a field that item.override.display vetoed', () => {
+    const reopened = {
+      ...timedItem('A', 300),
+      override: { display: { userOverrides: { duration: false } } },
+      display: { userOverrides: { duration: true } },
+    } as DP1Item;
+    expect(hasDecisiveSyncVeto(reopened)).toBe(false);
+  });
+
+  it('does not let an override-layer veto on another field read as decisive', () => {
+    const scalingVetoed = {
+      ...timedItem('A', 300),
+      display: { userOverrides: { scaling: false } },
+    } as DP1Item;
+    expect(hasDecisiveSyncVeto(scalingVetoed)).toBe(false);
   });
 });

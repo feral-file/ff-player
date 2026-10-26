@@ -14,6 +14,9 @@ export function applyDeviceFraming(
   preference: unknown
 ): DP1DisplayPreference {
   const framing = deviceFraming(preference);
-  if (framing === 'artwork' || display.userOverrides === false) {return display;}
+  // DP-1 §4 models userOverrides per field; this control only ever changes
+  // `scaling`, so that is the field it must check — a veto on another field
+  // (e.g. `duration`) must not block the owner's Fit/Fill choice here.
+  if (framing === 'artwork' || display.userOverrides?.scaling === false) {return display;}
   return { ...display, scaling: framing === 'fill' ? Scaling.Fill : Scaling.Fit };
 }

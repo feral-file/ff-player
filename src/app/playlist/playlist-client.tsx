@@ -336,7 +336,7 @@ export default function PlaylistClient() {
       // Device-level default duration (viewer override): applied only once
       // this slot's fully merged display preference — including the async
       // ref-manifest layer — is known, so a manifest-carried
-      // userOverrides=false (artist veto) or loop=false (natural length) can
+      // userOverrides.duration=false (artist veto) or loop=false (natural length) can
       // never be beaten to the timer by a slow fetch. Until the merge lands
       // the item's own duration stands; the re-arm effect below reschedules
       // with the override the moment the merge resolves. The cached read is

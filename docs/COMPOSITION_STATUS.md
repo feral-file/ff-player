@@ -68,7 +68,7 @@ artwork). Unknown modes and ephemeral framing writes are rejected. Existing
 partial settings are preserved when framing changes.
 
 An explicit Fit or Fill overrides the final authored scaling and current-showing
-scaling, unless `userOverrides: false` forbids it. Follow artwork releases this
+scaling, unless `userOverrides: { scaling: false }` forbids it. Follow artwork releases this
 override and restores the normal DP-1 merge; legacy saved scaling remains only
 a fallback for documents without authored scaling. Playlist documents and
 signatures are unchanged. The preference is stored in the existing device display

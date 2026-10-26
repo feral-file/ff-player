@@ -1,5 +1,6 @@
 import {
   defaultDP1DisplayPreference,
+  mergeUserOverrides,
   type DP1Defaults,
   type DP1DisplayPreference,
   type DP1Item,
@@ -96,6 +97,18 @@ export function mergeItemDisplayPreference(
     ...(refDisplay ?? {}),
     ...(dp1Item.override?.display ?? {}),
     ...(dp1Item.display ?? {}),
+    // userOverrides is a per-field map (DP-1 §4); merge it field-by-field
+    // rather than letting the plain spread above replace the whole map —
+    // see mergeUserOverrides.
+    userOverrides: mergeUserOverrides(
+      defaultDP1DisplayPreference.userOverrides,
+      deviceDefaults?.userOverrides,
+      playlistDefaults?.display.userOverrides,
+      dp1Item.inlineManifest?.controls?.display?.userOverrides,
+      refDisplay?.userOverrides,
+      dp1Item.override?.display?.userOverrides,
+      dp1Item.display?.userOverrides
+    ),
   };
 }
 

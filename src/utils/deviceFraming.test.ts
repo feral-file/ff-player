@@ -19,8 +19,13 @@ describe('persistent device framing', () => {
   });
 
   it('honors the authored restriction on viewer changes', () => {
-    const authored = { scaling: Scaling.Fit, userOverrides: false };
+    const authored = { scaling: Scaling.Fit, userOverrides: { scaling: false } };
     expect(applyDeviceFraming(authored, 'fill')).toBe(authored);
+  });
+
+  it('does not let a veto on another field block the scaling override', () => {
+    const authored = { scaling: Scaling.Fit, userOverrides: { duration: false } };
+    expect(applyDeviceFraming(authored, 'fill').scaling).toBe(Scaling.Fill);
   });
 
   it('lets two devices render the same document independently', () => {
