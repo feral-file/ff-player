@@ -2,6 +2,7 @@ import { NO_DURATION_VALUE } from '@/constants';
 import { LoopMode } from '@/models/cast_info.model';
 import {
   defaultDP1DisplayPreference,
+  mergeUserOverrides,
   type DP1Defaults,
   type DP1DisplayPreference,
   type DP1Item,
@@ -65,7 +66,11 @@ export function hasDecisiveSyncVeto(item: DP1Item): boolean {
   // item.override.display, so a field the higher layer re-opts into
   // neutralizes the lower layer's veto (mirrors mergeItemDisplayPreference).
   const merged = { ...item.override?.display, ...item.display };
-  return merged.userOverrides === false || merged.loop === false;
+  const mergedUserOverrides = mergeUserOverrides(
+    item.override?.display?.userOverrides,
+    item.display?.userOverrides
+  );
+  return mergedUserOverrides.duration === false || merged.loop === false;
 }
 
 /**
@@ -143,9 +148,9 @@ interface ResolveSlotDurationSecondsOptions {
  * "each work displays this long" setting — replaces the baseline per DP-1
  * §4.1's device-level override rule, with two deliberate exceptions:
  *
- * - `userOverrides: false` in the merged display preference is the artist's
- * veto on viewer re-timing; the baseline stands. (DP-1 models userOverrides
- * per-field; this codebase carries it as a single boolean, default true.)
+ * - `userOverrides.duration === false` in the merged display preference is
+ * the artist's veto on viewer re-timing; the baseline stands (DP-1 §4 models
+ * `userOverrides` as a per-field map, default true per field).
  * - `loop: false` declares a time-based source that plays its natural length
  * and advances at end-of-stream. The override is skipped so a non-looping
  * film is never cut short by the device setting. This veto is deliberately
@@ -160,15 +165,18 @@ interface ResolveSlotDurationSecondsOptions {
  * caller has it. Before that merge lands, the synchronous subset of the
  * cascade (defaults.display → item.inlineManifest.controls.display →
  * item.override.display → item.display) stands in, and the caller re-arms the
- * timer once the full merge resolves so a manifest-only `userOverrides: false`
- * or `loop: false` still wins.
+ * timer once the full merge resolves so a manifest-only
+ * `userOverrides.duration === false` or `loop: false` still wins.
  *
  * LOCKSTEP: that fallback is a second, hand-maintained copy of
  * mergeItemDisplayPreference's layer order, minus two layers on purpose: the
  * async ref layer, which by definition has not arrived yet, and the device
  * machine-default layer, which deviceDefaultDisplay guarantees only ever
  * carries `scaling` — a field this gate does not read. Any other layer added
- * there must be added here. Today the only caller passes a non-null `deviceDefaultDurationSeconds`
+ * there must be added here, including in the `userOverrides` merge below
+ * (see mergeUserOverrides — a plain object spread would let one layer's
+ * `userOverrides` map silently erase another layer's field). Today the only
+ * caller passes a non-null `deviceDefaultDurationSeconds`
  * exclusively when `mergedDisplay` is set, so the fallback never actually
  * runs — which is precisely why a drift here would go unnoticed until some
  * later change relaxed that guard, and then an artist's veto carried in an
@@ -192,9 +200,16 @@ export function resolveSlotDurationSeconds({
     ...(item.inlineManifest?.controls?.display ?? {}),
     ...(item.override?.display ?? {}),
     ...(item.display ?? {}),
+    userOverrides: mergeUserOverrides(
+      defaultDP1DisplayPreference.userOverrides,
+      playlistDefaults?.display?.userOverrides,
+      item.inlineManifest?.controls?.display?.userOverrides,
+      item.override?.display?.userOverrides,
+      item.display?.userOverrides
+    ),
   };
 
-  if (display.userOverrides === false || display.loop === false) {
+  if (display.userOverrides?.duration === false || display.loop === false) {
     return baseline;
   }
 

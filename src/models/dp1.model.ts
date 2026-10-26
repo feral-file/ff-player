@@ -35,7 +35,13 @@ export enum DP1Action {
 }
 
 export interface DP1Defaults {
-  display: DP1DisplayPreference;
+  // Optional, matching how every reader already treats it (`?? {}`): this is
+  // untyped wire JSON, and a `defaults` block with no `display` key is a
+  // valid document (PR #312 review, run-reviewer F1 — a prior `display:
+  // DP1DisplayPreference` here made ESLint's no-unnecessary-condition
+  // autofix drop a real `?.` as "impossible", which then threw on exactly
+  // this shape).
+  display?: DP1DisplayPreference;
   license: DP1License;
   duration: number;
 }
@@ -111,7 +117,17 @@ export interface DP1DisplayPreference {
       hover?: boolean;
     };
   };
-  userOverrides?: boolean;
+  // DP-1 core/v1.1.0 spec.md §4: a map of field name -> whether the
+  // viewer/device may override it (default true per field; absent key
+  // means true). Not a single boolean: controld decodes it as
+  // `map[string]bool` and rejects a bare bool with a 500 (feral-file/ff-player#308).
+  // `Partial<Record<...>>` rather than `Record<...>` on purpose: a plain
+  // `Record<string, boolean>` tells TS every key is present, which made an
+  // ESLint autofix rewrite a gate's `x.duration === false` into
+  // `!x.duration` (see hasDecisiveSyncVeto in playlist.ts) — wrong once a
+  // playlist simply never sets a key (the common case, which must read as
+  // the spec default `true`, not as a veto).
+  userOverrides?: Partial<Record<string, boolean>>;
 }
 
 export interface DP1Repro {
@@ -185,8 +201,29 @@ export const defaultDP1DisplayPreference: DP1DisplayPreference = {
       hover: false,
     },
   },
-  userOverrides: true,
+  // Empty, not `true`: a map has no single "everything allowed" value, and
+  // an absent key already means true per §4, so the baked-in default
+  // overrides nothing.
+  userOverrides: {},
 };
+
+/**
+ * Merge `userOverrides` maps from lowest to highest display-layer priority,
+ * per field (DP-1 §4: `userOverrides.<field>`). A plain object spread of two
+ * whole `DisplayPrefs` layers would let a higher layer that only sets one
+ * field (e.g. `{ scaling: false }`) silently erase a lower layer's veto on a
+ * different field (e.g. `{ duration: false }`); this merges the maps
+ * themselves instead, the same "last write wins" rule DP-1 applies to every
+ * other field.
+ */
+export function mergeUserOverrides(
+  ...layers: (Partial<Record<string, boolean>> | undefined)[]
+): Partial<Record<string, boolean>> {
+  return layers.reduce<Partial<Record<string, boolean>>>(
+    (merged, layer) => (layer ? { ...merged, ...layer } : merged),
+    {}
+  );
+}
 
 // ---- Manifest envelope: the content behind DP1Item.ref, or carried inline ----
 //

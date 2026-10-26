@@ -207,6 +207,53 @@ describe('device machine-default layer', () => {
 });
 
 /**
+ * Regression guard (PR #312 review, run-reviewer F1): `defaults` is untyped
+ * wire JSON, and a `defaults` block present but lacking a nested `display`
+ * key is a valid shape the base branch always handled via `?? {}`. The
+ * `userOverrides` merge line must not be the one access that assumes
+ * `display` is there and throws, which `resolveAndApplyItemDisplayPreference`
+ * would otherwise swallow and silently reset the whole slot's display to the
+ * baked-in default.
+ */
+describe('playlist defaults without a nested display key', () => {
+  const bareDefaults = { duration: 30, license: {} } as DP1Defaults;
+
+  it('does not throw merging an item display over bare defaults', () => {
+    const item = {
+      id: 'a',
+      source: 'https://example.com/a.html',
+      license: DP1License.Open,
+      display: { scaling: Scaling.Fill, background: '#111111' },
+    } as DP1Item;
+    expect(() => mergeItemDisplayPreference(item, bareDefaults)).not.toThrow();
+  });
+
+  it("keeps the item's own display instead of resetting to the baked-in default", () => {
+    const item = {
+      id: 'a',
+      source: 'https://example.com/a.html',
+      license: DP1License.Open,
+      display: { scaling: Scaling.Fill, background: '#111111' },
+    } as DP1Item;
+    const merged = mergeItemDisplayPreference(item, bareDefaults);
+    expect(merged.scaling).toBe(Scaling.Fill);
+    expect(merged.background).toBe('#111111');
+  });
+
+  it('still merges a userOverrides veto set only on the item', () => {
+    const item = {
+      id: 'a',
+      source: 'https://example.com/a.html',
+      license: DP1License.Open,
+      display: { userOverrides: { duration: false } },
+    } as DP1Item;
+    expect(
+      mergeItemDisplayPreference(item, bareDefaults).userOverrides
+    ).toEqual({ duration: false });
+  });
+});
+
+/**
  * The layering above is pure; these cover how an inline manifest behaves once
  * it goes through the real resolve path, and what a malformed one costs.
  */
@@ -308,13 +355,13 @@ describe('concurrent display and label loads share one fetch', () => {
     const labelPromise = loadRefManifestLabel(refItem('h1'));
 
     resolveManifest({
-      controls: { display: { userOverrides: false } },
+      controls: { display: { userOverrides: { duration: false } } },
       metadata: { title: 'Work (2026)', artists: [{ name: 'Artist' }] },
     });
 
     const [display, label] = await Promise.all([displayPromise, labelPromise]);
     expect(getItemRefMock).toHaveBeenCalledTimes(1);
-    expect(display?.userOverrides).toBe(false);
+    expect(display?.userOverrides).toEqual({ duration: false });
     expect(label?.title).toBe('Work (2026)');
     expect(label?.artistNames).toBe('Artist');
   });
@@ -328,42 +375,42 @@ describe('loadRefManifestDisplay session cache', () => {
 
   it('caches by ref for repeat visits', async () => {
     getItemRefMock.mockResolvedValue({
-      controls: { display: { userOverrides: false } },
+      controls: { display: { userOverrides: { duration: false } } },
     } as never);
 
     const first = await loadRefManifestDisplay(refItem('h1'));
     const second = await loadRefManifestDisplay(refItem('h1'));
 
-    expect(first?.userOverrides).toBe(false);
-    expect(second?.userOverrides).toBe(false);
+    expect(first?.userOverrides).toEqual({ duration: false });
+    expect(second?.userOverrides).toEqual({ duration: false });
     expect(getItemRefMock).toHaveBeenCalledTimes(1);
   });
 
   it('does not reuse a cached display across a different refHash', async () => {
     getItemRefMock.mockResolvedValueOnce({
-      controls: { display: { userOverrides: false } },
+      controls: { display: { userOverrides: { duration: false } } },
     } as never);
     getItemRefMock.mockResolvedValueOnce({
-      controls: { display: { userOverrides: true } },
+      controls: { display: { userOverrides: { duration: true } } },
     } as never);
 
     const v1 = await loadRefManifestDisplay(refItem('h1'));
     const v2 = await loadRefManifestDisplay(refItem('h2'));
 
-    expect(v1?.userOverrides).toBe(false);
-    expect(v2?.userOverrides).toBe(true);
+    expect(v1?.userOverrides).toEqual({ duration: false });
+    expect(v2?.userOverrides).toEqual({ duration: true });
     expect(getItemRefMock).toHaveBeenCalledTimes(2);
   });
 
   it('a fresh-cast boundary drops only hash-less entries', async () => {
     getItemRefMock.mockResolvedValueOnce({
-      controls: { display: { userOverrides: false } },
+      controls: { display: { userOverrides: { duration: false } } },
     } as never);
     getItemRefMock.mockResolvedValueOnce({
       controls: { display: { loop: false } },
     } as never);
     getItemRefMock.mockResolvedValueOnce({
-      controls: { display: { userOverrides: true } },
+      controls: { display: { userOverrides: { duration: true } } },
     } as never);
 
     await loadRefManifestDisplay(refItem());
@@ -372,7 +419,7 @@ describe('loadRefManifestDisplay session cache', () => {
 
     // Hash-less entry refetches (new manifest content honored)...
     const refetched = await loadRefManifestDisplay(refItem());
-    expect(refetched?.userOverrides).toBe(true);
+    expect(refetched?.userOverrides).toEqual({ duration: true });
     // ...while the hashed entry stays cached.
     const cached = await loadRefManifestDisplay(refItem('h1'));
     expect(cached?.loop).toBe(false);

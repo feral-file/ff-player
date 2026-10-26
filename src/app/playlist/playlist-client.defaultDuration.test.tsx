@@ -95,10 +95,10 @@ describe('PlaylistClient — device default duration vs ref-manifest gates', () 
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 
-  it('never re-times an item whose manifest carries userOverrides=false', async () => {
+  it('never re-times an item whose manifest carries userOverrides.duration=false', async () => {
     await setDeviceDefault(5);
     getItemRefMock.mockResolvedValue(
-      manifestWithDisplay({ userOverrides: false }) as never
+      manifestWithDisplay({ userOverrides: { duration: false } }) as never
     );
     const items = [refItem('a', 30), item('b', 300)];
     const initial = displayCast(items, 0, LoopMode.playlist);
@@ -277,7 +277,7 @@ describe('PlaylistClient — late manifest vetoes', () => {
     const items = [
       {
         ...refItem('a', 5),
-        display: { userOverrides: false },
+        display: { userOverrides: { duration: false } },
       } as DP1Item,
       item('b', 300),
       item('c', 300),
@@ -310,7 +310,7 @@ describe('PlaylistClient — late manifest vetoes', () => {
     await advanceMs(0);
 
     await advanceMs(2000);
-    resolveLate?.(manifestWithDisplay({ userOverrides: false }));
+    resolveLate?.(manifestWithDisplay({ userOverrides: { duration: false } }));
     await advanceMs(0);
     // 2s elapsed under the veto's baseline: only ~3s remain.
     expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
@@ -338,7 +338,7 @@ describe('PlaylistClient — late manifest vetoes', () => {
 
     // The manifest veto arrives only now — after the slot advanced. It must
     // not rewind playback; it lands in the session cache instead.
-    resolveLate?.(manifestWithDisplay({ userOverrides: false }));
+    resolveLate?.(manifestWithDisplay({ userOverrides: { duration: false } }));
     await advanceMs(0);
     expect(canvasService.getCastInfo()?.index).toBe(1);
 
@@ -389,7 +389,7 @@ describe('PlaylistClient — recasts and local layer precedence', () => {
     await advanceMs(0);
 
     const vetoed = [
-      { ...refItem('a', 30), display: { userOverrides: false } } as DP1Item,
+      { ...refItem('a', 30), display: { userOverrides: { duration: false } } } as DP1Item,
       item('b', 300),
       item('c', 300),
     ];
@@ -399,7 +399,7 @@ describe('PlaylistClient — recasts and local layer precedence', () => {
     await advanceMs(0);
 
     // The OLD cast's manifest resolves permissive now; stale generation.
-    resolveOld?.(manifestWithDisplay({ userOverrides: true }) as never);
+    resolveOld?.(manifestWithDisplay({ userOverrides: { duration: true } }) as never);
     await advanceMs(0);
 
     // If the stale merge applied, the 5s override would advance the slot.
@@ -418,8 +418,8 @@ describe('PlaylistClient — recasts and local layer precedence', () => {
     const items = [
       {
         ...refItem('a', 5),
-        override: { display: { userOverrides: false } },
-        display: { userOverrides: true },
+        override: { display: { userOverrides: { duration: false } } },
+        display: { userOverrides: { duration: true } },
       } as DP1Item,
       item('b', 300),
       item('c', 300),
@@ -458,7 +458,7 @@ describe('PlaylistClient — merge-cache lifetime', () => {
     // First display: manifest allows overrides; the merge lands and the
     // device default becomes armed for item 'a'.
     getItemRefMock.mockResolvedValue(
-      manifestWithDisplay({ userOverrides: true }) as never
+      manifestWithDisplay({ userOverrides: { duration: true } }) as never
     );
     const permissive = [refItem('a', 30), item('b', 300)];
     const initial = displayCast(permissive, 0, LoopMode.playlist);
@@ -467,11 +467,11 @@ describe('PlaylistClient — merge-cache lifetime', () => {
     await advanceMs(0);
 
     // New display carries the same id/ref item, now sync-vetoed, with its
-    // manifest merge kept pending. A stale cached merge (userOverrides=true)
+    // manifest merge kept pending. A stale cached merge (userOverrides.duration=true)
     // must not let the device default cut the new slot short.
     getItemRefMock.mockReturnValue(new Promise(() => undefined) as never);
     const vetoed = [
-      { ...refItem('a', 30), display: { userOverrides: false } } as DP1Item,
+      { ...refItem('a', 30), display: { userOverrides: { duration: false } } } as DP1Item,
       item('b', 300),
       item('c', 300),
     ];
@@ -498,12 +498,12 @@ describe('PlaylistClient — merge-cache lifetime', () => {
     // so only its slot-keyed (absent) merge may gate the device default.
     getItemRefMock
       .mockResolvedValueOnce(
-        manifestWithDisplay({ userOverrides: true }) as never
+        manifestWithDisplay({ userOverrides: { duration: true } }) as never
       )
       .mockReturnValue(new Promise(() => undefined) as never);
     const items = [
       refItem('a', 30),
-      { ...refItem('a', 30), display: { userOverrides: false } } as DP1Item,
+      { ...refItem('a', 30), display: { userOverrides: { duration: false } } } as DP1Item,
       item('c', 300),
     ];
     const initial = displayCast(items, 0, LoopMode.playlist);
