@@ -150,7 +150,7 @@ describe('seriesItemsForPlayback', () => {
   const item = seriesItem();
   const editions = [edition(0), edition(1), edition(2)];
 
-  it('Full plays the editions the chain index returned', () => {
+  it('Full plays the editions the catalog returned', () => {
     expect(
       seriesItemsForPlayback({
         item,

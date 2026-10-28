@@ -62,11 +62,12 @@ export function resolveSeriesPlayback({
  * The items one series item plays, given the editions already resolved for
  * it and the mode in force.
  *
- * `editions` is what the chain index returned for the series, which reaches
- * this player already expanded (feral-controld hydrates it the same way it
- * hydrates a `dynamicQuery`). `First` keeps the item itself, whose `source`
- * is the representative edition, so narrowing never needs a fetch and the
- * device override is free in both directions.
+ * `editions` is what the art catalog returned for the series, which reaches
+ * this player already expanded: feral-controld asks the catalog, which reads
+ * the series' `tokenDataURI` from the SeriesRegistry contract and hands back
+ * DP-1 items that have already inherited from the series item. `First` keeps
+ * the item itself, whose `source` is the representative edition, so narrowing
+ * never needs a fetch and the device override is free in both directions.
  */
 export function seriesItemsForPlayback({
   item,
