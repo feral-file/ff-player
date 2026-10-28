@@ -19,6 +19,11 @@ import MessageModal from '../MessageModal';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
 import { createMediaLoader, BlobLoadedMediaType } from '@/utils/mediaLoader';
 import {
+  artworkIframeSandbox,
+  dataDocumentURL,
+  releaseDataDocumentURLs,
+} from '@/utils/dataDocument';
+import {
   FileUseAudio,
   FileUseIframePDF,
   FileUseImage,
@@ -2121,7 +2126,11 @@ const ArtworkPlayer = ({
           // mutating it corrupts raw HTML/SVG payloads accepted at the cast
           // boundary. Relative web URLs are resolved only for this iframe
           // setting, leaving the persisted/display source unchanged.
-          if (resolvedURL.protocol !== 'data:') {
+          if (resolvedURL.protocol === 'data:') {
+            // Served as a sandboxed blob document so on-chain works get a
+            // secure context (WebGPU); see utils/dataDocument.
+            softwareURL = dataDocumentURL(slot.displayPreviewURL);
+          } else {
             // Delegated so the reversibility contract lives beside the rule
             // it protects: controld's offline-cache replay strips
             // `display_mode` back off and matches the remainder against the
@@ -2149,6 +2158,15 @@ const ArtworkPlayer = ({
     context.deviceRotation?.viewMode,
     slots,
   ]);
+
+  // A data: source's blob document lives as long as a slot shows the source.
+  useEffect(() => {
+    releaseDataDocumentURLs(
+      slots.flatMap(slot => (slot ? [slot.displayPreviewURL] : []))
+    );
+  }, [slots]);
+
+  useEffect(() => () => { releaseDataDocumentURLs([]); }, []);
 
   const handleLoadIframeError = (slotIndex: SlotIndex, layer: SlotLayer) => {
     // Failure still consumes the current incoming slot. Without this, an
@@ -2545,7 +2563,11 @@ const ArtworkPlayer = ({
         {slot.displaySoftwareURL &&
           slot.previewType === PreviewHTMLTag.iframe && (
             <iframe
-              key={slot.iframeKey}
+              // The sandbox mode is part of the key so a change of mode mounts
+              // a fresh element: on a live iframe, a src set before the new
+              // sandbox could load the blob document with allow-same-origin,
+              // i.e. as the player's own origin.
+              key={`${String(slot.iframeKey)}-${artworkIframeSandbox(slot.displaySoftwareURL)}`}
               ref={iframeRefs[slotIndex]}
               className={styles.iframe}
               src={slot.displaySoftwareURL}
@@ -2555,7 +2577,7 @@ const ArtworkPlayer = ({
               onError={() => {
                 handleLoadIframeError(slotIndex, slot);
               }}
-              sandbox="allow-same-origin allow-scripts"
+              sandbox={artworkIframeSandbox(slot.displaySoftwareURL)}
               tabIndex={0}
             />
           )}

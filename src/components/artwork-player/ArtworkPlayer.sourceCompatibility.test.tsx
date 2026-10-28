@@ -123,15 +123,37 @@ describe('ArtworkPlayer — accepted artwork source compatibility', () => {
     }
   );
 
-  it('does not append display settings to a raw data payload', async () => {
-    const source = 'data:text/html,<h1>100% artwork</h1>';
-    const { container } = renderArtwork(source, 'text/html');
-
-    await waitFor(() => {
-      const iframe = container.querySelector('iframe');
-      expect(iframe).toBeTruthy();
-      expect(iframe?.getAttribute('src')).toBe(source);
+  it('serves a raw data payload unmodified as an isolated blob document', async () => {
+    // jsdom has no object URLs; record the blob the player hands over.
+    const blobs: Blob[] = [];
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: (blob: Blob) => {
+        blobs.push(blob);
+        return `blob:http://127.0.0.1:8080/${String(blobs.length)}`;
+      },
     });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: () => undefined,
+    });
+    try {
+      const source = 'data:text/html,<h1>100% artwork</h1>';
+      const { container } = renderArtwork(source, 'text/html');
+
+      await waitFor(() => {
+        const iframe = container.querySelector('iframe');
+        expect(iframe?.getAttribute('src')).toBe('blob:http://127.0.0.1:8080/1');
+        // No allow-same-origin: the blob would otherwise run as the player.
+        expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');
+      });
+      expect(blobs[0]?.type).toBe('text/html');
+      expect(await blobs[0]?.text()).toBe('<h1>100% artwork</h1>');
+    } finally {
+      cleanup();
+      Reflect.deleteProperty(URL, 'createObjectURL');
+      Reflect.deleteProperty(URL, 'revokeObjectURL');
+    }
   });
 
   it.each(base64MediaSources)(
