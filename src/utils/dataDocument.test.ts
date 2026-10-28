@@ -62,6 +62,16 @@ describe('dataDocumentURL', () => {
     expect(artworkIframeSandbox(url)).toBe('allow-scripts');
   });
 
+  it('isolates every spelling of a blob URL', () => {
+    const url = dataDocumentURL(base64HTML);
+    for (const alias of [` ${url}`, `${url}\t`, url.replace(/^blob:/, 'BLOB:'), `${url}?x=1`]) {
+      expect(artworkIframeSandbox(alias)).toBe('allow-scripts');
+    }
+    expect(artworkIframeSandbox('/setup-artwork/index.html')).toBe(
+      'allow-same-origin allow-scripts'
+    );
+  });
+
   it('keeps the fragment on the blob URL and still isolates it', () => {
     const url = dataDocumentURL(`${base64HTML}#0xabc`);
     expect(url).toMatch(/^blob:.*#0xabc$/);
@@ -83,9 +93,6 @@ describe('dataDocumentURL', () => {
     const dropped = dataDocumentURL(other);
     releaseDataDocumentURLs([base64HTML]);
     expect(dataDocumentURL(base64HTML)).toBe(kept);
-    expect(artworkIframeSandbox(dropped)).toBe(
-      'allow-same-origin allow-scripts'
-    );
     expect(dataDocumentURL(other)).not.toBe(dropped);
   });
 });

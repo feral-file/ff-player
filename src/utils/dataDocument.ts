@@ -22,9 +22,10 @@
 
 const SANDBOX_ISOLATED = 'allow-scripts';
 const SANDBOX_DEFAULT = 'allow-same-origin allow-scripts';
+// Relative sources resolve against the player, never to a blob: URL.
+const ARTWORK_URL_BASE = 'https://ff-player.local/';
 
 const blobURLBySource = new Map<string, string>();
-const dataDocumentBlobURLs = new Set<string>();
 
 /**
  * Percent-decode a string to bytes the way the Fetch `data:` URL processor
@@ -120,20 +121,25 @@ export function dataDocumentURL(source: string): string {
   }
   const url = URL.createObjectURL(blob);
   blobURLBySource.set(source, url);
-  dataDocumentBlobURLs.add(url);
   return url + fragment;
 }
 
 /**
- * The `sandbox` attribute for the artwork iframe showing `src`. Blob
- * documents made by `dataDocumentURL` must not get `allow-same-origin`, or
- * the work would run as the player's own origin.
+ * The `sandbox` attribute for the artwork iframe showing `src`. Every blob
+ * document runs without `allow-same-origin`: a blob URL carries its creator's
+ * origin, so with that flag the work would run as the player itself. The rule
+ * fails closed on the parsed scheme rather than matching the URLs
+ * `dataDocumentURL` made, so no spelling of a blob URL (case, surrounding
+ * whitespace, tabs, a fragment) can reach the default sandbox.
  */
 export function artworkIframeSandbox(src: string): string {
-  // Look up without the fragment dataDocumentURL appends, or a blob document
-  // with a #hash would fall through to allow-same-origin.
-  const [blobURL] = splitFragment(src);
-  return dataDocumentBlobURLs.has(blobURL) ? SANDBOX_ISOLATED : SANDBOX_DEFAULT;
+  try {
+    return new URL(src, ARTWORK_URL_BASE).protocol === 'blob:'
+      ? SANDBOX_ISOLATED
+      : SANDBOX_DEFAULT;
+  } catch {
+    return SANDBOX_DEFAULT;
+  }
 }
 
 /**
@@ -147,7 +153,6 @@ export function releaseDataDocumentURLs(inUse: Iterable<string>): void {
     if (!keep.has(source)) {
       URL.revokeObjectURL(url);
       blobURLBySource.delete(source);
-      dataDocumentBlobURLs.delete(url);
     }
   });
 }
