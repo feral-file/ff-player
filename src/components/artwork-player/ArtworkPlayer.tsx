@@ -19,9 +19,9 @@ import MessageModal from '../MessageModal';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
 import { createMediaLoader, BlobLoadedMediaType } from '@/utils/mediaLoader';
 import {
-  artworkIframeSandbox,
   dataDocumentURL,
-  releaseDataDocumentURLs,
+  forgetDataDocuments,
+  usesDataDocument,
 } from '@/utils/dataDocument';
 import {
   FileUseAudio,
@@ -211,6 +211,9 @@ const ArtworkPlayer = ({
       onRegisterArtworkReload(null);
     };
   }, [onRegisterArtworkReload, performArtworkReload]);
+  // Bumped when a data: work's origin label finishes hashing, so the
+  // software-URL effect can point its iframe at that origin.
+  const [dataDocumentsReady, setDataDocumentsReady] = useState(0);
   const [slots, setSlots] = useState<[SlotLayer | null, SlotLayer | null]>([
     null,
     null,
@@ -1604,7 +1607,14 @@ const ArtworkPlayer = ({
             previewType: cfg.previewType,
             isStreaming: cfg.isStreaming,
             displayPreviewURL: url,
-            displaySoftwareURL: url,
+            // A data: work waits for its own origin (software-URL effect)
+            // rather than loading once as a bare data: document.
+            displaySoftwareURL:
+              cfg.previewType === PreviewHTMLTag.iframe &&
+              !isModelMimeType(resolvedMimeType) &&
+              usesDataDocument(url)
+                ? ''
+                : url,
             mimeType: resolvedMimeType,
           };
           return next;
@@ -1684,7 +1694,7 @@ const ArtworkPlayer = ({
             previewType: PreviewHTMLTag.iframe,
             isStreaming: false,
             displayPreviewURL: url,
-            displaySoftwareURL: url,
+            displaySoftwareURL: usesDataDocument(url) ? '' : url,
             mimeType: null,
           };
           return next;
@@ -2127,9 +2137,13 @@ const ArtworkPlayer = ({
           // boundary. Relative web URLs are resolved only for this iframe
           // setting, leaving the persisted/display source unchanged.
           if (resolvedURL.protocol === 'data:') {
-            // Served as a sandboxed blob document so on-chain works get a
-            // secure context (WebGPU); see utils/dataDocument.
-            softwareURL = dataDocumentURL(slot.displayPreviewURL);
+            // Each data: work plays in a device-local origin of its own
+            // (storage, WebGPU); see utils/dataDocument. '' while that
+            // origin's label is hashed: no iframe until it is ready.
+            softwareURL =
+              dataDocumentURL(slot.displayPreviewURL, () => {
+                setDataDocumentsReady(n => n + 1);
+              }) ?? '';
           } else {
             // Delegated so the reversibility contract lives beside the rule
             // it protects: controld's offline-cache replay strips
@@ -2157,16 +2171,22 @@ const ArtworkPlayer = ({
     committedVisualSettings,
     context.deviceRotation?.viewMode,
     slots,
+    dataDocumentsReady,
   ]);
 
-  // A data: source's blob document lives as long as a slot shows the source.
+  // A data: work's cached origin label lives as long as a slot shows it.
   useEffect(() => {
-    releaseDataDocumentURLs(
+    forgetDataDocuments(
       slots.flatMap(slot => (slot ? [slot.displayPreviewURL] : []))
     );
   }, [slots]);
 
-  useEffect(() => () => { releaseDataDocumentURLs([]); }, []);
+  useEffect(
+    () => () => {
+      forgetDataDocuments([]);
+    },
+    []
+  );
 
   const handleLoadIframeError = (slotIndex: SlotIndex, layer: SlotLayer) => {
     // Failure still consumes the current incoming slot. Without this, an
@@ -2563,11 +2583,7 @@ const ArtworkPlayer = ({
         {slot.displaySoftwareURL &&
           slot.previewType === PreviewHTMLTag.iframe && (
             <iframe
-              // The sandbox mode is part of the key so a change of mode mounts
-              // a fresh element: on a live iframe, a src set before the new
-              // sandbox could load the blob document with allow-same-origin,
-              // i.e. as the player's own origin.
-              key={`${String(slot.iframeKey)}-${artworkIframeSandbox(slot.displaySoftwareURL)}`}
+              key={slot.iframeKey}
               ref={iframeRefs[slotIndex]}
               className={styles.iframe}
               src={slot.displaySoftwareURL}
@@ -2577,7 +2593,7 @@ const ArtworkPlayer = ({
               onError={() => {
                 handleLoadIframeError(slotIndex, slot);
               }}
-              sandbox={artworkIframeSandbox(slot.displaySoftwareURL)}
+              sandbox="allow-same-origin allow-scripts"
               tabIndex={0}
             />
           )}

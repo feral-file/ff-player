@@ -1,158 +1,125 @@
 /**
- * Serve `data:` artwork sources to the artwork iframe as sandboxed blob
- * documents.
+ * Give every `data:` artwork its own device-local origin.
  *
- * Chromium gives a document loaded from a `data:` URL an opaque origin that
- * is never a secure context, so a fully on-chain work (token metadata whose
- * `animation_url` is `data:text/html;base64,...`) loses every secure-context
- * API: `navigator.gpu` is absent and WebGPU works cannot start. The same bytes
- * served as a blob URL created by the player (origin `http://127.0.0.1:8080`,
- * a potentially trustworthy localhost origin) are a secure context.
+ * Chromium gives a document loaded from a `data:` URL an opaque origin that is
+ * never a secure context and has no storage. A fully on-chain work (token
+ * metadata whose `animation_url` is `data:text/html;base64,...`) therefore
+ * loses WebGPU and dies on its first `localStorage`, `sessionStorage`,
+ * IndexedDB or cookie access, showing only its background.
  *
- * A blob URL inherits the player's origin, so the iframe that shows it must
- * drop `allow-same-origin`: with `allow-scripts` alone the document gets a
- * fresh opaque origin that cannot reach the player's DOM, storage or
- * IndexedDB, which is the isolation a `data:` document already had. Storage
- * stays unavailable to these works, as it is in any `data:` or sandboxed
- * embedding; works must guard their own storage reads.
+ * On an FF1 the player runs at `http://127.0.0.1:8080`, served by a static
+ * server that answers any hostname, and Chromium resolves every `*.localhost`
+ * name to loopback and treats it as a secure context. So the player loads a
+ * `data:` work in `http://<label>.localhost:<port>/data-document.html`, where
+ * `<label>` is the first 128 bits of the SHA-256 of the `data:` URL (fragment
+ * excluded), carrying that URL in the page's fragment. The shell
+ * (`public/data-document.html`) re-derives the label from what it was given,
+ * refuses anything that does not match its own hostname, and replaces itself
+ * with the decoded bytes as a document of its origin.
  *
- * Blob URLs are cached by source so both slots and re-renders share one, and
- * revoked through `releaseDataDocumentURLs` once no slot shows the source.
+ * The result: each work runs in an origin of its own, with persistent storage
+ * and a secure context; it is cross-origin to the player and to every other
+ * work, so the iframe keeps the default `allow-same-origin allow-scripts`
+ * sandbox. Because the origin is content-addressed and the shell checks it, no
+ * other page can run different bytes in a work's origin to reach its storage.
+ *
+ * Off loopback (the player deployed as a website), `*.localhost` would point at
+ * the viewer's own machine, so `data:` sources there keep loading directly.
  */
 
-const SANDBOX_ISOLATED = 'allow-scripts';
-const SANDBOX_DEFAULT = 'allow-same-origin allow-scripts';
-// Relative sources resolve against the player, never to a blob: URL.
-const ARTWORK_URL_BASE = 'https://ff-player.local/';
+export const DATA_DOCUMENT_SHELL_PATH = '/data-document.html';
 
-const blobURLBySource = new Map<string, string>();
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost']);
 
-/**
- * Percent-decode a string to bytes the way the Fetch `data:` URL processor
- * does: valid `%XX` escapes become bytes, every other character stays as its
- * UTF-8 bytes, including a literal `%` that starts no escape.
- */
-function percentDecode(text: string): Uint8Array<ArrayBuffer> {
-  const input = new TextEncoder().encode(text);
-  const out = new Uint8Array(input.length);
-  const isHex = (b: number | undefined) =>
-    b !== undefined && /[0-9a-fA-F]/.test(String.fromCharCode(b));
-  let length = 0;
-  for (let i = 0; i < input.length; i += 1) {
-    if (input[i] === 0x25 && isHex(input[i + 1]) && isHex(input[i + 2])) {
-      out[length] = parseInt(
-        String.fromCharCode(input[i + 1], input[i + 2]),
-        16
-      );
-      i += 2;
-    } else {
-      out[length] = input[i];
-    }
-    length += 1;
-  }
-  return out.slice(0, length);
-}
+// data: URL without fragment -> label ('' when hashing failed).
+const labelBySource = new Map<string, string>();
+const pendingSources = new Set<string>();
 
 /**
  * Split a URL at its first `#`. A fragment is never part of a `data:` body
- * (Fetch's data: URL processor excludes it); it stays on the document URL,
- * where a work can read it as `location.hash`.
+ * (Fetch's data: URL processor excludes it); the shell keeps it on the
+ * work's own URL, where the work reads it as `location.hash`.
  */
-function splitFragment(url: string): [string, string] {
+export function splitFragment(url: string): [string, string] {
   const hash = url.indexOf('#');
   return hash === -1 ? [url, ''] : [url.slice(0, hash), url.slice(hash)];
 }
 
 /**
- * The Blob type for a `data:` URL's media type, defaulted as Fetch does: an
- * omitted type is `text/plain;charset=US-ASCII`, and parameters with no type
- * (`;charset=utf-8`) keep their parameters under `text/plain`.
+ * Hex of the first 16 bytes of SHA-256 over `body`: a 32-character DNS label.
+ * The shell computes the same value; keep the two in step.
  */
-function blobType(mediaType: string): string {
-  if (mediaType === '') {
-    return 'text/plain;charset=US-ASCII';
-  }
-  return mediaType.startsWith(';') ? `text/plain${mediaType}` : mediaType;
+export async function dataDocumentLabel(body: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(body)
+  );
+  return Array.from(new Uint8Array(digest).slice(0, 16), b =>
+    b.toString(16).padStart(2, '0')
+  ).join('');
+}
+
+/** The player's own location when it runs on loopback, otherwise null. */
+function loopbackPlayerLocation(): Location | null {
+  const location = globalThis.location as Location | undefined;
+  return location && LOOPBACK_HOSTS.has(location.hostname) ? location : null;
+}
+
+/** Whether `source` is a `data:` URL that plays through a device-local origin. */
+export function usesDataDocument(source: string): boolean {
+  return /^data:/i.test(source.trim()) && loopbackPlayerLocation() !== null;
 }
 
 /**
- * Decode a `data:` URL into a Blob carrying its declared media type, or
- * return null when it is not a well-formed `data:` URL.
+ * The iframe URL for a `data:` artwork source: the shell on the work's own
+ * `<label>.localhost` origin, carrying the source in its fragment. Returns
+ * null while the label is still being hashed and calls `onReady` once it is;
+ * returns `source` unchanged for anything that does not use a data document
+ * (web sources, or any source off loopback) and when hashing failed.
  */
-export function blobFromDataURL(source: string): Blob | null {
-  const [trimmed] = splitFragment(source.trim());
-  const comma = trimmed.indexOf(',');
-  if (!/^data:/i.test(trimmed) || comma === -1) {
-    return null;
-  }
-  const metadata = trimmed.slice('data:'.length, comma);
-  const isBase64 = /;\s*base64\s*$/i.test(metadata);
-  const mediaType = metadata.replace(/;\s*base64\s*$/i, '').trim();
-  const body = percentDecode(trimmed.slice(comma + 1));
-  let bytes = body;
-  if (isBase64) {
-    try {
-      // atob is the forgiving-base64 decode the Fetch spec uses here. Valid
-      // base64 is ASCII, so a UTF-8 decode of the body is exact for it, and
-      // any other byte becomes U+FFFD, which atob rejects.
-      const binary = atob(new TextDecoder().decode(body));
-      bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
-    } catch {
-      return null;
-    }
-  }
-  return new Blob([bytes], { type: blobType(mediaType) });
-}
-
-/**
- * Return the iframe URL for an artwork source: a cached blob URL for a
- * `data:` source, or the source unchanged for anything else (including a
- * `data:` URL that does not decode, which keeps today's behavior).
- */
-export function dataDocumentURL(source: string): string {
-  const [, fragment] = splitFragment(source.trim());
-  const cached = blobURLBySource.get(source);
-  if (cached) {
-    return cached + fragment;
-  }
-  const blob = blobFromDataURL(source);
-  if (!blob) {
+export function dataDocumentURL(
+  source: string,
+  onReady: () => void
+): string | null {
+  const location = loopbackPlayerLocation();
+  const trimmed = source.trim();
+  if (!location || !/^data:/i.test(trimmed)) {
     return source;
   }
-  const url = URL.createObjectURL(blob);
-  blobURLBySource.set(source, url);
-  return url + fragment;
-}
-
-/**
- * The `sandbox` attribute for the artwork iframe showing `src`. Every blob
- * document runs without `allow-same-origin`: a blob URL carries its creator's
- * origin, so with that flag the work would run as the player itself. The rule
- * fails closed on the parsed scheme rather than matching the URLs
- * `dataDocumentURL` made, so no spelling of a blob URL (case, surrounding
- * whitespace, tabs, a fragment) can reach the default sandbox.
- */
-export function artworkIframeSandbox(src: string): string {
-  try {
-    return new URL(src, ARTWORK_URL_BASE).protocol === 'blob:'
-      ? SANDBOX_ISOLATED
-      : SANDBOX_DEFAULT;
-  } catch {
-    return SANDBOX_DEFAULT;
+  const [body] = splitFragment(trimmed);
+  const label = labelBySource.get(body);
+  if (label === '') {
+    return source;
   }
+  if (label) {
+    const port = location.port ? `:${location.port}` : '';
+    return `${location.protocol}//${label}.localhost${port}${DATA_DOCUMENT_SHELL_PATH}#${encodeURIComponent(trimmed)}`;
+  }
+  if (!pendingSources.has(body)) {
+    pendingSources.add(body);
+    void dataDocumentLabel(body)
+      .catch(() => '')
+      .then(computed => {
+        labelBySource.set(body, computed);
+        pendingSources.delete(body);
+        onReady();
+      });
+  }
+  return null;
 }
 
 /**
- * Revoke the blob URL of every `data:` source not in `inUse`. Call with the
- * sources the slots currently show; an empty list releases them all.
+ * Drop cached labels for every `data:` source not in `inUse`. The cache keys
+ * are whole `data:` URLs, often hundreds of kilobytes, so they must not
+ * outlive the slots that show them. An empty list forgets them all.
  */
-export function releaseDataDocumentURLs(inUse: Iterable<string>): void {
-  const keep = new Set(inUse);
-  // Deleting the visited entry during Map#forEach is safe.
-  blobURLBySource.forEach((url, source) => {
-    if (!keep.has(source)) {
-      URL.revokeObjectURL(url);
-      blobURLBySource.delete(source);
+export function forgetDataDocuments(inUse: Iterable<string>): void {
+  const keep = new Set(
+    Array.from(inUse, source => splitFragment(source.trim())[0])
+  );
+  labelBySource.forEach((_label, body) => {
+    if (!keep.has(body)) {
+      labelBySource.delete(body);
     }
   });
 }

@@ -187,6 +187,22 @@ renderer error surfaces as `renderStatus: failed`, rather than being rejected at
 cast time. The iframe/PDF caveat above still applies — a navigation the browser
 reports as a successful load is indistinguishable from a real render there.
 
+A `data:` source rendered in the artwork iframe plays in a device-local origin
+of its own (`src/utils/dataDocument.ts`). A document loaded straight from a
+`data:` URL has an opaque origin with no storage and no secure context, so
+fully on-chain works die on their first `localStorage` read and lose WebGPU.
+When the player runs on loopback, the iframe instead loads
+`http://<label>.localhost:<port>/data-document.html#<the data: URL>`, where
+`<label>` is the hex of the first 16 bytes of SHA-256 over the `data:` URL
+(fragment excluded). The static shell (`public/data-document.html`) recomputes
+the label, refuses any URL that does not match its hostname, and replaces
+itself with the decoded bytes. Each work therefore gets a secure context and
+persistent storage of its own, cross-origin to the player and to every other
+work, under the usual `allow-same-origin allow-scripts` sandbox. This depends
+on the device's static server answering any `Host` (darkhttpd does) and on
+Chromium resolving `*.localhost` to loopback. Off loopback, `data:` sources
+load directly as before.
+
 Boot playlist, cast-info, and scheduled-task records are recovery snapshots
 rather than new cast commands. They are intentionally restored or executed
 without source validation so an upgrade does not interrupt a previously

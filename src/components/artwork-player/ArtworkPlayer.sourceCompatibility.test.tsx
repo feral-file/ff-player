@@ -3,6 +3,7 @@
  * Relative forms need an absolute iframe-settings URL, while data payloads must
  * remain byte-for-byte intact because their text is the artwork itself.
  */
+import { createHash } from 'node:crypto';
 import { AppContext } from '@/context/AppContext';
 import { Scaling, defaultDP1DisplayPreference } from '@/models/dp1.model';
 import { cleanup, render, waitFor } from '@testing-library/react';
@@ -123,37 +124,34 @@ describe('ArtworkPlayer — accepted artwork source compatibility', () => {
     }
   );
 
-  it('serves a raw data payload unmodified as an isolated blob document', async () => {
-    // jsdom has no object URLs; record the blob the player hands over.
-    const blobs: Blob[] = [];
-    Object.defineProperty(URL, 'createObjectURL', {
-      configurable: true,
-      value: (blob: Blob) => {
-        blobs.push(blob);
-        return `blob:http://127.0.0.1:8080/${String(blobs.length)}`;
-      },
-    });
-    Object.defineProperty(URL, 'revokeObjectURL', {
-      configurable: true,
-      value: () => undefined,
-    });
-    try {
-      const source = 'data:text/html,<h1>100% artwork</h1>';
-      const { container } = renderArtwork(source, 'text/html');
-
-      await waitFor(() => {
-        const iframe = container.querySelector('iframe');
-        expect(iframe?.getAttribute('src')).toBe('blob:http://127.0.0.1:8080/1');
-        // No allow-same-origin: the blob would otherwise run as the player.
-        expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');
+  it('plays a raw data payload in its own localhost origin, never as a bare data: document', async () => {
+    const source = 'data:text/html,<h1>100% artwork</h1>';
+    const srcs: string[] = [];
+    const observer = new MutationObserver(() => {
+      container.querySelectorAll('iframe').forEach(frame => {
+        srcs.push(frame.getAttribute('src') ?? '');
       });
-      expect(blobs[0]?.type).toBe('text/html');
-      expect(await blobs[0]?.text()).toBe('<h1>100% artwork</h1>');
-    } finally {
-      cleanup();
-      Reflect.deleteProperty(URL, 'createObjectURL');
-      Reflect.deleteProperty(URL, 'revokeObjectURL');
-    }
+    });
+    const { container } = renderArtwork(source, 'text/html');
+    observer.observe(container, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+    });
+    const label = createHash('sha256').update(source).digest('hex').slice(0, 32);
+
+    await waitFor(() => {
+      const iframe = container.querySelector('iframe');
+      expect(iframe?.getAttribute('src')).toBe(
+        `http://${label}.localhost:${window.location.port}/data-document.html#${encodeURIComponent(source)}`
+      );
+      // Cross-origin to the player, so the work keeps its own storage.
+      expect(iframe?.getAttribute('sandbox')).toBe(
+        'allow-same-origin allow-scripts'
+      );
+    });
+    observer.disconnect();
+    expect(srcs.some(src => src.startsWith('data:'))).toBe(false);
   });
 
   it.each(base64MediaSources)(
