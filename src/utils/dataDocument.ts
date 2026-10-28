@@ -53,11 +53,33 @@ function percentDecode(text: string): Uint8Array<ArrayBuffer> {
 }
 
 /**
+ * Split a URL at its first `#`. A fragment is never part of a `data:` body
+ * (Fetch's data: URL processor excludes it); it stays on the document URL,
+ * where a work can read it as `location.hash`.
+ */
+function splitFragment(url: string): [string, string] {
+  const hash = url.indexOf('#');
+  return hash === -1 ? [url, ''] : [url.slice(0, hash), url.slice(hash)];
+}
+
+/**
+ * The Blob type for a `data:` URL's media type, defaulted as Fetch does: an
+ * omitted type is `text/plain;charset=US-ASCII`, and parameters with no type
+ * (`;charset=utf-8`) keep their parameters under `text/plain`.
+ */
+function blobType(mediaType: string): string {
+  if (mediaType === '') {
+    return 'text/plain;charset=US-ASCII';
+  }
+  return mediaType.startsWith(';') ? `text/plain${mediaType}` : mediaType;
+}
+
+/**
  * Decode a `data:` URL into a Blob carrying its declared media type, or
  * return null when it is not a well-formed `data:` URL.
  */
 export function blobFromDataURL(source: string): Blob | null {
-  const trimmed = source.trim();
+  const [trimmed] = splitFragment(source.trim());
   const comma = trimmed.indexOf(',');
   if (!/^data:/i.test(trimmed) || comma === -1) {
     return null;
@@ -78,9 +100,7 @@ export function blobFromDataURL(source: string): Blob | null {
       return null;
     }
   }
-  return new Blob([bytes], {
-    type: mediaType || 'text/plain;charset=US-ASCII',
-  });
+  return new Blob([bytes], { type: blobType(mediaType) });
 }
 
 /**
@@ -89,9 +109,10 @@ export function blobFromDataURL(source: string): Blob | null {
  * `data:` URL that does not decode, which keeps today's behavior).
  */
 export function dataDocumentURL(source: string): string {
+  const [, fragment] = splitFragment(source.trim());
   const cached = blobURLBySource.get(source);
   if (cached) {
-    return cached;
+    return cached + fragment;
   }
   const blob = blobFromDataURL(source);
   if (!blob) {
@@ -100,7 +121,7 @@ export function dataDocumentURL(source: string): string {
   const url = URL.createObjectURL(blob);
   blobURLBySource.set(source, url);
   dataDocumentBlobURLs.add(url);
-  return url;
+  return url + fragment;
 }
 
 /**
@@ -109,7 +130,10 @@ export function dataDocumentURL(source: string): string {
  * the work would run as the player's own origin.
  */
 export function artworkIframeSandbox(src: string): string {
-  return dataDocumentBlobURLs.has(src) ? SANDBOX_ISOLATED : SANDBOX_DEFAULT;
+  // Look up without the fragment dataDocumentURL appends, or a blob document
+  // with a #hash would fall through to allow-same-origin.
+  const [blobURL] = splitFragment(src);
+  return dataDocumentBlobURLs.has(blobURL) ? SANDBOX_ISOLATED : SANDBOX_DEFAULT;
 }
 
 /**

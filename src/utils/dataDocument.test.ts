@@ -28,6 +28,22 @@ describe('blobFromDataURL', () => {
     );
   });
 
+  it('keeps a fragment out of the decoded body', async () => {
+    const encoded = Buffer.from('<h1>OK</h1>').toString('base64');
+    expect(await blobFromDataURL(`data:text/html;base64,${encoded}#token`)?.text()).toBe(
+      '<h1>OK</h1>'
+    );
+    expect(await blobFromDataURL('data:text/html,<h1>OK</h1>#token')?.text()).toBe(
+      '<h1>OK</h1>'
+    );
+  });
+
+  it('keeps charset parameters under text/plain when the type is omitted', async () => {
+    const blob = blobFromDataURL('data:;charset=utf-8,%C3%A9');
+    expect(blob?.type).toBe('text/plain;charset=utf-8');
+    expect(await blob?.text()).toBe('é');
+  });
+
   it('returns null for invalid base64 or a non-data source', () => {
     expect(blobFromDataURL('data:text/html;base64,@@@')).toBeNull();
     expect(blobFromDataURL('https://example.com/a.html')).toBeNull();
@@ -43,6 +59,12 @@ describe('dataDocumentURL', () => {
     const url = dataDocumentURL(base64HTML);
     expect(url.startsWith('blob:')).toBe(true);
     expect(dataDocumentURL(base64HTML)).toBe(url);
+    expect(artworkIframeSandbox(url)).toBe('allow-scripts');
+  });
+
+  it('keeps the fragment on the blob URL and still isolates it', () => {
+    const url = dataDocumentURL(`${base64HTML}#0xabc`);
+    expect(url).toMatch(/^blob:.*#0xabc$/);
     expect(artworkIframeSandbox(url)).toBe('allow-scripts');
   });
 
