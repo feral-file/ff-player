@@ -24,6 +24,13 @@ import {
   releaseDataDocumentURLs,
 } from '@/utils/dataDocument';
 import {
+  WORK_ORIGIN_MESSAGE,
+  forgetWorkOrigins,
+  isWorkOriginURL,
+  resolveWorkOrigin,
+  usesWorkOrigin,
+} from '@/utils/workOrigin';
+import {
   FileUseAudio,
   FileUseIframePDF,
   FileUseImage,
@@ -211,6 +218,9 @@ const ArtworkPlayer = ({
       onRegisterArtworkReload(null);
     };
   }, [onRegisterArtworkReload, performArtworkReload]);
+  // Bumped when an on-chain work's origin is resolved (label hashed, works
+  // server probed), so the software-URL effect can point its iframe there.
+  const [workOriginsReady, setWorkOriginsReady] = useState(0);
   const [slots, setSlots] = useState<[SlotLayer | null, SlotLayer | null]>([
     null,
     null,
@@ -1604,7 +1614,14 @@ const ArtworkPlayer = ({
             previewType: cfg.previewType,
             isStreaming: cfg.isStreaming,
             displayPreviewURL: url,
-            displaySoftwareURL: url,
+            // An on-chain work waits for its own origin (software-URL
+            // effect) rather than loading once as a bare data: document.
+            displaySoftwareURL:
+              cfg.previewType === PreviewHTMLTag.iframe &&
+              !isModelMimeType(resolvedMimeType) &&
+              usesWorkOrigin(url)
+                ? ''
+                : url,
             mimeType: resolvedMimeType,
           };
           return next;
@@ -1684,7 +1701,7 @@ const ArtworkPlayer = ({
             previewType: PreviewHTMLTag.iframe,
             isStreaming: false,
             displayPreviewURL: url,
-            displaySoftwareURL: url,
+            displaySoftwareURL: usesWorkOrigin(url) ? '' : url,
             mimeType: null,
           };
           return next;
@@ -2127,9 +2144,18 @@ const ArtworkPlayer = ({
           // boundary. Relative web URLs are resolved only for this iframe
           // setting, leaving the persisted/display source unchanged.
           if (resolvedURL.protocol === 'data:') {
-            // Served as a sandboxed blob document so on-chain works get a
-            // secure context (WebGPU); see utils/dataDocument.
-            softwareURL = dataDocumentURL(slot.displayPreviewURL);
+            // An on-chain HTML work plays in a device-local origin of its own
+            // (storage, WebGPU; utils/workOrigin), '' while that is resolved;
+            // otherwise as a sandboxed blob document (WebGPU; utils/dataDocument).
+            const origin = resolveWorkOrigin(slot.displayPreviewURL, () => {
+              setWorkOriginsReady(n => n + 1);
+            });
+            softwareURL =
+              origin.kind === 'ready'
+                ? origin.url
+                : origin.kind === 'pending'
+                  ? ''
+                  : dataDocumentURL(slot.displayPreviewURL);
           } else {
             // Delegated so the reversibility contract lives beside the rule
             // it protects: controld's offline-cache replay strips
@@ -2157,14 +2183,66 @@ const ArtworkPlayer = ({
     committedVisualSettings,
     context.deviceRotation?.viewMode,
     slots,
+    workOriginsReady,
   ]);
 
-  // A data: source's blob document lives as long as a slot shows the source.
+  // A data: source's blob document and work-origin label live as long as a
+  // slot shows the source.
   useEffect(() => {
-    releaseDataDocumentURLs(
-      slots.flatMap(slot => (slot ? [slot.displayPreviewURL] : []))
-    );
+    const shown = slots.flatMap(slot => (slot ? [slot.displayPreviewURL] : []));
+    releaseDataDocumentURLs(shown);
+    forgetWorkOrigins(shown);
   }, [slots]);
+
+  // Latest refs and handlers for the work-origin message listener below,
+  // which subscribes once.
+  const workOriginFramesRef = useRef<{
+    iframeRefs: typeof iframeRefs;
+    onLoad: ((slotIndex: SlotIndex, layer: SlotLayer) => void) | null;
+    onError: ((slotIndex: SlotIndex, layer: SlotLayer) => void) | null;
+  }>({ iframeRefs, onLoad: null, onError: null });
+
+  // A work-origin frame reports through its shell: the frame's own load
+  // event comes from the shell, before the work exists, so for these frames
+  // the shell's messages are the completion signal (utils/workOrigin). The
+  // shell asks for the bytes with `ready`; only the frame's current slot
+  // source is sent, and only to the frame's own origin.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      const type = (event.data as { type?: unknown } | null)?.type;
+      if (typeof type !== 'string' || !type.startsWith('ff-data-document:')) {
+        return;
+      }
+      const frames = workOriginFramesRef.current;
+      SLOT_INDICES.forEach(i => {
+        const frame = frames.iframeRefs[i].current;
+        const slot = slotsRef.current[i];
+        if (
+          !frame ||
+          !slot ||
+          event.source !== frame.contentWindow ||
+          !isWorkOriginURL(slot.displaySoftwareURL) ||
+          event.origin !== new URL(slot.displaySoftwareURL).origin
+        ) {
+          return;
+        }
+        if (type === WORK_ORIGIN_MESSAGE.ready) {
+          frame.contentWindow?.postMessage(
+            { type: WORK_ORIGIN_MESSAGE.open, source: slot.displayPreviewURL },
+            event.origin
+          );
+        } else if (type === WORK_ORIGIN_MESSAGE.loaded) {
+          frames.onLoad?.(i, slot);
+        } else if (type === WORK_ORIGIN_MESSAGE.error) {
+          frames.onError?.(i, slot);
+        }
+      });
+    };
+    window.addEventListener('message', onMessage);
+    return () => {
+      window.removeEventListener('message', onMessage);
+    };
+  }, []);
 
   useEffect(() => () => { releaseDataDocumentURLs([]); }, []);
 
@@ -2181,6 +2259,14 @@ const ArtworkPlayer = ({
     // RenderStatus.failed, and raises the modal.
     handleArtworkRenderFailure(slotIndex, layer);
   };
+
+  useEffect(() => {
+    workOriginFramesRef.current = {
+      iframeRefs,
+      onLoad: handleIframeLoad,
+      onError: handleLoadIframeError,
+    };
+  });
 
   const reloadIframe = (slotIndex: SlotIndex) => {
     setSlots(prev => {
@@ -2572,10 +2658,15 @@ const ArtworkPlayer = ({
               className={styles.iframe}
               src={slot.displaySoftwareURL}
               onLoad={() => {
-                handleIframeLoad(slotIndex, slot);
+                // Work-origin frames complete through their shell's message.
+                if (!isWorkOriginURL(slot.displaySoftwareURL)) {
+                  handleIframeLoad(slotIndex, slot);
+                }
               }}
               onError={() => {
-                handleLoadIframeError(slotIndex, slot);
+                if (!isWorkOriginURL(slot.displaySoftwareURL)) {
+                  handleLoadIframeError(slotIndex, slot);
+                }
               }}
               sandbox={artworkIframeSandbox(slot.displaySoftwareURL)}
               tabIndex={0}

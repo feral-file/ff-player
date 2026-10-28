@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title></title>
+    <script>
+      // The shell for a fully on-chain (data:) work's device-local origin,
+      // http://<label>.localhost:8081/. FF OS serves this directory, and only
+      // this directory, on that port; see src/utils/workOrigin.ts, which this
+      // page must stay in step with. It tells the player it is ready, takes
+      // the work's data: URL by postMessage, refuses it unless its SHA-256
+      // label is this page's hostname (so an origin can only ever run the
+      // bytes it names), writes the work into this document, and reports
+      // "loaded" once the work has finished loading. The player waits for
+      // that message rather than this frame's load events.
+      (() => {
+        const PREFIX = 'ff-data-document:';
+        const notify = event => parent.postMessage({ type: PREFIX + event }, '*');
+        const label = location.hostname.endsWith('.localhost')
+          ? location.hostname.slice(0, -'.localhost'.length)
+          : '';
+        let opened = false;
+
+        async function open(source) {
+          const hashAt = source.indexOf('#');
+          const body = hashAt === -1 ? source : source.slice(0, hashAt);
+          const fragment = hashAt === -1 ? '' : source.slice(hashAt);
+          const digest = await crypto.subtle.digest(
+            'SHA-256',
+            new TextEncoder().encode(body)
+          );
+          const computed = Array.from(new Uint8Array(digest).slice(0, 16), b =>
+            b.toString(16).padStart(2, '0')
+          ).join('');
+          if (!/^data:text\/html\s*[;,]/i.test(body) || computed !== label) {
+            throw new Error('refused: content does not match this origin');
+          }
+          // fetch() decodes the data: URL exactly as Chromium would.
+          const response = await fetch(body);
+          const type = response.headers.get('content-type') || '';
+          const charset = (/charset=([^;]+)/i.exec(type) || [])[1] || 'utf-8';
+          const html = new TextDecoder(charset.trim()).decode(
+            await response.arrayBuffer()
+          );
+          if (fragment) {
+            history.replaceState(null, '', fragment);
+          }
+          // document.open() erases this window's listeners, so the load
+          // listener goes on after it and before the work is written.
+          document.open();
+          addEventListener('load', () => notify('loaded'), { once: true });
+          document.write(html);
+          document.close();
+        }
+
+        addEventListener('message', event => {
+          const data = event.data;
+          if (
+            opened ||
+            event.source !== parent ||
+            !data ||
+            data.type !== PREFIX + 'open' ||
+            typeof data.source !== 'string'
+          ) {
+            return;
+          }
+          opened = true;
+          open(data.source).catch(error => {
+            console.error('[data-document]', error);
+            notify('error');
+          });
+        });
+        notify('ready');
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

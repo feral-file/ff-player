@@ -9,6 +9,11 @@ import { cleanup, render, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
+import { createHash } from 'node:crypto';
+import {
+  WORK_ORIGIN_MESSAGE,
+  resetWorkOriginServerForTests,
+} from '@/utils/workOrigin';
 
 const relativeSources = [
   ['relative', 'artwork.html', 'http://localhost:3000/artwork.html'],
@@ -94,7 +99,10 @@ function renderArtwork(source: string, artworkPreviewMIMEType?: string) {
   );
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  resetWorkOriginServerForTests();
+});
 
 describe('ArtworkPlayer — accepted artwork source compatibility', () => {
   it.each(relativeSources)(
@@ -123,7 +131,43 @@ describe('ArtworkPlayer — accepted artwork source compatibility', () => {
     }
   );
 
-  it('serves a raw data payload unmodified as an isolated blob document', async () => {
+  it.each(base64MediaSources)(
+    'selects the %s renderer from a playlist data URL without an injected MIME type',
+    async (_kind, selector, source) => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      const { container } = renderArtwork(source);
+
+      await waitFor(() => {
+        expect(container.querySelector(selector)).toBeTruthy();
+      });
+
+      expect(container.querySelector('iframe')).toBeNull();
+      // Media loaders may fetch data: bytes for blob conversion, but MIME
+      // discovery must not probe with a cache-busting HEAD that corrupts them.
+      expect(
+        fetchSpy.mock.calls.some(([requestURL, init]) => {
+          const method =
+            init && typeof init === 'object' && 'method' in init && init.method
+              ? init.method.toUpperCase()
+              : 'GET';
+          return (
+            method === 'HEAD' ||
+            (typeof requestURL === 'string' &&
+              requestURL.includes('x-request=xhr'))
+          );
+        })
+      ).toBe(false);
+      fetchSpy.mockRestore();
+    }
+  );
+});
+
+describe('ArtworkPlayer data: works', () => {
+  it('serves a raw data payload unmodified as an isolated blob document without a works server', async () => {
+    // The OS has no works server (older image): the work-origin probe fails.
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+      new TypeError('connection refused')
+    );
     // jsdom has no object URLs; record the blob the player hands over.
     const blobs: Blob[] = [];
     Object.defineProperty(URL, 'createObjectURL', {
@@ -156,33 +200,55 @@ describe('ArtworkPlayer — accepted artwork source compatibility', () => {
     }
   });
 
-  it.each(base64MediaSources)(
-    'selects the %s renderer from a playlist data URL without an injected MIME type',
-    async (_kind, selector, source) => {
-      const fetchSpy = vi.spyOn(globalThis, 'fetch');
-      const { container } = renderArtwork(source);
-
-      await waitFor(() => {
-        expect(container.querySelector(selector)).toBeTruthy();
+  it('plays an HTML data payload in its own work origin and hands the bytes over on ready', async () => {
+    // The works server answers the probe.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null));
+    const source = 'data:text/html,<h1>100% artwork</h1>';
+    const label = createHash('sha256').update(source).digest('hex').slice(0, 32);
+    const origin = `http://${label}.localhost:8081`;
+    const srcs: string[] = [];
+    const { container } = renderArtwork(source, 'text/html');
+    const observer = new MutationObserver(() => {
+      container.querySelectorAll('iframe').forEach(frame => {
+        srcs.push(frame.getAttribute('src') ?? '');
       });
+    });
+    observer.observe(container, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+    });
 
-      expect(container.querySelector('iframe')).toBeNull();
-      // Media loaders may fetch data: bytes for blob conversion, but MIME
-      // discovery must not probe with a cache-busting HEAD that corrupts them.
-      expect(
-        fetchSpy.mock.calls.some(([requestURL, init]) => {
-          const method =
-            init && typeof init === 'object' && 'method' in init && init.method
-              ? init.method.toUpperCase()
-              : 'GET';
-          return (
-            method === 'HEAD' ||
-            (typeof requestURL === 'string' &&
-              requestURL.includes('x-request=xhr'))
-          );
-        })
-      ).toBe(false);
-      fetchSpy.mockRestore();
+    await waitFor(() => {
+      const iframe = container.querySelector('iframe');
+      expect(iframe?.getAttribute('src')).toBe(`${origin}/`);
+      // Cross-origin to the player, so the work keeps its own storage.
+      expect(iframe?.getAttribute('sandbox')).toBe(
+        'allow-same-origin allow-scripts'
+      );
+    });
+    observer.disconnect();
+    expect(srcs.some(src => src.startsWith('data:'))).toBe(false);
+
+    const iframe = container.querySelector('iframe');
+    const frameWindow = iframe?.contentWindow;
+    if (!frameWindow) {
+      throw new Error('expected the work-origin iframe to have a window');
     }
-  );
+    const post = vi.spyOn(frameWindow, 'postMessage').mockImplementation(() => undefined);
+    const fromShell = (type: string, from: string) =>
+      new MessageEvent('message', {
+        data: { type },
+        origin: from,
+        source: frameWindow,
+      });
+    // A message from any other origin is ignored.
+    window.dispatchEvent(fromShell(WORK_ORIGIN_MESSAGE.ready, 'http://evil.localhost:8081'));
+    expect(post).not.toHaveBeenCalled();
+    window.dispatchEvent(fromShell(WORK_ORIGIN_MESSAGE.ready, origin));
+    expect(post).toHaveBeenCalledWith(
+      { type: WORK_ORIGIN_MESSAGE.open, source },
+      origin
+    );
+  });
 });
