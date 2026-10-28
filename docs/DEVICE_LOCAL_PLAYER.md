@@ -203,18 +203,15 @@ read and loses WebGPU. The player never mounts one that way:
   (`public/data-document/index.html`), so no other bundle page can boot in a
   work's origin. The shell posts `ready`; the player answers with the source,
   to that origin only; the shell refuses bytes whose hash is not its
-  hostname, writes the work into its document, and posts `loaded` (or
-  `error`) when the work has finished loading. That message is the frame's
-  completion signal: its own `load` events come from the shell and are
-  ignored, and only the first completion per frame counts (a work shares its
-  shell's window and can post look-alike messages). The player probes for the
-  works server when a work chooses its path, at most once a minute, and a
-  slot keeps the path it took, so a playing work is never re-routed. The shell
-  decodes the work in the encoding the browser's own HTML parse of it
-  reports (an `XMLHttpRequest` document's `characterSet`: byte order mark,
-  the `data:` charset, the `<meta>` prescan, then UTF-8). Each work gets
-  WebGPU and persistent storage of its own,
-  cross-origin to the player and to every other work, under the usual
+  hostname (posting `error`), otherwise posts `navigating` and replaces
+  itself with the work as a blob document of its origin, so Chromium's own
+  navigation decoder opens the work exactly as a direct load would. The
+  frame's first `load` after `navigating` is the work's completion, counted
+  once per frame; the shell's own earlier `load` is not. The player probes
+  for the works server when a work chooses its path, at most once a minute,
+  and a slot keeps the path it took, so a playing work is never re-routed.
+  Each work gets WebGPU and persistent storage of its own, cross-origin to
+  the player and to every other work, under the usual
   `allow-same-origin allow-scripts` sandbox.
 - **Blob document** (`src/utils/dataDocument.ts`): otherwise (an OS without
   the works server, a non-HTML `data:` type, or a player off loopback) the

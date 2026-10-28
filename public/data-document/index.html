@@ -10,9 +10,9 @@
       // page must stay in step with. It tells the player it is ready, takes
       // the work's data: URL by postMessage, refuses it unless its SHA-256
       // label is this page's hostname (so an origin can only ever run the
-      // bytes it names), writes the work into this document, and reports
-      // "loaded" once the work has finished loading. The player waits for
-      // that message rather than this frame's load events.
+      // bytes it names), then posts "navigating" and replaces itself with the
+      // work as a blob document of this origin. The player counts the
+      // frame's first load event after "navigating" as the work's.
       (() => {
         const PREFIX = 'ff-data-document:';
         const notify = event => parent.postMessage({ type: PREFIX + event }, '*');
@@ -20,22 +20,6 @@
           ? location.hostname.slice(0, -'.localhost'.length)
           : '';
         let opened = false;
-
-        // The encoding the browser's HTML parser picks for this document
-        // (byte order mark, the data: URL's charset, the <meta> prescan with
-        // its comment and attribute rules and its remapping, then UTF-8),
-        // read off the browser's own parse instead of re-implemented here.
-        function htmlEncoding(url) {
-          return new Promise(resolve => {
-            const request = new XMLHttpRequest();
-            request.open('GET', url);
-            request.responseType = 'document';
-            request.onload = () =>
-              resolve((request.response && request.response.characterSet) || 'UTF-8');
-            request.onerror = () => resolve('UTF-8');
-            request.send();
-          });
-        }
 
         async function open(source) {
           const hashAt = source.indexOf('#');
@@ -51,19 +35,20 @@
           if (!/^data:text\/html\s*[;,]/i.test(body) || computed !== label) {
             throw new Error('refused: content does not match this origin');
           }
-          // fetch() decodes the data: URL exactly as Chromium would.
-          const response = await fetch(body);
-          const bytes = new Uint8Array(await response.arrayBuffer());
-          const html = new TextDecoder(await htmlEncoding(body)).decode(bytes);
-          if (fragment) {
-            history.replaceState(null, '', fragment);
+          // Navigate to the bytes as a blob document of this origin, so
+          // Chromium's own navigation decoder opens the work exactly as a
+          // direct load would (encoding fallback included). fetch() decodes
+          // the data: URL, media type and all. The frame's next load event is
+          // the work's: wait out this page's own load first, then say so.
+          const blob = await (await fetch(body)).blob();
+          if (document.readyState !== 'complete') {
+            await new Promise(resolve => addEventListener('load', resolve, { once: true }));
           }
-          // document.open() erases this window's listeners, so the load
-          // listener goes on after it and before the work is written.
-          document.open();
-          addEventListener('load', () => notify('loaded'), { once: true });
-          document.write(html);
-          document.close();
+          // One more task, so the frame's report of this page's own load has
+          // left before "navigating" does.
+          await new Promise(resolve => setTimeout(resolve, 0));
+          notify('navigating');
+          location.replace(URL.createObjectURL(blob) + fragment);
         }
 
         addEventListener('message', event => {

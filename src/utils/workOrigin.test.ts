@@ -178,10 +178,7 @@ describe('resolveWorkOrigin probe lifecycle', () => {
  * Loads public/data-document/index.html's script into a VM context standing
  * in for the shell's window on `hostname`, and exposes what it did.
  */
-function loadShell(
-  hostname: string,
-  detected: string | null = 'UTF-8'
-) {
+function loadShell(hostname: string) {
   const html = readFileSync(
     path.resolve(__dirname, '../../public/data-document/index.html'),
     'utf8'
@@ -189,8 +186,7 @@ function loadShell(
   const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1] ?? '';
   const toParent: unknown[] = [];
   const listeners: Partial<Record<string, (event: unknown) => void>> = {};
-  const written: string[] = [];
-  const replaced: string[] = [];
+  const navigated: string[] = [];
   const parent = {
     postMessage: (message: unknown) => {
       toParent.push(message);
@@ -200,47 +196,22 @@ function loadShell(
     script,
     vm.createContext({
       parent,
-      location: { hostname },
+      location: {
+        hostname,
+        replace: (url: string) => {
+          navigated.push(url);
+        },
+      },
       addEventListener: (type: string, listener: (event: unknown) => void) => {
         listeners[type] = listener;
       },
-      document: {
-        open: () => undefined,
-        write: (text: string) => {
-          written.push(text);
-        },
-        close: () => undefined,
-      },
-      history: {
-        replaceState: (_state: unknown, _title: string, url: string) => {
-          replaced.push(url);
-        },
-      },
-      // Stands in for the browser's HTML encoding detection: reports
-      // `detected` as the parsed document's characterSet, or fails when null.
-      XMLHttpRequest: class {
-        response: { characterSet: string } | null = null;
-        onload: (() => void) | null = null;
-        onerror: (() => void) | null = null;
-        open() {
-          return undefined;
-        }
-        send() {
-          setTimeout(() => {
-            if (detected === null) {
-              this.onerror?.();
-              return;
-            }
-            this.response = { characterSet: detected };
-            this.onload?.();
-          }, 0);
-        }
-      },
+      document: { readyState: 'complete' },
+      setTimeout,
       crypto: globalThis.crypto,
       TextEncoder,
-      TextDecoder,
       Uint8Array,
       Array,
+      URL,
       fetch,
       console: { error: () => undefined },
     })
@@ -252,62 +223,32 @@ function loadShell(
     });
     await new Promise(resolve => setTimeout(resolve, 50));
   };
-  return { toParent, listeners, written, replaced, send, parent };
+  return { toParent, navigated, send };
 }
 
 describe('public/data-document/index.html', () => {
   const host = `${labelOf(SOURCE)}.localhost`;
 
-  it('asks for the work, writes the exact bytes, keeps the fragment and reports loaded', async () => {
+  it('asks for the work, announces the navigation, then opens the exact bytes with the fragment', async () => {
     const shell = loadShell(host);
     expect(shell.toParent).toEqual([{ type: WORK_ORIGIN_MESSAGE.ready }]);
     await shell.send(`${SOURCE}#seed42`);
-    expect(shell.written).toEqual([HTML]);
-    expect(shell.replaced).toEqual(['#seed42']);
-    shell.listeners.load?.({});
-    expect(shell.toParent.at(-1)).toEqual({ type: WORK_ORIGIN_MESSAGE.loaded });
-  });
-
-  it('decodes the work in the encoding its <meta> declares', async () => {
-    const latin = Buffer.from(
-      '<!doctype html><meta charset="windows-1252"><script>let café = 1</script>',
-      'latin1'
-    );
-    const source = `data:text/html;base64,${latin.toString('base64')}`;
-    const shell = loadShell(`${labelOf(source)}.localhost`, 'windows-1252');
-    await shell.send(source);
-    expect(shell.written[0]).toContain('let café = 1');
-  });
-
-  it('honours a UTF-16 byte order mark', async () => {
-    const utf16 = Buffer.concat([
-      Buffer.from([0xff, 0xfe]),
-      Buffer.from('<p>naïve</p>', 'utf16le'),
+    expect(shell.toParent).toEqual([
+      { type: WORK_ORIGIN_MESSAGE.ready },
+      { type: WORK_ORIGIN_MESSAGE.navigating },
     ]);
-    const source = `data:text/html;base64,${utf16.toString('base64')}`;
-    const shell = loadShell(`${labelOf(source)}.localhost`, 'UTF-16LE');
-    await shell.send(source);
-    expect(shell.written[0]).toBe('<p>naïve</p>');
-  });
-
-  it('decodes as UTF-8 when encoding detection fails', async () => {
-    const source = `data:text/html;base64,${Buffer.from('<p>café</p>').toString('base64')}`;
-    const shell = loadShell(`${labelOf(source)}.localhost`, null);
-    await shell.send(source);
-    expect(shell.written[0]).toBe('<p>café</p>');
-  });
-
-  it('accepts the trimmed source the player hashes and sends', async () => {
-    const padded = 'data:text/html,<p>ok</p>\n';
-    const shell = loadShell(`${labelOf(padded.trim())}.localhost`);
-    await shell.send(padded.trim());
-    expect(shell.written).toEqual(['<p>ok</p>']);
+    expect(shell.navigated).toHaveLength(1);
+    expect(shell.navigated[0]).toMatch(/^blob:.*#seed42$/);
+    const blobURL = shell.navigated[0]?.split('#')[0] ?? '';
+    const blob = await (await fetch(blobURL)).blob();
+    expect(blob.type).toBe('text/html');
+    expect(await blob.text()).toBe(HTML);
   });
 
   it('refuses bytes that do not match its origin', async () => {
     const shell = loadShell(host);
     await shell.send(`data:text/html,${encodeURIComponent('<p>other work</p>')}`);
-    expect(shell.written).toEqual([]);
+    expect(shell.navigated).toEqual([]);
     expect(shell.toParent.at(-1)).toEqual({ type: WORK_ORIGIN_MESSAGE.error });
   });
 
@@ -315,16 +256,23 @@ describe('public/data-document/index.html', () => {
     const svg = 'data:image/svg+xml,<svg/>';
     const shell = loadShell(`${labelOf(svg)}.localhost`);
     await shell.send(svg);
-    expect(shell.written).toEqual([]);
+    expect(shell.navigated).toEqual([]);
     expect(shell.toParent.at(-1)).toEqual({ type: WORK_ORIGIN_MESSAGE.error });
   });
 
   it('ignores messages that are not from its parent, and opens only once', async () => {
     const shell = loadShell(host);
     await shell.send(SOURCE, {});
-    expect(shell.written).toEqual([]);
+    expect(shell.navigated).toEqual([]);
     await shell.send(SOURCE);
     await shell.send(SOURCE);
-    expect(shell.written).toEqual([HTML]);
+    expect(shell.navigated).toHaveLength(1);
+  });
+
+  it('accepts the trimmed source the player hashes and sends', async () => {
+    const padded = 'data:text/html,<p>ok</p>\n';
+    const shell = loadShell(`${labelOf(padded.trim())}.localhost`);
+    await shell.send(padded.trim());
+    expect(shell.navigated).toHaveLength(1);
   });
 });
