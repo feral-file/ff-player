@@ -112,7 +112,12 @@
             return;
           }
           opened = true;
-          const report = type => port.postMessage({ type: PREFIX + type });
+          // Bind the native sender now, before the work exists: the work
+          // shares this realm and could later replace
+          // MessagePort.prototype.postMessage, which a lookup at report time
+          // would then call with the private port.
+          const send = MessagePort.prototype.postMessage.bind(port);
+          const report = type => send({ type: PREFIX + type });
           open(data.source, report).catch(error => {
             console.error('[data-document]', error);
             report('error');

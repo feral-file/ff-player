@@ -222,14 +222,19 @@ function loadShell(hostname: string) {
       toParent.push(message);
     },
   };
-  const port = {
-    postMessage: (message: unknown) => {
+  // A port class standing in for MessagePort, so a test can replace its
+  // prototype method the way a work running in the shell's realm could.
+  /**
+   *
+   */
+  class FakePort {
+    postMessage(message: unknown) {
       reports.push(message);
-    },
-  };
-  vm.runInContext(
-    script,
-    vm.createContext({
+    }
+  }
+  const port = new FakePort();
+  const context = vm.createContext({
+      MessagePort: FakePort,
       parent,
       location: { hostname },
       addEventListener: (type: string, listener: (event: unknown) => void) => {
@@ -244,8 +249,8 @@ function loadShell(hostname: string) {
       URL,
       fetch,
       console: { error: () => undefined },
-    })
-  );
+  });
+  vm.runInContext(script, context);
   const send = async (
     source: unknown,
     options: { from?: unknown; withPort?: boolean } = {}
@@ -257,7 +262,7 @@ function loadShell(hostname: string) {
     });
     await new Promise(resolve => setTimeout(resolve, 50));
   };
-  return { toParent, reports, frames, send };
+  return { toParent, reports, frames, send, FakePort };
 }
 
 describe('public/data-document/index.html', () => {
@@ -280,6 +285,17 @@ describe('public/data-document/index.html', () => {
     expect(shell.reports).toEqual([{ type: WORK_ORIGIN_MESSAGE.loaded }]);
     // Completion never goes to window, where the work could imitate it.
     expect(shell.toParent).toEqual([{ type: WORK_ORIGIN_MESSAGE.ready }]);
+  });
+
+  it('keeps reporting through the native sender after the work replaces it', async () => {
+    const shell = loadShell(host);
+    await shell.send(SOURCE);
+    // What a work could do from inside the shell's realm once it runs.
+    shell.FakePort.prototype.postMessage = () => {
+      shell.reports.push('intercepted');
+    };
+    shell.frames[0]?.load({ isTrusted: true });
+    expect(shell.reports).toEqual([{ type: WORK_ORIGIN_MESSAGE.loaded }]);
   });
 
   it('refuses bytes that do not match its origin, reporting over the port', async () => {
