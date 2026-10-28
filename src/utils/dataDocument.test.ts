@@ -1,167 +1,98 @@
-import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import vm from 'node:vm';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
+  artworkIframeSandbox,
+  blobFromDataURL,
   dataDocumentURL,
-  forgetDataDocuments,
-  splitFragment,
-  usesDataDocument,
+  releaseDataDocumentURLs,
 } from './dataDocument';
 
 const HTML = '<!doctype html><title>Pressure — Study</title><p>ok</p>';
-const SOURCE = `data:text/html;base64,${Buffer.from(HTML).toString('base64')}`;
+const base64HTML = `data:text/html;base64,${Buffer.from(HTML).toString('base64')}`;
 
-const labelOf = (body: string) =>
-  createHash('sha256').update(body).digest('hex').slice(0, 32);
-
-/** Resolves the URL for `source`, waiting out the async label hash. */
-async function shellURLFor(source: string): Promise<string | null> {
-  const first = dataDocumentURL(source, () => undefined);
-  if (first !== null) {
-    return first;
-  }
-  await vi.waitFor(() => {
-    expect(dataDocumentURL(source, () => undefined)).not.toBeNull();
-  });
-  return dataDocumentURL(source, () => undefined);
-}
-
-/**
- * Runs public/data-document.html's script with `url` as its location and
- * returns what it navigated to (null when it refused).
- */
-async function runShell(url: string): Promise<string | null> {
-  const html = readFileSync(
-    path.resolve(__dirname, '../../public/data-document.html'),
-    'utf8'
-  );
-  const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1] ?? '';
-  const parsed = new URL(url);
-  let navigated: string | null = null;
-  const context = vm.createContext({
-    location: {
-      hash: parsed.hash,
-      hostname: parsed.hostname,
-      replace: (to: string) => {
-        navigated = to;
-      },
-    },
-    crypto: globalThis.crypto,
-    TextEncoder,
-    Uint8Array,
-    Array,
-    URL,
-    fetch,
-    decodeURIComponent,
-    console: { error: () => undefined },
-  });
-  vm.runInContext(script, context);
-  await new Promise(resolve => setTimeout(resolve, 50));
-  return navigated;
-}
-
-describe('dataDocumentURL on an FF1 (loopback player)', () => {
-  beforeEach(() => {
-    vi.stubGlobal('location', {
-      hostname: '127.0.0.1',
-      port: '8080',
-      protocol: 'http:',
-    });
-  });
-  afterEach(() => {
-    forgetDataDocuments([]);
-    vi.unstubAllGlobals();
+describe('blobFromDataURL', () => {
+  it('decodes a base64 HTML source byte for byte, keeping the media type', async () => {
+    const blob = blobFromDataURL(base64HTML);
+    expect(blob?.type).toBe('text/html');
+    expect(await blob?.text()).toBe(HTML);
   });
 
-  it('puts each data: work on its own content-addressed localhost origin', async () => {
-    let ready = 0;
-    expect(
-      dataDocumentURL(SOURCE, () => {
-        ready += 1;
-      })
-    ).toBeNull();
-    await vi.waitFor(() => {
-      expect(ready).toBe(1);
-    });
-    expect(dataDocumentURL(SOURCE, () => undefined)).toBe(
-      `http://${labelOf(SOURCE)}.localhost:8080/data-document.html#${encodeURIComponent(SOURCE)}`
+  it('percent-decodes a plain source and keeps a stray % literal', async () => {
+    const blob = blobFromDataURL('data:text/html;charset=utf-8,%3Cp%3E100%%3C/p%3E');
+    expect(blob?.type).toBe('text/html;charset=utf-8');
+    expect(await blob?.text()).toBe('<p>100%</p>');
+  });
+
+  it('defaults an omitted media type to text/plain', () => {
+    expect(blobFromDataURL('data:,hello')?.type).toBe(
+      'text/plain;charset=us-ascii'
     );
-    expect(usesDataDocument(SOURCE)).toBe(true);
   });
 
-  it('labels by the bytes, not the fragment, and keeps the fragment', async () => {
-    const url = await shellURLFor(`${SOURCE}#0xabc`);
-    expect(url).toContain(`//${labelOf(SOURCE)}.localhost:8080/`);
-    expect(url).toContain(encodeURIComponent('#0xabc'));
+  it('keeps a fragment out of the decoded body', async () => {
+    const encoded = Buffer.from('<h1>OK</h1>').toString('base64');
+    expect(await blobFromDataURL(`data:text/html;base64,${encoded}#token`)?.text()).toBe(
+      '<h1>OK</h1>'
+    );
+    expect(await blobFromDataURL('data:text/html,<h1>OK</h1>#token')?.text()).toBe(
+      '<h1>OK</h1>'
+    );
   });
 
-  it('leaves web sources unchanged', () => {
+  it('keeps charset parameters under text/plain when the type is omitted', async () => {
+    const blob = blobFromDataURL('data:;charset=utf-8,%C3%A9');
+    expect(blob?.type).toBe('text/plain;charset=utf-8');
+    expect(await blob?.text()).toBe('é');
+  });
+
+  it('returns null for invalid base64 or a non-data source', () => {
+    expect(blobFromDataURL('data:text/html;base64,@@@')).toBeNull();
+    expect(blobFromDataURL('https://example.com/a.html')).toBeNull();
+  });
+});
+
+describe('dataDocumentURL', () => {
+  afterEach(() => {
+    releaseDataDocumentURLs([]);
+  });
+
+  it('serves a data source as one cached blob URL with an isolated sandbox', () => {
+    const url = dataDocumentURL(base64HTML);
+    expect(url.startsWith('blob:')).toBe(true);
+    expect(dataDocumentURL(base64HTML)).toBe(url);
+    expect(artworkIframeSandbox(url)).toBe('allow-scripts');
+  });
+
+  it('isolates every spelling of a blob URL', () => {
+    const url = dataDocumentURL(base64HTML);
+    for (const alias of [` ${url}`, `${url}\t`, url.replace(/^blob:/, 'BLOB:'), `${url}?x=1`]) {
+      expect(artworkIframeSandbox(alias)).toBe('allow-scripts');
+    }
+    expect(artworkIframeSandbox('/setup-artwork/index.html')).toBe(
+      'allow-same-origin allow-scripts'
+    );
+  });
+
+  it('keeps the fragment on the blob URL and still isolates it', () => {
+    const url = dataDocumentURL(`${base64HTML}#0xabc`);
+    expect(url).toMatch(/^blob:.*#0xabc$/);
+    expect(artworkIframeSandbox(url)).toBe('allow-scripts');
+  });
+
+  it('leaves web sources and undecodable data sources unchanged', () => {
     const web = 'https://example.com/work/index.html';
-    expect(dataDocumentURL(web, () => undefined)).toBe(web);
-    expect(usesDataDocument(web)).toBe(false);
+    const broken = 'data:text/html;base64,@@@';
+    expect(dataDocumentURL(web)).toBe(web);
+    expect(dataDocumentURL(broken)).toBe(broken);
+    expect(artworkIframeSandbox(web)).toBe('allow-same-origin allow-scripts');
+    expect(artworkIframeSandbox(broken)).toBe('allow-same-origin allow-scripts');
   });
 
-  it('forgets labels no slot shows', async () => {
-    await shellURLFor(SOURCE);
-    forgetDataDocuments([`${SOURCE}#kept-by-fragment`]);
-    expect(dataDocumentURL(SOURCE, () => undefined)).not.toBeNull();
-    forgetDataDocuments([]);
-    expect(dataDocumentURL(SOURCE, () => undefined)).toBeNull();
-  });
-});
-
-describe('dataDocumentURL off loopback (player deployed as a website)', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('keeps loading data: sources directly', () => {
-    vi.stubGlobal('location', {
-      hostname: 'player.example.com',
-      port: '',
-      protocol: 'https:',
-    });
-    expect(dataDocumentURL(SOURCE, () => undefined)).toBe(SOURCE);
-    expect(usesDataDocument(SOURCE)).toBe(false);
-  });
-});
-
-describe('public/data-document.html', () => {
-  beforeEach(() => {
-    vi.stubGlobal('location', {
-      hostname: '127.0.0.1',
-      port: '8080',
-      protocol: 'http:',
-    });
-  });
-  afterEach(() => {
-    forgetDataDocuments([]);
-    vi.unstubAllGlobals();
-  });
-
-  it('opens the exact bytes the player sent, keeping the work fragment', async () => {
-    const url = await shellURLFor(`${SOURCE}#seed42`);
-    const navigated = await runShell(url ?? '');
-    expect(navigated).toMatch(/^blob:.*#seed42$/);
-    const [blobURL] = splitFragment(navigated ?? '');
-    expect(await (await fetch(blobURL)).text()).toBe(HTML);
-  });
-
-  it('refuses bytes that do not match its origin', async () => {
-    const url = new URL((await shellURLFor(SOURCE)) ?? '');
-    const evil = `data:text/html,${encodeURIComponent('<p>other work</p>')}`;
-    url.hash = encodeURIComponent(evil);
-    expect(await runShell(url.toString())).toBeNull();
-  });
-
-  it('refuses anything that is not a data: URL', async () => {
-    const web = 'https://example.com/';
-    expect(
-      await runShell(
-        `http://${labelOf(web)}.localhost:8080/data-document.html#${encodeURIComponent(web)}`
-      )
-    ).toBeNull();
+  it('revokes only sources no slot still shows', () => {
+    const other = `data:text/html;base64,${Buffer.from('<p>2</p>').toString('base64')}`;
+    const kept = dataDocumentURL(base64HTML);
+    const dropped = dataDocumentURL(other);
+    releaseDataDocumentURLs([base64HTML]);
+    expect(dataDocumentURL(base64HTML)).toBe(kept);
+    expect(dataDocumentURL(other)).not.toBe(dropped);
   });
 });
