@@ -2252,7 +2252,11 @@ const ArtworkPlayer = ({
         }
         if (type === WORK_ORIGIN_MESSAGE.ready) {
           frame.contentWindow?.postMessage(
-            { type: WORK_ORIGIN_MESSAGE.open, source: slot.displayPreviewURL },
+            // Exactly the string the label was hashed from (workOrigin).
+            {
+              type: WORK_ORIGIN_MESSAGE.open,
+              source: slot.displayPreviewURL.trim(),
+            },
             event.origin
           );
           return;

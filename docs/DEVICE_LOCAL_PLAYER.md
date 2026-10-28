@@ -210,8 +210,9 @@ read and loses WebGPU. The player never mounts one that way:
   shell's window and can post look-alike messages). The player probes for the
   works server when a work chooses its path, at most once a minute, and a
   slot keeps the path it took, so a playing work is never re-routed. The shell
-  decodes the work in the encoding the HTML parser would pick (byte order
-  mark, the `data:` charset, a `<meta>` charset, then UTF-8). Each work gets
+  decodes the work in the encoding the browser's own HTML parse of it
+  reports (an `XMLHttpRequest` document's `characterSet`: byte order mark,
+  the `data:` charset, the `<meta>` prescan, then UTF-8). Each work gets
   WebGPU and persistent storage of its own,
   cross-origin to the player and to every other work, under the usual
   `allow-same-origin allow-scripts` sandbox.

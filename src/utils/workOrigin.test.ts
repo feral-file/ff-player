@@ -163,13 +163,25 @@ describe('resolveWorkOrigin probe lifecycle', () => {
     expect((await resolved(SOURCE)).kind).toBe('unavailable');
     expect(probe).toHaveBeenCalledTimes(2);
   });
+
+  it('labels a padded source by its trimmed form, the string it sends', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(null))));
+    const padded = 'data:text/html,<p>ok</p>\n';
+    expect(await resolved(padded)).toEqual({
+      kind: 'ready',
+      url: `http://${labelOf(padded.trim())}.localhost:8081/`,
+    });
+  });
 });
 
 /**
  * Loads public/data-document/index.html's script into a VM context standing
  * in for the shell's window on `hostname`, and exposes what it did.
  */
-function loadShell(hostname: string) {
+function loadShell(
+  hostname: string,
+  detected: string | null = 'UTF-8'
+) {
   const html = readFileSync(
     path.resolve(__dirname, '../../public/data-document/index.html'),
     'utf8'
@@ -203,6 +215,26 @@ function loadShell(hostname: string) {
         replaceState: (_state: unknown, _title: string, url: string) => {
           replaced.push(url);
         },
+      },
+      // Stands in for the browser's HTML encoding detection: reports
+      // `detected` as the parsed document's characterSet, or fails when null.
+      XMLHttpRequest: class {
+        response: { characterSet: string } | null = null;
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        open() {
+          return undefined;
+        }
+        send() {
+          setTimeout(() => {
+            if (detected === null) {
+              this.onerror?.();
+              return;
+            }
+            this.response = { characterSet: detected };
+            this.onload?.();
+          }, 0);
+        }
       },
       crypto: globalThis.crypto,
       TextEncoder,
@@ -242,7 +274,7 @@ describe('public/data-document/index.html', () => {
       'latin1'
     );
     const source = `data:text/html;base64,${latin.toString('base64')}`;
-    const shell = loadShell(`${labelOf(source)}.localhost`);
+    const shell = loadShell(`${labelOf(source)}.localhost`, 'windows-1252');
     await shell.send(source);
     expect(shell.written[0]).toContain('let café = 1');
   });
@@ -253,9 +285,23 @@ describe('public/data-document/index.html', () => {
       Buffer.from('<p>naïve</p>', 'utf16le'),
     ]);
     const source = `data:text/html;base64,${utf16.toString('base64')}`;
-    const shell = loadShell(`${labelOf(source)}.localhost`);
+    const shell = loadShell(`${labelOf(source)}.localhost`, 'UTF-16LE');
     await shell.send(source);
     expect(shell.written[0]).toBe('<p>naïve</p>');
+  });
+
+  it('decodes as UTF-8 when encoding detection fails', async () => {
+    const source = `data:text/html;base64,${Buffer.from('<p>café</p>').toString('base64')}`;
+    const shell = loadShell(`${labelOf(source)}.localhost`, null);
+    await shell.send(source);
+    expect(shell.written[0]).toBe('<p>café</p>');
+  });
+
+  it('accepts the trimmed source the player hashes and sends', async () => {
+    const padded = 'data:text/html,<p>ok</p>\n';
+    const shell = loadShell(`${labelOf(padded.trim())}.localhost`);
+    await shell.send(padded.trim());
+    expect(shell.written).toEqual(['<p>ok</p>']);
   });
 
   it('refuses bytes that do not match its origin', async () => {

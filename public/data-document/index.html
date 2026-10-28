@@ -21,25 +21,20 @@
           : '';
         let opened = false;
 
-        // The encoding the HTML parser would pick for these bytes, in its
-        // order: a byte order mark, the data: URL's charset, a <meta>
-        // charset in the first 1024 bytes, then UTF-8.
-        function htmlEncoding(bytes, contentType) {
-          if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return 'utf-8';
-          if (bytes[0] === 0xfe && bytes[1] === 0xff) return 'utf-16be';
-          if (bytes[0] === 0xff && bytes[1] === 0xfe) return 'utf-16le';
-          const declared = (/charset=([^;]+)/i.exec(contentType) || [])[1];
-          const head = new TextDecoder('windows-1252').decode(bytes.slice(0, 1024));
-          const meta = (/<meta[^>]*?charset\s*=\s*["']?\s*([^\s"'\/>;]+)/i.exec(head) || [])[1];
-          for (const label of [declared, meta]) {
-            if (!label) continue;
-            try {
-              return new TextDecoder(label.trim()).encoding;
-            } catch {
-              // An unknown label falls through to the next source.
-            }
-          }
-          return 'utf-8';
+        // The encoding the browser's HTML parser picks for this document
+        // (byte order mark, the data: URL's charset, the <meta> prescan with
+        // its comment and attribute rules and its remapping, then UTF-8),
+        // read off the browser's own parse instead of re-implemented here.
+        function htmlEncoding(url) {
+          return new Promise(resolve => {
+            const request = new XMLHttpRequest();
+            request.open('GET', url);
+            request.responseType = 'document';
+            request.onload = () =>
+              resolve((request.response && request.response.characterSet) || 'UTF-8');
+            request.onerror = () => resolve('UTF-8');
+            request.send();
+          });
         }
 
         async function open(source) {
@@ -58,9 +53,8 @@
           }
           // fetch() decodes the data: URL exactly as Chromium would.
           const response = await fetch(body);
-          const type = response.headers.get('content-type') || '';
           const bytes = new Uint8Array(await response.arrayBuffer());
-          const html = new TextDecoder(htmlEncoding(bytes, type)).decode(bytes);
+          const html = new TextDecoder(await htmlEncoding(body)).decode(bytes);
           if (fragment) {
             history.replaceState(null, '', fragment);
           }
