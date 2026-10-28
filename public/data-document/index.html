@@ -1,8 +1,27 @@
 <!doctype html>
 <html>
   <head>
-    <meta charset="utf-8" />
+    <!-- No charset on purpose: this page is pure ASCII, so it decodes under
+         the browser's fallback encoding, and a work that declares none
+         inherits that same fallback from this same-origin parent, exactly
+         as when the work is loaded directly. Declaring one here would hand
+         it to every undeclared work instead. Keep this file ASCII. -->
     <title></title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+      }
+      iframe {
+        display: block;
+        border: 0;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
     <script>
       // The shell for a fully on-chain (data:) work's device-local origin,
       // http://<label>.localhost:8081/. FF OS serves this directory, and only
@@ -10,9 +29,14 @@
       // page must stay in step with. It tells the player it is ready, takes
       // the work's data: URL by postMessage, refuses it unless its SHA-256
       // label is this page's hostname (so an origin can only ever run the
-      // bytes it names), then posts "navigating" and replaces itself with the
-      // work as a blob document of this origin. The player counts the
-      // frame's first load event after "navigating" as the work's.
+      // bytes it names), then shows the work in a child frame pointed at a
+      // blob of those bytes, and posts "loaded" on the child's first load.
+      // The child is a real navigation of this origin, so Chromium decodes
+      // and runs the work exactly as a direct load (encoding fallback
+      // included). This page stays alive under it because it owns the blob
+      // URL: replacing itself would revoke the URL, and a work that reloads
+      // itself would land on an error page. The work's parent is this page,
+      // so it cannot post look-alike messages as the shell.
       (() => {
         const PREFIX = 'ff-data-document:';
         const notify = event => parent.postMessage({ type: PREFIX + event }, '*');
@@ -35,20 +59,30 @@
           if (!/^data:text\/html\s*[;,]/i.test(body) || computed !== label) {
             throw new Error('refused: content does not match this origin');
           }
-          // Navigate to the bytes as a blob document of this origin, so
-          // Chromium's own navigation decoder opens the work exactly as a
-          // direct load would (encoding fallback included). fetch() decodes
-          // the data: URL, media type and all. The frame's next load event is
-          // the work's: wait out this page's own load first, then say so.
           const blob = await (await fetch(body)).blob();
-          if (document.readyState !== 'complete') {
-            await new Promise(resolve => addEventListener('load', resolve, { once: true }));
-          }
-          // One more task, so the frame's report of this page's own load has
-          // left before "navigating" does.
-          await new Promise(resolve => setTimeout(resolve, 0));
-          notify('navigating');
-          location.replace(URL.createObjectURL(blob) + fragment);
+          const frame = document.createElement('iframe');
+          // Keys go to the focused document, and the player focuses this
+          // page: hand focus on to the work whenever this page gets it and on
+          // every load (reloads included). Deferred one task, because a focus
+          // move inside the focus event itself does not stick.
+          const handOffFocus = () =>
+            setTimeout(() => {
+              frame.focus();
+              if (frame.contentWindow) {
+                frame.contentWindow.focus();
+              }
+            }, 0);
+          let loaded = false;
+          frame.addEventListener('load', () => {
+            handOffFocus();
+            if (!loaded) {
+              loaded = true;
+              notify('loaded');
+            }
+          });
+          frame.src = URL.createObjectURL(blob) + fragment;
+          document.body.appendChild(frame);
+          addEventListener('focus', handOffFocus);
         }
 
         addEventListener('message', event => {

@@ -186,7 +186,7 @@ function loadShell(hostname: string) {
   const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1] ?? '';
   const toParent: unknown[] = [];
   const listeners: Partial<Record<string, (event: unknown) => void>> = {};
-  const navigated: string[] = [];
+  const frames: { src: string; load: () => void }[] = [];
   const parent = {
     postMessage: (message: unknown) => {
       toParent.push(message);
@@ -196,16 +196,36 @@ function loadShell(hostname: string) {
     script,
     vm.createContext({
       parent,
-      location: {
-        hostname,
-        replace: (url: string) => {
-          navigated.push(url);
-        },
-      },
+      location: { hostname },
       addEventListener: (type: string, listener: (event: unknown) => void) => {
         listeners[type] = listener;
       },
-      document: { readyState: 'complete' },
+      // A child frame records its src and lets the test fire its load.
+      document: {
+        createElement: () => {
+          const frame: {
+            src: string;
+            onload: () => void;
+            addEventListener: (type: string, listener: () => void) => void;
+            focus: () => void;
+            contentWindow: { focus: () => void };
+          } = {
+            src: '',
+            onload: () => undefined,
+            addEventListener: (_type: string, listener: () => void) => {
+              frame.onload = listener;
+            },
+            focus: () => undefined,
+            contentWindow: { focus: () => undefined },
+          };
+          return frame;
+        },
+        body: {
+          appendChild: (frame: { src: string; onload: () => void }) => {
+            frames.push({ src: frame.src, load: frame.onload });
+          },
+        },
+      },
       setTimeout,
       crypto: globalThis.crypto,
       TextEncoder,
@@ -223,23 +243,27 @@ function loadShell(hostname: string) {
     });
     await new Promise(resolve => setTimeout(resolve, 50));
   };
-  return { toParent, navigated, send };
+  const navigated = () => frames.map(frame => frame.src);
+  return { toParent, frames, navigated, send };
 }
 
 describe('public/data-document/index.html', () => {
   const host = `${labelOf(SOURCE)}.localhost`;
 
-  it('asks for the work, announces the navigation, then opens the exact bytes with the fragment', async () => {
+  it('asks for the work, shows the exact bytes with the fragment in a child frame, and reports loaded once', async () => {
     const shell = loadShell(host);
     expect(shell.toParent).toEqual([{ type: WORK_ORIGIN_MESSAGE.ready }]);
     await shell.send(`${SOURCE}#seed42`);
+    expect(shell.toParent).toEqual([{ type: WORK_ORIGIN_MESSAGE.ready }]);
+    shell.frames[0]?.load();
+    shell.frames[0]?.load(); // the work reloading itself
     expect(shell.toParent).toEqual([
       { type: WORK_ORIGIN_MESSAGE.ready },
-      { type: WORK_ORIGIN_MESSAGE.navigating },
+      { type: WORK_ORIGIN_MESSAGE.loaded },
     ]);
-    expect(shell.navigated).toHaveLength(1);
-    expect(shell.navigated[0]).toMatch(/^blob:.*#seed42$/);
-    const blobURL = shell.navigated[0]?.split('#')[0] ?? '';
+    expect(shell.navigated()).toHaveLength(1);
+    expect(shell.navigated()[0]).toMatch(/^blob:.*#seed42$/);
+    const blobURL = shell.navigated()[0]?.split('#')[0] ?? '';
     const blob = await (await fetch(blobURL)).blob();
     expect(blob.type).toBe('text/html');
     expect(await blob.text()).toBe(HTML);
@@ -248,7 +272,7 @@ describe('public/data-document/index.html', () => {
   it('refuses bytes that do not match its origin', async () => {
     const shell = loadShell(host);
     await shell.send(`data:text/html,${encodeURIComponent('<p>other work</p>')}`);
-    expect(shell.navigated).toEqual([]);
+    expect(shell.navigated()).toEqual([]);
     expect(shell.toParent.at(-1)).toEqual({ type: WORK_ORIGIN_MESSAGE.error });
   });
 
@@ -256,23 +280,23 @@ describe('public/data-document/index.html', () => {
     const svg = 'data:image/svg+xml,<svg/>';
     const shell = loadShell(`${labelOf(svg)}.localhost`);
     await shell.send(svg);
-    expect(shell.navigated).toEqual([]);
+    expect(shell.navigated()).toEqual([]);
     expect(shell.toParent.at(-1)).toEqual({ type: WORK_ORIGIN_MESSAGE.error });
   });
 
   it('ignores messages that are not from its parent, and opens only once', async () => {
     const shell = loadShell(host);
     await shell.send(SOURCE, {});
-    expect(shell.navigated).toEqual([]);
+    expect(shell.navigated()).toEqual([]);
     await shell.send(SOURCE);
     await shell.send(SOURCE);
-    expect(shell.navigated).toHaveLength(1);
+    expect(shell.navigated()).toHaveLength(1);
   });
 
   it('accepts the trimmed source the player hashes and sends', async () => {
     const padded = 'data:text/html,<p>ok</p>\n';
     const shell = loadShell(`${labelOf(padded.trim())}.localhost`);
     await shell.send(padded.trim());
-    expect(shell.navigated).toHaveLength(1);
+    expect(shell.navigated()).toHaveLength(1);
   });
 });

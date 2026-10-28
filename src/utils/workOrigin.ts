@@ -20,11 +20,13 @@
  * Second, the bytes travel by `postMessage`, not in the URL, so a large work
  * never outgrows Chromium's 2 MB URL limit: the shell posts `ready`, the
  * player answers with the source, and the shell refuses anything whose hash
- * is not its own hostname. Third, the shell then posts `navigating` and
- * replaces itself with the work as a blob document of its origin, so
- * Chromium's own navigation decoder opens it exactly as a direct load would;
- * the frame's first `load` after `navigating` is the work's completion, and
- * the shell's own earlier `load` is not.
+ * is not its own hostname. Third, the shell shows the work in a child
+ * frame pointed at a blob of those bytes and stays alive under it (it owns
+ * the blob URL, so a work that reloads itself keeps working); the child is a
+ * real navigation, so Chromium decodes the work exactly as a direct load. The
+ * shell posts `loaded` on the child's first load: for these frames that
+ * message, once, is the completion signal, and the iframe's own `load` (the
+ * shell's) is not. The work's parent is the shell, so it cannot pose as it.
  *
  * Off loopback (the player deployed as a website), or on an OS without the
  * works server, `data:` works keep the blob path.
@@ -35,7 +37,7 @@ export const WORK_ORIGIN_PORT = 8081;
 export const WORK_ORIGIN_MESSAGE = {
   ready: 'ff-data-document:ready',
   open: 'ff-data-document:open',
-  navigating: 'ff-data-document:navigating',
+  loaded: 'ff-data-document:loaded',
   error: 'ff-data-document:error',
 } as const;
 

@@ -203,11 +203,17 @@ read and loses WebGPU. The player never mounts one that way:
   (`public/data-document/index.html`), so no other bundle page can boot in a
   work's origin. The shell posts `ready`; the player answers with the source,
   to that origin only; the shell refuses bytes whose hash is not its
-  hostname (posting `error`), otherwise posts `navigating` and replaces
-  itself with the work as a blob document of its origin, so Chromium's own
-  navigation decoder opens the work exactly as a direct load would. The
-  frame's first `load` after `navigating` is the work's completion, counted
-  once per frame; the shell's own earlier `load` is not. The player probes
+  hostname (posting `error`), and otherwise shows the work in a child frame
+  pointed at a blob of the bytes. The child is a real navigation of the
+  work's origin, so Chromium decodes and runs the work exactly as a direct
+  load would; the shell declares no charset (it is pure ASCII), so a work
+  that declares none inherits the same fallback a direct load uses. The
+  shell stays alive under it because it owns the blob URL, so a work that
+  reloads itself keeps working, and it hands keyboard focus on to the work. The shell posts `loaded` on
+  the child's first load. That message, counted once per frame, is the
+  completion signal; the frame's own `load` events (the shell's) are
+  ignored, and the work's `parent` is the shell, so it cannot pose as it.
+The player probes
   for the works server when a work chooses its path, at most once a minute,
   and a slot keeps the path it took, so a playing work is never re-routed.
   Each work gets WebGPU and persistent storage of its own, cross-origin to

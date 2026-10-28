@@ -2213,13 +2213,9 @@ const ArtworkPlayer = ({
   );
 
   // Frames whose completion has been consumed. Every load attempt mounts a
-  // new iframe element, so the element is the attempt: a work shares its
-  // shell's window and can post look-alike messages, and a second completion
+  // new iframe element, so the element is the attempt: a second completion
   // would reopen a committed transition.
   const workOriginCompletedRef = useRef(new WeakSet<HTMLIFrameElement>());
-  // Frames whose shell has announced it is navigating to the work: only their
-  // next load event is the work's (the shell's own load comes first).
-  const workOriginNavigatingRef = useRef(new WeakSet<HTMLIFrameElement>());
 
   // Latest refs and handlers for the work-origin message listener below,
   // which subscribes once.
@@ -2264,12 +2260,13 @@ const ArtworkPlayer = ({
           );
           return;
         }
-        if (type === WORK_ORIGIN_MESSAGE.navigating) {
-          workOriginNavigatingRef.current.add(frame);
-        } else if (
-          type === WORK_ORIGIN_MESSAGE.error &&
-          !workOriginCompletedRef.current.has(frame)
-        ) {
+        if (workOriginCompletedRef.current.has(frame)) {
+          return;
+        }
+        if (type === WORK_ORIGIN_MESSAGE.loaded) {
+          workOriginCompletedRef.current.add(frame);
+          frames.onLoad?.(i, slot);
+        } else if (type === WORK_ORIGIN_MESSAGE.error) {
           workOriginCompletedRef.current.add(frame);
           frames.onError?.(i, slot);
         }
@@ -2694,20 +2691,11 @@ const ArtworkPlayer = ({
               ref={iframeRefs[slotIndex]}
               className={styles.iframe}
               src={slot.displaySoftwareURL}
-              onLoad={event => {
-                // A work-origin frame completes on its first load after the
-                // shell announced the navigation, once (utils/workOrigin).
-                const frame = event.currentTarget;
-                if (isWorkOriginURL(slot.displaySoftwareURL)) {
-                  if (
-                    !workOriginNavigatingRef.current.has(frame) ||
-                    workOriginCompletedRef.current.has(frame)
-                  ) {
-                    return;
-                  }
-                  workOriginCompletedRef.current.add(frame);
+              onLoad={() => {
+                // Work-origin frames complete through their shell's message.
+                if (!isWorkOriginURL(slot.displaySoftwareURL)) {
+                  handleIframeLoad(slotIndex, slot);
                 }
-                handleIframeLoad(slotIndex, slot);
               }}
               onError={() => {
                 if (!isWorkOriginURL(slot.displaySoftwareURL)) {
