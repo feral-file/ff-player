@@ -92,3 +92,7 @@ For bundling and serving the static export on-device (FF1 local HTTP, root URL),
 Contributions are welcome. Please fork the repository and submit a pull request with your changes. Ensure your code follows the project's coding standards and includes appropriate tests.
 
 For AI-assisted changes or repo workflow updates, start with [`AGENTS.md`](AGENTS.md) and [`docs/review-workflow.md`](docs/review-workflow.md).
+
+## License
+
+Mozilla Public License 2.0. See [LICENSE](LICENSE). Everything that plays the work on an Art Computer is open source; what is open, and under which license, is listed at [docs.feralfile.com/open-source/](https://docs.feralfile.com/open-source/).
