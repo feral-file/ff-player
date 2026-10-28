@@ -24,6 +24,7 @@ export enum CastCommand {
   setLoop = 'setLoop',
   displayDefaultPlaylist = 'displayDefaultPlaylist',
   updateDefaultDuration = 'updateDefaultDuration',
+  updateSeriesPlayback = 'updateSeriesPlayback',
 }
 
 export interface CastInfo {

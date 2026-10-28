@@ -8,6 +8,7 @@ import {
   SchedulePlaylistRequest,
   SchedulePlaylistReply,
   UpdateDefaultDurationRequest,
+  UpdateSeriesPlaybackRequest,
 } from '@/models/cast_request_reply.model';
 import * as Sentry from '@sentry/nextjs';
 import {
@@ -65,6 +66,7 @@ import {
   resolveItemIndexInNewItems,
 } from '@/utils/playlist';
 import { coerceLoopMode } from '@/utils/loopMode';
+import { VALID_SERIES_PLAYBACK } from '@/utils/seriesPlayback';
 import { coerceTombstoneMode } from '@/utils/tombstoneMode';
 import { deepEqual } from '@/utils/helper';
 import { DP1Service } from './DP1Service';
@@ -767,6 +769,10 @@ class CanvasService {
           return this.updateDefaultDuration(
             requestJson as UpdateDefaultDurationRequest
           );
+        case CastCommand.updateSeriesPlayback:
+          return this.updateSeriesPlayback(
+            requestJson as UpdateSeriesPlaybackRequest
+          );
         default:
           console.error(`[CAST] Unknown command: ${command}`);
           return { ok: false };
@@ -842,6 +848,12 @@ class CanvasService {
           tombstone: coerceTombstoneMode(
             DeviceManager.getCachedDeviceDisplaySettings()?.tombstone
           ),
+          // Absent means "auto": no override, and each item's own
+          // `seriesPlayback` stands. Reported raw rather than coerced,
+          // unlike `tombstone` above, because absent and `first` are
+          // different states here — a controller has to be able to show
+          // "following the playlist" apart from "always one edition".
+          seriesPlayback: DeviceManager.getCachedSeriesPlayback() ?? undefined,
         },
 
         isPaused: window.location.pathname === '/sleep',
@@ -1398,6 +1410,43 @@ class CanvasService {
       this.setCastInfo({
         ...this.castInfo,
         castCommand: CastCommand.updateDefaultDuration,
+      });
+    }
+
+    return { ok: true };
+  }
+
+  /**
+   * Sets (or clears, with null/absent `mode`) the persisted device-level
+   * series playback override — how a `seriesRegistry` item plays on this
+   * screen whatever the item asked for. Cached synchronously before the
+   * IndexedDB write settles, then castInfo is republished so the playlist
+   * route re-selects the active slot against the new value without
+   * restarting playback. Same shape, and same reasons, as
+   * `updateDefaultDuration` above.
+   */
+  private updateSeriesPlayback(
+    request: UpdateSeriesPlaybackRequest | undefined
+  ): Reply {
+    // A missing request envelope means "clear" — same as an explicit null.
+    const raw = request?.mode ?? null;
+    if (raw !== null && !VALID_SERIES_PLAYBACK.has(raw)) {
+      console.error('[CanvasService] Invalid series playback mode:', raw);
+      return { ok: false };
+    }
+
+    console.log('[CanvasService] updateSeriesPlayback', raw);
+    DeviceManager.setSeriesPlayback(raw).catch((error: unknown) => {
+      console.error(
+        '[CanvasService] Error persisting series playback:',
+        error
+      );
+    });
+
+    if (this.castInfo) {
+      this.setCastInfo({
+        ...this.castInfo,
+        castCommand: CastCommand.updateSeriesPlayback,
       });
     }
 

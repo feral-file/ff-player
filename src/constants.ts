@@ -7,6 +7,7 @@ export enum LocalStorageItem {
   bootPlaylist = 'boot_playlist',
   versionUpdateReload = 'versionUpdateReload',
   defaultItemDuration = 'defaultItemDuration',
+  seriesPlayback = 'seriesPlayback',
 }
 
 export const AppSettings = {
