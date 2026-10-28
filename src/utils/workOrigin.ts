@@ -24,9 +24,12 @@
  * frame pointed at a blob of those bytes and stays alive under it (it owns
  * the blob URL, so a work that reloads itself keeps working); the child is a
  * real navigation, so Chromium decodes the work exactly as a direct load. The
- * shell posts `loaded` on the child's first load: for these frames that
- * message, once, is the completion signal, and the iframe's own `load` (the
- * shell's) is not. The work's parent is the shell, so it cannot pose as it.
+ * shell reports `loaded` (or `error`) over a MessagePort the player sent with
+ * `open`, for the child's first trusted load: that report, once, is the
+ * completion signal, and the iframe's own `load` (the shell's) is not. The
+ * work is same-origin with its shell and can run code in its realm, so only
+ * the port, held in the shell's closure, is trusted; the player answers only
+ * the first `ready` per frame, before the work exists.
  *
  * Off loopback (the player deployed as a website), or on an OS without the
  * works server, `data:` works keep the blob path.

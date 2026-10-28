@@ -2216,6 +2216,10 @@ const ArtworkPlayer = ({
   // new iframe element, so the element is the attempt: a second completion
   // would reopen a committed transition.
   const workOriginCompletedRef = useRef(new WeakSet<HTMLIFrameElement>());
+  // Frames whose shell has been sent its source and port: the first `ready`
+  // per frame element is the shell's (the work does not exist yet); a later
+  // one could come from the work posing as the shell to win a port.
+  const workOriginOpenedRef = useRef(new WeakSet<HTMLIFrameElement>());
 
   // Latest refs and handlers for the work-origin message listener below,
   // which subscribes once.
@@ -2225,51 +2229,70 @@ const ArtworkPlayer = ({
     onError: ((slotIndex: SlotIndex, layer: SlotLayer) => void) | null;
   }>({ iframeRefs, onLoad: null, onError: null });
 
-  // A work-origin frame reports through its shell: the frame's own load
-  // event comes from the shell, before the work exists, so for these frames
-  // the shell's messages are the completion signal (utils/workOrigin). The
-  // shell asks for the bytes with `ready`; only the frame's current slot
-  // source is sent, and only to the frame's own origin.
+  // A work-origin frame reports through its shell, over a private channel.
+  // The frame's own load event comes from the shell, before the work exists,
+  // so the shell's report is the completion signal (utils/workOrigin). The
+  // shell asks with `ready`, answered once per frame element with the slot's
+  // source (to the frame's own origin only) and a fresh MessagePort; only that
+  // port is trusted for `loaded`/`error`. The work is same-origin with its
+  // shell and can post as it on `window`, but it cannot reach the port.
   useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      const type = (event.data as { type?: unknown } | null)?.type;
-      if (typeof type !== 'string' || !type.startsWith('ff-data-document:')) {
+    const slotOf = (frame: HTMLIFrameElement) =>
+      SLOT_INDICES.find(
+        i => workOriginFramesRef.current.iframeRefs[i].current === frame
+      );
+    const onReport = (frame: HTMLIFrameElement, type: unknown) => {
+      const i = slotOf(frame);
+      const slot = i === undefined ? null : slotsRef.current[i];
+      if (
+        i === undefined ||
+        !slot ||
+        !isWorkOriginURL(slot.displaySoftwareURL) ||
+        workOriginCompletedRef.current.has(frame)
+      ) {
         return;
       }
       const frames = workOriginFramesRef.current;
+      if (type === WORK_ORIGIN_MESSAGE.loaded) {
+        workOriginCompletedRef.current.add(frame);
+        frames.onLoad?.(i, slot);
+      } else if (type === WORK_ORIGIN_MESSAGE.error) {
+        workOriginCompletedRef.current.add(frame);
+        frames.onError?.(i, slot);
+      }
+    };
+    const onMessage = (event: MessageEvent) => {
+      const type = (event.data as { type?: unknown } | null)?.type;
+      if (type !== WORK_ORIGIN_MESSAGE.ready) {
+        return;
+      }
       SLOT_INDICES.forEach(i => {
-        const frame = frames.iframeRefs[i].current;
+        const frame = workOriginFramesRef.current.iframeRefs[i].current;
         const slot = slotsRef.current[i];
         if (
           !frame ||
           !slot ||
           event.source !== frame.contentWindow ||
           !isWorkOriginURL(slot.displaySoftwareURL) ||
-          event.origin !== new URL(slot.displaySoftwareURL).origin
+          event.origin !== new URL(slot.displaySoftwareURL).origin ||
+          workOriginOpenedRef.current.has(frame)
         ) {
           return;
         }
-        if (type === WORK_ORIGIN_MESSAGE.ready) {
-          frame.contentWindow?.postMessage(
-            // Exactly the string the label was hashed from (workOrigin).
-            {
-              type: WORK_ORIGIN_MESSAGE.open,
-              source: slot.displayPreviewURL.trim(),
-            },
-            event.origin
-          );
-          return;
-        }
-        if (workOriginCompletedRef.current.has(frame)) {
-          return;
-        }
-        if (type === WORK_ORIGIN_MESSAGE.loaded) {
-          workOriginCompletedRef.current.add(frame);
-          frames.onLoad?.(i, slot);
-        } else if (type === WORK_ORIGIN_MESSAGE.error) {
-          workOriginCompletedRef.current.add(frame);
-          frames.onError?.(i, slot);
-        }
+        workOriginOpenedRef.current.add(frame);
+        const channel = new MessageChannel();
+        channel.port1.onmessage = report => {
+          onReport(frame, (report.data as { type?: unknown } | null)?.type);
+        };
+        frame.contentWindow?.postMessage(
+          // Exactly the string the label was hashed from (workOrigin).
+          {
+            type: WORK_ORIGIN_MESSAGE.open,
+            source: slot.displayPreviewURL.trim(),
+          },
+          event.origin,
+          [channel.port2]
+        );
       });
     };
     window.addEventListener('message', onMessage);

@@ -200,6 +200,10 @@ describe('ArtworkPlayer data: works', () => {
     }
   });
 
+
+});
+
+describe('ArtworkPlayer data: works with the FF OS works server', () => {
   it('plays an HTML data payload in its own work origin and hands the bytes over on ready', async () => {
     // The works server answers the probe.
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null));
@@ -246,9 +250,14 @@ describe('ArtworkPlayer data: works', () => {
     window.dispatchEvent(fromShell(WORK_ORIGIN_MESSAGE.ready, 'http://evil.localhost:8081'));
     expect(post).not.toHaveBeenCalled();
     window.dispatchEvent(fromShell(WORK_ORIGIN_MESSAGE.ready, origin));
+    // The source goes to the frame's own origin with a private port.
     expect(post).toHaveBeenCalledWith(
       { type: WORK_ORIGIN_MESSAGE.open, source },
-      origin
+      origin,
+      [expect.any(MessagePort)]
     );
+    // A later `ready` (the work posing as its shell) wins no second port.
+    window.dispatchEvent(fromShell(WORK_ORIGIN_MESSAGE.ready, origin));
+    expect(post).toHaveBeenCalledTimes(1);
   });
 });

@@ -201,23 +201,25 @@ read and loses WebGPU. The player never mounts one that way:
   (`serve-feral-player.sh` in ffos-user) serves that port from this bundle's
   `data-document/` directory, which holds only the shell
   (`public/data-document/index.html`), so no other bundle page can boot in a
-  work's origin. The shell posts `ready`; the player answers with the source,
-  to that origin only; the shell refuses bytes whose hash is not its
-  hostname (posting `error`), and otherwise shows the work in a child frame
-  pointed at a blob of the bytes. The child is a real navigation of the
-  work's origin, so Chromium decodes and runs the work exactly as a direct
-  load would; the shell declares no charset (it is pure ASCII), so a work
-  that declares none inherits the same fallback a direct load uses. The
-  shell stays alive under it because it owns the blob URL, so a work that
-  reloads itself keeps working, and it hands keyboard focus on to the work. The shell posts `loaded` on
-  the child's first load. That message, counted once per frame, is the
-  completion signal; the frame's own `load` events (the shell's) are
-  ignored, and the work's `parent` is the shell, so it cannot pose as it.
-The player probes
-  for the works server when a work chooses its path, at most once a minute,
-  and a slot keeps the path it took, so a playing work is never re-routed.
-  Each work gets WebGPU and persistent storage of its own, cross-origin to
-  the player and to every other work, under the usual
+  work's origin. The shell posts `ready`; the player answers once per frame,
+  to that origin only, with the source and a private MessagePort; the shell
+  refuses bytes whose hash is not its hostname (reporting `error`), and
+  otherwise shows the work in a child frame pointed at a blob of the bytes.
+  The child is a real navigation of the work's origin, so Chromium decodes
+  and runs the work exactly as a direct load would; the shell declares no
+  charset (it is pure ASCII), so a work that declares none inherits the same
+  fallback a direct load uses. The shell stays alive under it because it
+  owns the blob URL, so a work that reloads itself keeps working. The shell
+  reports `loaded` over the port on the child's first trusted load; that
+  report, counted once per frame, is the completion signal, and the frame's
+  own `load` events (the shell's) are ignored. The work is same-origin with
+  its shell and can run code in it, but it cannot reach the port, which lives
+  in the shell's closure. The shell hands keyboard focus to the work only
+  while it holds focus itself, so an outgoing work cannot take it. The player
+  probes for the works server when a work chooses its path, at most once a
+  minute, and a slot keeps the path it took, so a playing work is never
+  re-routed. Each work gets WebGPU and persistent storage of its own,
+  cross-origin to the player and to every other work, under the usual
   `allow-same-origin allow-scripts` sandbox.
 - **Blob document** (`src/utils/dataDocument.ts`): otherwise (an OS without
   the works server, a non-HTML `data:` type, or a player off loopback) the

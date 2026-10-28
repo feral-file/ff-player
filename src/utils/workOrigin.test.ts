@@ -174,6 +174,35 @@ describe('resolveWorkOrigin probe lifecycle', () => {
   });
 });
 
+type FakeLoad = (event: { isTrusted: boolean }) => void;
+
+/**
+ * A stand-in for the shell's document: child frames record their src, and the
+ * test fires their load events with a chosen isTrusted.
+ */
+function fakeShellDocument(frames: { src: string; load: FakeLoad }[]) {
+  return {
+    hasFocus: () => true,
+    createElement: () => {
+      const frame = {
+        src: '',
+        onload: (() => undefined) as FakeLoad,
+        addEventListener: (_type: string, listener: FakeLoad) => {
+          frame.onload = listener;
+        },
+        focus: () => undefined,
+        contentWindow: { focus: () => undefined },
+      };
+      return frame;
+    },
+    body: {
+      appendChild: (frame: { src: string; onload: FakeLoad }) => {
+        frames.push({ src: frame.src, load: frame.onload });
+      },
+    },
+  };
+}
+
 /**
  * Loads public/data-document/index.html's script into a VM context standing
  * in for the shell's window on `hostname`, and exposes what it did.
@@ -185,11 +214,17 @@ function loadShell(hostname: string) {
   );
   const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1] ?? '';
   const toParent: unknown[] = [];
+  const reports: unknown[] = [];
   const listeners: Partial<Record<string, (event: unknown) => void>> = {};
-  const frames: { src: string; load: () => void }[] = [];
+  const frames: { src: string; load: FakeLoad }[] = [];
   const parent = {
     postMessage: (message: unknown) => {
       toParent.push(message);
+    },
+  };
+  const port = {
+    postMessage: (message: unknown) => {
+      reports.push(message);
     },
   };
   vm.runInContext(
@@ -200,32 +235,7 @@ function loadShell(hostname: string) {
       addEventListener: (type: string, listener: (event: unknown) => void) => {
         listeners[type] = listener;
       },
-      // A child frame records its src and lets the test fire its load.
-      document: {
-        createElement: () => {
-          const frame: {
-            src: string;
-            onload: () => void;
-            addEventListener: (type: string, listener: () => void) => void;
-            focus: () => void;
-            contentWindow: { focus: () => void };
-          } = {
-            src: '',
-            onload: () => undefined,
-            addEventListener: (_type: string, listener: () => void) => {
-              frame.onload = listener;
-            },
-            focus: () => undefined,
-            contentWindow: { focus: () => undefined },
-          };
-          return frame;
-        },
-        body: {
-          appendChild: (frame: { src: string; onload: () => void }) => {
-            frames.push({ src: frame.src, load: frame.onload });
-          },
-        },
-      },
+      document: fakeShellDocument(frames),
       setTimeout,
       crypto: globalThis.crypto,
       TextEncoder,
@@ -236,67 +246,71 @@ function loadShell(hostname: string) {
       console: { error: () => undefined },
     })
   );
-  const send = async (source: unknown, from: unknown = parent) => {
+  const send = async (
+    source: unknown,
+    options: { from?: unknown; withPort?: boolean } = {}
+  ) => {
     listeners.message?.({
-      source: from,
+      source: options.from ?? parent,
       data: { type: WORK_ORIGIN_MESSAGE.open, source },
+      ports: options.withPort === false ? [] : [port],
     });
     await new Promise(resolve => setTimeout(resolve, 50));
   };
-  const navigated = () => frames.map(frame => frame.src);
-  return { toParent, frames, navigated, send };
+  return { toParent, reports, frames, send };
 }
 
 describe('public/data-document/index.html', () => {
   const host = `${labelOf(SOURCE)}.localhost`;
 
-  it('asks for the work, shows the exact bytes with the fragment in a child frame, and reports loaded once', async () => {
+  it('shows the exact bytes with the fragment in a child frame and reports loaded once, over the port', async () => {
     const shell = loadShell(host);
     expect(shell.toParent).toEqual([{ type: WORK_ORIGIN_MESSAGE.ready }]);
     await shell.send(`${SOURCE}#seed42`);
-    expect(shell.toParent).toEqual([{ type: WORK_ORIGIN_MESSAGE.ready }]);
-    shell.frames[0]?.load();
-    shell.frames[0]?.load(); // the work reloading itself
-    expect(shell.toParent).toEqual([
-      { type: WORK_ORIGIN_MESSAGE.ready },
-      { type: WORK_ORIGIN_MESSAGE.loaded },
-    ]);
-    expect(shell.navigated()).toHaveLength(1);
-    expect(shell.navigated()[0]).toMatch(/^blob:.*#seed42$/);
-    const blobURL = shell.navigated()[0]?.split('#')[0] ?? '';
-    const blob = await (await fetch(blobURL)).blob();
+    expect(shell.frames).toHaveLength(1);
+    const src = shell.frames[0]?.src ?? '';
+    expect(src).toMatch(/^blob:.*#seed42$/);
+    const blob = await (await fetch(src.split('#')[0] ?? '')).blob();
     expect(blob.type).toBe('text/html');
     expect(await blob.text()).toBe(HTML);
+    shell.frames[0]?.load({ isTrusted: false }); // synthetic, from the work
+    expect(shell.reports).toEqual([]);
+    shell.frames[0]?.load({ isTrusted: true });
+    shell.frames[0]?.load({ isTrusted: true }); // the work reloading itself
+    expect(shell.reports).toEqual([{ type: WORK_ORIGIN_MESSAGE.loaded }]);
+    // Completion never goes to window, where the work could imitate it.
+    expect(shell.toParent).toEqual([{ type: WORK_ORIGIN_MESSAGE.ready }]);
   });
 
-  it('refuses bytes that do not match its origin', async () => {
+  it('refuses bytes that do not match its origin, reporting over the port', async () => {
     const shell = loadShell(host);
     await shell.send(`data:text/html,${encodeURIComponent('<p>other work</p>')}`);
-    expect(shell.navigated()).toEqual([]);
-    expect(shell.toParent.at(-1)).toEqual({ type: WORK_ORIGIN_MESSAGE.error });
+    expect(shell.frames).toEqual([]);
+    expect(shell.reports).toEqual([{ type: WORK_ORIGIN_MESSAGE.error }]);
   });
 
   it('refuses non-HTML data: URLs even when the label matches', async () => {
     const svg = 'data:image/svg+xml,<svg/>';
     const shell = loadShell(`${labelOf(svg)}.localhost`);
     await shell.send(svg);
-    expect(shell.navigated()).toEqual([]);
-    expect(shell.toParent.at(-1)).toEqual({ type: WORK_ORIGIN_MESSAGE.error });
+    expect(shell.frames).toEqual([]);
+    expect(shell.reports).toEqual([{ type: WORK_ORIGIN_MESSAGE.error }]);
   });
 
-  it('ignores messages that are not from its parent, and opens only once', async () => {
+  it('ignores an open without a port or not from its parent, and opens only once', async () => {
     const shell = loadShell(host);
-    await shell.send(SOURCE, {});
-    expect(shell.navigated()).toEqual([]);
+    await shell.send(SOURCE, { withPort: false });
+    await shell.send(SOURCE, { from: {} });
+    expect(shell.frames).toEqual([]);
     await shell.send(SOURCE);
     await shell.send(SOURCE);
-    expect(shell.navigated()).toHaveLength(1);
+    expect(shell.frames).toHaveLength(1);
   });
 
   it('accepts the trimmed source the player hashes and sends', async () => {
     const padded = 'data:text/html,<p>ok</p>\n';
     const shell = loadShell(`${labelOf(padded.trim())}.localhost`);
     await shell.send(padded.trim());
-    expect(shell.navigated()).toHaveLength(1);
+    expect(shell.frames).toHaveLength(1);
   });
 });
