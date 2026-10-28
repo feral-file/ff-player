@@ -9,6 +9,7 @@ import {
   isWorkOriginURL,
   resetWorkOriginServerForTests,
   resolveWorkOrigin,
+  subscribeWorkOrigins,
   usesWorkOrigin,
 } from './workOrigin';
 
@@ -23,9 +24,9 @@ const loopback = { hostname: '127.0.0.1', port: '8080', protocol: 'http:' };
 /** Resolves `source`, waiting out the probe and the label hash. */
 async function resolved(source: string) {
   await vi.waitFor(() => {
-    expect(resolveWorkOrigin(source, () => undefined).kind).not.toBe('pending');
+    expect(resolveWorkOrigin(source).kind).not.toBe('pending');
   });
-  return resolveWorkOrigin(source, () => undefined);
+  return resolveWorkOrigin(source);
 }
 
 describe('resolveWorkOrigin', () => {
@@ -42,20 +43,21 @@ describe('resolveWorkOrigin', () => {
     const probe = vi.fn(() => Promise.resolve(new Response(null)));
     vi.stubGlobal('fetch', probe);
     let ready = 0;
-    expect(
-      resolveWorkOrigin(SOURCE, () => {
-        ready += 1;
-      })
-    ).toEqual({ kind: 'pending' });
+    const unsubscribe = subscribeWorkOrigins(() => {
+      ready += 1;
+    });
+    expect(resolveWorkOrigin(SOURCE)).toEqual({ kind: 'pending' });
     expect(probe).toHaveBeenCalledWith(
       'http://ffos-probe.localhost:8081/',
       expect.objectContaining({ mode: 'no-cors' })
     );
     await vi.waitFor(() => {
-      expect(ready).toBe(2);
+      expect(ready).toBeGreaterThanOrEqual(1);
     });
+    await resolved(SOURCE);
+    unsubscribe();
     const url = `http://${labelOf(SOURCE)}.localhost:8081/`;
-    expect(resolveWorkOrigin(`${SOURCE}#seed`, () => undefined)).toEqual({
+    expect(resolveWorkOrigin(`${SOURCE}#seed`)).toEqual({
       kind: 'ready',
       url,
     });
@@ -74,10 +76,10 @@ describe('resolveWorkOrigin', () => {
 
   it('leaves non-HTML data: sources and web sources on the old paths', () => {
     vi.stubGlobal('fetch', vi.fn());
-    expect(resolveWorkOrigin('data:image/svg+xml,<svg/>', () => undefined).kind).toBe(
+    expect(resolveWorkOrigin('data:image/svg+xml,<svg/>').kind).toBe(
       'unavailable'
     );
-    expect(resolveWorkOrigin('https://example.com/', () => undefined).kind).toBe(
+    expect(resolveWorkOrigin('https://example.com/').kind).toBe(
       'unavailable'
     );
   });
@@ -89,7 +91,7 @@ describe('resolveWorkOrigin', () => {
       protocol: 'https:',
     });
     vi.stubGlobal('fetch', vi.fn());
-    expect(resolveWorkOrigin(SOURCE, () => undefined).kind).toBe('unavailable');
+    expect(resolveWorkOrigin(SOURCE).kind).toBe('unavailable');
     expect(usesWorkOrigin(SOURCE)).toBe(false);
   });
 
@@ -97,7 +99,7 @@ describe('resolveWorkOrigin', () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(null))));
     await resolved(SOURCE);
     forgetWorkOrigins([]);
-    expect(resolveWorkOrigin(SOURCE, () => undefined).kind).toBe('pending');
+    expect(resolveWorkOrigin(SOURCE).kind).toBe('pending');
   });
 
   it('recognizes only work-origin frame URLs', () => {
@@ -106,6 +108,60 @@ describe('resolveWorkOrigin', () => {
     expect(isWorkOriginURL('https://abc.localhost:8081/')).toBe(false);
     expect(isWorkOriginURL('blob:http://127.0.0.1:8080/x')).toBe(false);
     expect(isWorkOriginURL('not a url')).toBe(false);
+  });
+});
+
+describe('resolveWorkOrigin probe lifecycle', () => {
+  beforeEach(() => {
+    vi.stubGlobal('location', loopback);
+  });
+  afterEach(() => {
+    forgetWorkOrigins([]);
+    resetWorkOriginServerForTests();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('notifies a subscriber that arrived while another mount\'s probe was in flight', async () => {
+    let settle: (value: Response) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise<Response>(resolve => {
+            settle = resolve;
+          })
+      )
+    );
+    const first = subscribeWorkOrigins(() => undefined);
+    expect(resolveWorkOrigin(SOURCE).kind).toBe('pending');
+    first();
+    let heard = 0;
+    const second = subscribeWorkOrigins(() => {
+      heard += 1;
+    });
+    settle(new Response(null));
+    await vi.waitFor(() => {
+      expect(heard).toBeGreaterThanOrEqual(1);
+    });
+    second();
+  });
+
+  it('re-asks after a minute, so a works server that died sends later works to the blob path', async () => {
+    const now = vi.spyOn(Date, 'now');
+    now.mockReturnValue(1_000_000);
+    const probe = vi.fn(() => Promise.resolve(new Response(null)));
+    vi.stubGlobal('fetch', probe);
+    expect((await resolved(SOURCE)).kind).toBe('ready');
+    probe.mockImplementation(() =>
+      Promise.reject(new TypeError('connection refused'))
+    );
+    now.mockReturnValue(1_000_000 + 30_000);
+    expect(resolveWorkOrigin(SOURCE).kind).toBe('ready');
+    now.mockReturnValue(1_000_000 + 61_000);
+    expect(resolveWorkOrigin(SOURCE).kind).toBe('pending');
+    expect((await resolved(SOURCE)).kind).toBe('unavailable');
+    expect(probe).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -178,6 +234,28 @@ describe('public/data-document/index.html', () => {
     expect(shell.replaced).toEqual(['#seed42']);
     shell.listeners.load?.({});
     expect(shell.toParent.at(-1)).toEqual({ type: WORK_ORIGIN_MESSAGE.loaded });
+  });
+
+  it('decodes the work in the encoding its <meta> declares', async () => {
+    const latin = Buffer.from(
+      '<!doctype html><meta charset="windows-1252"><script>let café = 1</script>',
+      'latin1'
+    );
+    const source = `data:text/html;base64,${latin.toString('base64')}`;
+    const shell = loadShell(`${labelOf(source)}.localhost`);
+    await shell.send(source);
+    expect(shell.written[0]).toContain('let café = 1');
+  });
+
+  it('honours a UTF-16 byte order mark', async () => {
+    const utf16 = Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from('<p>naïve</p>', 'utf16le'),
+    ]);
+    const source = `data:text/html;base64,${utf16.toString('base64')}`;
+    const shell = loadShell(`${labelOf(source)}.localhost`);
+    await shell.send(source);
+    expect(shell.written[0]).toBe('<p>naïve</p>');
   });
 
   it('refuses bytes that do not match its origin', async () => {

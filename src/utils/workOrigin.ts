@@ -46,10 +46,11 @@ export type WorkOriginState =
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost']);
 const PROBE_TIMEOUT_MS = 2000;
-// An OS without the works server answers the probe with a refused
-// connection; ask again after this long in case the server was still
-// starting.
-const PROBE_RETRY_MS = 60_000;
+// Either probe answer expires after this long: a miss in case the server was
+// still starting, a hit in case it has since died. Only a slot choosing its
+// path asks (the player keeps a slot on the path it took), so a playing work
+// is never re-routed by a fresh answer.
+const PROBE_TTL_MS = 60_000;
 
 // data: URL without fragment -> label ('' when hashing failed).
 const labelBySource = new Map<string, string>();
@@ -57,6 +58,35 @@ const pendingSources = new Set<string>();
 let serverAvailable: boolean | undefined;
 let serverCheckedAt = 0;
 let probeInFlight = false;
+// Everyone waiting on a probe or a hash, notified when either settles: a
+// player that mounts while another's probe is in flight must hear it too.
+const listeners = new Set<() => void>();
+
+/** Tell every subscriber that a probe or label settled. */
+function notifyListeners(): void {
+  listeners.forEach(listener => {
+    listener();
+  });
+}
+
+/**
+ * Subscribe to work-origin resolutions (a works-server probe or a label hash
+ * settling); returns the unsubscribe function.
+ */
+export function subscribeWorkOrigins(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/** Whether the last probe answer is recent enough to act on. */
+function serverAnswerFresh(): boolean {
+  return (
+    serverAvailable !== undefined &&
+    Date.now() - serverCheckedAt <= PROBE_TTL_MS
+  );
+}
 
 /** Split a URL at its first `#`; a fragment is never part of a data: body. */
 export function splitFragment(url: string): [string, string] {
@@ -95,7 +125,8 @@ function isHTMLDataURL(source: string): boolean {
  * found missing. Lets callers avoid mounting a bare `data:` frame first.
  */
 export function usesWorkOrigin(source: string): boolean {
-  return isHTMLDataURL(source) && onLoopback() && serverAvailable !== false;
+  const knownMissing = serverAvailable === false && serverAnswerFresh();
+  return isHTMLDataURL(source) && onLoopback() && !knownMissing;
 }
 
 /** Whether `url` is a work-origin frame URL made by `resolveWorkOrigin`. */
@@ -112,15 +143,9 @@ export function isWorkOriginURL(url: string): boolean {
   }
 }
 
-/**
- * Probe once for the works server (again after a miss goes stale) and call
- * `onReady` with the answer.
- */
-function checkServer(onReady: () => void): void {
-  const stale =
-    serverAvailable === false &&
-    Date.now() - serverCheckedAt > PROBE_RETRY_MS;
-  if (probeInFlight || (serverAvailable !== undefined && !stale)) {
+/** Probe for the works server unless a fresh answer is cached or in flight. */
+function checkServer(): void {
+  if (probeInFlight || serverAnswerFresh()) {
     return;
   }
   probeInFlight = true;
@@ -139,12 +164,12 @@ function checkServer(onReady: () => void): void {
       serverAvailable = available;
       serverCheckedAt = Date.now();
       probeInFlight = false;
-      onReady();
+      notifyListeners();
     });
 }
 
-/** Hash `body` into its label once and call `onReady` when it is cached. */
-function checkLabel(body: string, onReady: () => void): void {
+/** Hash `body` into its label once, notifying subscribers when it is cached. */
+function checkLabel(body: string): void {
   if (labelBySource.has(body) || pendingSources.has(body)) {
     return;
   }
@@ -154,34 +179,35 @@ function checkLabel(body: string, onReady: () => void): void {
     .then(label => {
       labelBySource.set(body, label);
       pendingSources.delete(body);
-      onReady();
+      notifyListeners();
     });
 }
 
 /**
  * Where an HTML `data:` source plays: its work origin (`ready`), not yet known
- * while the label hashes or the works server is probed (`pending`, and
- * `onReady` fires when that changes), or `unavailable` for everything else,
- * which keeps the blob path.
+ * while the label hashes or a fresh works-server answer is awaited
+ * (`pending`; subscribers hear when that settles), or `unavailable` for
+ * everything else, which keeps the blob path. Call it when a slot chooses its
+ * path, not for a slot already playing.
  */
-export function resolveWorkOrigin(
-  source: string,
-  onReady: () => void
-): WorkOriginState {
+export function resolveWorkOrigin(source: string): WorkOriginState {
   if (!isHTMLDataURL(source) || !onLoopback()) {
     return { kind: 'unavailable' };
   }
-  checkServer(onReady);
+  checkServer();
+  if (!serverAnswerFresh()) {
+    return { kind: 'pending' };
+  }
   if (serverAvailable === false) {
     return { kind: 'unavailable' };
   }
   const [body] = splitFragment(source.trim());
-  checkLabel(body, onReady);
+  checkLabel(body);
   const label = labelBySource.get(body);
   if (label === '') {
     return { kind: 'unavailable' };
   }
-  if (serverAvailable === undefined || label === undefined) {
+  if (label === undefined) {
     return { kind: 'pending' };
   }
   return {

@@ -206,7 +206,13 @@ read and loses WebGPU. The player never mounts one that way:
   hostname, writes the work into its document, and posts `loaded` (or
   `error`) when the work has finished loading. That message is the frame's
   completion signal: its own `load` events come from the shell and are
-  ignored. Each work gets WebGPU and persistent storage of its own,
+  ignored, and only the first completion per frame counts (a work shares its
+  shell's window and can post look-alike messages). The player probes for the
+  works server when a work chooses its path, at most once a minute, and a
+  slot keeps the path it took, so a playing work is never re-routed. The shell
+  decodes the work in the encoding the HTML parser would pick (byte order
+  mark, the `data:` charset, a `<meta>` charset, then UTF-8). Each work gets
+  WebGPU and persistent storage of its own,
   cross-origin to the player and to every other work, under the usual
   `allow-same-origin allow-scripts` sandbox.
 - **Blob document** (`src/utils/dataDocument.ts`): otherwise (an OS without

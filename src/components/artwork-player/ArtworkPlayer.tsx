@@ -28,6 +28,7 @@ import {
   forgetWorkOrigins,
   isWorkOriginURL,
   resolveWorkOrigin,
+  subscribeWorkOrigins,
   usesWorkOrigin,
 } from '@/utils/workOrigin';
 import {
@@ -2147,15 +2148,22 @@ const ArtworkPlayer = ({
             // An on-chain HTML work plays in a device-local origin of its own
             // (storage, WebGPU; utils/workOrigin), '' while that is resolved;
             // otherwise as a sandboxed blob document (WebGPU; utils/dataDocument).
-            const origin = resolveWorkOrigin(slot.displayPreviewURL, () => {
-              setWorkOriginsReady(n => n + 1);
-            });
-            softwareURL =
-              origin.kind === 'ready'
-                ? origin.url
-                : origin.kind === 'pending'
-                  ? ''
-                  : dataDocumentURL(slot.displayPreviewURL);
+            // A slot keeps the path it first took: re-routing a playing work
+            // would reload it and replay its completion.
+            const chosen =
+              slot.displaySoftwareURL !== '' &&
+              slot.displaySoftwareURL !== slot.displayPreviewURL;
+            if (chosen) {
+              softwareURL = slot.displaySoftwareURL;
+            } else {
+              const origin = resolveWorkOrigin(slot.displayPreviewURL);
+              softwareURL =
+                origin.kind === 'ready'
+                  ? origin.url
+                  : origin.kind === 'pending'
+                    ? ''
+                    : dataDocumentURL(slot.displayPreviewURL);
+            }
           } else {
             // Delegated so the reversibility contract lives beside the rule
             // it protects: controld's offline-cache replay strips
@@ -2194,6 +2202,22 @@ const ArtworkPlayer = ({
     forgetWorkOrigins(shown);
   }, [slots]);
 
+  // Re-run the software-URL effect whenever a work-origin probe or label
+  // settles, including ones another mount started.
+  useEffect(
+    () =>
+      subscribeWorkOrigins(() => {
+        setWorkOriginsReady(n => n + 1);
+      }),
+    []
+  );
+
+  // Frames whose completion has been consumed. Every load attempt mounts a
+  // new iframe element, so the element is the attempt: a work shares its
+  // shell's window and can post look-alike messages, and a second completion
+  // would reopen a committed transition.
+  const workOriginCompletedRef = useRef(new WeakSet<HTMLIFrameElement>());
+
   // Latest refs and handlers for the work-origin message listener below,
   // which subscribes once.
   const workOriginFramesRef = useRef<{
@@ -2231,9 +2255,16 @@ const ArtworkPlayer = ({
             { type: WORK_ORIGIN_MESSAGE.open, source: slot.displayPreviewURL },
             event.origin
           );
-        } else if (type === WORK_ORIGIN_MESSAGE.loaded) {
+          return;
+        }
+        if (workOriginCompletedRef.current.has(frame)) {
+          return;
+        }
+        if (type === WORK_ORIGIN_MESSAGE.loaded) {
+          workOriginCompletedRef.current.add(frame);
           frames.onLoad?.(i, slot);
         } else if (type === WORK_ORIGIN_MESSAGE.error) {
+          workOriginCompletedRef.current.add(frame);
           frames.onError?.(i, slot);
         }
       });
