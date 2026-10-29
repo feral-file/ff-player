@@ -281,18 +281,27 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
     // Primary path: open the app on the same Wi-Fi and look for the frame
     // by name — covers both the auto-prompt and manual-add cases.
     expect(screen.getByText('FF1-8EVTK3RE')).toBeTruthy();
-    // The claim step is the ONE flow that requires a phone (the app), so
-    // the copy must name it — pinned as the full sentence.
+    // The same-Wi-Fi requirement leads on its own line (first-owner
+    // enrollment is LAN-only), pinned as the full sentence.
+    expect(
+      screen.getByText(
+        'Connect your phone to the same Wi-Fi as this Art Computer.'
+      )
+    ).toBeTruthy();
     expect(
       screen.getByText(
         (_, el) =>
           el?.tagName === 'P' &&
           el.textContent ===
-            'Open the app on a phone on the same Wi-Fi and look for FF1-8EVTK3RE.'
+            'Then open the app and look for FF1-8EVTK3RE, or scan this code.'
       )
     ).toBeTruthy();
-    // Backup path: the QR, framed as the fallback.
-    expect(screen.getByText('Or scan this code.')).toBeTruthy();
+    // The reason, so the requirement reads as protection.
+    expect(
+      screen.getByText(
+        'Setup only works on the same Wi-Fi, so no one can take over this Art Computer just by seeing this screen.'
+      )
+    ).toBeTruthy();
     expect(container.querySelector('svg')).not.toBeNull();
   });
 

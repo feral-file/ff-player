@@ -397,7 +397,8 @@ function FactoryResetPanel() {
  * frame manually inside the app — "look for <name>" is the one instruction
  * that routes both cases without a separate screen. The QR code is
  * deliberately framed as the backup for when discovery fails (cross-VLAN,
- * multicast-filtering APs, or the phone on a different network).
+ * multicast-filtering APs). Either way the phone must be on the frame's
+ * Wi-Fi: the claim itself only completes on the LAN.
  */
 function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
   const frameName = display.device_name?.trim();
@@ -411,18 +412,29 @@ function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
             "If pairing doesn't start automatically, add ... in the app"
             conditional routed the second case explicitly; looking for the
             name routes both. */}
+        {/* The same-Wi-Fi requirement leads, as its own line: first-owner
+            enrollment is LAN-only by protocol (ffos-user
+            docs/ff1-control-v1.md §5.1), so a phone on mobile data or
+            another network cannot finish here at all. The security line
+            says why, so the requirement reads as protection rather than a
+            limitation. */}
         <p className={styles.subtitle}>
-          Open the app on a phone on the same Wi-Fi and look for{' '}
-          {frameName ? <strong>{frameName}</strong> : 'this Art Computer'}.
+          Connect your phone to the same Wi-Fi as this Art Computer.
+        </p>
+        <p className={styles.stepLabel}>
+          Then open the app and look for{' '}
+          {frameName ? <strong>{frameName}</strong> : 'this Art Computer'}
+          {display.url ? ', or scan this code.' : '.'}
         </p>
         {display.url ? (
-          <>
-            <p className={styles.stepLabel}>Or scan this code.</p>
-            <div className={styles.qrFrame}>
-              <QRCodeSVG value={display.url} size={qrSize} marginSize={2} />
-            </div>
-          </>
+          <div className={styles.qrFrame}>
+            <QRCodeSVG value={display.url} size={qrSize} marginSize={2} />
+          </div>
         ) : null}
+        <p className={styles.securityNote}>
+          Setup only works on the same Wi-Fi, so no one can take over this Art
+          Computer just by seeing this screen.
+        </p>
       </div>
     </section>
   );
