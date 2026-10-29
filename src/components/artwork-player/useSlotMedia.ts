@@ -30,7 +30,7 @@ export function useMediaEvents(
   );
 }
 
-/** Preserves the distinct HLS and ordinary-media setup keys, including the iframe-only reload exception. */
+/** Media setup keeps its existing keys; the watchdog follows each actual element mount. */
 export function useSlotMedia(
   index: SlotIndex,
   layer: SlotLayer | null,
@@ -53,6 +53,7 @@ export function useSlotMedia(
     layer?.itemIdentity,
     layer?.showingKey,
   ]);
+  const watchdogKey = JSON.stringify([mediaKey, layer?.iframeKey]);
   const streamKey = JSON.stringify([
     layer?.displayPreviewURL,
     layer?.previewType,
@@ -70,6 +71,10 @@ export function useSlotMedia(
   useEffect(
     () => resources.setupMediaForSlot(index, committedLayer.current, events),
     [index, resources, events, mediaKey, onArtworkExhausted]
+  );
+  useEffect(
+    () => resources.watchSlot(index, committedLayer.current, events),
+    [index, resources, events, watchdogKey, onArtworkExhausted]
   );
 }
 

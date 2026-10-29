@@ -94,7 +94,9 @@ the distinct callback and composition timings.
   fallback iframe or artwork-error modal. Offline recovery owns that case.
 - WebGL recovery polls every 5 s for up to 10 minutes. On availability, it waits
   2 s and reloads the active iframe key. Recovery completion or timeout resumes
-  an item retry suspended by GPU loss without charging another attempt.
+  an item retry suspended by GPU loss without charging another attempt. Each
+  reloaded element receives a fresh watchdog; a stalled iframe recovery fails
+  after 45 s and enters the ordinary bounded retry/advance path.
 - Exhaustion follows the playlist's ordinary advance path, including queued
   replacements. When repeat-one or repeat-off's final slot has no next target,
   it starts another bounded retry cycle in place.
@@ -107,8 +109,6 @@ Current limitations that callers must preserve:
   AppContext's M7 recovery can request an immediate reload and shorten the
   nominal 3 s retry pacing. Watchdog and fatal-HLS failures do not raise that
   degraded signal. The failure budget still bounds attempts.
-- WebGL's iframe-key-only reload does not restart media setup or arm a new load
-  watchdog. A stalled recovery reload can therefore remain unbounded.
 
 ## Recently played
 
@@ -127,7 +127,7 @@ record as the work on the wall:
 | Durable append for the current showing | Known; its record is active. |
 | Record omitted as oversize | Known; no retained record is active. |
 | Disconnect, sleep, error navigation, empty cast, or blocked visible work | Known; no retained record is active. |
-| Failed render | Unknown/pending until a later commit or stop. |
+| Failed render | Unknown/pending until genuine recovery, a later commit, or stop. |
 
 An allowed outgoing work remains active while its replacement loads. Policy
 changes that leave it playing do not retire it. Generation checks prevent an
@@ -140,9 +140,13 @@ after making that marker durable. If even the marker write fails, the gap is
 known only for that page lifetime. An unreadable history starts empty and
 incomplete, allowing subsequent commits to rebuild it.
 
-Known limitation: failure and recovery in place may produce no second played
-callback. History then remains pending until the next commit. A bare `ready`
-status does not identify a new successful occurrence.
+Failure suspends the current occurrence. Each successful commit returns a
+session-only recovery receipt to its renderer. Genuine recovery of that same
+showing restores its occurrence without appending a duplicate; a pending write
+must still settle before history becomes known. Stops and newer commits
+invalidate older receipts. A bare `ready` status cannot restore an occurrence.
+A suspended receipt does not identify a visible work for policy/refresh checks;
+otherwise relabelling an already-retired predecessor could restart the cast.
 
 ## Offline recovery and connectivity
 

@@ -5,7 +5,8 @@ import { itemIdentityFor, normalizePlaylistIndex } from '@/utils/playlist';
 import { useCallback } from 'react';
 
 /**
- * Records only successfully played media, not a selected playlist index.
+ * Records successfully played media and returns its recovery receipt to the
+ * renderer, which can restore the same occurrence without recording it twice.
  */
 export function useRecentlyPlayedCommit(
   playlist: DP1Item[],
@@ -22,7 +23,11 @@ export function useRecentlyPlayedCommit(
           ) === identity
       );
       if (item) {
-        canvasService.recordRecentlyPlayed(item, playlistDefaults, contentContext);
+        return canvasService.recordRecentlyPlayed(
+          item,
+          playlistDefaults,
+          contentContext
+        );
       }
     },
     [contentContext, playlist, playlistDefaults]
