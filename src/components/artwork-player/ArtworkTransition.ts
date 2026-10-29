@@ -2,6 +2,7 @@ import { RenderStatus } from '@/models';
 import type { Dispatch, SetStateAction } from 'react';
 import type { ArtworkRecovery } from './ArtworkRecovery';
 import {
+  ArtworkPlayerProps,
   FADE_IN_OUT_DURATION_MS,
   SlotIndex,
   SlotLayer,
@@ -27,7 +28,7 @@ export interface TransitionUI {
 }
 interface CommitCallbacks {
   onItemCommitted?: (identity: string) => void;
-  onItemPlayed?: (identity: string) => void;
+  onItemPlayed?: ArtworkPlayerProps['onItemPlayed'];
 }
 /** Owns slot identity and transition acceptance. Resource callbacks never write slot refs directly. */
 export class ArtworkTransition {
@@ -42,6 +43,7 @@ export class ArtworkTransition {
   };
   private committedAsFailureRef = { current: [false, false] };
   private itemPlayedFiredRef = { current: [false, false] };
+  private occurrenceRecovery: ((() => void) | undefined)[] = [];
   private transitionTokenRef = { current: 0 };
   private transitionTimeoutRef: { current: NodeJS.Timeout | undefined } = {
     current: undefined,
@@ -169,17 +171,19 @@ export class ArtworkTransition {
     this.markSlotReady(slotIndex);
     if (isSuccess) {
       this.recovery.acceptSuccess();
+      // Only an accepted load can restore a suspended occurrence. A delayed
+      // fade callback can run after another failure and is not new evidence.
+      this.occurrenceRecovery[slotIndex]?.();
       if (wasFailed) {
         this.recovery.markArtworkReady(
           this.committedAsFailureRef.current[slotIndex]
         );
         this.incomingSlotRef.current = null;
-        if (!this.itemPlayedFiredRef.current[slotIndex]) {
-          this.itemPlayedFiredRef.current[slotIndex] = true;
-          this.onItemPlayedRef.current?.(
-            expectedLayer?.itemIdentity ?? this.itemIdentityRef.current
-          );
-        }
+        this.notifyPlayed(
+          slotIndex,
+          expectedLayer?.itemIdentity ?? this.itemIdentityRef.current,
+          this.onItemPlayedRef.current
+        );
       }
     }
     return true;
@@ -224,6 +228,7 @@ export class ArtworkTransition {
     this.incomingSlotRef.current = target;
     this.media.resetMount(target);
     this.itemPlayedFiredRef.current[target] = false;
+    this.occurrenceRecovery[target] = undefined;
     this.ui.setSlots(prev => {
       const next: Slots = hasAny ? [...prev] : [null, null];
       next[target] = createSlotLayer(url, ++this.iframeKeyCounterRef.current, {
@@ -319,13 +324,23 @@ export class ArtworkTransition {
     callbacks: CommitCallbacks
   ) {
     callbacks.onItemCommitted?.(layer.itemIdentity);
-    if (
-      this.recovery.status !== RenderStatus.failed &&
-      !this.itemPlayedFiredRef.current[index]
-    ) {
-      this.itemPlayedFiredRef.current[index] = true;
-      callbacks.onItemPlayed?.(layer.itemIdentity);
+    if (this.recovery.status !== RenderStatus.failed) {
+      this.notifyPlayed(index, layer.itemIdentity, callbacks.onItemPlayed);
     }
+  }
+  /** Capture one receipt per showing; a repeated deferred commit is a no-op. */
+  private notifyPlayed(
+    index: SlotIndex,
+    identity: string,
+    callback: CommitCallbacks['onItemPlayed']
+  ) {
+    if (this.itemPlayedFiredRef.current[index]) {
+      return;
+    }
+    this.itemPlayedFiredRef.current[index] = true;
+    const receipt = callback?.(identity);
+    this.occurrenceRecovery[index] =
+      typeof receipt === 'function' ? receipt : undefined;
   }
   private finishFade(
     fade: {
@@ -360,6 +375,9 @@ export class ArtworkTransition {
     }
   }
   reloadIframe(slotIndex: SlotIndex) {
+    // Share the mount counter with ordinary retries: a local slot increment
+    // could collide with the incoming slot's next key after this reload fails.
+    const iframeKey = ++this.iframeKeyCounterRef.current;
     this.ui.setSlots(prev => {
       const slot = prev[slotIndex];
       if (!slot) {
@@ -368,7 +386,7 @@ export class ArtworkTransition {
       const next = [...prev] as [SlotLayer | null, SlotLayer | null];
       next[slotIndex] = {
         ...slot,
-        iframeKey: slot.iframeKey + 1,
+        iframeKey,
         loading: true,
       };
       return next;

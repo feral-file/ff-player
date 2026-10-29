@@ -159,12 +159,13 @@ class CanvasService {
     return this.history.primeRecentlyPlayed();
   }
 
+  /** Record a visual commit and return its generation-bound in-place recovery receipt. */
   public recordRecentlyPlayed(
     item: DP1Item,
     defaults: DP1Defaults | null = null,
     contentContext: ContentContext = 'curated'
-  ): void {
-    this.history.recordRecentlyPlayed(item, defaults, contentContext);
+  ): () => void {
+    return this.history.recordRecentlyPlayed(item, defaults, contentContext);
   }
 
   private getRecentlyPlayed(): Reply & {

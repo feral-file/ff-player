@@ -13,8 +13,8 @@ This repository reviews AI-assisted changes against the full diff, not only the 
 ## Review expectations
 
 - Review the entire PR diff, including docs, workflow files, and config changes.
-- Step back from the patch and restate the underlying problem in your own words before deciding whether the implementation is good.
-- Review from first principles: ask whether this is the best solution for the problem, not merely whether the diff is internally consistent.
+- Reconstruct the settled requirement and design from the handoff, then verify that the implementation realizes them correctly and completely.
+- Raise an architectural issue when the implementation cannot satisfy that direction safely or coherently. Do not reopen the design merely because another solution is possible.
 - Check that behavior-sensitive surfaces keep their contracts: cast handling, DP1 loading, persisted device state, and playback recovery.
 - Evaluate how the chosen solution affects the current flow, including what it makes simpler, what it makes riskier, and what future changes it might constrain.
 - Treat missing docs or stale guidance as review feedback when the change alters repo behavior or workflow.
@@ -25,7 +25,7 @@ This repository reviews AI-assisted changes against the full diff, not only the 
 
 - After `npm run post-implement-check` is clean, run a separate review pass over the full diff before human handoff.
 - If sub-agents are available, use a dedicated reviewer sub-agent so implementation and review are separate loops.
-- The reviewer pass should focus on regressions, behavior drift, missing docs, verification gaps, and whether the solution is the right one for the real problem rather than style nits already covered by lint.
+- The reviewer pass should focus on correctness against the settled requirement, regressions, behavior drift, missing docs, and verification gaps. Style preferences and alternative designs alone are not findings.
 - Treat missing contextual comments on touched exported APIs or tricky flows as review feedback when future maintainers would otherwise have to reconstruct intent from code alone.
 
 ## Accept / revise loop
@@ -46,3 +46,9 @@ A change is done only when all of the following are true:
 - `npm run verify` passes.
 - Required manual smoke coverage is recorded for playback-facing changes.
 - The PR description is filled out using `.github/pull_request_template.md`.
+
+Review findings and the verdict are observations, not commit, merge, or release
+authority. The named human owner decides the disposition of material findings;
+reviewer unanimity is not required. The generated
+[local review contract](../prompts/code-review.md) and `AGENTS.md` govern when
+instructions here conflict with them.
