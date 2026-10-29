@@ -925,8 +925,19 @@ class CanvasService {
     incoming: CastInfo | null,
     applied: CastInfo | null
   ): void {
+    if (incoming === null) {
+      return;
+    }
+    // A cast with nothing to show is a stop whatever came before it. Checked
+    // before the occurrence guard: after a failed render or a restart there is
+    // no tracked occurrence, and no commit will follow to end the pending
+    // answer, which would hold History at its loading view.
+    if ((applied?.playlist?.items?.length ?? 0) === 0) {
+      this.retireActiveRecentlyPlayed();
+      return;
+    }
     const onScreen = this.occurrenceItem;
-    if (onScreen === null || incoming === null) {
+    if (onScreen === null) {
       return;
     }
     const items = incoming.playlist?.items ?? [];
@@ -941,8 +952,7 @@ class CanvasService {
     const policy = this.admissionPolicy();
     const fresh = items.find(item => item.id === onScreen.id && item.source === onScreen.source);
     const context = parseContentContext(incoming.contentContext);
-    const nothingToShow = (applied?.playlist?.items?.length ?? 0) === 0;
-    if (nothingToShow || (policy !== null && !allowsContent(fresh ?? onScreen, policy, context))) {
+    if (policy !== null && !allowsContent(fresh ?? onScreen, policy, context)) {
       this.retireActiveRecentlyPlayed();
     }
   }

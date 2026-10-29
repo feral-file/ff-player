@@ -215,6 +215,20 @@ describe('recently played active occurrence across cast replacement', () => {
     expectNoActiveRecord();
   });
 
+  it('answers an emptied cast after a failed render, when no occurrence is tracked', async () => {
+    canvasService.setCastInfo(castOf([item('a')]), false);
+    canvasService.recordRecentlyPlayed(item('a'));
+    await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
+    canvasService.setRenderStatus(RenderStatus.failed);
+    expect(history().activeOccurrenceKnown).toBe(false);
+
+    // The renderer will not commit anything from an empty cast, so only this
+    // cast can end the pending answer.
+    canvasService.setCastInfo(castOf([]), false);
+
+    expectNoActiveRecord();
+  });
+
   it('cannot let a pending write promote a work the new cast blocks', async () => {
     const gate = new Promise<void>(resolve => { releaseWrite = resolve; });
     setRecentlyPlayed.mockImplementationOnce(async () => gate);
