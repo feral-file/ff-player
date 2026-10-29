@@ -31,7 +31,7 @@
  * the port, held in the shell's closure, is trusted; the player answers only
  * the first `ready` per frame, before the work exists.
  *
- * Off loopback (the player deployed as a website), or on an OS without the
+ * Off loopback (the web build in a browser), or on an OS without the
  * works server, `data:` works keep the blob path.
  */
 
