@@ -18,7 +18,8 @@ Repo contract for coding agents and automation working in `ff-player`.
 
 ## Major surfaces
 
-- `src/context/AppContext.tsx`: boot flow, fallback playlist behavior, persisted recovery, and app-wide initialization.
+- `src/context/AppContext.tsx`: app snapshot provider. `src/context/runtime/` owns boot hydration, fallback retries, configuration, and reconnect recovery.
+- `src/app/playlist/playlist-client.tsx`: playlist presentation. `PlaylistTimeline` owns timers, selection, loop/hold, and advance decisions; `usePlaylistPlayback` composes route owners. See `docs/PLAYLIST_LOOP_CONTRACT.md`.
 - `src/services/CanvasService.ts`: stable command/route facade. `src/services/canvas/` owns live playback, history, boot persistence, recovery, composition, and command orchestration.
 - `src/services/DP1Service.ts` and `src/services/DP1ScheduleService.ts`: DP1 playlist loading and scheduled playback support.
 - `src/utils/DeviceManager.ts`: persisted device state, migration behavior, and storage compatibility.

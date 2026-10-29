@@ -1,10 +1,10 @@
+import type { DisplaySettings } from '@/models/display_settings.model';
 import {
   defaultDP1DisplayPreference,
   DP1Defaults,
   DP1DisplayPreference,
   DP1Item,
 } from '@/models/dp1.model';
-import type { DisplaySettings } from '@/models/display_settings.model';
 import {
   mergeStillDescribesActiveSlot,
   normalizePlaylistIndex,
@@ -25,14 +25,16 @@ import {
 } from 'react';
 
 /** The route's live-position refs, shared by the guard and the re-resolve. */
-interface SlotRefs {
-  currentItemRef: MutableRefObject<DP1Item | undefined>;
-  currentIndexRef: MutableRefObject<number>;
-  playlistRef: MutableRefObject<DP1Item[]>;
+interface SlotReader {
+  readSlot: () => {
+    item: DP1Item | undefined;
+    index: number;
+    items: DP1Item[];
+  };
 }
 
 /** Everything the per-slot apply guard needs to decide and to store. */
-interface SlotApplyContext extends SlotRefs {
+interface SlotApplyContext extends SlotReader {
   /** Generation the merge started under; a bump makes it stale. */
   generation: number;
   generationRef: MutableRefObject<number>;
@@ -57,13 +59,11 @@ function makeSlotApply(
     if (ctx.generation !== ctx.generationRef.current) {
       return;
     }
-    const activeIndex = normalizePlaylistIndex(
-      ctx.currentIndexRef.current,
-      ctx.playlistRef.current.length
-    );
+    const slot = ctx.readSlot();
+    const activeIndex = normalizePlaylistIndex(slot.index, slot.items.length);
     const stillActive = mergeStillDescribesActiveSlot({
       activeIndex,
-      activeItem: ctx.currentItemRef.current,
+      activeItem: slot.item,
       slotIndex: ctx.slotIndex,
       itemId: ctx.dp1Item.id,
       ref: ctx.dp1Item.ref,
@@ -93,7 +93,7 @@ function makeSlotApply(
  */
 function useReResolveOnDeviceScaling(
   deviceScaling: unknown,
-  refs: SlotRefs,
+  refs: SlotReader,
   resolveForSlot: (dp1Item: DP1Item, slotIndex: number) => Promise<void>
 ): void {
   const appliedScaling = useRef(deviceScaling);
@@ -102,14 +102,12 @@ function useReResolveOnDeviceScaling(
       return;
     }
     appliedScaling.current = deviceScaling;
-    const dp1Item = refs.currentItemRef.current;
+    const slot = refs.readSlot();
+    const dp1Item = slot.item;
     if (!dp1Item) {
       return;
     }
-    const slotIndex = normalizePlaylistIndex(
-      refs.currentIndexRef.current,
-      refs.playlistRef.current.length
-    );
+    const slotIndex = normalizePlaylistIndex(slot.index, slot.items.length);
     void resolveForSlot(dp1Item, slotIndex);
   }, [deviceScaling, refs, resolveForSlot]);
 }
@@ -129,24 +127,16 @@ function useReResolveOnDeviceScaling(
 export function usePlaylistItemDisplayPreference(options: {
   playlistDefaults: DP1Defaults | null;
   deviceDisplaySettings: DisplaySettings | null;
-  currentItemRef: MutableRefObject<DP1Item | undefined>;
-  currentIndexRef: MutableRefObject<number>;
-  playlistRef: MutableRefObject<DP1Item[]>;
+  readSlot: SlotReader['readSlot'];
 }): {
   preference: DP1DisplayPreference | null;
-  mergedDisplayRef: MutableRefObject<SlotMergedDisplay | null>;
+  readMergedDisplay: () => SlotMergedDisplay | null;
   resolveForSlot: (dp1Item: DP1Item, slotIndex: number) => Promise<void>;
   clearMergedDisplayForNewCast: () => void;
   clearMergedDisplay: () => void;
   reset: () => void;
 } {
-  const {
-    playlistDefaults,
-    deviceDisplaySettings,
-    currentItemRef,
-    currentIndexRef,
-    playlistRef,
-  } = options;
+  const { playlistDefaults, deviceDisplaySettings, readSlot } = options;
 
   const [preference, setPreference] = useState<DP1DisplayPreference | null>(
     null
@@ -167,10 +157,7 @@ export function usePlaylistItemDisplayPreference(options: {
   const deviceScaling = deviceDisplaySettings?.scaling;
   const deviceDefaultsRef = useRef(deviceDefaultDisplay(deviceScaling));
   deviceDefaultsRef.current = deviceDefaultDisplay(deviceScaling);
-  const slotRefs = useMemo(
-    () => ({ currentItemRef, currentIndexRef, playlistRef }),
-    [currentItemRef, currentIndexRef, playlistRef]
-  );
+  const slotRefs = useMemo(() => ({ readSlot }), [readSlot]);
 
   const resolveForSlot = useCallback(
     async (dp1Item: DP1Item, slotIndex: number) => {
@@ -215,9 +202,10 @@ export function usePlaylistItemDisplayPreference(options: {
     setPreference(null);
   }, [clearMergedDisplay]);
 
+  const readMergedDisplay = useCallback(() => mergedDisplayRef.current, []);
   return {
     preference,
-    mergedDisplayRef,
+    readMergedDisplay,
     resolveForSlot,
     clearMergedDisplayForNewCast,
     clearMergedDisplay,

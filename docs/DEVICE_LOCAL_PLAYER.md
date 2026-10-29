@@ -45,11 +45,17 @@ result even if the effect that initiated it has been superseded.
   the session or scheduling work. `canvas/BootPlaylistStore` serializes boot
   writes and refresh supersession against the owning cast.
 - `canvas/PlaybackRecovery` owns hydration, halt, sleep/wake, and conditional
-  default ordering. AppContext owns fetching and retrying the fallback playlist.
+  default ordering. `context/runtime/BootHydration` restores persisted state
+  after checking for intervening live commands; `FallbackPlaylist` owns fallback
+  cancellation, supersession, and bounded retry delays.
 - `canvas/RecentPlaybackService` owns durable history and active-occurrence
   knowledge. Selection alone is never evidence that a work played.
 - `canvas/DisplaySettingsService` owns composition identity and revision-based
   command acceptance; the mounted renderer supplies the committed composition.
+- `AppContext` publishes the app snapshot. `usePlayerRuntime` composes boot,
+  fallback, configuration, and `PlaybackReconnect` in their required effect order.
+- `PlaylistTimeline` owns route timers, selection mirrors, loop/hold state, and
+  advance decisions. See [Playlist loop contract](PLAYLIST_LOOP_CONTRACT.md).
 - `ArtworkPlayer` composes transition, source, media, recovery, and composition
   owners. A slot's load event is not interchangeable with visual commitment.
 
