@@ -19,10 +19,10 @@ Repo contract for coding agents and automation working in `ff-player`.
 ## Major surfaces
 
 - `src/context/AppContext.tsx`: boot flow, fallback playlist behavior, persisted recovery, and app-wide initialization.
-- `src/services/CanvasService.ts`: cast-command handling, playback orchestration, scheduling hooks, and display-setting updates.
+- `src/services/CanvasService.ts`: stable command/route facade. `src/services/canvas/` owns live playback, history, boot persistence, recovery, composition, and command orchestration.
 - `src/services/DP1Service.ts` and `src/services/DP1ScheduleService.ts`: DP1 playlist loading and scheduled playback support.
 - `src/utils/DeviceManager.ts`: persisted device state, migration behavior, and storage compatibility.
-- `src/components/artwork-player/ArtworkPlayer.tsx`: artwork rendering and runtime playback behavior.
+- `src/components/artwork-player/ArtworkPlayer.tsx`: player composition and presentation. Adjacent transition, media, source, recovery, and composition owners implement the runtime; see `docs/ARTWORK_TRANSITION_SEQUENTIAL_LOGIC.md`.
 - `src/services/custom-hooks/*`: synchronization hooks for cast info, display settings, device rotation, cursor state, and connectivity.
 
 ## Non-negotiable rules

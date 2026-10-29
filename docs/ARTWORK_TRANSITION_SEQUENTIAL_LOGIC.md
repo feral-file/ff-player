@@ -1,280 +1,140 @@
-# Artwork Transition Sequential Logic
-
-This document explains the transition model currently implemented in `src/components/artwork-player/ArtworkPlayer.tsx`.
-
-## Overview
-
-Artwork transitions in ArtworkPlayer to use a 2-slot overlay model with safer media lifecycle handling and improved transition stability.
-
-- Implemented two-slot transition pipeline (slots[0|1]) with per-slot state:
-  - previewURL, previewType, displayPreviewURL, displaySoftwareURL, mimeType, isStreaming, loading, iframeKey
-- Added per-slot opacity/z-order transition control:
-  - slotOpacity, activeSlot, topSlotIndex
-- Added stale-transition guards:
-  - incomingSlotRef, pendingReadySlotRef, transitionTokenRef, timeout cancellation
-- Kept heavy embedded content (iframe, object) on sequential handoff to reduce performance/GPU pressure.
-- Model MIME types now render through `ModelViewerScreen` directly inside `ArtworkPlayer` so glTF / GLB assets stay inside the playlist transition pipeline instead of falling back to the raw binary/object path.
-- Model-viewer bootstrap/load failures still clear the loading indicators and commit the failed model slot so the error modal replaces the outgoing artwork instead of leaving the prior slot visible underneath it.
-- Added per-slot media/HLS bookkeeping:
-  - hlsInstancesRef, hlsLoadedURLRef, playedVideoURLRef
-- Split streaming video setup by slot (avoid cross-slot teardown/re-attach side effects).
-- Split media loading by slot (avoid one slot cleanup retriggering the other slot’s media pipeline).
-- Unified video play gating in a reusable helper (playVideoForSlot) so target-slot and duplicate-play checks are consistent.
-- Non-streaming video now uses media-loader path + loadeddata playback hook.
-
-## 1) Core model: two slots (A/B)
-
-Code references:
-
-- `ArtworkPlayer.tsx` lines `43-76` (`SLOT_INDICES`, `SlotIndex`, `SlotLayer`, helpers)
-- `ArtworkPlayer.tsx` lines `90-146` (slot state + refs)
-
-The player uses two visual slots:
-
-- `slots[0]` and `slots[1]`
-- each slot holds one `SlotLayer`:
-  - `previewURL`
-  - `previewType`
-  - `displayPreviewURL`
-  - `displaySoftwareURL`
-  - `mimeType`
-  - `isStreaming`
-  - `loading`
-  - `iframeKey`
-
-Only one slot is considered active at a time (`activeSlot`).  
-The other slot is used as incoming during transitions.
-
-## 2) Transition state refs
-
-Code references:
-
-- `ArtworkPlayer.tsx` lines `112-145` (`transitionTokenRef`, `transitionTimeoutRef`, `pendingReadySlotRef`, `incomingSlotRef`, `slotsRef`, `activeSlotRef`)
-
-Important refs used to keep transitions deterministic:
-
-- `incomingSlotRef`: which slot is currently the incoming target.
-- `pendingReadySlotRef`: which slot reported "ready" and is waiting for transition execution.
-- `transitionTokenRef`: monotonic token to cancel stale timeout callbacks.
-- `transitionTimeoutRef`: timeout handle for delayed cleanup.
-
-These prevent old async callbacks from taking over new transitions.
-
-## 3) Start of a new artwork request (`previewURL` changed)
-
-Code references:
-
-- `ArtworkPlayer.tsx` lines `498-615` (`previewURL` effect)
-- `ArtworkPlayer.tsx` lines `503-521` (cancel previous token + collapse stale overlay)
-- `ArtworkPlayer.tsx` lines `532-547` (choose incoming slot and create layer)
-- `ArtworkPlayer.tsx` lines `572-609` (type detection write with stale guards)
-
-When `previewURL` changes:
-
-1. Increment `transitionTokenRef` to invalidate old transition callbacks.
-2. Clear existing `transitionTimeoutRef` if present.
-3. Collapse stale overlay:
-   - Keep only `activeSlot` visible.
-   - Teardown and clear the non-active slot.
-4. Mark global loading state and schedule delayed spinner.
-5. Create a new incoming slot layer with a new `iframeKey`.
-6. Detect MIME/preview type and patch that incoming slot only if URL is still current.
-
-This avoids stale overlays and old artwork callbacks from blocking new content.
-
-## 4) Media readiness and single-load behavior
-
-Code references:
-
-- `ArtworkPlayer.tsx` lines `263-299` (`markSlotReady`, `loadedSource`)
-- `ArtworkPlayer.tsx` lines `393-487` (ready-consume transition effect)
-- `ArtworkPlayer.tsx` lines `135-138` and `209-216` (`mediaLoaders`, `hlsInstancesRef`, `hlsLoadedURLRef`, `playedVideoURLRef`, teardown reset)
-- `ArtworkPlayer.tsx` lines `301-391` (`playVideoForSlot`, `setupStreamingVideoForSlot`)
-- `ArtworkPlayer.tsx` lines `653-782` (`setupMediaForSlot`)
-
-Each slot has isolated media resources:
-
-- `mediaLoaders.current[slot]` for image/video/audio blob loading.
-- `hlsInstancesRef.current[slot]` for streaming video.
-- `hlsLoadedURLRef.current[slot]` to avoid duplicate `loadSource()` on repeated attach cycles.
-- `videoRefs/audioRefs/imageRefs/iframeRefs` are all per-slot.
-
-Readiness rules:
-
-- `loadedSource(slotIndex)` marks that slot ready.
-- `markSlotReady` updates only if slot URL still matches current `previewURL`.
-- `pendingReadySlotRef` is consumed in `useLayoutEffect` to run the actual transition.
-
-Video duplicate-start guard:
-
-- `playedVideoURLRef[slot]` ensures `video.play()` for a given slot+URL runs once.
-- Reset during teardown.
-- Streaming `loadSource()` is guarded by `hlsLoadedURLRef[slot]`.
-
-### Streaming vs non-streaming split
-
-- Streaming video setup is done in `setupStreamingVideoForSlot(...)` and mounted through two slot-specific effects.
-- Non-streaming video setup is done in `setupMediaForSlot(...)`, where `loadeddata` triggers `playVideoForSlot(...)`.
-
-## 5) Sequential vs overlap
-
-Code references:
-
-- `ArtworkPlayer.tsx` lines `430-487` (mode decision + sequential/overlap branches)
-
-The transition mode is decided when incoming slot is ready:
-
-- **Sequential** if either side is heavy embedded:
-  - heavy embedded means `iframe`, `object`, `model`
-- **Overlap crossfade** for other combinations
-
-### Sequential flow
-
-1. Fade outgoing to `0`, keep incoming at `0`.
-2. Wait `FADE_IN_OUT_DURATION_MS`.
-3. Remove outgoing slot completely.
-4. Set incoming to visible (`1`).
-5. Commit `activeSlot = incoming`.
-
-### Overlap flow
-
-1. Outgoing opacity `1 -> 0`.
-2. Incoming opacity `0 -> 1`.
-3. After duration, remove outgoing slot and commit active slot.
-
-## 6) Video -> video crossfade mode (Option A)
-
-With Option A, `video -> video` uses overlap crossfade (opacity blend), but the outgoing slot is still paused immediately.
-
-Safety comes from two guards:
-
-1. Immediate pause: `pauseSlotPlayback(outgoing)` runs before either branch starts. It pauses the media elements, resets the played-URL guard, and calls `stopLoad()` on any HLS instance — but deliberately does NOT `Hls.destroy()`. The synchronous destroy used to run inside the pre-paint layout effect that starts the fade, which janked the fade's opening frames (MediaSource detach + buffer free) and could blank the outgoing frame instead of freezing it. The full destroy now happens after the fade, via `setupStreamingVideoForSlot`'s effect cleanup, when the post-fade timeout removes the outgoing slot layer. `pauseAndTeardownSlot` (immediate destroy) still runs in the `previewURL` effect's stale-overlay collapse, where nothing is animating.
-2. Readiness target guard: `loadedSource(slotIndex)` only marks the slot ready when that slot is the current transition target (`incomingSlotRef ?? activeSlot`).
-
-The pause, the visible-slot gating in the `isOnline` effect (§7), and `playVideoForSlot`'s target-slot guard are what keep the hidden outgoing video from resuming — destroy timing is not load-bearing for that.
-
-## 7) Online/offline playback safety
-
-Code references:
-
-- `ArtworkPlayer.tsx` lines `1011-1054` (visible/target-slot play gating; `isStreaming`-only connectivity pause)
-
-The online effect now:
-
-- plays video only for slots that are actually visible (`slotOpacity > 0.05`) and are the current transition target
-- pauses hidden video slots (prevents hidden outgoing video from resuming and flashing)
-- pauses on `!isOnline` **only when `layer.isStreaming` is true** (HLS/live, which must keep fetching new segments to progress)
-
-Progressive/local video (`isStreaming: false`) is deliberately NOT paused by connectivity. Its bytes are either already buffered or served locally with no WAN dependency — this includes `feral-controld`'s offline-cache replay, which serves cached video via CDP `Fetch` interception or its local static blob server. Gating that on `isOnline` made cached video freeze like a still image during real offline playback even though playback could continue uninterrupted. Non-streaming video failures are still caught by the element's own `onerror` -> `handleMediaError('video')` path, so no connectivity-based pre-emptive pause is needed for it.
-
-Any future change to this effect's play/pause conditions must preserve the `isStreaming` split above — collapsing it back to a blanket `isOnline` pause reintroduces the offline-cache freeze regression.
-
-## 8) Stale callback protection summary
-
-Code references:
-
-- `ArtworkPlayer.tsx` lines `281-284` (ignore stale ready slot URL)
-- `ArtworkPlayer.tsx` lines `289-294` (incoming-slot stale check)
-- `ArtworkPlayer.tsx` lines `441-443`, `456-457`, `477-478` (token timeout guards)
-- `ArtworkPlayer.tsx` lines `574-609` (ignore stale type detection results)
-
-A callback is ignored if any of these are true:
-
-- slot URL does not match current `previewURL`
-- a different incoming slot already matches the current URL
-- `transitionTokenRef` changed before timeout callback executes
-
-This is the main mechanism that prevents old transitions from reappearing.
-
-## 9) Latched visual settings (background / margin / scaling)
-
-`displaySettings` (from `useArtworkSettings`) flips to the NEXT item's preferences the moment the playlist advances — but the incoming artwork only becomes visible after load + fade, often seconds later. The stage therefore renders from `committedVisualSettings`, a latched copy that swaps only when a transition commits (`setActiveSlot`):
-
-- Container `backgroundColor` and `padding` (margin) — latched. A `background-color 0.2s` transition softens the commit-time swap in letterbox/margin areas.
-- Both absolute artwork slots share a positioned, in-flow viewport inside the
-  stage's content area. The stage owns the matte padding; the inner viewport
-  makes that padding reduce the artwork bounds for every media type. Attaching
-  the slots directly to the padded stage makes `inset: 0` cover the padding,
-  silently disabling matting. Cursor and global loading overlays remain on the
-  full-screen stage. The wrapper does not introduce a stacking context or change
-  slot opacity, order, readiness, or transition timing.
-- Image/video `objectFit` (scaling) — latched. Trade-off: during the crossfade the incoming slot briefly renders with the outgoing item's scaling (bounded by `FADE_IN_OUT_DURATION_MS`, at partial opacity). This is deliberately preferred over the old behavior, where the fully-visible outgoing artwork restyled seconds before the swap.
-- Iframe `display_mode` URL rewriting — per-slot: only the slot currently claimed as the incoming transition target (`incomingSlotRef`) uses live settings; every other slot keeps committed settings. Otherwise the outgoing iframe's `displaySoftwareURL` changes at playlist-advance time and the iframe reloads (blanks) mid-display. The discriminator is deliberately `incomingSlotRef`, not a `previewURL` comparison, because adjacent playlist items can share the same URL while differing in scaling.
-- `loop` / `autoPlay` — intentionally LIVE, not latched. They are behavioral (end-of-stream gating per DP-1 §4.1), not visual staging, and must reflect the current item immediately.
-
-Commit points: the first-load path (no other layer), the sequential-mode midpoint timeout, and the overlap-mode end-of-fade timeout — all in the ready-consume effect.
-
-Live escape hatch: settings changes that arrive while no transition is pending (e.g. the user adjusts background from the app for the artwork already on screen) apply immediately. "Pending" means an incoming slot is claimed (`incomingSlotRef` non-null), or the active slot's layer URL no longer matches the current `previewURL` (the gap before the slot-setup effect claims an incoming slot). Known edge: an image/iframe load failure leaves `incomingSlotRef` claimed, so live settings changes stay held until the next artwork request — the committed settings still match the artwork left on screen, so this is cosmetic-only for the live-adjust case.
-
-## 10) Image pre-decode before ready
-
-The image path awaits `img.decode()` before calling `loadedSource`, so a large image's first rasterization does not land on the first painted frame of the crossfade (which janked the fade on kiosk hardware). `decode()` rejections or absence fall back to marking ready anyway — painting undecoded is the old behavior, not an error — and `loadedSource`'s URL guard drops stale results.
-
-## 11) Render-loading overlay vs the transition
-
-The render-status lifecycle drives a visible overlay as well as the status poll
-(see *Artwork render status* in [DEVICE_LOCAL_PLAYER.md](DEVICE_LOCAL_PLAYER.md)).
-This overlay changes what the wall shows during a slow transition, so it is part
-of the transition contract, not a separate concern.
-
-- **Delay before it appears.** The artwork-setup effect arms a
-  `RENDER_LOADING_DELAY_MS` (2s) timer right after calling `markArtworkPending`.
-  Only if the request is still `pending` when it fires does `markArtworkLoading`
-  raise the overlay, so a load that finishes inside the window never flashes it.
-  The timer belongs to the effect, not to `markArtworkPending` — the WebGL
-  recovery path is the other caller of that function and has to re-arm the timer
-  itself, because `reloadIframe` only bumps the slot's `iframeKey` and does not
-  re-run the setup effect.
-- **It covers the stage, including the outgoing artwork.** The overlay is an
-  opaque full-screen panel above the slot layers. This is deliberate: an FF1 that
-  is mid-load should say so on the wall, not hold a stale frame silently. It
-  therefore supersedes the "outgoing artwork stays until the incoming one is
-  ready" behavior for loads slower than the delay — that rule still governs the
-  slots themselves, but the overlay is painted over them.
-- **It is disarmed at slot commit, not at fade end.** The ready-consume effect
-  calls `clearLoadingDelay()` as soon as the incoming slot commits. Without this,
-  a load landing between roughly `RENDER_LOADING_DELAY_MS - FADE_IN_OUT_DURATION_MS`
-  and the delay itself would commit, start its crossfade, and *then* trip the
-  timer — raising the overlay on top of a transition already in flight and
-  reporting `loading` for an artwork that had finished loading. In the overlap
-  and sequential branches `markArtworkReady` only runs at the end of the fade, so
-  the commit point is the only place early enough to disarm it.
-- **An overlay that is already up stays up until fade end.** `markArtworkReady`
-  clears it at the same moment it publishes `ready`, so a genuinely slow load is
-  never revealed mid-crossfade.
-- **`ready` publishes with the teardown, not before it.** `markArtworkReady` both
-  clears the overlay and publishes `renderStatus: ready`, at the commit points —
-  synchronously on a first load, at the end of the fade in the sequential and
-  overlap branches. Keeping them together is what guarantees a status poll can
-  never answer `ready` while the wall still shows the outgoing artwork or an
-  opaque overlay. The cost is that `ready` trails byte arrival by up to
-  `FADE_IN_OUT_DURATION_MS` on a transition, and the poll reads `pending` (fast
-  load) or `loading` (slow load) in that window. See *Artwork render status* in
-  [DEVICE_LOCAL_PLAYER.md](DEVICE_LOCAL_PLAYER.md).
-- **The failure path is asymmetric on purpose.** `markArtworkFailed` publishes and
-  drops the overlay at the error site rather than at the commit point, so on a slow
-  load that fails the rest of the fade is no longer covered: the overlap branch
-  reveals the outgoing artwork, and the sequential branch (iframe/object/model —
-  both slots at opacity 0) shows black. The error modal is raised over either, so
-  the wall is never silently wrong.
-- **Model artworks.** `ModelViewerScreen` paints its own "Loading 3D model"
-  overlay inside the slot wrapper, so it inherits `slotOpacity` and is invisible
-  while the incoming slot is still fading in. The global overlay is therefore
-  suppressed only when a model that is BOTH still loading AND painted would stack
-  the two — in practice the first-load case. A slow transition INTO a model still
-  gets the global overlay, because the model's own one cannot be seen yet. The
-  check is also scoped to the current `previewURL`: a model whose load never
-  resolves keeps `loading: true` for the life of its slot, and an unscoped check
-  would let it suppress the overlay for every artwork after it.
-- **Runtime switch.** `showRenderLoadingOverlay` in `display.json` (default `true`)
-  gates the overlay only; it never changes the codes reported on status polls.
-  `ArtworkPlayer` passes it to `ModelViewerScreen` as
-  `showLoadingOverlay={showRenderLoadingOverlay && showLoading}`, so the model
-  overlay honours both the kill switch and the same `RENDER_LOADING_DELAY_MS`
-  gate as every other type — one timer owns both surfaces.
-
-## Showing identity
-
-The slot identity also carries the current showing key (`sessionKey`, with item/source fallback). A new showing starts a fresh slot transition even when the work ID and source URL are unchanged. Media readiness and ended-event guards check this showing key; ended callbacks still carry the original work identity. Composition and session adjustments cannot move to the next showing before its renderer commit.
-
-The playlist's internal showing identity encodes `[slot index, item identity, source]` as a JSON tuple. IDs and URLs can contain delimiters, so concatenation must not make different works share a showing. This internal value stays inside the player; controllers receive an opaque UUID that renews when the committed showing changes.
+# Artwork transitions
+
+`ArtworkPlayer` composes the renderer owners. Its props and route callbacks are
+stable interfaces; `CanvasService` remains the command/status interface.
+
+## Owners
+
+| Owner | State and responsibility |
+|---|---|
+| `ArtworkTransition` / `useArtworkTransition` | Two slot layers, selected target, active/incoming slot, opacity, transition tokens, showing latches, and accepted load/commit events. |
+| `useArtworkSource` | MIME detection and software-URL selection for the current request. |
+| `SlotMediaResources` / `useSlotMedia` | Elements, blob loaders, abort controllers, per-slot watchdogs, HLS instances, and media setup/cleanup. |
+| `ArtworkRecovery` / `useArtworkRecovery` | Render lifecycle, overlay delay, retry budget, and degraded reporting. |
+| `useWebGLRecovery` | GPU probe, context events, and recovery interval. |
+| `useCommittedComposition` | Selected versus committed visual settings and the layout-phase composition reporter. |
+| `useWorkOriginFrame` | Authenticated shell handshake and private-channel completion. |
+| `ArtworkStage` / `ArtworkSlot` | Presentation of the committed snapshot and media-specific DOM. |
+
+Controllers retain private mutable state. Other owners call operations or read
+snapshots. React owns the visible state; layout effects publish committed props
+and slot snapshots before browser events can observe them. An effect's dependency
+list must preserve its resource lifetime, not merely silence the hooks rule.
+
+## Slot identity and request setup
+
+A layer carries source URLs, MIME/preview type, streaming/loading state, an
+`iframeKey`, item identity, and showing key. Guards distinguish all of these:
+
+- URL changes include same-item source replacement.
+- Item identity distinguishes adjacent entries sharing a URL.
+- Showing key distinguishes repeated showings of the same item and source.
+- `iframeKey` distinguishes recreated elements and rejects an older mount's
+  completion where the caller supplies its layer.
+- Transition tokens invalidate an obsolete fade timeout.
+
+The playlist's internal showing key is a JSON tuple of slot index, item identity,
+and source. Controller-visible showing identity is an opaque UUID; internal
+source-bearing identities must not escape in status.
+
+A request invalidates the previous fade, removes the stale non-active layer,
+publishes pending, arms the loading delay, and creates an incoming layer. It
+resets that mount's failure and played latches. MIME results apply only while
+that request remains current. Unknown/unconfirmed types use iframe fallback;
+corroborated-offline detection follows the separate recovery contract.
+
+The active layer remains mounted while incoming media loads. The delayed global
+loading overlay can cover it; retaining the outgoing slot does not imply that
+it remains visible through an opaque overlay.
+
+## Accepted readiness and callback timing
+
+A media completion must pass the current slot/URL/item/showing checks. A different
+incoming slot that still owns the requested source rejects a competing claim.
+Only a loading-to-settled change queues transition processing; repeated load
+events cannot requeue an already-settled transition.
+
+| Path | `onItemCommitted` / successful `onItemPlayed` | Settings latch, active slot, and `ready` |
+|---|---|---|
+| First load, no outgoing layer | Immediately on accepted readiness. | Immediately. |
+| Overlap crossfade | At fade start. | At fade end, after 650 ms. |
+| Sequential handoff | At the handoff after outgoing fade-out, 650 ms. | At that same handoff. |
+
+`onItemCommitted` also fires for failed transitions. `onItemPlayed` is withheld
+for failures and fires at most once per showing. The delayed history callback
+reads the latest cast context. Do not combine these callbacks with `ready` into
+one event: they intentionally have different timing and success conditions.
+
+A genuine late success after a failed load cancels its retry, restores readiness,
+and supplies a played callback if that showing has none. It does not cancel a
+pending sequential handoff. The same per-showing latch prevents its later
+handoff or another iframe load from recording playback again.
+
+## Fade modes and media lifetime
+
+The transition is sequential when either side is iframe, object, or model.
+Other combinations overlap, including video-to-video and PDF. A PDF's longer
+watchdog does not make it a sequential-transition type.
+
+Both modes pause outgoing video/audio and stop HLS network loading at fade start.
+They retain the outgoing element and HLS instance until removal:
+
+- Sequential: set both opacities to zero; after 650 ms remove outgoing, latch
+  settings, and start incoming fade-in.
+- Overlap: fade outgoing to zero and incoming to one together; after 650 ms
+  remove outgoing and latch settings.
+
+Full HLS destruction occurs on outgoing slot cleanup after the fade. Stale-layer
+collapse on a new request may tear it down immediately. One slot's cleanup must
+not abort, destroy, or clear another slot's resources.
+
+Ordinary media setup keys on display URL, preview type, streaming flag, item
+identity, and showing key. HLS setup keys on display URL, preview type, and
+streaming flag. A WebGL iframe-key-only reload does not rerun those effects.
+Preserve that distinction, including its documented watchdog limitation.
+
+Video plays only when visible (opacity above 0.05) and the current target.
+Offline connectivity pauses streaming video only; buffered/local video remains
+playable. Source-ended callbacks carry item identity and reject mismatched URL,
+item, or showing state.
+
+Images await `decode()` before accepted readiness. Missing/rejected decode falls
+back to ordinary readiness; it is not a terminal failure. Every element-specific
+listener and media fetch belongs to its setup attempt.
+
+## Visual composition
+
+Background, margin, and image/video scaling use committed visual settings.
+Selection can run ahead during loading, so reading selected settings directly
+would restyle the outgoing work. Both fade layers occupy the same inner viewport
+inside the stage's matte; cursor and global overlays cover the full screen.
+
+During an overlap, the incoming work briefly uses outgoing scaling until the
+fade-end latch. Iframe `display_mode` is per-slot: the incoming target uses
+selected settings; other layers retain committed settings. A data-document slot
+keeps its chosen origin/blob path. `loop` and `autoPlay` remain live behavioral
+settings rather than visual latches.
+
+Same-showing adjustments apply in layout when no transition is pending. The
+composition reporter carries the committed showing and whether it can accept
+updates. Its revision must settle before a later command is accepted. Failed
+incoming slots still release the transition latch so later adjustments can apply.
+
+## Loading and failure presentation
+
+The 2 s loading delay belongs to the load attempt. Accepted transition readiness
+cancels it immediately, preventing a timer from raising an overlay during a fade.
+An overlay already raised stays until ready. `showRenderLoadingOverlay` gates
+presentation only. A visible, loading model uses its own overlay; an invisible
+incoming model does not suppress the global one.
+
+Failure publishes failed and removes the loading overlay at the failure site,
+rather than waiting for the fade. A failed layer still completes the handoff,
+with the error modal above it and no successful-played callback. Failure budget,
+offline recovery, and current limitations are defined in
+[Device-local player](DEVICE_LOCAL_PLAYER.md#render-status-and-bounded-failures).
+
+Work-origin frames ignore the outer shell's load/error events. Only its verified
+private-channel completion reaches the ordinary artwork load/failure path;
+[the device contract](DEVICE_LOCAL_PLAYER.md#artwork-sources-and-isolated-data-documents)
+owns hashing, sandbox, port, and shell rules.

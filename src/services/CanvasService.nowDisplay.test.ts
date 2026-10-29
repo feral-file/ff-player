@@ -1,3 +1,4 @@
+import type { PlaybackSession } from './canvas/PlaybackSession';
 import { RenderStatus, CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import { DP1Action, type DP1Call, type DP1Item } from '@/models/dp1.model';
@@ -271,8 +272,7 @@ it('resets render status when a deferred playlist promotion selects a new item',
   const previous = playlist('old', ['A'].map(item));
   const deferred = playlist('new', ['B', 'C'].map(item));
   const service = canvasService as unknown as {
-    deferredRefreshPlaylist: DP1Call | null;
-    queuedPlaylistPending: boolean;
+    session: PlaybackSession;
   };
 
   canvasService.setCastInfo(
@@ -284,8 +284,7 @@ it('resets render status when a deferred playlist promotion selects a new item',
     },
     false
   );
-  service.deferredRefreshPlaylist = deferred;
-  service.queuedPlaylistPending = true;
+  service.session.setDeferredRefreshPlaylist(deferred);
 
   expect(canvasService.consumeDeferredRefreshPlaylist(0)?.id).toBe('new');
   expect(canvasService.getCastInfo()?.playlist?.id).toBe('new');

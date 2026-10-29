@@ -1,241 +1,267 @@
 # Device-local FF Player (FF1)
 
-This document describes how the static export of `ff-player` is intended to run on FF1 when the player is served from the device.
+The FF1 player is the static Next.js export served by FF OS. This document
+states the device runtime and compatibility contracts. Transition mechanics
+live in [Artwork transitions](ARTWORK_TRANSITION_SEQUENTIAL_LOGIC.md);
+verification procedures live in [Verification](verification.md).
 
-## Build artifact
+## Build, hosting, and updates
 
-- Run `npm run build`. Next.js is configured with `output: 'export'`; output is the `out/` directory.
-- Ship the contents of `out/` on the device image or OTA bundle. FF OS owns install paths and the local HTTP server.
+- `npm run build` produces `out/` using `output: 'export'`. FF OS owns the
+  installation paths, HTTP servers, and image/OTA delivery.
+- Serve the bundle at `http://127.0.0.1:8080/`. The logging proxy accepts
+  exactly that origin. Subpaths require a matching Next `basePath` and asset
+  and routing verification. `file://` is unsupported: assets and routes use
+  ordinary web origins and root-relative paths.
+- The device export sets `NEXT_PUBLIC_DISABLE_VERSION_CHECK=true` and updates
+  with the device image or updater. The web build retains `version.json`
+  polling; nothing deploys that build.
+- `public/ffos-player-contract.json` is the deploy-time capability manifest.
+  Controllers must feature-detect contracts there; an absent live status field
+  can mean a supported lifecycle has not reported yet.
 
-## Serve URL (canonical)
+## Runtime configuration
 
-- Serve the bundle at the **root** of the canonical FF1 kiosk origin: `http://127.0.0.1:8080/`. The logging proxy deliberately accepts this exact origin only.
-- Avoid subpaths such as `/player/` unless `basePath` is added in Next config and the app is smoke-tested for assets and routing.
+`RemoteConfigService` reads `${NEXT_PUBLIC_PUB_DOC_URL}/configs/display.json`,
+or same-origin `/configs/display.json` when that environment variable is empty.
 
-## Why HTTP, not `file://`
+| Key | Rule |
+|---|---|
+| `duration` | Browser version-polling interval. |
+| `defaultPlaylistURL` | Source of fallback playback. |
+| `showRenderLoadingOverlay` | Controls visible loading overlays, not status codes. |
 
-The export uses standard web origins and paths (for example `/_next/static/...`). A local HTTP server keeps origin, routing, and asset loading consistent with remote hosting.
+Other published keys are ignored. A failed read returns local defaults without
+caching them. The first successful remote read wins for the page lifetime;
+concurrent reads converge on it. AppContext must publish that successful cached
+result even if the effect that initiated it has been superseded.
 
-## Remote config (`display.json`)
+## Playback ownership
 
-- At runtime, [RemoteConfigService](../src/services/remoteConfigService.ts) loads `${NEXT_PUBLIC_PUB_DOC_URL}/configs/display.json` when `NEXT_PUBLIC_PUB_DOC_URL` is set at build time.
-- When `NEXT_PUBLIC_PUB_DOC_URL` is empty, the request is same-origin: `/configs/display.json` (serve a matching file from `public/` in the bundle if needed).
-- `duration` controls the browser version-polling interval for web/Pages deployments, `defaultPlaylistURL` controls fallback playback, and `showRenderLoadingOverlay` controls whether the loading overlay is shown while the current artwork is still rendering. Other keys in the published JSON are ignored.
-- A failed fetch resolves with the local defaults but is **not** cached, so the next caller retries the network. Only a config that actually came back from the remote read is cached for the page lifetime. Without this, a device that boots offline pins itself to the local defaults forever and never reads the published `display.json`, even after Wi-Fi comes up.
-- Overlapping reads settle first-landed-wins: the first successful remote read populates the cache, and a slower concurrent read — whether it fails or succeeds with what is by then an older response — converges on that cached config instead of overwriting it. Once populated, the page-lifetime cache never changes.
-- A superseded `AppContext` read that lands the remote config still publishes it to the player: the effect's cancel guard only drops results that are NOT the immutable cache. Without the carve-out, an older read succeeding after a newer one already failed over to local defaults (flapping link) would strand the published config in the cache — with no further online notification due, the wall would stay on the built-in default.
+- `CanvasService` is the stable command and route facade.
+- `canvas/PlaybackSession` owns live cast state, render-status continuity,
+  shuffle order, deferred refresh, and parked artwork refreshes.
+- `canvas/PlaylistCommands` applies admission and policy rules before changing
+  the session or scheduling work. `canvas/BootPlaylistStore` serializes boot
+  writes and refresh supersession against the owning cast.
+- `canvas/PlaybackRecovery` owns hydration, halt, sleep/wake, and conditional
+  default ordering. AppContext owns fetching and retrying the fallback playlist.
+- `canvas/RecentPlaybackService` owns durable history and active-occurrence
+  knowledge. Selection alone is never evidence that a work played.
+- `canvas/DisplaySettingsService` owns composition identity and revision-based
+  command acceptance; the mounted renderer supplies the committed composition.
+- `ArtworkPlayer` composes transition, source, media, recovery, and composition
+  owners. A slot's load event is not interchangeable with visual commitment.
 
-## Player updates
+## Render status and bounded failures
 
-- The web build uses `version.json` polling and reload; nothing deploys it.
-- The FF OS static export sets `NEXT_PUBLIC_DISABLE_VERSION_CHECK=true`, so the device-local bundle does not self-refresh and should be updated with the FF1 image or updater policy.
+Status replies expose optional numeric `renderStatus`: `0` pending, `1` loading,
+`2` ready, `3` failed. It describes the current page mount only. Persistence and
+boot recovery strip it. After hydration it may be absent until the renderer
+reports; `contracts.renderStatus` distinguishes that case from unsupported builds.
 
-## Mint pairing overlay
+A selected artwork change is identified by both ID and source. It immediately
+publishes pending, including same-ID source replacement. An unchanged selection
+preserves its lifecycle. Renderer status updates do not re-emit cast commands or
+restart playlist timers.
 
-- `feral-controld` drives browser-session mint pairing display through the CDP command `mintPairingDisplay`.
-- The command payload is `{ command: "mintPairingDisplay", request: { state, pairingCode?, browserName? } }`.
-- Supported states are `pairing_code`, `request_received`, `creating_token`, and `hidden`.
-- The overlay renders above the active artwork player and does not unmount or navigate away from playback. In `pairing_code`, the player shows a code-only "Pairing code" screen and asks the user to enter that code on the website that requested a session.
-- In `request_received`, the player instructs the user to open the Feral File app, go to Settings > Art Computer, and approve the browser session.
-- The device-local static export ships `ffos-player-contract.json` at the bundle root. `feral-controld` and `feral-player.service` use that manifest to verify the deployed player supports this CDP contract before enabling mint pairing.
+`ready` means load completion accepted by the transition pipeline, with the
+loading overlay removed. It is not verification of painted content. On first
+load it publishes immediately; ordinary transitions publish it at the fade's
+handoff/end, 650 ms after accepted readiness. The transition contract specifies
+the distinct callback and composition timings.
 
-## Artwork render status (`renderStatus`)
+- The loading overlay has a 2 s delay. Accepting a slot for transition disarms
+  that delay; an already-visible overlay remains until ready or failure.
+- Ordinary terminal load failures use a per-item budget with limit `3`: the
+  first two failures schedule an in-place retry after 3 s; the third calls
+  `onArtworkExhausted`. A new item or genuine success resets the budget. A
+  same-item remount cancels the old timer but retains the budget.
+- A non-streaming load attempt gets a per-slot watchdog when its load mechanism
+  is ready: 15 s for image/video/audio, 45 s for iframe/object/model/PDF. Failure
+  aborts that slot's pending media fetch. HLS uses its own error classification:
+  fatal errors enter the failure budget; non-fatal errors remain with hls.js.
+- A late genuine success cancels retry, restores readiness, and records played
+  at most once for that showing. Failed slots still complete the visual handoff
+  so settings do not remain held behind an abandoned incoming slot.
+- Corroborated-offline MIME detection reports failed and degraded, without a
+  fallback iframe or artwork-error modal. Offline recovery owns that case.
+- WebGL recovery polls every 5 s for up to 10 minutes. On availability, it waits
+  2 s and reloads the active iframe key. Recovery completion or timeout resumes
+  an item retry suspended by GPU loss without charging another attempt.
+- Exhaustion follows the playlist's ordinary advance path, including queued
+  replacements. When repeat-one or repeat-off's final slot has no next target,
+  it starts another bounded retry cycle in place.
 
-- Status polls expose an optional numeric `renderStatus` on the device-status reply: `0` pending, `1` loading, `2` ready, `3` failed (`RenderStatus` in `src/models/render_status.model.ts`).
-- The value describes the **current page mount** only. Persistence and boot recovery strip it so IndexedDB cannot resurrect a prior ready/failed before `ArtworkPlayer` publishes a new lifecycle.
-- After boot/hydrate, `renderStatus` may be omitted/`undefined` until the player mounts; treat that as “not yet reported”, not as a terminal failure.
-- **Feature-detect via the manifest, not via the field.** `JSON.stringify` drops an `undefined` key, so "this build never reports `renderStatus`" and "this build supports it but has not published a lifecycle yet" are byte-identical on the wire. `contracts.renderStatus` in `public/ffos-player-contract.json` is the deploy-time fuse that separates them, the same role `contracts.playerStatus` plays for the probe: a manifest carrying the entry means an absent field is "not yet reported"; a manifest without it is an older build that never reports at all. A controller that waits for `ready` must check the fuse first or it will wait forever on an old player.
-- A corroborated-offline detection failure reports `failed`: nothing is rendering for that mount, so holding `loading` would claim an in-flight attempt that does not exist — indefinitely, once the M7 refresh budget is spent. The recovery remount republishes `pending`. The error modal is deliberately NOT raised in that state; the offline backdrop owns the screen (see *Offline playback recovery*), and "cannot be displayed on this device" would misread a transient network outage as a broken artwork.
-- A render failure that is NOT the corroborated-offline case above — an image/video/audio/model load error, an iframe's own `onError`, a **fatal** hls.js error (hls.js has already declared the stream unrecoverable, so this budget applies the same as any other terminal failure — a non-fatal hls.js error is handled entirely inside hls.js itself and never reaches here), or a mount still neither `ready` nor `failed` after `ARTWORK_LOAD_WATCHDOG_MS` (15s — see below) — retries the same item in place up to `ARTWORK_FAILURE_RETRY_LIMIT` (3) times, `ARTWORK_FAILURE_RETRY_DELAY_MS` (3s) apart, before calling `onArtworkExhausted` so the playlist moves on to the next item (feral-file/ff-player#307: a single broken work, e.g. one whose content-type HEAD probe used to hang forever against a stalled gateway, must not park the playlist — or the device — on it indefinitely; see `CONTENT_TYPE_HEAD_TIMEOUT_MS` in `src/utils/helper.ts` for the probe-level half of that fix). That "3s apart" pacing holds for the watchdog-timeout and fatal-HLS paths, but NOT for the common `onError` path (image/video/audio/iframe/model) — see the M7 known-gap entry below, which collapses it for the first failure of a newly-degraded URL. This budget is separate from, and does not race, the M7 offline-recovery budget above or WebGL context-loss recovery (`startWebGLRecovery`) — both of those already own their own bounded retry and must not be double-handled. The retry timer itself is cleared at the top of every mount (not only when `previewURL`/`itemIdentity` change), so a reload triggered from elsewhere — `refreshArtwork`, `setLoop`'s resume — can't leave a stale retry to fire a redundant extra reload later.
-- A load that reaches neither `onLoad` nor `onError` at all — the content-type HEAD probe's own timeout is bounded, but the real media fetch behind it (`mediaLoader`'s blob fetch, for any origin outside `KNOWN_ORIGINS`) carries no timeout of its own, and a gateway that accepts the connection but never replies hangs it identically — is covered by a per-slot watchdog (`ARTWORK_LOAD_WATCHDOG_MS`, 15s), one timer per slot so one slot's load lifecycle can never clear the other slot's. It is armed in `setupMediaForSlot`, once this slot has an actual load mechanism to attempt (previewType resolved, URL known) — not at the top of the mount effect, which would make it share its whole budget with the content-type probe's own resolution time first. If the slot is still `pending`/`loading` when the watchdog fires, it is treated as a render failure and flows through the same retry-then-skip budget above, regardless of which underlying mechanism (blob fetch, direct `element.src`, iframe navigation, model-viewer init) is actually stuck. When THIS slot's own reload is the one a WebGL-recovery cycle owns, `handleWebGLLost`'s `markArtworkFailed` has already moved `renderStatus` away from `pending`/`loading` by the time this watchdog could still be armed for it, so the watchdog's own `renderStatus` guard bails on it without needing a separate `isWebGLContextLost` check — the watchdog used to bail on that flag directly too, but the flag is page-wide, not scoped to this slot, so bailing on it unconditionally left a completely unrelated item's own watchdog failure permanently unrecorded (nothing wrote `artworkFailureStuckByWebGLRef` for it, unlike the scheduled retry timer's own bail below) whenever an unrelated WebGL recovery happened to still be in progress when this watchdog fired (`run-reviewer` bot-round-3 pass-5 F2, Major). Fixed by committing the failure unconditionally instead, routing it through the normal `scheduleArtworkFailureRetryOrSkip` -> `armScheduledRetry` path, whose own WebGL-aware bail correctly records and resumes it. `startWebGLRecovery`'s `MAX_RECOVERY_TIME` bounds only the wait for `isWebGLAvailable()` to return true; once GL is available it calls `reloadIframe`, which does not re-run `setupMediaForSlot` to re-arm the watchdog — so if that specific reload itself then stalls, nothing currently bounds it. This is a pre-existing gap (the same unbounded-reload shape existed on `main` before this branch, with no watchdog of any kind), accepted as a narrow-trigger risk and tracked as a follow-up rather than fixed in this change — see the PR's `Out of scope`/`Pre-existing` entries. It also does not fire for an HLS/live-streaming slot (`layer.isStreaming`): that load mechanism lives entirely in a sibling effect (`setupStreamingVideoForSlot`) backed by hls.js's own non-fatal-tolerant `Hls.Events.ERROR` handling, and a live stream merely slow to buffer is not "stuck" the way this watchdog assumes — `setupMediaForSlot` skips arming it for that layer entirely rather than race hls.js's own terminality. A real success that lands AFTER the watchdog has already fired — the load was only slow, not actually stuck — cancels the watchdog's own scheduled retry rather than being swallowed by it: `loadedSource` (the single commit path every success and failure call site funnels through) clears the pending `artworkFailureRetryTimeoutRef` and resets `artworkFailureCountRef` whenever it is told the commit is a genuine success (`isSuccess`, defaulting `true`), regardless of whether `renderStatusRef` already reads `failed` from the watchdog. Only the four failure call sites that share this same commit path (`handleArtworkRenderFailure`, `handleModelLoadError`, the media-error handler, `handleLoadIframeError`) pass `isSuccess=false`, so a real failure's own about-to-fire retry is left alone. The watchdog window itself is not uniform: iframe/object/model-viewer loads (`isEmbeddedHeavy`) — heavier, more variable initializations than a blob fetch, and had no time bound at all before this branch — get a longer window (`ARTWORK_LOAD_WATCHDOG_EMBEDDED_MS`, 45s) than image/video/audio (`ARTWORK_LOAD_WATCHDOG_MS`, 15s), so a merely-slow (not stuck) load of the dominant artwork type does not false-positive. `iframePDF` gets that same longer window too, but via its own check at the watchdog's own call site (`layer.previewType === PreviewHTMLTag.iframePDF`), not by being folded into `isEmbeddedHeavy` itself — that helper is also read by the pre-existing crossfade-vs-sequential-fade transition-style decision (`docs/ARTWORK_TRANSITION_SEQUENTIAL_LOGIC.md`), and widening it would have silently changed PDF's transition presentation too. Separately, the *scheduled retry timer* itself (not just the watchdog's own arm-time check) bails rather than reloading when it fires while `isWebGLContextLost` is true — a failure unrelated to WebGL could otherwise have its retry land mid-recovery, reloading into a GPU that is not back yet and wasting (or exhausting) the budget on an attempt doomed by an unrelated condition; `startWebGLRecovery`'s own `reloadIframe` independently revives the slot once GL returns, and the late-success handling above then cancels/resets cleanly. A slot's own in-flight blob fetch (image/video/audio) is aborted immediately once it is marked failed (watchdog or real `onError`) — via a per-slot `AbortController` ref `handleArtworkRenderFailure` reads — rather than only on the effect cleanup that fires once an unrelated later commit nulls that slot out. This late-success recovery also calls `onItemPlayed` for the recovered showing (via the stable `onItemPlayedRef`, not the captured prop): the original failure commit already called `onItemCommitted` (which fires even for a failed transition) but never `onItemPlayed` (gated on the status not being `failed`). For the already-active slot and the crossfade transition type, the `pendingReadySlotRef`-driven transition-commit effect will never call it for this showing on its own, so without this recovery call `PlaylistClient`'s recently-played history would never learn a work that, in the end, did play. Calling it from inside `loadedSource` only when `wasFailed` was true (computed fresh from `renderStatusRef` at the top of that call) means a later, stray success signal for the same already-recovered mount sees `wasFailed === false` and does not fire it again. The one transition type where that effect WOULD otherwise still call it a second time is the sequential (`isEmbeddedHeavy`) one: unlike crossfade/first-load, which call `onItemCommitted`/`onItemPlayed` synchronously at failure-commit time, sequential defers that whole pair into the transition's own `FADE_IN_OUT_DURATION_MS` `setTimeout` — already scheduled by the time this recovery runs, and not cancelled by it (it still needs to perform the slot swap). Every `onItemPlayed` call site — first-load, crossfade, that deferred sequential timeout, and this recovery — checks and sets one per-slot, per-showing latch (`itemPlayedFiredRef`), so whichever runs second is a no-op while the deferred timeout's `onItemCommitted` call still goes through (`run-reviewer` bot-round-3 pass-3 F1, Moderate). The latch is reset only where a new showing is mounted into the slot (the mount effect, next to `mountFailedRef`), never per `loadedSource` call: an iframe that fires `load` again (it navigates) or fails and recovers again inside the fade window re-enters `loadedSource`, and a per-call reset dropped the suppression before the deferred commit read it, recording the same showing twice (feralfile-bot review of PR #310, round 4). A second, related gap in the same finding: `markSlotReady` used to write `pendingReadySlotRef.current` unconditionally on every call, including this recovery's own no-op one (the slot's `loading` flag is already `false` from the earlier failure commit, so its `setSlots` call changes nothing) — leaving a stale, non-null value that a later, unrelated re-render (the deferred timeout's own `setSlots` call nulling the outgoing slot) would pick back up, re-running the whole transition-commit effect a second time for an already-fully-handled slot, and — since the outgoing slot was by then null — taking the first-load (`!otherLayer`) branch and firing `onItemCommitted`/`onItemPlayed` a further, spurious time. Fixed by only writing `pendingReadySlotRef.current` inside the branch that actually flips `loading`, never on the no-op path. `isWebGLContextLost` itself is reset back to `false` on `startWebGLRecovery`'s give-up branch (`MAX_RECOVERY_TIME` exceeded, GL never came back), matching its own success branch: before this branch, a stuck-true flag there had no reachable consequence (its only other reader was `handleWebGLLost`'s own re-entry guard), but this watchdog and the scheduled retry timer both now also bail on it — so without this reset, one WebGL recovery that times out would silently disable both mechanisms for every later, unrelated playlist item for the rest of the session. Both branches of `startWebGLRecovery` — give-up and success — go one step further than just resetting the flag for later items: they also resume the *specific* item whose own scheduled retry bailed on that exact flag (tracked in `artworkFailureStuckByWebGLRef`, cleared on a genuine success or on exhaustion), via the shared `resumeRetryStuckByWebGL`. Without it, that one item would otherwise be left stranded forever: the give-up branch reloads nothing, and the success branch's own `reloadIframe` only bumps the active slot's `iframeKey`, which is not in `setupMediaForSlot`'s deps, so an image/video/audio slot is never actually reloaded by it. The success branch resumes before its own 2s timeout publishes `pending` (the resume is gated on the status still reading `failed`); if its `reloadIframe` recovers the slot first, `loadedSource`'s success handling cancels the re-armed retry. The resume is scoped by identity/URL match against the currently-mounted item, not a bare "is anything currently failed" check, so a coincidentally mid-retry but unrelated item is not charged an extra attempt it did nothing to earn. That resume re-arms the retry timer directly (`armScheduledRetry`, the arming half of `scheduleArtworkFailureRetryOrSkip` split out for exactly this call site) rather than going through the full increment-then-arm function: the bail it is resuming never incremented `artworkFailureCountRef` in the first place — bailing on a lost context is not itself a real load attempt — so re-entering the counting function here would otherwise charge the budget a second time for an attempt that still hasn't actually happened, silently shrinking the item's remaining budget to 2 real attempts instead of the documented 3 (`run-reviewer` bot-round-3 pass-4 F1, Moderate).
+Current limitations that callers must preserve:
 
-**Known gap, not fixed** (run-reviewer bot-round-2 pass-3 F1, Major, Decision needed; frequency/magnitude corrected in bot-round-3 pass-5 F3 after new evidence showed the original "occasionally" wording understated it): `handleMediaError`/`handleLoadIframeError`/`handleModelLoadError` each call `notePlaybackOutcome(url, true)` for the SAME failure that also feeds this retry-then-skip budget — a pre-existing call AppContext's M7 reconnect-recovery effect watches. For a URL not already degraded, M7's budget is created fresh (zero attempts, no backoff yet), so its own `requestArtworkRefresh()` fires immediately, on the same tick — not "occasionally": this is the deterministic outcome of the FIRST `onError` on this failure path for any newly-degraded URL, the common case this budget mostly exists to bound (the watchdog-timeout and fatal-HLS paths are unaffected — neither calls `notePlaybackOutcome`). The practical effect for that common case: the first 3s backoff window collapses, so three attempts land closer to one ~3s window rather than the ~6-9s "3 attempts, 3s apart" pacing stated above. The required-outcome guarantees still hold regardless — still bounded at 3 attempts, still skips, device still stays controllable — only the pacing is affected, and none of this branch's own regression tests exercise the real M7 effect (every mock `AppContext` in them omits `setPlaybackDegraded`). The straightforward fix (dropping those three `notePlaybackOutcome(..., true)` calls, matching the watchdog/fatal-HLS paths, which never call it) was tried and reverted: it silently disables M7 Layer-1 damping (§4.4 of the cross-repo recovery design, `ArtworkPlayer.m7damping.test.tsx`) for video/audio render failures — a separately-tested cross-repo contract, not this branch's to retire unilaterally. The underlying choice (accept this corrected risk / retire M7 Layer-1 damping for these three failure types / a different fix) remains owner-pending — only the stated facts were corrected here, not the decision itself.
-- `onArtworkExhausted` normally reuses `advanceFromSlot`'s natural end-of-stream path so a broken work is skipped like any other end-of-item transition. The one exception is `LoopMode.none` with the failed item at the final (or only) slot: `resolveSequentialPlaylistAdvance` has nowhere to advance to there, and the plain hold-the-last-frame branch `advanceFromSlot` takes is meant for a *successful* natural end, not a failure that has already exhausted its retry budget. Reusing it for exhaustion would park the device on the error modal indefinitely with no further attempt, so this one case retries in place instead (same `ARTWORK_FAILURE_RETRY_LIMIT`/`_DELAY_MS` budget, reset before each cycle) — mirroring the `LoopMode.one` "keep trying" treatment for the other case where "skipped" has no target. This retry-in-place lives inside `advanceFromSlot` itself (a `retryOnFinalHold` parameter), not in a bypass that calls `replayCurrentSlot` directly, so a queued refresh/shuffle command (`applyQueuedPlaylistIfExists`, checked earlier in the same function) still takes over exactly as it would for any other advance. The `retryOnFinalHold` branch also sets `holdAfterFinalSlotRef.current = true`, matching its natural-end sibling: without it, a no-duration item that eventually recovers here was left with the flag still `false`, and `shouldResumeSlotTimerAfterSetLoop`/`shouldApplyQueuedPlaylistOnShuffleOrRefresh` (both gated on that flag in `src/utils/playlist.ts`) would then never resume a later `setLoop`-away-from-`none` or apply a queued shuffle/refresh for that one item (`run-reviewer` bot-round-3 pass-5 F1, Major).
-- `CanvasService` forces `pending` when the selected artwork identity changes (`id` + `source`), including same-id source refresh.
-- `ready` means **the artwork finished loading AND is what the screen is showing** — not that it rendered what it should. Two separate limits are folded into that sentence:
-  - **Not render verification.** Every preview type reports `ready` from its own load-completion signal; the player never inspects what was actually painted.
-  - **Visual commitment, not byte arrival.** `ready` publishes when the incoming slot is committed to the screen, which on a transition with an outgoing artwork is the end of the fade — up to `FADE_IN_OUT_DURATION_MS` (650ms) after the bytes landed. A first load with nothing to fade from publishes immediately. During that window the poll reports `pending` (fast load) or `loading` (load slower than the overlay delay). This is deliberate: `ready` is bound to the same moment the loading overlay comes down, so there is never a state where the poll says `ready` while the wall is showing the previous artwork or an opaque overlay. A controller taking a screenshot or flipping its own “now displaying” UI wants that moment, not byte arrival.
-  - For iframe and PDF the first limit is real: a browser can load its own error document after a failed remote navigation, and Chromium does not emit an iframe error for that case, so a dead HTML artwork can still report `ready`. This is a deliberate trade-off. Withholding `ready` from iframe pinned the dominant artwork type — HTML/generative, plus every item whose MIME type is empty or undetectable and therefore falls back to iframe — at `loading` indefinitely, which gives a controller strictly less to act on than an occasional optimistic `ready`.
-  - Failures that do surface an error event still reach `failed` normally; the gap is limited to navigation failures the browser reports as a successful load.
-- `showRenderLoadingOverlay` only gates the visible loading overlay; it does not change the codes reported on status polls.
+- Chromium can emit iframe/PDF `load` for its own navigation-error page. Such a
+  load may report ready; the player cannot inspect a cross-origin document.
+- For the first ordinary media/model/iframe error on a newly degraded URL,
+  AppContext's M7 recovery can request an immediate reload and shorten the
+  nominal 3 s retry pacing. Watchdog and fatal-HLS failures do not raise that
+  degraded signal. The failure budget still bounds attempts.
+- WebGL's iframe-key-only reload does not restart media setup or arm a new load
+  watchdog. A stalled recovery reload can therefore remain unbounded.
 
-## Recently played (`getRecentlyPlayed`)
+## Recently played
 
-- The device retains a bounded, reverse-chronological record of works that reached the visual-commit boundary (`RECENTLY_PLAYED_*` in `src/services/recentPlaybackHistory.ts`). It is a timeline, not current state: clearing the wall never deletes it, and restoring a cast after a reboot never fabricates an entry.
-- `activeOccurrenceKnown` answers one question only — can the device currently say whether a retained record is the work on the wall? It is `false` only while that is genuinely pending: from a commit until that work's record is durable or is omitted as oversize, after a player restart until the first commit, and after a render reports `failed` until a later commit, a stop, or a cast with nothing to show. Treat `false` as **pending**, never as "nothing has ever played" — the records list stands on its own.
-- When it is `true`, `isActive` marks the retained record on the wall, or no record when none is: an oversize record was omitted (the wall shows a work History does not hold), any deliberate halt reached the `PlaybackHalted` bus (disconnect, sleep, error navigation), the cast was cleared or left nothing to show, a refreshed cast blocked the work on screen, or a policy change moved the selection to a different work. The halts matter because most of them do not clear `castInfo`: the work is off the wall while the cast is still the current one. These are answers, not pending states: the app holds History at a loading view while the answer is pending, and none of these cases ends with a commit that would release it on a sleeping wall or a single-work cast.
-- A failed render is pending rather than an answer. The failed work may be an incoming one, or the recorded work failing in place (WebGL context loss, a mid-playback media error), which can recover without committing again because ArtworkPlayer reports a showing as played only once. The player does not yet tell the two apart, so History waits for one of those. **Known gap:** a work that fails and recovers in place leaves History pending until the next commit. A policy change that leaves the same work playing does **not** retire it — that would list a work still on the wall as past.
-- A durable write that lands after the wall has moved on does not become the active occurrence. The record is still retained; it simply cannot claim to be what is showing. Without that rule a slow IndexedDB write could name a work that left the screen seconds earlier.
-- `incomplete: true` means a committed work is missing from the timeline. When an append fails, the player also tries to persist that marker, so a restart does not reload the older records and report them as a complete history. If even the marker cannot be written, the gap is only known for the life of that page.
-- A failed append makes `getRecentlyPlayed` answer with an error, but only until a later append succeeds: one transient IndexedDB failure must not disable History for the rest of the page's life. The gap it left is permanent and stays visible as `incomplete`, which is made durable before the error clears.
+`getRecentlyPlayed` returns a bounded reverse-chronological timeline of successful
+showings. Retention limits and replay projection live in `recentPlaybackHistory`.
+Clearing playback preserves the timeline; restoring a persisted cast does not
+itself append a record.
 
-## Setup overlay background artwork
+`activeOccurrenceKnown` answers whether the device can identify a retained
+record as the work on the wall:
 
-- Every visible `setupDisplay` state (scanning, softap_qr, joining, connecting, setup_error, finalizing, updating, claim_qr, factory_reset, join_failed) renders a bundled artwork beneath its panel, behind the panels' existing dark scrim. This background layer does not change the setup-state arbitration contract.
-- `softap_qr` requires `ssid` and accepts optional `password`, `portal_url`, and `client_attached` fields. `portal_url` is the controller-discovered direct HTTP address on the active setup hotspot; when present, the panel renders it as the DNS-independent final recovery step while keeping the QR payload dedicated to joining Wi-Fi. When an older controller omits it, or address discovery fails, the player omits that recovery line rather than falling back to `ff1.config`; QR and manual Wi-Fi joining remain available.
-- `softap_qr` also accepts `reason`: the failed join's user-facing message, sent with the join QR that comes back after a wrong password. The panel shows it under the title; the `join_failed` paint that precedes it is overwritten within a millisecond, so this is the only place the reason is visible on the device.
-- `client_attached: true` is the controller's repaint once the hotspot's portal has seen the phone's first request. With `portal_url` present the panel swaps the join QR for a QR encoding that address under the heading "Finish setup on your phone", keeping scan-again, the typed-address line, the hotspot credentials, and the keep-connected cue as text. The swap is gated on `portal_url` being an http(s) link, since the code is then the only scannable target. This is the fix for iOS holding the captive sheet back while the Camera app that scanned the join code stays in front (feral-file#3515): the still-aimed camera picks up a browser link instead. Without `portal_url` the join phase stays up. Older controllers never send the flag; the player then behaves as before.
-- `connecting` is the provisioned-device connectivity narration (controld's boot/offline hedge): neutral "Connecting to the network" title with controld's optional `reason` prose beneath. It exists so that narration no longer borrows `join_failed`, whose asserting title flashed a false "Couldn't connect to Wi-Fi" on every normal reboot.
-- `setup_error` narrates a persistent provisioning failure controld cannot resolve on its own (its escalation latches: the setup hotspot repeatedly failing to start or to release the radio). "Setup needs attention" title; controld's optional `reason` prose carries the full diagnosis and the power-cycle fallback. On player builds that predate the state, controld's send-time downgrade shows the same prose under the `join_failed` title — degraded, never dark.
-- The artwork ships in `public/setup-artwork/` (`index.html` plus a local `p5.min.js`). Source: `https://generator.artblocks.io/1/0x0000000c687daed0fba60d1dba4e5f6149e8b894/55`, saved with the CDN p5.js reference rewritten to the local sibling so it renders with zero connectivity — factory-fresh setup runs before Wi-Fi exists, so the background must be same-origin and offline-complete.
-- The background is deliberately NOT cast through `CanvasService`: a cast is persisted as `castInfo` and would replace the boot fallback-playlist recovery contract. It is a render-only layer inside `SetupOverlay` ([SetupArtworkBackground](../src/components/setup/SetupArtworkBackground.tsx)).
-- Under a panel it renders only while no cast is active. When `castInfo` exists (for example an OTA `updating` overlay raised over live playback), the user's playing artwork remains what shows beneath the scrim. The one exception is a device whose playback is degraded — see *Offline playback recovery* below.
+| Situation | Answer |
+|---|---|
+| Restart before the first commit | Unknown/pending. |
+| Successful commit awaiting a durable append | Unknown/pending. |
+| Durable append for the current showing | Known; its record is active. |
+| Record omitted as oversize | Known; no retained record is active. |
+| Disconnect, sleep, error navigation, empty cast, or blocked visible work | Known; no retained record is active. |
+| Failed render | Unknown/pending until a later commit or stop. |
 
-## Offline playback recovery
+An allowed outgoing work remains active while its replacement loads. Policy
+changes that leave it playing do not retire it. Generation checks prevent an
+append or oversize omission settling after a stop/new commit from claiming the
+current occurrence. Timestamps are captured at commitment, before queued storage.
 
-The same bundled artwork doubles as the offline backdrop for a **claimed** device, and the player retries its own failed loads when connectivity returns.
+A failed append reports an error and marks the timeline incomplete. The player
+tries to persist the gap marker; a later successful append clears the error only
+after making that marker durable. If even the marker write fails, the gap is
+known only for that page lifetime. An unreadable history starts empty and
+incomplete, allowing subsequent commits to rebuild it.
 
-- `ArtworkPlayer` reports the load outcome of the artwork it is currently trying to show through `AppContext.context.playbackDegraded`. It is set at the media/model/iframe error handlers and cleared by a genuine success (`loadeddata`, image decode, model load, iframe load) — **except** on a video/audio mount that has already reported a failure: browsers can still fire a stray `loadeddata` on a partially-buffered element after `error`, and M7 damping's Layer 1 (see *M7 offline-recovery damping* below) latches that mount's degraded flag past it, so one genuine failure cannot flap clear-then-immediately-set on every stray event. The flag also clears on moving to a different artwork (a change of `previewURL` **or** playlist-item identity — adjacent items may share a URL), which resets the latch for the new mount. Failure sites still commit their slot through `loadedSource`, so the commit itself cannot distinguish success from failure — the flag is recorded at the error and success sites instead.
-  - **Known gap — iframe/HTML artworks.** A cross-origin iframe fires `load` even when the browser rendered its own network-error page, and nothing in-page can inspect that document, so an offline HTML artwork reads as a success and neither raises the backdrop nor triggers the reconnect refresh. `onError` does not fire for navigation failures in Chromium. This part of the gap stands: treating an offline iframe `load` as a *failure* would still be wrong — `HEAD` also dies on CORS-restricted hosts whose iframe content then renders fine, and browser-cached iframe artworks can legitimately render with no WAN, so flagging those would paint the backdrop over working playback. A fallback-typed iframe (type detection itself failed; `mimeType: null` on the slot) still reports NO outcome from its own `load` for the same reason: that event says nothing about the artwork, and scoring it as a success would clear a degraded flag on exactly the offline boot the recovery exists for.
-    - **Narrowed at the source.** `getContentTypeFromURL`'s `HEAD` also fails offline, and type is inferred from the file extension when it can — so an *extensionless* source still falls through to the fallback iframe, but detection failure is no longer silently conflated with "reachable, just untyped." `getContentTypeFromURL` throws a `ContentTypeDetectionError` carrying `isNetworkFailure`, computed from `fetch` never getting a response at all (offline, DNS, connection refused) **AND** an offline corroboration signal — either suffices: `navigator.onLine` is false, **or** the daemon's pushed connectivity verdict says offline (`DaemonConnectivity` store; when no verdict has arrived yet the classification WAITS for the first one, bounded by `DAEMON_VERDICT_WAIT_MS`, because the daemon's generation-ready replay races this very code — it landed 7ms too late in the 2026-08-05 field incident). `navigator.onLine` alone was the original corroborator and proved insufficient: the device's own setup AP keeps the interface up, so an offline frame in AP mode reads `onLine: true` and the classification silently fell through to the fallback iframe, whose cross-origin `load` masks failure — the offline backdrop never rose (same incident). Corroboration itself stays mandatory: `fetch` rejects with the same bare error for a genuine network failure and for a CORS/CSP/extension block, and CORS is common on this exact HEAD (a third-party host reachable over the network but missing `Access-Control-Allow-Origin` — see the cache-buster workaround comment in the source). Without it, an ONLINE device hitting that CORS wall would misclassify as a network failure and raise the flag with nothing left to ever clear it (a healthy artwork stuck degraded forever via the age valve); the daemon verdict preserves that safety because an online daemon resolves the wait early with `true`, and a standalone browser (no daemon) times out to "unknown", which is treated as uncorroborated. **Known limitation, accepted:** the daemon verdict proves *no WAN*, not *this host is unreachable* — a LAN-reachable artwork host whose HEAD is CORS-blocked, on a device with LAN but no WAN, now classifies as a network failure and commits no fallback iframe, so the backdrop can cover an artwork the old behavior would have rendered. Bounded (the recovery remount re-runs detection when connectivity changes) and accepted because fielded artwork sources are WAN-hosted; revisit if LAN-hosted artworks become a real shape. **Considered alternative, recorded for future amendment:** commit the fallback iframe exactly as before and *retroactively* raise `playbackDegraded` when the first daemon verdict arrives `false` while the current slot is fallback-typed (`mimeType: null`) — no timeout constant, no time-dependence inside `getContentTypeFromURL`, no LAN/no-WAN divergence, at the price of a store subscription API and slot-state plumbing in ArtworkPlayer. Rejected for now to keep the fix at the classification seam; it is the natural next shape if the wait or the limitation above ever bites. Both a reached-but-unhelpful HTTP response (4xx/5xx, or 2xx with no `Content-Type` header) and an uncorroborated `fetch` rejection classify as `isNetworkFailure: false` — the server is effectively reachable either way, and the type is simply unknown. ArtworkPlayer's detection-catch path reports `notePlaybackOutcome(url, true)` directly for the corroborated network case only (closing the cold-offline-boot gap for this source shape), while every `isNetworkFailure: false` detection failure keeps the existing silent fallback — a healthy-but-extensionless artwork must not be marked degraded just because its type is unknown or its HEAD request was blocked by CORS. The corroborated network case also commits **no fallback iframe at all**: the device is provably offline, so a remote iframe could only render Chromium's in-frame net-error page (the field "dinosaur" flash, revealed when the backdrop lifted on reconnect). The slot stays pending — `previewType: null` renders nothing — until the recovery remount re-runs detection; the fallback iframe is reserved for `isNetworkFailure: false`, where a render attempt against a reachable server can genuinely succeed. A false positive here is still cheap even so: the M7 refresh budget (Layer 2, below) bounds any consequence, and the backdrop only shows when offline signals corroborate (`offlineDegraded` below), so this cannot black out a genuinely healthy, WAN-online wall. The loop closes on recovery: the reconnect refresh bumps `artworkReloadTick`, detection re-runs, and once `HEAD` succeeds again the confidently-typed path's own success reporting (gated on `mimeType !== null`, same as the paragraph above) clears the flag.
-  - **Known gap — `<object>` artworks.** SVG and the other `FileUseObject` / `MIMETypeObject` routes render through `<object>`, which is wired with `onLoad` only and has no error handler at all, so these artworks can never raise the flag. Wiring `onError` there is a separate change, tracked in [#266](https://github.com/feral-file/ff-player/issues/266) — Chromium's error-event delivery needs on-device verification per MIME route before the recovery contract can rely on it.
-  - **Known gap — streaming (HLS).** These layers report neither outcome: `setupMediaForSlot` skips them and the hls.js `NETWORK_ERROR` branch is deliberately non-fatal. The existing `isOnline` gate pauses streaming playback offline instead.
-- `AppContext` calls `canvasService.requestArtworkRefresh()` on two edges: when an online notification arrives while playback is degraded, and when playback becomes degraded. Together they cover both orderings of the race between "Wi-Fi came back" and "the fetch finally gave up" — on a single-item playlist there is no playlist advance to retry a load that errors seconds after reconnect. The refresh re-mounts the current artwork through the playlist route's registered handler, re-running the exact asset fetches that failed, with the player's normal crossfade. It does not touch `castInfo` or playlist position.
-  - Keyed on the online *notification*, not the derived `isOnline` boolean — the boolean routinely repeats: `useNetworkManger` seeds from the `DaemonConnectivity` store (optimistic `true` only when no daemon has spoken), and the daemon re-delivers its level (generation-ready replays, sys-monitord restart re-emissions), so an online notification often arrives with `isOnline` already `true` and an `isOnline`-keyed effect would never re-key. This mirrors the boot fallback-playlist loop.
-  - Bounded by a per-URL refresh budget with backoff, not by "it cannot loop": a single artwork's own repeat failure cannot re-trigger the effect on its own (Layer 1 above holds the flag steady), but a flapping link can still deliver repeated online notifications while the artwork stays continuously degraded. See *M7 offline-recovery damping* below for the full budget/backoff/re-arm mechanism that bounds that path.
-- The remote-config effect is re-keyed on the same online notification, which is what makes the `display.json` retry above reachable — otherwise the one-shot mount fetch would leave an offline boot pinned to the local defaults for the page lifetime.
-  - A fallback cast that lands with a **stale URL** is superseded rather than prevented. The fallback loop deliberately races the refetch (blocking casts on a config read — 10s timeout, re-cancelled by every further notification — could leave the wall showing nothing, and stale beats nothing): if a still-armed retry casts the built-in default first and clears the request, or the cast outruns the refetch entirely because the playlist host is reachable while the config host is not, the published `defaultPlaylistURL` landing later re-arms the loop and replaces the wrong fallback. The wrong cast is a bounded transient — the page-lifetime config cache means the URL changes at most once — and an explicit cast or a deliberate stop (`disconnect`, `setSleepMode(true)`, error-page navigation — all announced via the `PlaybackHalted` event; any halt landing mid-hydration is latched by CanvasService so the boot restore bails) disarms the supersede and cancels any armed retry, so no fallback path the controller did not ask for relights a cleared, sleeping, or errored wall. The halt is a stand-down, not a latch: a later explicit cast or `displayDefaultPlaylist` push still wins, last command wins. Waking from sleep with nothing playable re-enters the fallback flow via `DisplayDefaultPlaylist` — a device that slept through its first-boot fallback wakes to artwork, not an empty player. Three deliberate boundaries on that re-arm: it fires only for a wake that ends a real sleep (a stray wake sent to a disconnected wall stays dark — the clear wins); it never commits a playlist-less `castInfo` (persisting one would make the next boot's restore branch treat it as real content and skip arming the fallback); and a mid-hydration halt cancels any already-deferred `onlyIfNoPlaylist` push at the moment it lands (a push arriving after the halt is newer intent and is still honored at settle). A wake with nothing playable also leaves `getStatus`'s cached `castCommand` at its prior value instead of flipping it to `displayPlaylist` — strictly more accurate, since nothing is displayed.
-- `SetupArtworkBackground` shows when `(panelVisible || degradedBackdrop) && (!castInfo || degradedBackdrop)`, where `degradedBackdrop` starts as `offlineDegraded = (!isOnline || !browserOnline) && playbackDegraded` — `browserOnline` is the browser's own `navigator.onLine` state (seeded from an initial read, then kept current by the `online`/`offline` window events), a second, level-triggered source of offline evidence alongside the daemon-driven `isOnline` (see *`isOnline` delivery* below). This keeps the original setup-flow behavior, adds the offline backdrop for a claimed device whose artwork cannot load, and preserves the invariant that a device playing artwork normally never gets this layer over it. Both factors use `degradedBackdrop` rather than the bare flag on purpose: an artwork that fails while **online** is a broken asset or an unsupported format, which the player's own error modal explains, and this `z-index: 999` layer must not cover that modal.
-  - **Reconnect handover.** The backdrop exits on *recovery*, not on reconnect: once raised for offline degradation it holds while `playbackDegraded` stays true even after connectivity returns (a `recoveryHold` latch), so the still-broken slot underneath is never revealed during the recovery remount — the recovered artwork crossfades in over the layer instead. The hold is bounded by `RECOVERY_HANDOVER_MS` (30s): an artwork that stays broken while online is error-modal territory, and the layer yields to it.
-- While the backdrop is up with no setup panel visible, a status chip renders inside the same layer, so it fades and unmounts with the artwork. On a boot that has **never** been browser-online, the first `CONNECTING_GRACE_MS` (60s) read "Connecting to the internet…" — the page routinely paints seconds before Wi-Fi association completes, and an instant "No internet connection" over-claims a routine connect-in-progress. The hard text takes over once the window elapses, and immediately for a device that *was* online and lost the link. During the online handover the chip is suppressed entirely (an offline claim would be false); its disappearance is itself the "connection restored" signal. When a panel is visible the panel copy owns the messaging and the chip is suppressed.
+Known limitation: failure and recovery in place may produce no second played
+callback. History then remains pending until the next commit. A bare `ready`
+status does not identify a new successful occurrence.
 
-### `isOnline` delivery: daemon replay + store seed; `navigator.onLine` narrows what remains
+## Offline recovery and connectivity
 
-`window.handleConnectivityChange` pushes arrive on connectivity edges **and** on every player generation-ready (the daemon replays its cached level when a new page's CDP handlers come up — since controld's playersession page-authority work, 2026-07-30), so a reload while the device is *already* offline does get told. Delivery has two hazards the player closes on its side, both proven by the 2026-08-05 field incident:
+`playbackDegraded` belongs to the current artwork URL and item identity. A genuine
+success or a different item clears it; a same-item retry retains it. A video/audio
+mount that has failed cannot clear degradation through a later stray `loadeddata`.
+A new slot mount resets that per-mount latch.
 
-- **The push can land before any React listener exists** (it arrived ~8ms after CDP connect). `CDPRequestHandler` therefore records every verdict in the `DaemonConnectivity` store *before* dispatching the window event, and `useNetworkManger` seeds from that store (falling back to optimistic `true` only when no daemon has ever spoken — the standalone-browser case) and re-reads it once when its listener attaches.
-- **The push can land just after a consumer already had to decide** (it arrived 7ms after content-type classification in the incident). Decision sites that need the verdict can wait briefly for the first one via `waitForDaemonConnectivity` — see the `isNetworkFailure` corroboration above.
+MIME detection treats a response-less fetch failure as offline only with
+corroboration: `navigator.onLine === false` or the daemon connectivity verdict.
+It may wait up to `DAEMON_VERDICT_WAIT_MS` for the first daemon verdict. Reached
+HTTP errors, unknown types, and uncorroborated failures retain iframe fallback.
+A fallback-typed iframe (`mimeType: null`) reports no success outcome from `load`.
 
-`SetupArtworkBackground`'s `browserOnline` state additionally covers the link-down case without any daemon involvement: it seeds from a direct `navigator.onLine` read at mount and stays current via the browser's own `online`/`offline` window events, which are level-triggered against the network interface. It cannot see "interface up but no internet" — including the device's *own setup AP* holding the interface up — which is exactly why the daemon verdict is the authoritative half.
+`CDPRequestHandler` records connectivity in `DaemonConnectivity` before dispatch.
+The network hook seeds from the store and rereads it when attaching. Daemon
+notifications include generation-ready level replay, so repeated online values
+still matter. Browser online/offline events supplement the daemon for link-down;
+interface-up without WAN requires the daemon verdict.
 
-The consequences split cleanly, and the split is deliberate:
+AppContext refreshes degraded playback on online notifications and degradation
+changes. Its per-URL M7 budget permits three refreshes with 15 s, 60 s, and 240 s
+backoff. It rearms on a different degraded URL, a genuine offline-to-online edge,
+60 s of clear settle, or 10 minutes of continuous elapsed time. Timers drive the
+next opportunity; recovery does not depend on another external notification.
 
-- **The recovery half is unaffected.** The reconnect refresh keys off `onlineSignal` and `playbackDegraded`, never `isOnline`, so it rides the `false→true` edge the daemon does deliver reliably. A device that reloads while offline still retries its artwork the moment connectivity actually returns.
-- **The backdrop half is covered whenever the daemon is alive.** `offlineDegraded` needs `(!isOnline || !browserOnline)`: a reload-while-link-down device raises the backdrop immediately from the initial `navigator.onLine` read, and the "associated but no internet" case — including the device's own setup AP holding the interface up — is covered by the daemon verdict, which the store seed and the generation-ready replay now deliver level-correctly to a freshly-loaded page. What remains best-effort is only a device whose daemon never speaks (standalone browser, daemon down): there `navigator.onLine` is the sole signal and interface-up-without-internet stays invisible.
+The setup artwork supplies an offline backdrop when degradation and offline
+signals agree. On reconnection the backdrop can hold for up to 30 s while the
+work recovers. Cached/progressive video keeps playing without WAN; streaming
+video pauses. Current signal limitations include iframe navigation-error loads,
+HLS failures that do not raise degradation, and a silent daemon on an interface
+that stays up. A LAN-reachable but CORS-blocked source with no WAN may be classified
+offline; this is a limitation of WAN corroboration.
 
-This is why the reconnect effect deliberately does *not* gate on `isOnline` — the boolean depends on the daemon being alive to deliver it, and gating recovery on daemon health would drag recovery down to that dependency. The daemon-side half of this design (level replay per generation-ready) shipped with controld's playersession page-authority work, 2026-07-30; the store seed and the classification wait in this repo are the player-side halves that consume it.
+## Hydration, halts, and default playback
 
-## M7 offline-recovery damping
+While boot hydration is pending, a null cast means unknown. Conditional
+`displayDefaultPlaylist` requests defer until hydration completes; forced requests
+remain immediate. A halt cancels older deferred defaults, while a later request
+can defer anew. A clearing halt prevents persisted-cast restoration; a preserving
+halt permits restoration but suppresses navigation and fallback arming.
 
-Two independent layers keep the reconnect refresh (above) from looping. Each closes a gap the other cannot: Layer 1 stops a single mount's own flap; Layer 2 stops a flapping *link* from re-driving the refresh indefinitely through repeated online notifications while one artwork stays continuously degraded.
+Sleep preserves cast state; disconnect clears it. Wake restores a retained
+playlist, or rearms fallback only when ending a real sleep. An explicit cast
+cancels a pending fallback; the fallback's own cast must not announce itself as
+explicit intent. Async fallback completion rechecks cancellation before casting.
 
-### Layer 1 — per-mount one-shot latch (`ArtworkPlayer`)
+## Controller status and refresh
 
-A per-slot `mountFailedRef` (`ArtworkPlayer.tsx`) latches once a video/audio mount reports a failure: a later stray `loadeddata` on that **same** mount (browsers can fire one after `error` on a partially-buffered element) must not clear the degraded flag, or one genuine failure turns into a rapid clear/re-raise cycle that re-triggers Layer 2's refresh on every flap. One-shot in the success→clear direction only — a failure can still supersede an earlier success within the same mount. The latch resets at slot creation: a fresh mount (a new `iframeKey`, whether from a playlist advance or Layer 2's own refresh re-mount) always gets a clean chance. Image/iframe/object success paths are unaffected; their failure signals do not exhibit this flap.
+`window.__ffosPlayerStatus()` is installed by `CDPRequestHandler.initialize()` and
+cleared by cleanup. It synchronously returns JSON from live state:
 
-### Layer 2 — per-URL refresh budget (`AppContext`)
+| Field | Meaning |
+|---|---|
+| `protocol` | Payload version, currently `1`. |
+| `route` | Current browser pathname. |
+| `handlerRegistered` | Whether the route registered its artwork reload handler. |
+| `hasArtwork` | Whether the session has reportable artwork under the applied policy. |
+| `bootHydration` | `pending`, `ok`, `halted_cleared`, `halted_preserving`, or `failed`. |
 
-The reconnect-recovery effect bounds itself to `REFRESH_BUDGET_MAX_ATTEMPTS` (3) refreshes per degraded URL, spaced by an escalating backoff (`REFRESH_BUDGET_BACKOFF_MS`: 15s → 60s → 240s). The budget resets — granting a fresh set of attempts — on any of:
+Only cast-hydration failure produces `bootHydration: failed`; a display-settings
+read failure does not. The runtime protocol and manifest
+`contracts.playerStatus.version` are separate checks and must be updated together
+when their contract changes. `checkStatus.stamp` always exists on a supporting
+player: the document stamp, or `''` before stamping.
 
-- a different URL becoming degraded;
-- a genuine online edge (`isOnline` false→true, not a repeated notification);
-- a 60s clear settle after a refresh (the artwork recovered and stayed up, `REFRESH_BUDGET_SETTLE_MS`);
-- `REFRESH_BUDGET_MAX_AGE_MS` (10 minutes) of continuous elapsed time — a safety valve so a URL that never settles is not capped forever.
+`refreshArtwork` retains its legacy error strings and stable refusal codes:
 
-Backoff is the **primary** re-entry trigger, not a passive gate: the effect's own dependencies (`onlineSignal`, `playbackDegraded`, `isOnline`) are not guaranteed to change again once an attempt has fired — a single-item playlist has no playlist advance to retry it, a flapping link can simply stop flapping, and critically, a repeat failure of the SAME URL after a refresh's remount never reaches context at all: `notePlaybackOutcome`'s own dedupe (`degradedURLRef.current === nextDegradedURL`) drops it before `setPlaybackDegraded` is even called, so no React state change — and no effect rerun — follows a refresh that quietly failed again (this is a different guard from Layer 1's `mountFailedRef` above; a refresh remount changes neither `previewURL` nor playlist-item identity, so nothing resets it). Every run that exits while STILL degraded — whether it just refreshed or found nothing to do — therefore arms a `setTimeout` for the earliest of the next allowed attempt or the age valve, so recovery never depends on another edge arriving, and clears that timer in the effect's own cleanup (and at the top of every run) so dependency changes and healthy transitions never leave a stale one behind.
-
-## CDP status probe (`window.__ffosPlayerStatus`)
-
-Installed by `CDPRequestHandler.initialize()` and set back to `null` by `cleanup()`. Called with no request payload — a plain global function, not a `checkStatus`-style command — and answers synchronously with the CURRENT state, read live from `CanvasService` on every call (never cached), so a single global function stays correct across route changes and hydration settling. Returns `JSON.stringify({ protocol, route, handlerRegistered, hasArtwork, bootHydration })`:
-
-| Field | Source | Meaning |
+| Code | Error | Handling |
 |---|---|---|
-| `protocol` | constant `1` | Version of the **status payload's own shape** (this field set). Read by controld at every site that parses a `__ffosPlayerStatus()` response, so a future field addition or rename bumps this and controld can tell an old payload shape from a new one before touching the new fields. |
-| `route` | `window.location.pathname` | Current client route (`/`, `/playlist`, `/sleep`, `/error`, …). |
-| `handlerRegistered` | `canvasService.onRefreshArtwork !== null` | Whether the playlist route has an active reload handler registered. |
-| `hasArtwork` | `canvasService.hasActiveArtwork()` | Mirrors `refreshArtwork`'s own "anything to refresh" check, so the probe and the live refusal path never disagree. |
-| `bootHydration` | `canvasService.bootHydrationState()` | `pending` \| `ok` \| `halted_cleared` \| `halted_preserving` \| `failed` — see *Offline playback recovery* boot-hydration notes above; `'failed'` is scoped to `initCastInfo` throwing, never a display-settings read failure. |
+| `no_artwork` | `No active artwork to refresh` | No refresh is parked. |
+| `handler_pending` | `No playlist handler registered yet` | Park for registration. |
+| `preview_update_failed` | `Playlist handler could not update preview URL` | Park for a healthy registration. |
 
-`protocol` is a **separate version number** from the manifest's `contracts.playerStatus.version` (`public/ffos-player-contract.json`) — the two are read at independent sites and version independent things. The manifest version is a static, deploy-time capability fuse: controld reads it from the bundled `ffos-player-contract.json` to decide, before ever calling `__ffosPlayerStatus()`, whether this player build supports the probe at all (a manifest with no `playerStatus` entry — an old player build — is capability-absent, and controld falls back to conservative, log-only boot recovery, never a navigation). `protocol` is a runtime, per-call payload version: it versions the JSON shape `__ffosPlayerStatus()` actually returns, and every one of controld's read sites checks it before trusting the rest of the fields.
+A replacement cast supersedes a parked refresh; index, loop, duration, and
+connection changes within that cast preserve it. An applied refresh publishes
+pending before acknowledging, without changing playlist position.
 
-**The two must be bumped together.** They only stay meaningful as a pair because the manifest version is what tells controld the probe function exists and is safe to call, and `protocol` is what tells controld the response it got back matches what that manifest version promised. Bumping `protocol` (a payload shape change) without also bumping `contracts.playerStatus.version` leaves the fuse reporting "capability present, known-good shape" while the live payload has actually changed underneath it — controld's fuse would pass a player build whose probe response it no longer parses correctly, and both read sites would effectively go dark (silently misparsing or dropping fields) instead of falling back to the conservative path the fuse exists to provide.
+## Artwork sources and isolated data documents
 
-Controld's boot recovery (`feral-controld`) polls the probe to classify a stuck boot instead of a synthetic "hydrated" boolean.
+Live display, schedule, and refresh commands accept absolute HTTP(S), relative,
+protocol-relative, and payload-bearing `data:` sources. They reject empty,
+malformed, or non-web sources before state mutation. Explicit base64 must have
+valid alphabet/padding; other data payloads remain opaque, including literal `%`.
+Policy admission precedes source validation. Persisted boot, cast, and scheduled
+records are recovery snapshots and are not revalidated as fresh commands.
 
-### Refusal codes (`refreshArtwork`)
+HTML `data:` works on a loopback player with a works server use
+`http://<label>.localhost:8081/`. The label is the first 16 SHA-256 bytes in hex,
+computed over the trimmed data URL excluding its fragment. FF OS serves only
+this bundle's `data-document/` directory on that port.
 
-`CanvasService.refreshArtwork()` (invoked by the `refreshArtwork` CDP command and by `requestArtworkRefresh()` above) replies with a machine-readable `code` alongside the legacy `error` string, so a caller can classify a refusal without string-matching:
+The shell announces ready. The player checks frame identity and origin, then
+sends the trimmed source and a private MessagePort once per frame. The shell
+verifies the label and navigates a child frame to a blob of the decoded bytes.
+Only the child's first trusted completion, reported over that port, commits
+playback. The outer shell's DOM load and public completion messages do not.
+The shell retains the blob for reloads and transfers keyboard focus only while
+it has focus. Each work has its own secure origin and storage, isolated from
+the player and other works.
 
-| `code` | `error` | Meaning |
-|---|---|---|
-| `no_artwork` | `No active artwork to refresh` | Nothing cast, or the current cast has no playlist items. |
-| `handler_pending` | `No playlist handler registered yet` | The playlist route has not registered a reload handler yet (parked; replayed on the next registration — see the *second flush trigger* note in `playlist-client.tsx`). |
-| `preview_update_failed` | `Playlist handler could not update preview URL` | A handler is registered, but it could not apply the refresh. Also parked and replayed the same way. |
+The works-server probe caches either answer for up to one minute. A slot keeps
+the path it chose. For iframe-rendered data without that server, off loopback, or with a non-HTML
+media type, `dataDocument` uses a secure blob frame with `allow-scripts` only and no storage.
+Sandbox changes remount the frame. Port, shell location, and label derivation
+are paired contracts with ffos-user.
 
-### Generation stamp echo
+## Setup and mint overlays
 
-`getStatus()` (the `checkStatus` CDP command) carries a `stamp` field alongside the rest of the reply, echoing `window.__ffosDocStamp`. A current player **always** includes the key: `''` before the session has stamped the document (a fresh mount, or a foreign/unstamped document), the stamp string once it has. An old player (pre-stamp code) omits the key entirely — controld's page-generation tracking treats an absent key as "this player predates the stamp contract," never as a mismatch, and a present-but-empty stamp as "a new player, unstamped document."
+Setup panels render the bundled, offline-complete `public/setup-artwork/` beneath
+their scrim when no cast is active, or when offline playback is degraded. This
+is a render-only layer; it must not replace persisted cast or fallback state.
 
-## Compatibility note
+`softap_qr` requires `ssid` and accepts `password`, `portal_url`, `reason`, and
+`client_attached`. A valid HTTP(S) portal URL supplies direct-IP recovery. Once
+`client_attached` is true, that URL replaces the join QR with the portal QR.
+Without the URL the join panel remains. `reason` carries failed-join detail.
+`connecting` narrates provisioned-device connectivity; `setup_error` reports a
+persistent setup failure. Setup-state arbitration remains with the existing
+controller/overlay contract.
 
-- Persisted storage keys for cast, display settings, and boot recovery are unchanged by this document. Do not rename persisted keys without a migration plan.
+Mint pairing uses `{command: "mintPairingDisplay", request: {state, pairingCode?,
+browserName?}}`, with states `pairing_code`, `request_received`, `creating_token`,
+and `hidden`. It overlays playback without unmounting it. FF OS checks
+`ffos-player-contract.json` before enabling this command.
 
-## Playlist artwork source compatibility
-
-`CanvasService` validates artwork sources before accepting a new
-`now_display`, `schedule_play`, or playlist refresh command. Absolute `http:`,
-`https:`, and payload-bearing `data:` sources are accepted, as are relative
-and protocol-relative sources; the latter are resolved by the player against
-its current web origin. Empty and non-web schemes (such as `about:`, `tezos:`,
-or `invalid:`) are rejected with `{ ok: false }` before they can replace cast
-or schedule state. Non-base64 `data:` payloads remain opaque, including raw
-literal percent characters; explicit `;base64` payloads must use valid base64.
-
-This guard rejects inputs the player already knows it cannot render while
-preserving relative DP1 sources used by device-local deployments. Acceptance
-does not promise a successful fetch: an accepted source that later fails with a
-renderer error surfaces as `renderStatus: failed`, rather than being rejected at
-cast time. The iframe/PDF caveat above still applies — a navigation the browser
-reports as a successful load is indistinguishable from a real render there.
-
-### `data:` artworks
-
-A document loaded straight from a `data:` URL has an opaque origin with no
-storage and no secure context, so a fully on-chain work (a token whose
-`animation_url` is `data:text/html;...`) dies on its first `localStorage`
-read and loses WebGPU. The player never mounts one that way:
-
-- **Work origin** (`src/utils/workOrigin.ts`): on a loopback player whose OS
-  runs the works server, an HTML `data:` work loads at
-  `http://<label>.localhost:8081/`, where `<label>` is the hex of the first 16
-  bytes of SHA-256 over the `data:` URL (fragment excluded). FF OS
-  (`serve-feral-player.sh` in ffos-user) serves that port from this bundle's
-  `data-document/` directory, which holds only the shell
-  (`public/data-document/index.html`), so no other bundle page can boot in a
-  work's origin. The shell posts `ready`; the player answers once per frame,
-  to that origin only, with the source and a private MessagePort; the shell
-  refuses bytes whose hash is not its hostname (reporting `error`), and
-  otherwise shows the work in a child frame pointed at a blob of the bytes.
-  The child is a real navigation of the work's origin, so Chromium decodes
-  and runs the work exactly as a direct load would; the shell declares no
-  charset (it is pure ASCII), so a work that declares none inherits the same
-  fallback a direct load uses. The shell stays alive under it because it
-  owns the blob URL, so a work that reloads itself keeps working. The shell
-  reports `loaded` over the port on the child's first trusted load; that
-  report, counted once per frame, is the completion signal, and the frame's
-  own `load` events (the shell's) are ignored. The work is same-origin with
-  its shell and can run code in it, but it cannot reach the port, which lives
-  in the shell's closure. The shell hands keyboard focus to the work only
-  while it holds focus itself, so an outgoing work cannot take it. The player
-  probes for the works server when a work chooses its path, at most once a
-  minute, and a slot keeps the path it took, so a playing work is never
-  re-routed. Each work gets WebGPU and persistent storage of its own,
-  cross-origin to the player and to every other work, under the usual
-  `allow-same-origin allow-scripts` sandbox.
-- **Blob document** (`src/utils/dataDocument.ts`): otherwise (an OS without
-  the works server, a non-HTML `data:` type, or a player off loopback) the
-  source plays as a blob URL the player creates, in a frame sandboxed
-  `allow-scripts` only. That is a secure context (WebGPU) but has no storage.
-
-The works port (8081), the shell's location, and the label rule are a
-contract with ffos-user; change them together.
-
-Boot playlist, cast-info, and scheduled-task records are recovery snapshots
-rather than new cast commands. They are intentionally restored or executed
-without source validation so an upgrade does not interrupt a previously
-persisted playlist; records written by the current version have already passed
-the live-command validation boundary.
-
-## Compatibility note
-
-- Persisted storage keys for cast, display settings, and boot recovery are unchanged by this document. Do not rename persisted keys without a migration plan.
+Persisted storage keys and wire payload shapes are compatibility boundaries.
+Changing them requires the corresponding migration or paired-controller work.
