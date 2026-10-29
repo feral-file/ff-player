@@ -183,8 +183,12 @@ export async function checkVideo(player) {
     }),
   ]);
   await player.ready();
-  await pause(200);
-  const video = (await player.nodes()).find(node => node.tag === 'VIDEO');
+  // Ready can precede the composition commit that applies the incoming inset.
+  let video;
+  await until(async () => {
+    video = (await player.nodes()).find(node => node.tag === 'VIDEO');
+    return video?.paused === false && video.rect.width === 1024;
+  }, 'playing video at intended inset');
   assert.ok(video);
   assert.equal(video.paused, false);
   assert.equal(video.rect.width, 1024);
