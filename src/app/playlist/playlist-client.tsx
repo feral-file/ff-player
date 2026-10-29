@@ -22,6 +22,7 @@ import {
   itemIdentityFor,
   mergedDisplayForSlot,
   normalizePlaylistIndex,
+  playableSlotsUnchanged,
   resolveQueuedPlaylistNextIndex,
   resolveSequentialPlaylistAdvance,
   resolveSlotDurationSeconds,
@@ -752,7 +753,6 @@ export default function PlaylistClient() {
         // item currently on screen is tracked by id, since a First<->Full
         // flip changes the array's length and positions.
         if (castInfo.playlist?.items?.length) {
-          holdAfterFinalSlotRef.current = false;
           const rawItems = castInfo.playlist.items;
           const { items: narrowedItems, mapIndex } = narrowSeriesPlaylist(
             rawItems,
@@ -763,12 +763,30 @@ export default function PlaylistClient() {
             0, rawItems.findIndex(raw => raw.id === currentId));
           const nextIndex = normalizePlaylistIndex(
             mapIndex(rawCurrentIndex), narrowedItems.length);
-          setPlaylist(
-            narrowedItems.map(item => ({
-              ...item,
-              duration: item.duration ?? NO_DURATION_VALUE,
-            }))
-          );
+          const nextPlaylist = narrowedItems.map(item => ({
+            ...item,
+            duration: item.duration ?? NO_DURATION_VALUE,
+          }));
+          // Only a rebuild that actually MOVES playback ends the repeat-off
+          // hold. Narrowing runs on every invocation of this command and is
+          // a no-op whenever the resolved mode collapses nothing — an
+          // ordinary playlist with no series in it at all, or an override
+          // re-set to the value already in effect — and clearing the hold
+          // there strands an ended final slot: nothing re-arms a timer for
+          // it, and both gates that could have restarted it
+          // (shouldResumeSlotTimerAfterSetLoop for a later setLoop,
+          // shouldApplyQueuedPlaylistOnShuffleOrRefresh for a queued
+          // refresh) read exactly this flag (feralfile-bot F4). When the
+          // list or the slot does move, the hold no longer describes what
+          // is on screen, so it goes — matching updateDefaultDuration,
+          // which never moves either and so never clears it.
+          if (
+            nextIndex !== currentIndexRef.current ||
+            !playableSlotsUnchanged(nextPlaylist, playlistRef.current)
+          ) {
+            holdAfterFinalSlotRef.current = false;
+          }
+          setPlaylist(nextPlaylist);
           currentIndexRef.current = nextIndex;
           setCurrentIndex(nextIndex);
         }

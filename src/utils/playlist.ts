@@ -433,3 +433,34 @@ export function shouldResumeSlotTimerAfterSetLoop(params: {
     playlistLength - 1
   );
 }
+
+/**
+ * Whether two playable lists describe the same showing in every slot.
+ *
+ * A device-setting command that rebuilds the playable list has to tell a
+ * rebuild that moved playback apart from one that changed nothing, because
+ * the repeat-off hold flag (`shouldResumeSlotTimerAfterSetLoop` and
+ * `shouldApplyQueuedPlaylistOnShuffleOrRefresh` both gate on it) describes
+ * the slot still on screen. Clearing it when nothing moved strands an ended
+ * final slot with no timer armed and no command left that can restart it.
+ * `updateSeriesPlayback` is such a caller: `narrowSeriesPlaylist` always
+ * returns a fresh array, identical in content whenever the resolved mode
+ * narrows nothing away, so reference equality cannot answer the question.
+ *
+ * Compared positionally by `itemIdentityFor` plus `source` — the same tuple
+ * `useShowingKey` uses to scope one showing — rather than by object
+ * identity, which a rebuild never preserves.
+ */
+export function playableSlotsUnchanged(
+  a: DP1Item[],
+  b: DP1Item[]
+): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  return a.every(
+    (_, index) =>
+      itemIdentityFor(a, index) === itemIdentityFor(b, index) &&
+      (a[index]?.source ?? '') === (b[index]?.source ?? '')
+  );
+}

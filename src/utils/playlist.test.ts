@@ -9,6 +9,7 @@ import {
   resolveQueuedPlaylistNextIndex,
   resolveSequentialPlaylistAdvance,
   resolveSlotDurationSeconds,
+  playableSlotsUnchanged,
   shouldApplyQueuedPlaylistOnShuffleOrRefresh,
   shouldResumeSlotTimerAfterSetLoop,
 } from './playlist';
@@ -427,5 +428,47 @@ describe('hasDecisiveSyncVeto', () => {
       display: { userOverrides: { scaling: false } },
     } as DP1Item;
     expect(hasDecisiveSyncVeto(scalingVetoed)).toBe(false);
+  });
+});
+
+describe('playableSlotsUnchanged', () => {
+  const slot = (id: string, source: string): DP1Item =>
+    ({ id, source, license: {} }) as DP1Item;
+
+  it('treats a rebuilt but content-identical list as unchanged', () => {
+    const a = [slot('a', 's/a'), slot('b', 's/b')];
+    const b = [slot('a', 's/a'), slot('b', 's/b')];
+    expect(playableSlotsUnchanged(a, b)).toBe(true);
+  });
+
+  it('reports a different length as changed, which is what a collapsed series group produces', () => {
+    const full = [slot('e0', 's/e0'), slot('e1', 's/e1')];
+    const collapsed = [slot('e0', 's/e0')];
+    expect(playableSlotsUnchanged(full, collapsed)).toBe(false);
+  });
+
+  it('reports a reorder of the same items as changed', () => {
+    const forward = [slot('a', 's/a'), slot('b', 's/b')];
+    const reversed = [slot('b', 's/b'), slot('a', 's/a')];
+    expect(playableSlotsUnchanged(forward, reversed)).toBe(false);
+  });
+
+  it('reports a same-id source swap as changed, since the showing is not the same one', () => {
+    const before = [slot('a', 's/old')];
+    const after = [slot('a', 's/new')];
+    expect(playableSlotsUnchanged(before, after)).toBe(false);
+  });
+
+  it('matches id-less items by their synthesised position-and-source identity', () => {
+    const a = [{ source: 's/x', license: {} } as DP1Item];
+    const b = [{ source: 's/x', license: {} } as DP1Item];
+    expect(playableSlotsUnchanged(a, b)).toBe(true);
+    expect(
+      playableSlotsUnchanged(a, [{ source: 's/y', license: {} } as DP1Item])
+    ).toBe(false);
+  });
+
+  it('treats two empty lists as unchanged', () => {
+    expect(playableSlotsUnchanged([], [])).toBe(true);
   });
 });
