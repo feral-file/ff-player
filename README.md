@@ -63,7 +63,7 @@ Use `npm run post-implement-check` first to auto-fix and lint only the files cha
 ## Runtime Configuration
 
 - `display.json` (loaded from `${NEXT_PUBLIC_PUB_DOC_URL}/configs/display.json`, or same-origin `/configs/display.json` when the env is empty) provides `duration` for web version polling, `defaultPlaylistURL` for fallback playback defaults, and `showRenderLoadingOverlay` for the artwork render-loading overlay. Extra keys in the published document are ignored.
-- Cloudflare Pages/web deployments keep the in-browser version polling/reload flow and publish `out/version.json` on deploy so open tabs can refresh onto new JS.
+- The web build keeps the in-browser version polling/reload flow, which reads `version.json` from its host. Nothing deploys the web build; FF1 runs the static export.
 - The FF OS static export sets `NEXT_PUBLIC_DISABLE_VERSION_CHECK=true`, so the installed bundle does not self-refresh and should ride with the device image or update channel.
 - Player console logs are mirrored through controld to the public FF1 Cloudflare stream as service `player`. Controld applies the player-specific whole-session rate from `logStreaming.playerSampleRate` in `controld.json`; the browser does not make a second sampling decision. Sessions close after five seconds without a log or after one minute of continuous logs. The player keeps arbitrary console arguments local because they may contain playlist, network, or credential data.
 - On-device batches go through the loopback-only `feral-controld` `POST /api/logs` route. The stream is disabled for every browser origin except `http://127.0.0.1:8080`. Controld attaches the trusted FF1 device ID and `player` service name before forwarding server-side, so delivery does not depend on public Cloudflare CORS settings. Deploy the matching ffos-user change before this player build; otherwise the bounded retry queue cannot drain.
@@ -92,3 +92,7 @@ For bundling and serving the static export on-device (FF1 local HTTP, root URL),
 Contributions are welcome. Please fork the repository and submit a pull request with your changes. Ensure your code follows the project's coding standards and includes appropriate tests.
 
 For AI-assisted changes or repo workflow updates, start with [`AGENTS.md`](AGENTS.md) and [`docs/review-workflow.md`](docs/review-workflow.md).
+
+## License
+
+Mozilla Public License 2.0. See [LICENSE](LICENSE). Everything that plays the work on an Art Computer is open source; what is open, and under which license, is listed at [docs.feralfile.com/open-source/](https://docs.feralfile.com/open-source/).

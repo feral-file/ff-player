@@ -1,6 +1,6 @@
 # Device-local FF Player (FF1)
 
-This document describes how the static export of `ff-player` is intended to run on FF1 when the player is served from the device instead of a remote host (for example `https://display.feralfile.com`).
+This document describes how the static export of `ff-player` is intended to run on FF1 when the player is served from the device.
 
 ## Build artifact
 
@@ -27,7 +27,7 @@ The export uses standard web origins and paths (for example `/_next/static/...`)
 
 ## Player updates
 
-- The Cloudflare Pages/web build still uses `version.json` polling and reload to pick up new deployments.
+- The web build uses `version.json` polling and reload; nothing deploys it.
 - The FF OS static export sets `NEXT_PUBLIC_DISABLE_VERSION_CHECK=true`, so the device-local bundle does not self-refresh and should be updated with the FF1 image or updater policy.
 
 ## Mint pairing overlay
