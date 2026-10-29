@@ -13,7 +13,8 @@
     "test": "node scripts/check-copy.mjs && vitest run",
     "check:copy": "node scripts/check-copy.mjs",
     "typecheck": "tsc --noEmit",
-    "verify": "bash ./scripts/verify.sh"
+    "verify": "bash ./scripts/verify.sh",
+    "smoke:browser": "node scripts/browser-smoke.mjs"
   },
   "dependencies": {
     "@google/model-viewer": "^4.3.1",

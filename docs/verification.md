@@ -69,6 +69,35 @@ human release operation.
 - If the change touches playback, cast recovery, display settings, or route behavior, pair verification with a manual smoke pass for the affected flow.
 - **Playlist route / repeat-off hold:** With loop `none`, advance to the last timed slot so playback holds on the final artwork; confirm a queued shuffle or refresh **promotes the new playlist on cast** only in that hold (not when the final item has no finite slot timer); leaving `none` via `setLoop` should resume the slot timer from the held frame. Expect the current artwork to stay selected after shuffle (anchor at index `0`) until its slot timer completes before advancing.
 
+## Production browser smoke
+
+Build with `npm run build`, then run:
+
+```bash
+npm run smoke:browser -- --artifacts=/tmp/ff-player-smoke-evidence
+```
+
+Requires Chromium (`chromium` on PATH) and `ffmpeg`. Use
+`--chromium=/path/to/browser` or `--bundle=/path/to/out` to select a different
+executable or built export. Ports 8080 and 8081 must be free; the script fails
+if either is occupied. It starts local fixture servers, launches headless
+Chromium with disposable storage, and drives the public CDP command surface.
+Only a constrained container that cannot use Chromium's sandbox should add
+`--no-sandbox` explicitly.
+
+The smoke checks image Fit/Fill and matte bounds, outgoing composition during
+handoff, video playback, delayed isolated HTML readiness and storage/parent
+isolation, sleep/wake, and recently played. It writes screenshots, assertion
+results (`evidence.json`), and browser diagnostics to the artifact directory,
+and exits nonzero on failure. Review the screenshots for visual defects;
+geometry assertions alone cannot judge a fade's appearance. Browser storage and
+generated media are discarded. No fixture binaries or production settings are
+installed.
+
+This is a repeatable desktop check of the built player. Hardware acceleration,
+device provisioning, daemon integration, and physical FF1 output still require
+the relevant device smoke checks.
+
 ## Manual visual smoke: matting and Fit/Fill
 
 Use the real player in Chromium or on an FF1; jsdom cannot verify layout.

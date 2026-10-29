@@ -1,6 +1,6 @@
 import type { DP1DisplayPreference, DP1Item } from '@/models/dp1.model';
 import DeviceManager from '@/utils/DeviceManager';
-import { MutableRefObject, useEffect } from 'react';
+import { useEffect } from 'react';
 
 /**
  * Once the async display-preference merge (incl. the ref-manifest layer)
@@ -20,26 +20,25 @@ import { MutableRefObject, useEffect } from 'react';
  */
 export function useMergeLandedRearm(options: {
   preference: DP1DisplayPreference | null;
-  currentIndexRef: MutableRefObject<number>;
-  playlistRef: MutableRefObject<DP1Item[]>;
+  readSlot: () => { index: number; items: DP1Item[] };
   scheduleCurrentItemTimer: (
     index: number,
     snapshot: DP1Item[],
     preserveElapsed?: boolean
   ) => void;
 }): void {
-  const { preference, currentIndexRef, playlistRef, scheduleCurrentItemTimer } =
-    options;
+  const { preference, readSlot, scheduleCurrentItemTimer } = options;
   useEffect(() => {
     if (!preference) {
       return;
     }
-    if (currentIndexRef.current < 0 || playlistRef.current.length === 0) {
+    const slot = readSlot();
+    if (slot.index < 0 || slot.items.length === 0) {
       return;
     }
     if (DeviceManager.getCachedDefaultItemDurationSeconds() === null) {
       return;
     }
-    scheduleCurrentItemTimer(currentIndexRef.current, playlistRef.current, true);
-  }, [preference, currentIndexRef, playlistRef, scheduleCurrentItemTimer]);
+    scheduleCurrentItemTimer(slot.index, slot.items, true);
+  }, [preference, readSlot, scheduleCurrentItemTimer]);
 }
