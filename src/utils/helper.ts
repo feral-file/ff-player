@@ -22,6 +22,18 @@ import { waitForDaemonConnectivity } from '@/services/DaemonConnectivity';
 export const DAEMON_VERDICT_WAIT_MS = 3_000;
 
 /**
+ * Upper bound on the content-type HEAD probe itself. Without this, a gateway
+ * that accepts the TCP connection but never responds (observed repeatedly
+ * against a third-party IPFS gateway in feral-file/ff-player#307's support
+ * bundle) leaves `fetch` pending forever: the promise never settles, so
+ * nothing downstream — not the M7 refresh budget, not the render-failure
+ * modal — ever sees a failure to retry or skip. Aborting at this bound turns
+ * that hang into an ordinary fetch rejection, which the existing catch below
+ * already classifies like any other network failure.
+ */
+export const CONTENT_TYPE_HEAD_TIMEOUT_MS = 10_000;
+
+/**
  * Read the declared media type from a `data:` URL without probing the network.
  * Cache-busting query suffixes are part of the payload for data URLs, so a
  * `HEAD` probe would corrupt the bytes and fail MIME detection.
@@ -93,9 +105,15 @@ export async function getContentTypeFromURL(
   // response already in hand, so `reachedServer` is exactly the network-vs-
   // reachable distinction ContentTypeDetectionError exposes.
   let reachedServer = false;
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(
+    () => { abortController.abort(); },
+    CONTENT_TYPE_HEAD_TIMEOUT_MS
+  );
   try {
     const response = await fetch(extendPreviewURL, {
       method: 'HEAD',
+      signal: abortController.signal,
     });
     reachedServer = true;
 
@@ -171,6 +189,8 @@ export async function getContentTypeFromURL(
       `Failed to determine content type: ${String(error)}`,
       !reachedServer && offlineCorroborated
     );
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

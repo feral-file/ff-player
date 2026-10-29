@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { canvasService } from '../CanvasService';
 import DeviceManager from '@/utils/DeviceManager';
 import { DisplaySettings } from '@/models/display_settings.model';
@@ -14,11 +14,16 @@ function mergeDisplaySettings(
   nextSettings: DisplaySettings
 ): DisplaySettings {
   const prototype = Object.getPrototypeOf(nextSettings) as object | null;
+  // Partial class instances can contain explicit undefined fields. They must
+  // not erase saved defaults that the command did not actually change.
+  const definedSettings = Object.fromEntries(
+    Object.entries(nextSettings).filter(([, value]) => value !== undefined)
+  );
 
   return Object.assign(
     Object.create(prototype) as DisplaySettings,
     previousSettings ?? {},
-    nextSettings
+    definedSettings
   );
 }
 
@@ -29,6 +34,22 @@ function mergeDisplaySettings(
 export function useDeviceSettings() {
   const [displaySettings, setDisplaySettings] =
     useState<DisplaySettings | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  // Startup reads can finish after a saved command. The command's partial
+  // values win, while untouched stored defaults survive. Do not persist the
+  // partial pre-hydration state: that would erase those untouched defaults.
+  const initializeDisplaySettings = useCallback(async () => {
+    try {
+      const stored = await DeviceManager.getDeviceDisplaySettings();
+      setDisplaySettings(current =>
+        current ? mergeDisplaySettings(stored, current) : stored
+      );
+    } finally {
+      // A failed settings read must not block later saves or cast recovery.
+      setHydrated(true);
+    }
+  }, []);
 
   useEffect(() => {
     const onSettingsChanged = (
@@ -49,10 +70,10 @@ export function useDeviceSettings() {
   }, []);
 
   useEffect(() => {
-    if (displaySettings) {
+    if (hydrated && displaySettings) {
       void DeviceManager.setDeviceDisplaySettings(displaySettings);
     }
-  }, [displaySettings]);
+  }, [displaySettings, hydrated]);
 
-  return { displaySettings, setDisplaySettings };
+  return { displaySettings, initializeDisplaySettings };
 }

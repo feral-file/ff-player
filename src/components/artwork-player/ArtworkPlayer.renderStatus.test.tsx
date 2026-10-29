@@ -69,12 +69,6 @@ vi.mock('@/utils/mediaLoader', async importOriginal => {
   };
 });
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
-}));
-
 vi.mock('hls.js', () => ({
   __esModule: true,
   default: Object.assign(vi.fn(), {
@@ -634,8 +628,14 @@ describe('ArtworkPlayer render status - loading overlay switch', () => {
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.loading);
     expect(screen.getByText('Loading...')).toBeTruthy();
 
-    await flushTimers();
-    await flushTimers();
+    // Settle the remaining microtask-only work (img.decode()'s promise
+    // chain) without advancing the fake clock any further: this file's
+    // ARTWORK_LOAD_WATCHDOG_MS safety timer is also armed by now, and
+    // flushTimers()'s vi.runAllTimersAsync() would race ahead to fire it
+    // before decode() finishes settling, since nothing else is due before
+    // it.
+    await advanceTimersBy(3000);
+    await advanceTimersBy(1000);
 
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
     expect(screen.queryByText('Loading...')).toBeNull();
@@ -710,8 +710,19 @@ describe('ArtworkPlayer render status - loading overlay switch', () => {
     expect(screen.getByText('Loading...')).toBeTruthy();
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.loading);
 
+    // Two separate bounded advances, not vi.runAllTimersAsync(): this file's
+    // ARTWORK_LOAD_WATCHDOG_MS safety timer is also armed by now, and
+    // runAllTimersAsync's single pass does not reliably let the slot commit
+    // (scheduled from the mock's onLoad microtask chain) flush into a render
+    // before racing ahead to it.
     await act(async () => {
-      await vi.runAllTimersAsync();
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
     });
 
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
@@ -741,8 +752,16 @@ describe('ArtworkPlayer render status - loading overlay switch', () => {
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.loading);
     expect(screen.queryByText('Loading...')).toBeNull();
 
+    // See the sibling 'shows loading only after 2s...' test above for why
+    // this is three bounded advances rather than vi.runAllTimersAsync().
     await act(async () => {
-      await vi.runAllTimersAsync();
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
     });
 
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);

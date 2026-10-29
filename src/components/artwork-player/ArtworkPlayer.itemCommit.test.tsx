@@ -14,12 +14,6 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
-}));
-
 const VIDEO_URL_A = 'https://feralfile.com/test/commit-a.mp4';
 const VIDEO_URL_B = 'https://feralfile.com/test/commit-b.mp4';
 const ITEM_A = 'commit-item-a';

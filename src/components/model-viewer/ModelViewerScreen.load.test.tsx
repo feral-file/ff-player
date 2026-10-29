@@ -73,7 +73,7 @@ describe('ModelViewerScreen', () => {
     await vi.advanceTimersByTimeAsync(250);
 
     expect(onLoad).not.toHaveBeenCalled();
-    expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+    expect(screen.queryByText('Unable to load 3D model')).toBeNull();
   });
 });
 
@@ -96,5 +96,21 @@ describe('ModelViewerScreen — loading overlay switch', () => {
     );
 
     expect(screen.queryByText('Loading 3D model')).toBeNull();
+  });
+});
+
+describe('ModelViewerScreen — unattended rotation', () => {
+  it('auto-rotates and suppresses the drag-to-rotate wiggle prompt', () => {
+    // On an FF1 wall display nobody drags the model, so camera-controls'
+    // default interaction-prompt would wiggle indefinitely without this.
+    const { container } = render(
+      <ModelViewerScreen src="https://example.com/model.glb" />
+    );
+
+    const viewer = container.querySelector('model-viewer');
+    expect(viewer).toBeTruthy();
+    expect(viewer?.hasAttribute('auto-rotate')).toBe(true);
+    expect(viewer?.getAttribute('interaction-prompt')).toBe('none');
+    expect(viewer?.hasAttribute('camera-controls')).toBe(true);
   });
 });

@@ -13,6 +13,7 @@ Repo contract for coding agents and automation working in `ff-player`.
 - `docs/review-workflow.md` for review handoff mechanics. If it conflicts with the local-review posture here or in `prompts/code-review.md`, this file and the generated prompt win.
 - `prompts/code-review.md` for the generated local review contract. Never edit it by hand; update Canon's `reference/review-contract.md` and propagate the generated file instead.
 - `docs/ARTWORK_TRANSITION_SEQUENTIAL_LOGIC.md` before changing artwork transition timing or sequencing behavior.
+- `docs/TOMBSTONE_SIZING_CONTRACT.md` before changing any dimension in `src/components/tombstone/`. All sizing there scales by the viewport short edge via `designPx`.
 - `.github/pull_request_template.md` before opening a PR.
 
 ## Major surfaces

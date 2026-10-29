@@ -1,4 +1,5 @@
 import { canvasService } from '../CanvasService';
+import { contentPolicyCommand } from './contentPolicyCommand';
 import { noteDaemonConnectivity } from '../DaemonConnectivity';
 import { WebSocketMessage } from '@/models';
 import {
@@ -79,7 +80,7 @@ export class CDPRequestHandler {
 
   private handleCDPRequest(
     event: WebSocketMessage | Record<string, unknown>
-  ): string {
+  ): string | Promise<string> {
     try {
       let wsMessage: Record<string, unknown>;
 
@@ -127,8 +128,10 @@ export class CDPRequestHandler {
     wsMessage: Record<string, unknown>,
     messageID?: string
   ) {
-    console.log('[CDP Handler] Command request received');
     const command = wsMessage.command as string;
+    if (command === 'getContentPolicy' || command === 'setContentPolicy') {
+      return contentPolicyCommand(command, wsMessage.request, messageID);
+    }
     let reply: WebSocketMessage | null = null;
     switch (command) {
       case pingCommand: {
@@ -258,9 +261,7 @@ function isMintPairingDisplayDetail(
   const detail = request as Partial<MintPairingDisplayDetail>;
   if (
     typeof detail.state !== 'string' ||
-    !Object.values(MintPairingDisplayState).includes(
-      detail.state
-    )
+    !Object.values(MintPairingDisplayState).includes(detail.state)
   ) {
     return false;
   }
@@ -316,7 +317,25 @@ function isSetupDisplayDetail(request: unknown): request is SetupDisplayDetail {
       if (typeof detail.ssid !== 'string' || !detail.ssid.trim()) {
         return false;
       }
-      if (detail.password !== undefined && typeof detail.password !== 'string') {
+      if (
+        detail.password !== undefined &&
+        typeof detail.password !== 'string'
+      ) {
+        return false;
+      }
+      if (
+        detail.portal_url !== undefined &&
+        typeof detail.portal_url !== 'string'
+      ) {
+        return false;
+      }
+      if (
+        detail.client_attached !== undefined &&
+        typeof detail.client_attached !== 'boolean'
+      ) {
+        return false;
+      }
+      if (detail.reason !== undefined && typeof detail.reason !== 'string') {
         return false;
       }
       break;
@@ -335,10 +354,7 @@ function isSetupDisplayDetail(request: unknown): request is SetupDisplayDetail {
       // `Number.isFinite` (not `typeof === 'number'`) rejects NaN/Infinity,
       // which would otherwise pass the type check and reach the overlay as
       // "NaN%"/"Infinity%".
-      if (
-        detail.progress !== undefined &&
-        !Number.isFinite(detail.progress)
-      ) {
+      if (detail.progress !== undefined && !Number.isFinite(detail.progress)) {
         return false;
       }
       break;

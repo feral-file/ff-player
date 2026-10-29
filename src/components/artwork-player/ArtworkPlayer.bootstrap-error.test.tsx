@@ -39,12 +39,6 @@ vi.mock('@google/model-viewer', () => {
   throw new Error('model-viewer chunk failed');
 });
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
-}));
-
 const MODEL_URL =
   'https://ipfs.filebase.io/ipfs/bafybeiht7hyohzvnje3aozwfkoqowuvmb7fooqh4pbyigzv6qm2dolwgxu';
 const IMAGE_URL = 'https://example.com/image.png';
@@ -84,7 +78,8 @@ describe('ArtworkPlayer — model bootstrap error handling', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+      expect(screen.getByText('The artwork cannot be displayed correctly on this device.')).toBeTruthy();
+      expect(screen.queryByText('Unable to load 3D model')).toBeNull();
     });
 
     expect(screen.queryByText('Loading 3D model')).toBeNull();
@@ -115,7 +110,8 @@ describe('ArtworkPlayer — model bootstrap error handling', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Unable to load 3D model')).toBeTruthy();
+      expect(screen.getByText('The artwork cannot be displayed correctly on this device.')).toBeTruthy();
+      expect(screen.queryByText('Unable to load 3D model')).toBeNull();
     });
 
     await waitFor(() => {

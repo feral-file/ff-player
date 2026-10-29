@@ -113,9 +113,11 @@ export default function ModelViewerScreen({
           ref={viewerRef}
           alt="3D artwork preview"
           autoplay
+          auto-rotate
           camera-controls
           crossorigin="anonymous"
           exposure="1"
+          interaction-prompt="none"
           loading="eager"
           reveal="auto"
           style={{ ...viewerStyle, cursor: 'none' }}
@@ -131,11 +133,7 @@ export default function ModelViewerScreen({
           </div>
         </div>
       )}
-      {(hasError || hasBootstrapError) && (
-        <div style={overlayStyle}>
-          <div>Unable to load 3D model</div>
-        </div>
-      )}
+      {/* ArtworkPlayer owns failure feedback; a second overlay obscures it. */}
     </main>
   );
 }

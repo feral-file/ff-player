@@ -14,6 +14,9 @@
  *
  * Shared by the tombstone label and its confirmation toast, which have to scale
  * together.
+ *
+ * The rule this enforces — and the exceptions to it — is written out in
+ * `docs/TOMBSTONE_SIZING_CONTRACT.md` and scanned by `sizingContract.test.ts`.
  */
 export const designPx = (px: number): string =>
   `${((px / 720) * 100).toFixed(4)}vmin`;

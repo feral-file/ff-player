@@ -17,19 +17,6 @@ const hiddenDisplay: SetupDisplayDetail = { state: SetupDisplayState.Hidden };
 const qrSize = 320;
 
 /**
- * Canonical human-facing address of the provisioning portal. The hotspot's
- * dnsmasq answers EVERY DNS name (catch-all plus an explicit ff1.config
- * entry) with 192.0.2.1 — a public-looking TEST-NET address, because Samsung
- * One UI refuses captive-portal detection when probe hostnames resolve to
- * private IPs — and an nftables rule redirects 192.0.2.1:80 back to the
- * portal, so ff1.config is reachable only while the phone is on the setup
- * hotspot. Must stay in sync with `captive.conf` / `nftables.conf` in the
- * `ffos` repo and the captive-detection section of `ffos-user`
- * docs/api-design.md.
- */
-const portalUrl = 'http://ff1.config';
-
-/**
  * controld's `reason` prose, or `undefined` when there is nothing worth
  * rendering. The CDP validator only checks that `reason` is a string, so an
  * empty or whitespace-only value is a valid command and reaches these panels
@@ -64,6 +51,24 @@ function escapeWifiField(value: string): string {
  * `P:` field when there's no password, since an empty `P:` after `T:WPA`
  * makes phones attempt (and fail) WPA auth with an empty key.
  */
+/**
+ * True only for a value the standard URL parser accepts with an http(s)
+ * scheme and a host. The swap makes portal_url the only scannable target,
+ * so a merely HTTP-shaped string (`http://?`, `http:///`, an out-of-range
+ * port) must keep the join QR rather than paint an inert code.
+ */
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      url.hostname !== ''
+    );
+  } catch {
+    return false;
+  }
+}
+
 function softApQrValue(ssid: string, password: string | undefined): string {
   const escapedSsid = escapeWifiField(ssid);
   if (!password) {
@@ -73,33 +78,69 @@ function softApQrValue(ssid: string, password: string | undefined): string {
 }
 
 /**
- * One join QR plus a spelled-out portal address, not a second "open the
- * portal" QR: the auto-opening captive sheet cannot be relied on across
- * phones (iOS joins scanned `WIFI:` codes from the Camera without ever
- * raising the captive-portal sheet, and some Android builds surface the
- * "sign in" notification silently or not at all), but a second code proved
- * confusing — phones can't scan it while the sheet is up, and two codes read
- * as two competing entry points. The deterministic fallback is therefore the
- * typed address: `portalUrl` resolves on the hotspot via the image's
- * catch-all DNS, so telling the user to type it covers every phone that
- * doesn't auto-open the sheet.
+ * One QR on screen at a time, in two phases. The join phase shows the WIFI:
+ * code plus a direct on-link portal address as text — never a second "open
+ * the portal" code beside it, which read as a competing entry point. controld
+ * gets the address NetworkManager actually assigned to the active hotspot and
+ * sends it as portal_url. Once the user accepts the no-internet setup Wi-Fi,
+ * a literal on-link IP bypasses Private DNS and cellular DNS entirely.
+ * Older controllers omit the optional field, and this player then omits the
+ * manual-address instruction rather than presenting an unreliable DNS name.
+ *
+ * The attached phase (client_attached, sent once the hotspot's portal sees
+ * the phone's first request) REPLACES the join code with a QR encoding that
+ * same portal_url. iOS decides on its own whether to present the captive
+ * sheet: it does so only while a "Wi-Fi app" (Settings, Safari) is in front,
+ * and a phone that joined from the Camera app's scan logs `waiting for UI`
+ * until the user switches apps (feral-file#3515). The camera is still aimed
+ * at this screen, so the swapped code surfaces a browser link where the join
+ * prompt was; opening it loads the setup page and, as a side effect, brings a
+ * Wi-Fi app forward. Without a portal_url there is nothing to encode, so the
+ * join phase stays up.
  */
 /*
- * Three elements only: a heading that is also the instruction, the QR, and
- * two compact fallback lines. The SSID/password ride the fallback sentence
- * rather than labeled Network:/Password: lines — the QR already encodes
- * both, and the manual path only matters to whoever can't (or won't) scan.
- * Deliberately no "phone": the portal is plain HTTP on the hotspot, so a
- * laptop joining the network and browsing to ff1.config works identically.
- * Only the claim step (the app) actually requires a phone, and only that
- * panel says so.
+ * Scanning a WIFI: code only proposes the hotspot; the phone owns the prompt
+ * that accepts it. Those labels vary (Join, Connect, Sign in, or no prompt),
+ * so the display names the required follow-up instead of an OS-specific
+ * button. The manual path still works from a laptop because it is phrased in
+ * terms of Wi-Fi settings, not a camera-only action.
  */
 function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   const ssid = display.ssid ?? '';
+  const portalUrl = display.portal_url?.trim();
+  // The swap makes portal_url the only scannable target, so it must be a
+  // link a camera app will offer to open: a bare address or a stray value
+  // would leave one inert code and no join code. Anything else stays on the
+  // join phase, where the address is a typed fallback and harmless.
+  if (display.client_attached === true && portalUrl && isHttpUrl(portalUrl)) {
+    return (
+      <SoftApPortalQrPanel
+        ssid={ssid}
+        password={display.password}
+        portalUrl={portalUrl}
+      />
+    );
+  }
+  // After a failed join (or once the attached phone left the hotspot) the
+  // daemon sends the join QR back WITH a reason; the join_failed panel it
+  // replaces is on screen for a millisecond, so this line is the only place
+  // the reason is visible on the device (the phone's picker carries its own
+  // banner). It renders at the panel's compact scale, not the shared
+  // .subtitle scale: at 1080p the full-size line wrapped to two rows and
+  // pushed the last recovery cue below the bottom edge (visual smoke
+  // 2026-09-08), and the join panel is the densest setup layout.
+  const joinFailure = proseReason(display);
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
-        <p className={styles.title}>Scan to set up your Art Computer</p>
+        <p className={styles.title}>
+          Scan the QR code, then follow your phone&apos;s prompt to connect
+        </p>
+        {joinFailure ? (
+          <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
+            {joinFailure}
+          </p>
+        ) : null}
         <div className={styles.qrFrame}>
           <QRCodeSVG
             value={softApQrValue(ssid, display.password)}
@@ -108,18 +149,72 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
           />
         </div>
         <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          Or join <strong>{ssid}</strong>
+          {/* Sets the wait, conditionally: across the 2026-09-07 trials iOS
+              took 5–12 s between the Join tap and associating, during which
+              the join code is still up and taps do nothing; the code then
+              changes for Apple phones only (feral-file#3515). Android and
+              older controllers never change it, so the line promises a
+              wait, not a change. */}
+          After you join, wait about 10 seconds: if this code changes, scan it
+          again
+          <br /> Nothing opened? Wi-Fi Settings → <strong>{ssid}</strong>
+          <br />{' '}
           {display.password ? (
             <>
+              Password <strong>{display.password}</strong> ·{' '}
+            </>
+          ) : null}
+          Keep connected
+          {portalUrl ? (
+            <>
+              <br /> Still stuck? Mobile data/VPN off →{' '}
+              <strong>{portalUrl}</strong>
+            </>
+          ) : null}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Attached phase of the soft-AP step (see SoftApQrPanel). The QR is the
+ * portal address; the title reads as the phone-side instruction because the
+ * swap fires on the hotspot's FIRST request from the phone — its captive
+ * probe — which also happens on phones where the sheet did open, so the
+ * screen must not send a user already typing in the portal back to scan.
+ * The subtitle carries the scan and typed-address recovery, the hotspot
+ * credentials for a second device, and the keep-connected cue: the phone
+ * is on a no-internet SSID its OS offers to abandon, and the address on the
+ * code is unroutable anywhere else.
+ */
+function SoftApPortalQrPanel({
+  ssid,
+  password,
+  portalUrl,
+}: {
+  ssid: string;
+  password: string | undefined;
+  portalUrl: string;
+}) {
+  return (
+    <section className={styles.overlay} aria-live="polite">
+      <div className={styles.panel}>
+        <p className={styles.title}>Finish setup on your phone</p>
+        <div className={styles.qrFrame}>
+          <QRCodeSVG value={portalUrl} size={qrSize} marginSize={2} />
+        </div>
+        <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
+          Nothing opened? Scan the code, or mobile data/VPN off →{' '}
+          <strong>{portalUrl}</strong>
+          <br /> Wi-Fi <strong>{ssid}</strong>
+          {password ? (
+            <>
               {' '}
-              (password <strong>{display.password}</strong>)
+              · Password <strong>{password}</strong>
             </>
           ) : null}{' '}
-          in your Wi-Fi settings.
-        </p>
-        <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          If the setup page doesn&apos;t open, go to{' '}
-          <strong>{portalUrl}</strong>.
+          · Keep connected
         </p>
       </div>
     </section>
@@ -318,12 +413,7 @@ function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
             name routes both. */}
         <p className={styles.subtitle}>
           Open the app on a phone on the same Wi-Fi and look for{' '}
-          {frameName ? (
-            <strong>{frameName}</strong>
-          ) : (
-            'this Art Computer'
-          )}
-          .
+          {frameName ? <strong>{frameName}</strong> : 'this Art Computer'}.
         </p>
         {display.url ? (
           <>
@@ -426,8 +516,7 @@ export function renderSetupPanel(
  * hard-cutting off screen; it unmounts itself once that fade completes.
  */
 export default function SetupOverlay() {
-  const [display, setDisplay] =
-    useState<SetupDisplayDetail>(hiddenDisplay);
+  const [display, setDisplay] = useState<SetupDisplayDetail>(hiddenDisplay);
 
   useEffect(() => {
     const handleDisplay = (event: Event) => {

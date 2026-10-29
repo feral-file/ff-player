@@ -9,6 +9,7 @@ import { CastCommand } from '@/models';
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
+import { prepareContentPolicy } from './contentPolicy.testkit';
 
 const item = (id: string): DP1Item =>
   ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
@@ -31,6 +32,12 @@ const service = canvasService as unknown as {
 };
 
 describe('CanvasService hasActiveArtwork', () => {
+  // A real device always has an applied policy by the time anything is cast:
+  // AppContext hydrates the mirror before boot recovery. Status now reports
+  // nothing playable while that mirror is unavailable, so the harness has to
+  // supply the boot step it skips.
+  beforeEach(prepareContentPolicy);
+
   afterEach(() => {
     canvasService.setCastInfo(null, false);
   });

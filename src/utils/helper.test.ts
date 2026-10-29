@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { appendDisplayModeParam, getContentTypeFromURL } from './helper';
+import {
+  appendDisplayModeParam,
+  CONTENT_TYPE_HEAD_TIMEOUT_MS,
+  getContentTypeFromURL,
+} from './helper';
 
 describe('getContentTypeFromURL', () => {
   afterEach(() => {
@@ -67,7 +71,12 @@ describe('getContentTypeFromURL', () => {
     expect(requestURL).toMatch(
       new RegExp(`^${expectedURL}\\?v=\\d+&x-request=xhr$`)
     );
-    expect(requestInit).toEqual({ method: 'HEAD' });
+    // `signal` bounds the HEAD probe itself (feral-file/ff-player#307) so a
+    // gateway that never responds cannot hang this promise forever; it is
+    // asserted separately below rather than via a literal `AbortSignal`
+    // instance, which this mocked call never receives back to compare.
+    expect(requestInit).toMatchObject({ method: 'HEAD' });
+    expect(requestInit?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it.each([
@@ -84,6 +93,37 @@ describe('getContentTypeFromURL', () => {
       expect(fetchSpy).not.toHaveBeenCalled();
     }
   );
+});
+
+describe('getContentTypeFromURL — HEAD probe timeout', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('aborts the HEAD probe instead of hanging forever when the gateway never responds', async () => {
+    // feral-file/ff-player#307: a gateway that accepts the connection but
+    // never replies must not leave this promise pending forever, or nothing
+    // downstream (the M7 refresh budget, the render-failure retry/skip) ever
+    // sees a failure to act on.
+    vi.useFakeTimers();
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((_url, init) => {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted', 'AbortError'));
+          });
+        });
+      });
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    const pending = getContentTypeFromURL('https://example.com/artwork/model.glb');
+    await vi.advanceTimersByTimeAsync(CONTENT_TYPE_HEAD_TIMEOUT_MS);
+
+    await expect(pending).resolves.toBe('model/gltf-binary');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
 });
 
 /**

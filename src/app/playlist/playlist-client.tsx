@@ -1,15 +1,22 @@
+/* eslint-disable max-lines -- playback orchestration is intentionally co-located. */
 'use client';
 
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
 import TombstoneOverlay from '@/components/tombstone/TombstoneOverlay';
 import { useAppContext } from '@/context/AppContext';
-import TombstoneToast from '@/components/tombstone/TombstoneToast';
 import { useTombstone } from './useTombstone';
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import { DP1Defaults, DP1Item } from '@/models/dp1.model';
 import { NO_DURATION_VALUE } from '@/constants';
 import { canvasService } from '@/services/CanvasService';
+import { allowsContent, parseContentContext } from '@/services/contentPolicy';
+import { permitsCurrentPreview } from '@/services/contentRendering';
+import { useArtworkRefreshBridge } from './useArtworkRefreshBridge';
+import { isSourceReplacement } from './sourceReplacement';
+import { usePlayableList } from './usePlayableList';
+import { useContentPolicy } from '@/services/custom-hooks/useContentPolicy';
+import { policyInForce } from '@/services/ContentPolicyStore';
 import {
   isNoDurationItem,
   itemIdentityFor,
@@ -24,27 +31,48 @@ import {
 } from '@/utils/playlist';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
+import { useCurrentItemIdentity, useShowingKey } from './useCurrentItemIdentity';
+import { useMergeLandedRearm } from './useMergeLandedRearm';
 import { usePlaylistItemDisplayPreference } from './usePlaylistItemDisplayPreference';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useRecentlyPlayedCommit } from './useRecentlyPlayedCommit';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 // 'sourceEnd' means the media just ended (display.loop=false) and needs a
 // reload to restart playback; 'timer' lets the natively-looping element
 // keep playing on the same-slot replay paths.
 type AdvanceCause = 'timer' | 'sourceEnd';
 
+/** Effective duration and wall-clock deadline of the armed slot timer. */
+interface ArmedInterval { duration: number; deadline: number }
+
 // eslint-disable-next-line max-lines-per-function
 export default function PlaylistClient() {
   const castInfo = useAppContext().context.castInfo;
   const deviceDisplaySettings = useAppContext().context.displaySettings;
+  const contentPolicy = useContentPolicy();
+  const contentContext = parseContentContext(castInfo?.contentContext);
 
   const [playlist, setPlaylist] = useState<DP1Item[]>([]);
   const [playlistDefaultsSettings, setPlaylistDefaultsSettings] =
     useState<DP1Defaults | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [castPreviewURL, setCastPreviewURL] = useState<string | null>(null);
-  const artworkPerformReloadRef = useRef<(() => void) | null>(null);
+  // Preview URL and the item that owns it are published together by the
+  // bridge, so the final media gate never sees one without the other.
+  const { artworkPerformReloadRef, triggerArtworkRefresh, registerArtworkReload,
+    getShowing, publishPreview, notePreviewCommitted, retireCommittedIfGone,
+    clearPreview } =
+    useArtworkRefreshBridge(setCastPreviewURL, identity => {
+      handleItemCommittedRef.current(identity);
+    });
+  const handleItemCommittedRef = useRef<(identity: string) => void>(() => undefined);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
+  // The interval the active slot's timer is armed with — effective duration
+  // and wall-clock deadline — so a re-arm that resolves to the same pacing
+  // keeps the real deadline (not one measured from slot entry, which a slot
+  // held pre-merge only started counting after its first arm).
+  const armedRef = useRef<ArmedInterval | null>(null);
   // Wall-clock moment the active slot last (re)started, so a merge-landed
   // re-arm can preserve elapsed time for baseline durations instead of
   // granting a vetoed item a fresh full interval.
@@ -69,10 +97,15 @@ export default function PlaylistClient() {
     reset: resetItemDisplayPreference,
   } = usePlaylistItemDisplayPreference({
     playlistDefaults: playlistDefaultsSettings,
+    deviceDisplaySettings,
     currentItemRef,
     currentIndexRef,
     playlistRef,
   });
+
+  const clearPlayableList = usePlayableList({ currentItemRef, setPlaylist,
+    setCurrentIndex, setPlaylistDefaultsSettings, resetItemDisplayPreference,
+    clearPreview });
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -100,50 +133,7 @@ export default function PlaylistClient() {
         artworkPerformReloadRef.current?.();
       }
     },
-    []
-  );
-
-  const triggerArtworkRefresh = useCallback((): boolean => {
-    const cast = canvasService.getCastInfo();
-    const items = cast?.playlist?.items;
-    const rawIndex = cast?.index;
-    if (!items?.length || rawIndex === undefined) {
-      return false;
-    }
-
-    const normalizedIndex = normalizePlaylistIndex(rawIndex, items.length);
-    const currentSource = items[normalizedIndex]?.source;
-    if (!currentSource) {
-      return false;
-    }
-    const performReload = artworkPerformReloadRef.current;
-    if (!performReload) {
-      return false;
-    }
-    setCastPreviewURL(currentSource);
-    performReload();
-    return true;
-  }, []);
-
-  const registerArtworkReload = useCallback(
-    (reload: (() => void) | null) => {
-      artworkPerformReloadRef.current = reload;
-      if (reload) {
-        // Second flush trigger (§4.2 of the cross-repo recovery design):
-        // covers a registration-ordering gap the `onRefreshArtwork` setter's
-        // own flush cannot close on its own. If a refusal parks while
-        // `onRefreshArtwork` gets set (below) but ArtworkPlayer has not
-        // mounted yet — `currentItemDisplayPreference` still resolving, so
-        // this ref was still null — that flush runs against a still-empty
-        // reload ref and leaves the refusal parked. Nothing else re-arms it
-        // once ArtworkPlayer finally mounts. Re-assigning the setter here
-        // (its own body always attempts a flush) re-triggers it now that the
-        // reload function actually exists. Teardown (reload === null) must
-        // NOT flush — there is nothing to refresh into a torn-down handler.
-        canvasService.onRefreshArtwork = triggerArtworkRefresh;
-      }
-    },
-    [triggerArtworkRefresh]
+    [artworkPerformReloadRef]
   );
 
   useLayoutEffect(() => {
@@ -155,13 +145,6 @@ export default function PlaylistClient() {
     const normalizedIndex = normalizePlaylistIndex(currentIndex, playlist.length);
     currentItemRef.current = playlist[normalizedIndex];
   }, [currentIndex, playlist]);
-
-  useEffect(() => {
-    canvasService.onRefreshArtwork = triggerArtworkRefresh;
-    return () => {
-      canvasService.onRefreshArtwork = null;
-    };
-  }, [triggerArtworkRefresh]);
 
   // Same-tick dedupe of index transitions lives with the cast state owner.
   const publishCurrentIndex = useCallback((index: number) => {
@@ -228,7 +211,10 @@ export default function PlaylistClient() {
   // again after the slot has already moved.
   const advanceFromSlot = useCallback(
     function advanceFromSlot(
-      fromIndex: number, snapshot: DP1Item[], cause: AdvanceCause = 'timer'
+      fromIndex: number,
+      snapshot: DP1Item[],
+      cause: AdvanceCause = 'timer',
+      retryOnFinalHold = false
     ): void {
       if (!snapshot.length) {
         return;
@@ -273,11 +259,33 @@ export default function PlaylistClient() {
       });
       if (nextIndex === null) {
         // Repeat-off holds the final artwork on screen until another command
-        // changes playback. Do not wrap or reschedule from this slot.
+        // changes playback. Do not wrap or reschedule from this slot — unless
+        // the caller is reporting a FAILURE (retryOnFinalHold), not a natural
+        // end: there is nothing to skip to here, so retry in place instead of
+        // parking on the error modal forever (run-reviewer pass 4, F2). The
+        // applyQueuedPlaylistIfExists() call above already ran before this
+        // branch, so a queued refresh/shuffle still takes over exactly as it
+        // would for any other advance — this only changes what happens when
+        // none is pending.
         if (
           loopModeRef.current === LoopMode.none &&
           fromIndex === snapshot.length - 1
         ) {
+          if (retryOnFinalHold) {
+            // Same end state as the natural-end branch below (nothing to
+            // skip to, held on this slot) — flag it the same way, or a
+            // later setLoop-away-from-none / queued shuffle-refresh, both
+            // gated on this flag (shouldResumeSlotTimerAfterSetLoop /
+            // shouldApplyQueuedPlaylistOnShuffleOrRefresh in
+            // src/utils/playlist.ts), is silently dropped forever for this
+            // one item once the retry eventually succeeds — nothing else
+            // ever calls advanceFromSlot again for a no-duration item with
+            // no further timer armed (run-reviewer bot-round-3 pass-5 F1,
+            // Major).
+            holdAfterFinalSlotRef.current = true;
+            replayCurrentSlot(fromIndex, snapshot, cause);
+            return;
+          }
           holdAfterFinalSlotRef.current = true;
         }
         return;
@@ -319,6 +327,7 @@ export default function PlaylistClient() {
       }
       if (!preserveElapsed) {
         slotStartedAtRef.current = Date.now();
+        armedRef.current = null;
       }
 
       const normalizedIndex = normalizePlaylistIndex(index, snapshot.length);
@@ -327,7 +336,7 @@ export default function PlaylistClient() {
       // Device-level default duration (viewer override): applied only once
       // this slot's fully merged display preference — including the async
       // ref-manifest layer — is known, so a manifest-carried
-      // userOverrides=false (artist veto) or loop=false (natural length) can
+      // userOverrides.duration=false (artist veto) or loop=false (natural length) can
       // never be beaten to the timer by a slow fetch. Until the merge lands
       // the item's own duration stands; the re-arm effect below reschedules
       // with the override the moment the merge resolves. The cached read is
@@ -358,19 +367,31 @@ export default function PlaylistClient() {
         return;
       }
 
-      // A merge-landed re-arm that resolves to the item's own duration (the
-      // override was withheld — artist veto or no default) must not grant a
-      // fresh interval: the artwork has been on screen since slot entry, so
-      // only the remaining time is scheduled. Override re-arms deliberately
-      // restart from zero (owner just changed the pacing).
+      // A merge-landed re-arm must not grant a fresh interval when it does
+      // not change the pacing. Two cases: the re-arm resolves to the
+      // duration already armed (a re-merge that changed only display
+      // fields, e.g. the device scaling record landing late) — keep the
+      // armed deadline itself; or it resolves to the item's own duration
+      // (the override was withheld — artist veto or no default) — the
+      // artwork has been on screen since slot entry, so schedule only the
+      // remaining time. A re-arm that changes the effective duration
+      // restarts from zero (the override just arrived, or the owner changed
+      // the pacing).
+      const remainingMs =
+        preserveElapsed && armedRef.current?.duration === duration
+          ? Math.max(armedRef.current.deadline - Date.now(), 0)
+          : null;
       const keepElapsed =
         preserveElapsed &&
         duration === (currentItem.duration ?? NO_DURATION_VALUE);
-      const delayMs = Math.max(
-        duration * 1000 -
-          (keepElapsed ? Date.now() - slotStartedAtRef.current : 0),
-        0
-      );
+      const delayMs =
+        remainingMs ??
+        Math.max(
+          duration * 1000 -
+            (keepElapsed ? Date.now() - slotStartedAtRef.current : 0),
+          0
+        );
+      armedRef.current = { duration, deadline: Date.now() + delayMs };
 
       timerRef.current = setTimeout(() => {
         // The timeout is firing now, so the previous handle is no longer active.
@@ -414,6 +435,49 @@ export default function PlaylistClient() {
     advanceFromSlot(normalizedIndex, snapshot, 'sourceEnd');
   }, [advanceFromSlot]);
 
+  // Triggered by ArtworkPlayer once a work has failed to render
+  // ARTWORK_FAILURE_RETRY_LIMIT times in a row (feral-file/ff-player#307): a
+  // stuck/broken work must not hold the playlist (or the device) forever.
+  // Reuses advanceFromSlot's 'sourceEnd' cause — the same identity-gated
+  // advance onSourceEnded drives — so a normal playlist/shuffle loop moves
+  // to the next item exactly as it would for natural end-of-stream. Under
+  // LoopMode.one this instead reloads the same (still looped-on-purpose)
+  // item via replayCurrentSlot, which is deliberate: the curator/user asked
+  // to loop this one work, so giving up on it entirely would override that
+  // choice rather than honor it; the retry still cannot hang the device
+  // (see the HEAD-probe timeout in src/utils/helper.ts).
+  //
+  // LoopMode.none at the final (or only) slot is the one other case
+  // advanceFromSlot cannot skip from: resolveSequentialPlaylistAdvance
+  // returns null there, and the plain hold-the-last-frame branch it takes
+  // is meant for a *successful* natural end, not a failure ArtworkPlayer
+  // already gave up retrying on. Reusing it for exhaustion would park the
+  // device on the error modal forever with no further attempt (run-reviewer
+  // pass 4, F2) — so advanceFromSlot's own null-nextIndex branch retries in
+  // place instead when told this call is a failure (retryOnFinalHold=true),
+  // mirroring LoopMode.one's "keep trying" treatment for the one case where
+  // "skipped" has no target. This goes through advanceFromSlot rather than
+  // calling replayCurrentSlot directly (an earlier version of this fix did,
+  // and run-reviewer pass 5 F1/F2 independently caught that it skipped
+  // applyQueuedPlaylistIfExists — a shuffle/refresh command sent while the
+  // final item is stuck retrying would silently never apply): going through
+  // advanceFromSlot keeps that check exactly as every other advance gets it.
+  // Still bounded/paced, not a tight loop: ArtworkPlayer resets its own
+  // retry budget before calling out, so each cycle gets the same 3-attempt,
+  // 3s-apart budget as every other failure.
+  const handleArtworkExhausted = useCallback((failedIdentity: string) => {
+    const idx = currentIndexRef.current;
+    const snapshot = playlistRef.current;
+    if (idx < 0 || !snapshot.length) {
+      return;
+    }
+    const normalizedIndex = normalizePlaylistIndex(idx, snapshot.length);
+    if (itemIdentityFor(snapshot, normalizedIndex) !== failedIdentity) {
+      return;
+    }
+    advanceFromSlot(normalizedIndex, snapshot, 'sourceEnd', true);
+  }, [advanceFromSlot]);
+
   useEffect(() => {
     if (currentIndex < 0 || playlist.length === 0) {
       holdAfterFinalSlotRef.current = false;
@@ -424,8 +488,21 @@ export default function PlaylistClient() {
     const normalizedIndex = normalizePlaylistIndex(currentIndex, playlist.length);
     const currentItem = playlist[normalizedIndex];
 
+    // The final media gate is not enough: do not fetch a blocked work's ref
+    // manifest while its slot is hidden or while policy hydration is pending.
+    const inForce = policyInForce(contentPolicy);
+    if (!inForce || !allowsContent(currentItem, inForce, contentContext)) {
+      clearTimer();
+      clearPreview();
+      return;
+    }
+    // A policy change can retire the work on screen while this selected one
+    // stays allowed; the gate would otherwise keep judging the retired work
+    // and never let its replacement mount.
+    retireCommittedIfGone(onScreen => allowsContent(
+      onScreen, inForce, contentContext));
     void handleItemDisplayPreference(currentItem, normalizedIndex);
-    setCastPreviewURL(currentItem.source);
+    publishPreview(currentItem);
     scheduleCurrentItemTimer(normalizedIndex, playlist);
 
     return () => {
@@ -436,44 +513,29 @@ export default function PlaylistClient() {
     playlist,
     playlistDefaultsSettings,
     clearTimer,
+    clearPreview,
+    publishPreview,
+    retireCommittedIfGone,
     handleItemDisplayPreference,
     scheduleCurrentItemTimer,
+    contentContext,
+    contentPolicy,
   ]);
 
-  // Once the async display-preference merge (incl. the ref-manifest layer)
-  // lands for the current slot, re-arm its timer: the initial arm ran without
-  // the device override (merge unknown), and only the merged preference may
-  // grant it. Restart-from-zero on re-arm is deliberate — manifest loads
-  // settle well before any human-scale duration elapses.
-  useEffect(() => {
-    if (!currentItemDisplayPreference) {
-      return;
-    }
-    if (currentIndexRef.current < 0 || playlistRef.current.length === 0) {
-      return;
-    }
-    // Without a device default the merge cannot change the timer (only the
-    // item duration governs), so skip the re-arm and let the entry-armed
-    // baseline keep its elapsed time — ref items must not restart at 10s
-    // just because their manifest landed.
-    if (DeviceManager.getCachedDefaultItemDurationSeconds() === null) {
-      return;
-    }
-    scheduleCurrentItemTimer(currentIndexRef.current, playlistRef.current, true);
-  }, [currentItemDisplayPreference, scheduleCurrentItemTimer]);
+  useMergeLandedRearm({
+    preference: currentItemDisplayPreference,
+    currentIndexRef,
+    playlistRef,
+    scheduleCurrentItemTimer,
+  });
 
   // eslint-disable-next-line max-lines-per-function
   useEffect(() => {
     if (!castInfo) {
       clearTimer();
       holdAfterFinalSlotRef.current = false;
-      currentItemRef.current = undefined;
       loopModeRef.current = LoopMode.playlist;
-      setPlaylist([]);
-      setCurrentIndex(-1);
-      setPlaylistDefaultsSettings(null);
-      resetItemDisplayPreference();
-      setCastPreviewURL(null);
+      clearPlayableList();
       return;
     }
 
@@ -496,11 +558,7 @@ export default function PlaylistClient() {
           );
           setCurrentIndex(startIndex);
         } else {
-          setPlaylist([]);
-          setCurrentIndex(-1);
-          setPlaylistDefaultsSettings(null);
-          resetItemDisplayPreference();
-          setCastPreviewURL(null);
+          clearPlayableList();
         }
         break;
       }
@@ -508,6 +566,27 @@ export default function PlaylistClient() {
       case CastCommand.refreshPlaylist:
       case CastCommand.setShuffle: {
         if (castInfo.playlist?.items?.length) {
+          // See isSourceReplacement: a same-id source swap must hand over now.
+          const incoming = castInfo.playlist.items;
+          if (isSourceReplacement(playlistRef.current[normalizePlaylistIndex(
+            currentIndexRef.current, playlistRef.current.length)], incoming)) {
+            setPlaylistDefaultsSettings(castInfo.playlist.defaults ?? null);
+            setPlaylist(incoming.map(dp1Item => ({
+              ...dp1Item,
+              duration: dp1Item.duration ?? NO_DURATION_VALUE,
+            })));
+            // Canvas remaps the selection by id, so a refresh that also
+            // reorders moves it. Installing the list without the resolved
+            // index would render one work while the controller reports another.
+            // The ref is mirrored synchronously, the way every other index
+            // handoff in this file does, so a same-tick reader is not stale.
+            const resolvedIndex = normalizePlaylistIndex(
+              castInfo.index ?? 0, incoming.length);
+            currentIndexRef.current = resolvedIndex;
+            setCurrentIndex(resolvedIndex);
+            canvasService.clearQueuedPlaylistPending();
+            break;
+          }
           if (
             shouldApplyQueuedPlaylistOnShuffleOrRefresh({
               currentIndex: currentIndexRef.current,
@@ -524,12 +603,7 @@ export default function PlaylistClient() {
 
         holdAfterFinalSlotRef.current = false;
         clearTimer();
-        currentItemRef.current = undefined;
-        setPlaylist([]);
-        setCurrentIndex(-1);
-        setPlaylistDefaultsSettings(null);
-        resetItemDisplayPreference();
-        setCastPreviewURL(null);
+        clearPlayableList();
         break;
       }
 
@@ -608,8 +682,11 @@ export default function PlaylistClient() {
     }
   }, [
     applyQueuedPlaylistIfExists,
+    artworkPerformReloadRef,
     castInfo,
     clearMergedDisplayForNewCast,
+    clearPlayableList,
+    clearPreview,
     clearTimer,
     replayCurrentSlot,
     resetItemDisplayPreference,
@@ -617,52 +694,52 @@ export default function PlaylistClient() {
     triggerArtworkRefresh,
   ]);
 
-  // Identity of the slot the player is currently rendering. Recomputed when
-  // the playlist or current index changes; passed to ArtworkPlayer so the
-  // end-of-stream gate can reject events from a previous adjacent item that
-  // happens to share the same source URL.
-  const currentItemIdentity = useMemo(() => {
-    if (currentIndex < 0 || playlist.length === 0) {
-      return '';
-    }
-    return itemIdentityFor(
-      playlist,
-      normalizePlaylistIndex(currentIndex, playlist.length)
-    );
-  }, [currentIndex, playlist]);
+  const currentItemIdentity = useCurrentItemIdentity(playlist, currentIndex);
+  const currentShowingKey = useShowingKey(playlist, currentIndex);
+  const permitted = castInfo !== null && permitsCurrentPreview(
+    canvasService.getCastInfo(), getShowing(), castPreviewURL, contentPolicy);
 
   // Tombstone state (feral-file#3452): committed-item tracking, label
-  // resolution, mode coercion, and the FF1-side toast — see useTombstone.
+  // resolution and mode coercion — see useTombstone.
   const {
     handleItemCommitted,
     mode: tombstoneMode,
     itemKey: tombstoneItemKey,
     title: tombstoneTitle,
     artistName: tombstoneArtist,
-    toastText: tombstoneToast,
   } = useTombstone(playlist, deviceDisplaySettings);
+  handleItemCommittedRef.current = handleItemCommitted;
+
+  const handleArtworkCommitted = useRecentlyPlayedCommit(
+    playlist,
+    playlistDefaultsSettings,
+    contentContext
+  );
 
   return (
     <>
       <div style={{ width: '100%', height: '100%' }}>
-        {currentItemDisplayPreference && (
+        {currentItemDisplayPreference && permitted && (
           <ArtworkPlayer
+            key={contentPolicy.retireEpoch}
             previewURL={castPreviewURL ?? ''}
             displayPreferences={currentItemDisplayPreference}
             itemIdentity={currentItemIdentity}
+            sessionKey={currentShowingKey}
             onRegisterArtworkReload={registerArtworkReload}
             onSourceEnded={handleSourceEnded}
-            onItemCommitted={handleItemCommitted}
+            onArtworkExhausted={handleArtworkExhausted}
+            onItemCommitted={notePreviewCommitted}
+            onItemPlayed={handleArtworkCommitted}
           />
         )}
-        <TombstoneOverlay
+        {permitted && <TombstoneOverlay
           mode={tombstoneMode}
           itemKey={tombstoneItemKey}
           title={tombstoneTitle}
           artistName={tombstoneArtist}
-          curatorName={castInfo?.playlist?.curator}
-        />
-        <TombstoneToast text={tombstoneToast} />
+          curatorName={castInfo.playlist?.curator}
+        />}
       </div>
     </>
   );

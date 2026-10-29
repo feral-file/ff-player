@@ -15,12 +15,6 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
-}));
-
 // Trusted origin (KNOWN_ORIGINS): the loader assigns el.src directly with no
 // blob fetch, so the only load/error/loadeddata events are the ones these
 // tests dispatch — matches ArtworkPlayer.sourceEnd.test.tsx's setup.

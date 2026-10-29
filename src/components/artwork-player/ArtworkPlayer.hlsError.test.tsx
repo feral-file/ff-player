@@ -104,15 +104,11 @@ vi.mock('hls.js', () => {
   };
 });
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
-}));
-
 function renderArtworkPlayer(
   itemIdentity = 'hls-error-item',
-  onItemCommitted?: (identity: string) => void
+  onItemCommitted?: (identity: string) => void,
+  onItemPlayed?: (identity: string) => void,
+  onArtworkExhausted?: (identity: string) => void
 ) {
   const value = {
     context: {
@@ -132,6 +128,8 @@ function renderArtworkPlayer(
         displayPreferences={defaultDP1DisplayPreference}
         itemIdentity={itemIdentity}
         onItemCommitted={onItemCommitted}
+        onItemPlayed={onItemPlayed}
+        onArtworkExhausted={onArtworkExhausted}
       />
     </AppContext.Provider>
   );
@@ -195,6 +193,65 @@ describe('ArtworkPlayer — non-fatal HLS errors', () => {
       ).toBeNull();
     }
   );
+});
+
+describe('ArtworkPlayer — generic load watchdog exemption for streaming', () => {
+  let playSpy: ReturnType<typeof vi.spyOn>;
+  let pauseSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    hlsTest.instances.length = 0;
+    hlsTest.errorHandlers.length = 0;
+    playSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'play')
+      .mockImplementation(() => Promise.resolve());
+    pauseSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'pause')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    playSpy.mockRestore();
+    pauseSpy.mockRestore();
+    hlsTest.instances.length = 0;
+    hlsTest.errorHandlers.length = 0;
+    canvasService.setCastInfo(null, false);
+    canvasService.setRenderStatus(undefined);
+    cleanup();
+  });
+
+  /**
+   * Regression for run-reviewer pass 4, F1: the generic ARTWORK_LOAD_WATCHDOG_MS
+   * (15s) stuck-load watchdog armed for every slot, including streaming video
+   * — whose own load mechanism (setupStreamingVideoForSlot + hls.js) is
+   * neither started nor finished by anything the watchdog can see. A live
+   * stream merely slow to buffer (congested network, cold CDN edge) would be
+   * falsely treated as stuck and retried/skipped out from under hls.js's own
+   * non-fatal-tolerant recovery. Here mediaAttached never fires and no error
+   * ever arrives — the watchdog must stay silent regardless.
+   */
+  it('does not fail a streaming slot still waiting to attach after the generic load watchdog window', async () => {
+    render(renderArtworkPlayer());
+
+    await waitFor(() => {
+      expect(hlsTest.instances.length).toBeGreaterThan(0);
+    });
+
+    vi.useFakeTimers();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(16000);
+    });
+
+    expect(canvasService.getStatus().renderStatus).not.toBe(
+      RenderStatus.failed
+    );
+    expect(
+      screen.queryByText(
+        'The artwork cannot be displayed correctly on this device.'
+      )
+    ).toBeNull();
+  });
 });
 
 describe('ArtworkPlayer — HLS error handling', () => {
@@ -308,7 +365,8 @@ describe('ArtworkPlayer — current-slot fatal HLS failures', () => {
     'publishes failed for a current-slot fatal HLS %s',
     async (type, details) => {
       const onItemCommitted = vi.fn();
-      render(renderArtworkPlayer('hls-fatal-item', onItemCommitted));
+      const onItemPlayed = vi.fn();
+      render(renderArtworkPlayer('hls-fatal-item', onItemCommitted, onItemPlayed));
 
       await waitFor(() => {
         expect(hlsTest.errorHandlers.length).toBeGreaterThan(0);
@@ -339,8 +397,78 @@ describe('ArtworkPlayer — current-slot fatal HLS failures', () => {
       await waitFor(() => {
         expect(onItemCommitted).toHaveBeenCalledWith('hls-fatal-item');
       });
+      expect(onItemPlayed).not.toHaveBeenCalled();
     }
   );
+});
+
+describe('ArtworkPlayer — fatal HLS errors feed the retry-then-skip budget', () => {
+  let playSpy: ReturnType<typeof vi.spyOn>;
+  let pauseSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    clearHlsTestState();
+    playSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'play')
+      .mockImplementation(() => Promise.resolve());
+    pauseSpy = vi
+      .spyOn(HTMLVideoElement.prototype, 'pause')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    playSpy.mockRestore();
+    pauseSpy.mockRestore();
+    clearHlsTestState();
+    canvasService.setCastInfo(null, false);
+    canvasService.setRenderStatus(undefined);
+    cleanup();
+  });
+
+  /**
+   * Regression for run-reviewer bot-round-2 F1: a fatal hls.js error reaches
+   * `handleArtworkRenderFailure` via the pre-existing `failSlotAndTeardownHls`
+   * teardown path, which — since this branch — also calls
+   * `scheduleArtworkFailureRetryOrSkip()`. Fatal HLS errors therefore now get
+   * the same bounded retry (remount, recreating the Hls instance) instead of
+   * the pre-existing behavior of publishing `failed` and parking on the
+   * modal forever. One retry cycle is enough to prove the integration — the
+   * full 3-attempt counting and exhaustion behavior itself is already
+   * covered end to end by ArtworkPlayer.failureRetrySkip.test.tsx, which this
+   * must feed the exact same way.
+   */
+  it('schedules a retry (new Hls instance) after a fatal error, via the same budget other failures use', async () => {
+    const onArtworkExhausted = vi.fn();
+    render(
+      renderArtworkPlayer(
+        'hls-fatal-retry-item',
+        undefined,
+        undefined,
+        onArtworkExhausted
+      )
+    );
+
+    await waitFor(() => {
+      expect(hlsTest.errorHandlers.length).toBeGreaterThan(0);
+    });
+
+    vi.useFakeTimers();
+    act(() => {
+      hlsTest.errorHandlers[0]('error', { fatal: true, type: 'networkError' });
+    });
+    expect(hlsTest.instances[0].destroy).toHaveBeenCalledTimes(1);
+    expect(onArtworkExhausted).not.toHaveBeenCalled();
+
+    // A retry fires after ARTWORK_FAILURE_RETRY_DELAY_MS (3s) — only
+    // reachable if the fatal error called scheduleArtworkFailureRetryOrSkip,
+    // the same function every other render-failure path calls.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(hlsTest.instances.length).toBe(2);
+    expect(onArtworkExhausted).not.toHaveBeenCalled();
+  });
 });
 
 /** Clears shared HLS mock state between describes so length assertions stay stable. */

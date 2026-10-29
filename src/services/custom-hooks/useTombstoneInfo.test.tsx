@@ -121,6 +121,103 @@ describe('useTombstoneInfo', () => {
   });
 });
 
+describe('useTombstoneInfo after a same-id manifest migration', () => {
+  it('uses an inline manifest when the item drops its ref', async () => {
+    loadRefManifestLabelMock.mockResolvedValue({
+      artistNames: 'Previous Artist',
+      title: 'Previous Work',
+    });
+    const { result, rerender } = renderHook(
+      ({ item }: { item: DP1Item }) => useTombstoneInfo(item),
+      { initialProps: { item: itemA } }
+    );
+    await waitFor(() => {
+      expect(result.current.title).toBe('Previous Work');
+    });
+
+    rerender({
+      item: {
+        ...itemA,
+        ref: undefined,
+        inlineManifest: {
+          refVersion: '1.1.0',
+          id: 'replacement-manifest',
+          created: '2026-01-01T00:00:00Z',
+          locale: 'en',
+          metadata: {
+            title: 'Replacement Work',
+            artists: [{ name: 'Replacement Artist' }],
+          },
+        },
+      },
+    });
+
+    expect(result.current.title).toBe('Replacement Work');
+    expect(result.current.artistName).toBe('Replacement Artist');
+  });
+
+  it('falls back to the playlist title when the item drops its ref', async () => {
+    loadRefManifestLabelMock.mockResolvedValue({
+      artistNames: 'Previous Artist',
+      title: 'Previous Work',
+    });
+    const { result, rerender } = renderHook(
+      ({ item }: { item: DP1Item }) => useTombstoneInfo(item),
+      { initialProps: { item: itemA } }
+    );
+    await waitFor(() => {
+      expect(result.current.title).toBe('Previous Work');
+    });
+
+    rerender({
+      item: {
+        ...itemA,
+        title: 'Current Playlist Title',
+        ref: undefined,
+      },
+    });
+
+    expect(result.current.title).toBe('Current Playlist Title');
+    expect(result.current.artistName).toBeUndefined();
+  });
+});
+
+describe('useTombstoneInfo after a same-ref manifest version change', () => {
+  it('does not show the previous label while the new version is pending', async () => {
+    loadRefManifestLabelMock.mockImplementation((item: DP1Item) => {
+      if (item.refHash === 'old-hash') {
+        return Promise.resolve({
+          artistNames: 'Previous Artist',
+          title: 'Previous Work',
+        });
+      }
+      return new Promise<RefManifestLabel>(() => undefined);
+    });
+    const oldVersion = {
+      ...itemA,
+      refHash: 'old-hash',
+    } as DP1Item;
+    const { result, rerender } = renderHook(
+      ({ item }: { item: DP1Item }) => useTombstoneInfo(item),
+      { initialProps: { item: oldVersion } }
+    );
+    await waitFor(() => {
+      expect(result.current.title).toBe('Previous Work');
+    });
+
+    rerender({
+      item: {
+        ...oldVersion,
+        title: 'Current Playlist Title',
+        refHash: 'new-hash',
+      },
+    });
+
+    expect(result.current.title).toBe('Current Playlist Title');
+    expect(result.current.artistName).toBeUndefined();
+  });
+});
+
 /**
  * A Ref Manifest can reach the item by two carriages. `inlineManifest`
  * (playlists extension §3.6) is already in hand, so it labels the item with no

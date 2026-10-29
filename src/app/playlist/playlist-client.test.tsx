@@ -19,6 +19,9 @@ import { act, render } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PlaylistClient from './playlist-client';
+import { prepareContentPolicy } from '@/services/contentPolicy.testkit';
+
+beforeEach(prepareContentPolicy);
 
 vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
   default: function MockArtworkPlayer(props: Record<string, unknown>) {
@@ -46,12 +49,6 @@ vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
     }, [props.onRegisterArtworkReload]);
     return null;
   },
-}));
-
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
-  captureMessage: vi.fn(),
-  addBreadcrumb: vi.fn(),
 }));
 
 function canvasInternals(): {

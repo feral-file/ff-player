@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render } from '@testing-library/react';
+import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ModelViewerScreen from './ModelViewerScreen';
 
@@ -102,7 +102,11 @@ describe('ModelViewerScreen cursor lock', () => {
     const viewer = document.querySelector('model-viewer') as HTMLElement | null;
     expect(viewer).toBeTruthy();
 
-    viewer?.dispatchEvent(new Event('error'));
+    // Commit the error state and effect cleanup before advancing the retry
+    // clock. Otherwise React can schedule another retry before it renders.
+    act(() => {
+      viewer?.dispatchEvent(new Event('error'));
+    });
 
     await vi.advanceTimersByTimeAsync(500);
 
