@@ -15,18 +15,23 @@ const playlist = (id: string, items: DP1Item[]): DP1Call => ({
   items,
 });
 
-describe('CanvasService updateSeriesPlayback', () => {
-  beforeEach(() => {
-    // getStatus reads window.location to derive sleep state; the node test
-    // environment has no window, so stub the minimal surface it touches.
-    vi.stubGlobal('window', { location: { pathname: '/playlist' } });
-  });
+/** GetStatus reads window.location for sleep state; stub it for node tests. */
+function stubWindowAndClearOverride() {
+  // getStatus reads window.location to derive sleep state; the node test
+  // environment has no window, so stub the minimal surface it touches.
+  vi.stubGlobal('window', { location: { pathname: '/playlist' } });
+}
 
-  afterEach(async () => {
-    vi.unstubAllGlobals();
-    canvasService.setCastInfo(null, false);
-    await DeviceManager.setSeriesPlayback(null);
-  });
+/** Clears the stub, the active cast, and the persisted override. */
+async function restoreAfterSeriesPlaybackTest() {
+  vi.unstubAllGlobals();
+  canvasService.setCastInfo(null, false);
+  await DeviceManager.setSeriesPlayback(null);
+}
+
+describe('CanvasService updateSeriesPlayback: persisting the override', () => {
+  beforeEach(stubWindowAndClearOverride);
+  afterEach(restoreAfterSeriesPlaybackTest);
 
   it('persists the override and reports it through getStatus', () => {
     const reply = canvasService.processMessage({
@@ -107,6 +112,11 @@ describe('CanvasService updateSeriesPlayback', () => {
       DP1SeriesPlayback.Random
     );
   });
+});
+
+describe('CanvasService updateSeriesPlayback: republishing castInfo', () => {
+  beforeEach(stubWindowAndClearOverride);
+  afterEach(restoreAfterSeriesPlaybackTest);
 
   it('republishes castInfo so the playlist route re-selects the slot', () => {
     canvasService.setCastInfo(

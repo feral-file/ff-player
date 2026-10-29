@@ -34,6 +34,17 @@ const PRELOAD_KEYS: string[] = [
  * are valid; anything else (missing, corrupted, non-positive) reads as `null`
  * so playback falls back to the playlist's own duration cascade.
  */
+function parseDurationSeconds(raw: string | null): number | null {
+  if (raw === null || raw === '') {
+    return null;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+}
+
 /**
  * A stored series-playback value, or null for "auto".
  *
@@ -48,17 +59,6 @@ function parseSeriesPlayback(raw: string | null): DP1SeriesPlayback | null {
   return (Object.values(DP1SeriesPlayback) as string[]).includes(raw)
     ? (raw as DP1SeriesPlayback)
     : null;
-}
-
-function parseDurationSeconds(raw: string | null): number | null {
-  if (raw === null || raw === '') {
-    return null;
-  }
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return null;
-  }
-  return parsed;
 }
 
 /**

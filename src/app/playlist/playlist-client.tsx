@@ -31,6 +31,7 @@ import {
 } from '@/utils/playlist';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
+import { narrowSeriesPlaylist } from '@/utils/seriesPlayback';
 import { useCurrentItemIdentity, useShowingKey } from './useCurrentItemIdentity';
 import { useMergeLandedRearm } from './useMergeLandedRearm';
 import { usePlaylistItemDisplayPreference } from './usePlaylistItemDisplayPreference';
@@ -147,8 +148,28 @@ export default function PlaylistClient() {
   }, [currentIndex, playlist]);
 
   // Same-tick dedupe of index transitions lives with the cast state owner.
+  //
+  // `index` is in LOCAL space: a position in `playlistRef.current`, which a
+  // series override can narrow to fewer slots than `castInfo.playlist.items`
+  // (run-reviewer F1, round 2). CanvasService's own castInfo.index is never
+  // narrowed — moveToArtwork, getStatus, and every other reader of it expect
+  // a RAW position into castInfo.playlist.items — so publishing the local
+  // index unchanged would, the moment a narrowed series group sits anywhere
+  // but the very start, desync the two and corrupt the next re-render's own
+  // `moveToArtwork`/`updateIndex` narrowing (which re-maps castInfo.index as
+  // raw). `rawIndexOf` resolves it by construction, not by id: two raw items
+  // can legitimately share an id (the same artwork twice in one playlist),
+  // which an id lookup cannot tell apart (run-reviewer F1, round 2's own
+  // fix attempt regressed exactly that case) but this never confuses.
   const publishCurrentIndex = useCallback((index: number) => {
-    canvasService.publishIndexUpdate(index);
+    const rawItems = canvasService.getCastInfo()?.playlist?.items;
+    if (!rawItems?.length) {
+      canvasService.publishIndexUpdate(index);
+      return;
+    }
+    const { rawIndexOf } = narrowSeriesPlaylist(
+      rawItems, DeviceManager.getCachedSeriesPlayback());
+    canvasService.publishIndexUpdate(rawIndexOf(index));
   }, []);
 
   const applyQueuedPlaylistIfExists = useCallback(
@@ -171,6 +192,13 @@ export default function PlaylistClient() {
 
       const hasDeferredRefresh = canvasService.hasDeferredRefreshPlaylist();
       const currentCastInfo = canvasService.getCastInfo();
+      // resolveQueuedPlaylistNextIndex works in RAW space: queuedPlaylist and
+      // previousItems both come straight from CanvasService, which never
+      // narrows (see the updateSeriesPlayback case above). consumeDeferredRefreshPlaylist
+      // below needs that raw value; the playable list itself is narrowed
+      // here — the one call site this file's own series-playback cascade had
+      // missed (run-reviewer F2, round 2) — with nextIndex carried across via
+      // mapIndex, the same pattern every other cast-command branch uses.
       const nextIndex = resolveQueuedPlaylistNextIndex({
         targetIndex,
         queuedPlaylist,
@@ -179,23 +207,31 @@ export default function PlaylistClient() {
         currentItemId: currentItemRef.current?.id,
         keepCurrent,
       });
+      const { items: narrowedQueued, mapIndex } = narrowSeriesPlaylist(
+        queuedPlaylist,
+        DeviceManager.getCachedSeriesPlayback()
+      );
+      const narrowedIndex = normalizePlaylistIndex(
+        mapIndex(nextIndex), narrowedQueued.length);
 
-      setPlaylist(queuedPlaylist);
-      setCurrentIndex(nextIndex);
+      setPlaylist(narrowedQueued);
+      setCurrentIndex(narrowedIndex);
       // Sync refs immediately so a same-tick concurrent caller sees the
       // new state instead of re-entering against the old snapshot.
-      playlistRef.current = queuedPlaylist;
-      playlistLengthRef.current = queuedPlaylist.length;
-      currentIndexRef.current = nextIndex;
+      playlistRef.current = narrowedQueued;
+      playlistLengthRef.current = narrowedQueued.length;
+      currentIndexRef.current = narrowedIndex;
 
       // consumeDeferredRefreshPlaylist atomically promotes the deferred refresh
       // onto castInfo so getStatus reflects the new list from the first frame.
       // Queued refresh/shuffle only changes playlist items and index; defaults
       // stay owned by the active playlist contract and are intentionally left as-is.
+      // This takes the RAW index: castInfo.playlist/castInfo.index are never
+      // narrowed (see publishCurrentIndex above for why that has to hold).
       const consumed = canvasService.consumeDeferredRefreshPlaylist(nextIndex);
       if (!consumed) {
         canvasService.clearQueuedPlaylistPending();
-        publishCurrentIndex(nextIndex);
+        publishCurrentIndex(narrowedIndex);
       }
 
       return { applied: true };
@@ -546,17 +582,27 @@ export default function PlaylistClient() {
         loopModeRef.current = coerceLoopMode(castInfo.loopMode);
         if (castInfo.playlist?.items?.length) {
           setPlaylistDefaultsSettings(castInfo.playlist.defaults ?? null);
+          const rawItems = castInfo.playlist.items;
+          const rawIndex = normalizePlaylistIndex(
+            castInfo.index ?? 0,
+            rawItems.length
+          );
+          // Narrows any seriesRegistry item/expanded series group per the
+          // item's own intent and the device override (resolveSeriesPlayback)
+          // before this becomes the playable list — see narrowSeriesPlaylist.
+          const { items: narrowedItems, mapIndex } = narrowSeriesPlaylist(
+            rawItems,
+            DeviceManager.getCachedSeriesPlayback()
+          );
           setPlaylist(
-            castInfo.playlist.items.map(item => ({
+            narrowedItems.map(item => ({
               ...item,
               duration: item.duration ?? NO_DURATION_VALUE,
             }))
           );
-          const startIndex = normalizePlaylistIndex(
-            castInfo.index ?? 0,
-            castInfo.playlist.items.length
+          setCurrentIndex(
+            normalizePlaylistIndex(mapIndex(rawIndex), narrowedItems.length)
           );
-          setCurrentIndex(startIndex);
         } else {
           clearPlayableList();
         }
@@ -567,7 +613,11 @@ export default function PlaylistClient() {
       case CastCommand.setShuffle: {
         if (castInfo.playlist?.items?.length) {
           // See isSourceReplacement: a same-id source swap must hand over now.
-          const incoming = castInfo.playlist.items;
+          const rawIncoming = castInfo.playlist.items;
+          const { items: incoming, mapIndex } = narrowSeriesPlaylist(
+            rawIncoming,
+            DeviceManager.getCachedSeriesPlayback()
+          );
           if (isSourceReplacement(playlistRef.current[normalizePlaylistIndex(
             currentIndexRef.current, playlistRef.current.length)], incoming)) {
             setPlaylistDefaultsSettings(castInfo.playlist.defaults ?? null);
@@ -580,8 +630,10 @@ export default function PlaylistClient() {
             // index would render one work while the controller reports another.
             // The ref is mirrored synchronously, the way every other index
             // handoff in this file does, so a same-tick reader is not stale.
+            const rawResolvedIndex = normalizePlaylistIndex(
+              castInfo.index ?? 0, rawIncoming.length);
             const resolvedIndex = normalizePlaylistIndex(
-              castInfo.index ?? 0, incoming.length);
+              mapIndex(rawResolvedIndex), incoming.length);
             currentIndexRef.current = resolvedIndex;
             setCurrentIndex(resolvedIndex);
             canvasService.clearQueuedPlaylistPending();
@@ -627,11 +679,17 @@ export default function PlaylistClient() {
 
         holdAfterFinalSlotRef.current = false;
         if (castInfo.playlist?.items?.length) {
+          const rawItems = castInfo.playlist.items;
+          const { items: narrowedItems, mapIndex } = narrowSeriesPlaylist(
+            rawItems,
+            DeviceManager.getCachedSeriesPlayback()
+          );
+          const rawIndex = normalizePlaylistIndex(
+            castInfo.index,
+            rawItems.length
+          );
           setCurrentIndex(
-            normalizePlaylistIndex(
-              castInfo.index,
-              castInfo.playlist.items.length
-            )
+            normalizePlaylistIndex(mapIndex(rawIndex), narrowedItems.length)
           );
         } else {
           setCurrentIndex(castInfo.index);
@@ -651,6 +709,40 @@ export default function PlaylistClient() {
           currentIndexRef.current,
           playlistRef.current
         );
+        break;
+      }
+
+      case CastCommand.updateSeriesPlayback: {
+        // The device series-playback override changed. Unlike duration, the
+        // override can change WHICH items play (First collapses an expanded
+        // series to one edition; Full restores every edition it narrowed
+        // away), so the playable list itself is rebuilt here — always from
+        // castInfo.playlist.items, which CanvasService never narrows or
+        // mutates, so toggling the override back and forth stays reversible
+        // without a re-cast (see narrowSeriesPlaylist). The slot carrying the
+        // item currently on screen is tracked by id, since a First<->Full
+        // flip changes the array's length and positions.
+        if (castInfo.playlist?.items?.length) {
+          holdAfterFinalSlotRef.current = false;
+          const rawItems = castInfo.playlist.items;
+          const { items: narrowedItems, mapIndex } = narrowSeriesPlaylist(
+            rawItems,
+            DeviceManager.getCachedSeriesPlayback()
+          );
+          const currentId = currentItemRef.current?.id;
+          const rawCurrentIndex = currentId === undefined ? 0 : Math.max(
+            0, rawItems.findIndex(raw => raw.id === currentId));
+          const nextIndex = normalizePlaylistIndex(
+            mapIndex(rawCurrentIndex), narrowedItems.length);
+          setPlaylist(
+            narrowedItems.map(item => ({
+              ...item,
+              duration: item.duration ?? NO_DURATION_VALUE,
+            }))
+          );
+          currentIndexRef.current = nextIndex;
+          setCurrentIndex(nextIndex);
+        }
         break;
       }
 
