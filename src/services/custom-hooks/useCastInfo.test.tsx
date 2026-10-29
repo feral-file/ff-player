@@ -146,6 +146,31 @@ describe('useCastInfo persistence rewrite', () => {
     expect(persisted?.index).toBe(1);
   });
 
+  it('persists updateSeriesPlayback as displayPlaylist, keeping the saved selection', async () => {
+    // The series override is a state-only command: AppWrapper navigates to
+    // /playlist for displayPlaylist alone, so persisting it raw restores the
+    // cast and then sits on the entry route, and a route replay would
+    // re-select the first artwork instead of the saved index
+    // (feralfile-bot F5).
+    renderHook(() => useCastInfo());
+
+    act(() => {
+      canvasService.setCastInfo(castWith(CastCommand.updateSeriesPlayback));
+    });
+
+    await waitFor(() => {
+      expect(setDeviceInfo).toHaveBeenCalled();
+    });
+
+    const persisted = setDeviceInfo.mock.calls.at(-1)?.[0];
+    expect(persisted?.castCommand).toBe(CastCommand.displayPlaylist);
+    expect(persisted?.playlist?.items?.map(entry => entry.id)).toEqual([
+      'a',
+      'b',
+    ]);
+    expect(persisted?.index).toBe(1);
+  });
+
   it('persists non-control commands unchanged', async () => {
     renderHook(() => useCastInfo());
 

@@ -9,8 +9,9 @@ import {
   resolveQueuedPlaylistNextIndex,
   resolveSequentialPlaylistAdvance,
   resolveSlotDurationSeconds,
-  playableSlotsUnchanged,
+  resolveRepeatOffHoldAfterRebuild,
   shouldApplyQueuedPlaylistOnShuffleOrRefresh,
+  slotShowingUnchanged,
   shouldResumeSlotTimerAfterSetLoop,
 } from './playlist';
 
@@ -431,44 +432,99 @@ describe('hasDecisiveSyncVeto', () => {
   });
 });
 
-describe('playableSlotsUnchanged', () => {
+describe('slotShowingUnchanged', () => {
   const slot = (id: string, source: string): DP1Item =>
     ({ id, source, license: {} }) as DP1Item;
 
-  it('treats a rebuilt but content-identical list as unchanged', () => {
-    const a = [slot('a', 's/a'), slot('b', 's/b')];
-    const b = [slot('a', 's/a'), slot('b', 's/b')];
-    expect(playableSlotsUnchanged(a, b)).toBe(true);
+  it('matches the same id and source across different positions', () => {
+    const before = [slot('x', 's/x')];
+    const after = [slot('a', 's/a'), slot('x', 's/x')];
+    expect(slotShowingUnchanged(before, 0, after, 1)).toBe(true);
   });
 
-  it('reports a different length as changed, which is what a collapsed series group produces', () => {
-    const full = [slot('e0', 's/e0'), slot('e1', 's/e1')];
-    const collapsed = [slot('e0', 's/e0')];
-    expect(playableSlotsUnchanged(full, collapsed)).toBe(false);
-  });
-
-  it('reports a reorder of the same items as changed', () => {
-    const forward = [slot('a', 's/a'), slot('b', 's/b')];
-    const reversed = [slot('b', 's/b'), slot('a', 's/a')];
-    expect(playableSlotsUnchanged(forward, reversed)).toBe(false);
-  });
-
-  it('reports a same-id source swap as changed, since the showing is not the same one', () => {
+  it('reports a same-id source swap as a different showing', () => {
     const before = [slot('a', 's/old')];
     const after = [slot('a', 's/new')];
-    expect(playableSlotsUnchanged(before, after)).toBe(false);
+    expect(slotShowingUnchanged(before, 0, after, 0)).toBe(false);
   });
 
-  it('matches id-less items by their synthesised position-and-source identity', () => {
-    const a = [{ source: 's/x', license: {} } as DP1Item];
-    const b = [{ source: 's/x', license: {} } as DP1Item];
-    expect(playableSlotsUnchanged(a, b)).toBe(true);
-    expect(
-      playableSlotsUnchanged(a, [{ source: 's/y', license: {} } as DP1Item])
-    ).toBe(false);
+  it('reports a different item at the same position as a different showing', () => {
+    const before = [slot('a', 's/a'), slot('b', 's/b')];
+    const after = [slot('a', 's/a'), slot('c', 's/c')];
+    expect(slotShowingUnchanged(before, 1, after, 1)).toBe(false);
   });
 
-  it('treats two empty lists as unchanged', () => {
-    expect(playableSlotsUnchanged([], [])).toBe(true);
+  it('treats an id-less item that moved as a different showing, as the player does', () => {
+    const idless = { source: 's/x', license: {} } as DP1Item;
+    const before = [idless];
+    // Same position: the synthesised identity matches, nothing remounts.
+    expect(slotShowingUnchanged(before, 0, [idless], 0)).toBe(true);
+    // Moved: its identity IS its position, so the player recreates the slot.
+    const after = [slot('a', 's/a'), idless];
+    expect(slotShowingUnchanged(before, 0, after, 1)).toBe(false);
+  });
+
+  it('reports a missing slot on either side rather than matching two absences', () => {
+    expect(slotShowingUnchanged([], 0, [], 0)).toBe(false);
+    expect(slotShowingUnchanged([slot('a', 's/a')], 0, [], 0)).toBe(false);
+  });
+});
+
+describe('resolveRepeatOffHoldAfterRebuild', () => {
+  const slot = (id: string, source: string): DP1Item =>
+    ({ id, source, license: {} }) as DP1Item;
+
+  const resolve = (
+    previous: [DP1Item[], number],
+    next: [DP1Item[], number],
+    holdAfterFinalSlot = true
+  ) =>
+    resolveRepeatOffHoldAfterRebuild({
+      holdAfterFinalSlot,
+      previousPlaylist: previous[0],
+      previousIndex: previous[1],
+      nextPlaylist: next[0],
+      nextIndex: next[1],
+    });
+
+  it('keeps a hold the rebuild did not move at all', () => {
+    // narrowSeriesPlaylist always returns a fresh array; whenever the
+    // resolved mode narrows nothing away it is content-identical.
+    const before = [slot('a', 's/a'), slot('b', 's/b')];
+    const after = [slot('a', 's/a'), slot('b', 's/b')];
+    expect(resolve([before, 1], [after, 1])).toBe('keep');
+  });
+
+  it('keeps a hold when other slots changed but the ended item is still final', () => {
+    // A group earlier in the list expanding: the held item moved position
+    // but is still the last thing the playlist had to play.
+    const before = [slot('e0', 's/e0'), slot('x', 's/x')];
+    const after = [slot('e0', 's/e0'), slot('e1', 's/e1'), slot('x', 's/x')];
+    expect(resolve([before, 1], [after, 2])).toBe('keep');
+  });
+
+  it('resumes when expansion adds editions after the ended item', () => {
+    // First -> Full on the group carrying the held representative: the
+    // playlist is unfinished again and nothing remounts the showing.
+    const before = [slot('e0', 's/e0')];
+    const after = [slot('e0', 's/e0'), slot('e1', 's/e1'), slot('e2', 's/e2')];
+    expect(resolve([before, 0], [after, 0])).toBe('resume');
+  });
+
+  it('clears when the held item was narrowed away and the slot moved', () => {
+    // Full -> First: the new showing mounts and plays on its own.
+    const before = [slot('e0', 's/e0'), slot('e1', 's/e1')];
+    const after = [slot('e0', 's/e0')];
+    expect(resolve([before, 1], [after, 0])).toBe('clear');
+  });
+
+  it('never resumes when no hold is in effect, so a live showing is not reloaded', () => {
+    const before = [slot('e0', 's/e0')];
+    const after = [slot('e0', 's/e0'), slot('e1', 's/e1')];
+    expect(resolve([before, 0], [after, 0], false)).toBe('clear');
+  });
+
+  it('clears on an empty rebuilt list rather than resuming nothing', () => {
+    expect(resolve([[slot('a', 's/a')], 0], [[], 0])).toBe('clear');
   });
 });

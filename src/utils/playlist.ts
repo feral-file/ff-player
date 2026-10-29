@@ -435,32 +435,94 @@ export function shouldResumeSlotTimerAfterSetLoop(params: {
 }
 
 /**
- * Whether two playable lists describe the same showing in every slot.
+ * Whether two slots describe the same showing: the same `itemIdentityFor`
+ * and the same `source`. That pair is what decides whether ArtworkPlayer
+ * keeps the element on screen or recreates it — the route passes identity as
+ * `itemIdentity` and the source through `castPreviewURL`, so when both hold,
+ * nothing remounts and nothing reloads on its own. Compared this way rather
+ * than by object identity, which a playlist rebuild never preserves.
  *
- * A device-setting command that rebuilds the playable list has to tell a
- * rebuild that moved playback apart from one that changed nothing, because
- * the repeat-off hold flag (`shouldResumeSlotTimerAfterSetLoop` and
- * `shouldApplyQueuedPlaylistOnShuffleOrRefresh` both gate on it) describes
- * the slot still on screen. Clearing it when nothing moved strands an ended
- * final slot with no timer armed and no command left that can restart it.
- * `updateSeriesPlayback` is such a caller: `narrowSeriesPlaylist` always
- * returns a fresh array, identical in content whenever the resolved mode
- * narrows nothing away, so reference equality cannot answer the question.
- *
- * Compared positionally by `itemIdentityFor` plus `source` — the same tuple
- * `useShowingKey` uses to scope one showing — rather than by object
- * identity, which a rebuild never preserves.
+ * Positions may differ: an id-carrying item moved by a rebuild is still the
+ * same showing, while an id-less item's identity is its own position, so
+ * moving it does change the showing — exactly as the player sees it.
  */
-export function playableSlotsUnchanged(
+export function slotShowingUnchanged(
   a: DP1Item[],
-  b: DP1Item[]
+  indexA: number,
+  b: DP1Item[],
+  indexB: number
 ): boolean {
-  if (a.length !== b.length) {
+  if (!a[indexA] || !b[indexB]) {
     return false;
   }
-  return a.every(
-    (_, index) =>
-      itemIdentityFor(a, index) === itemIdentityFor(b, index) &&
-      (a[index]?.source ?? '') === (b[index]?.source ?? '')
+  return (
+    itemIdentityFor(a, indexA) === itemIdentityFor(b, indexB) &&
+    (a[indexA]?.source ?? '') === (b[indexB]?.source ?? '')
   );
+}
+
+/** What a playable-list rebuild must do with a repeat-off hold in effect. */
+export type RepeatOffHoldAfterRebuild = 'keep' | 'resume' | 'clear';
+
+/**
+ * What a device-setting command that rebuilds the playable list must do with
+ * the repeat-off hold — the flag recording that repeat-off deliberately
+ * stopped on the final artwork, which `shouldResumeSlotTimerAfterSetLoop`
+ * and `shouldApplyQueuedPlaylistOnShuffleOrRefresh` both gate on.
+ *
+ * `updateSeriesPlayback` is such a caller, and the only one that can change
+ * WHICH items play: a First<->Full flip rebuilds the list around the slot on
+ * screen. Three outcomes, because the flag describes one specific claim —
+ * "the ended item on screen is the last thing this playlist had to play":
+ *
+ * `keep`: the ended item is still on screen and still the final slot, so the
+ * claim stands. The rebuild may have changed other slots (a group earlier in
+ * the list expanding or collapsing) or none at all — `narrowSeriesPlaylist`
+ * returns a fresh array that is content-identical whenever the resolved mode
+ * narrows nothing away. Clearing the flag here strands the ended slot for
+ * good: no timer is armed for it, and both commands that could restart it
+ * read exactly this flag.
+ *
+ * `resume`: the ended item is still on screen but no longer the final slot,
+ * because expansion added editions after it. The playlist is unfinished
+ * again, so the hold is wrong AND nothing will restart the source by itself
+ * — the showing is unchanged, so the player neither remounts nor reloads.
+ * The caller must reload it, the way `setLoop` does when it leaves
+ * repeat-off.
+ *
+ * `clear`: the showing moved (the held item was narrowed away, or an id-less
+ * item changed position). The new showing mounts and plays on its own; the
+ * hold no longer describes anything.
+ */
+export function resolveRepeatOffHoldAfterRebuild(params: {
+  holdAfterFinalSlot: boolean;
+  previousPlaylist: DP1Item[];
+  previousIndex: number;
+  nextPlaylist: DP1Item[];
+  nextIndex: number;
+}): RepeatOffHoldAfterRebuild {
+  const {
+    holdAfterFinalSlot,
+    previousPlaylist,
+    previousIndex,
+    nextPlaylist,
+    nextIndex,
+  } = params;
+
+  // Nothing held: the flag is already false and a live showing must never be
+  // reloaded by a rebuild that only re-selected the same slot.
+  if (!holdAfterFinalSlot || nextPlaylist.length === 0) {
+    return 'clear';
+  }
+  if (
+    !slotShowingUnchanged(
+      previousPlaylist,
+      previousIndex,
+      nextPlaylist,
+      nextIndex
+    )
+  ) {
+    return 'clear';
+  }
+  return nextIndex === nextPlaylist.length - 1 ? 'keep' : 'resume';
 }

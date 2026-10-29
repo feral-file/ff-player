@@ -190,6 +190,102 @@ describe('PlaylistClient — updateSeriesPlayback keeps a hold it did not move',
 
 });
 
+describe('PlaylistClient — updateSeriesPlayback resumes a hold it outgrew', () => {
+  useFakeTimersForHoldSuite();
+
+  it('resumes the ended representative when Full adds editions after it', async () => {
+    // First -> Full on the group carrying the held slot. The representative
+    // stays on screen at the same position, so the player neither remounts
+    // nor reloads, but the playlist is no longer finished: the editions the
+    // expansion added come after it. Clearing the hold alone leaves the
+    // ended source stopped for good, and a later setLoop cannot recover it
+    // either, since the flag it gates on has just been zeroed
+    // (feralfile-bot F4 on 9504a48).
+    await DeviceManager.setSeriesPlayback(DP1SeriesPlayback.First);
+    const items = [
+      { ...seriesEdition('edition-0'), duration: undefined } as DP1Item,
+      seriesEdition('edition-1', 1),
+      seriesEdition('edition-2', 1),
+    ];
+    const cast = displayCast(items, 0, LoopMode.none);
+    canvasService.setCastInfo(cast, false);
+    render(<LivePlaylistHarness />);
+
+    // First collapses the group to its representative, which is then the
+    // only — and so the final — playable slot.
+    expect(shownItemIdentity()).toBe('edition-0');
+    endFinalSlot();
+    await advanceMs(0);
+
+    const reloadsBefore = reloadCount();
+
+    act(() => {
+      canvasService.processMessage({
+        command: CastCommand.updateSeriesPlayback,
+        request: { mode: DP1SeriesPlayback.Full },
+      });
+    });
+    await advanceMs(0);
+
+    // The same showing is still selected, so the restart has to be explicit.
+    expect(shownItemIdentity()).toBe('edition-0');
+    expect(reloadCount()).toBe(reloadsBefore + 1);
+
+    // And the resumed source now advances into the editions Full added,
+    // instead of holding a slot that is no longer the last one.
+    endFinalSlot();
+    await advanceMs(0);
+    expect(shownItemIdentity()).toBe('edition-1');
+  });
+
+  it('keeps the hold when the rebuild changes other slots but the ended item is still final', async () => {
+    // The expanding group sits BEFORE the held item, so the rebuild changes
+    // the list without falsifying what the hold claims: the item on screen
+    // is still the last thing the playlist has to play. The previous
+    // condition compared whole lists and so cleared the hold here, leaving
+    // setLoop with nothing to resume.
+    await DeviceManager.setSeriesPlayback(DP1SeriesPlayback.First);
+    const items = [
+      seriesEdition('edition-0', 1),
+      seriesEdition('edition-1', 1),
+      endlessItem('tail'),
+    ];
+    const cast = displayCast(items, 2, LoopMode.none);
+    canvasService.setCastInfo(cast, false);
+    render(<LivePlaylistHarness />);
+
+    // Narrowed to [edition-0, tail]; raw index 2 is the tail, which First
+    // keeps, so the cast index maps onto it rather than onto the group.
+    expect(shownItemIdentity()).toBe('tail');
+    endFinalSlot();
+    await advanceMs(0);
+
+    act(() => {
+      canvasService.processMessage({
+        command: CastCommand.updateSeriesPlayback,
+        request: { mode: DP1SeriesPlayback.Full },
+      });
+    });
+    await advanceMs(0);
+
+    // Still the final slot of [edition-0, edition-1, tail]: repeat-off is
+    // correctly parked, so nothing restarts now...
+    expect(shownItemIdentity()).toBe('tail');
+    const reloadsBefore = reloadCount();
+
+    // ...and the hold survived, so leaving repeat-off still restarts it.
+    act(() => {
+      canvasService.processMessage({
+        command: CastCommand.setLoop,
+        request: { mode: LoopMode.playlist },
+      });
+    });
+    await advanceMs(0);
+
+    expect(reloadCount()).toBe(reloadsBefore + 1);
+  });
+});
+
 describe('PlaylistClient — updateSeriesPlayback clears a hold it does move', () => {
   useFakeTimersForHoldSuite();
 
