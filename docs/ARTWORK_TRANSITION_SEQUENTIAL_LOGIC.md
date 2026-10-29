@@ -68,7 +68,10 @@ one event: they intentionally have different timing and success conditions.
 A genuine late success after a failed load cancels its retry, restores readiness,
 and supplies a played callback if that showing has none. It does not cancel a
 pending sequential handoff. The same per-showing latch prevents its later
-handoff or another iframe load from recording playback again.
+handoff or another iframe load from recording playback again. A successful
+played callback may return a recovery receipt. A later genuine success for that
+same showing invokes the receipt to restore its history occurrence; the history
+owner rejects receipts invalidated by a stop or a newer commit.
 
 ## Fade modes and media lifetime
 
@@ -91,7 +94,9 @@ not abort, destroy, or clear another slot's resources.
 Ordinary media setup keys on display URL, preview type, streaming flag, item
 identity, and showing key. HLS setup keys on display URL, preview type, and
 streaming flag. A WebGL iframe-key-only reload does not rerun those effects.
-Preserve that distinction, including its documented watchdog limitation.
+The watchdog has a separate lifetime keyed by the ordinary-media keys plus the
+element's iframe key. It gets a fresh deadline on recovery reload and cancels on
+replacement or unmount. Only a still-current pending/loading slot can fail.
 
 Video plays only when visible (opacity above 0.05) and the current target.
 Offline connectivity pauses streaming video only; buffered/local video remains

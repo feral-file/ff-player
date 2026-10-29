@@ -52,8 +52,6 @@ export class SlotMediaResources {
   private mediaAbortControllerRef: {
     current: (AbortController | undefined)[];
   } = { current: [] };
-  private artworkLoadWatchdogRef: { current: (NodeJS.Timeout | undefined)[] } =
-    { current: [] };
   refs(index: SlotIndex) {
     return {
       image: this.imageRefs[index],
@@ -215,24 +213,28 @@ export class SlotMediaResources {
       cancelled: false,
     };
     this.mediaAbortControllerRef.current[slotIndex] = attempt.abortController;
-    this.startWatchdog(attempt);
     void this.loadMedia(attempt);
     return () => {
       this.cleanupAttempt(attempt);
     };
   }
-  private startWatchdog(attempt: MediaAttempt) {
-    const { slotIndex, layer, events } = attempt;
-    clearTimeout(this.artworkLoadWatchdogRef.current[slotIndex]);
+  /** Each mounted element gets a deadline, including a key-only GPU reload. */
+  watchSlot(
+    slotIndex: SlotIndex,
+    layer: SlotLayer | null,
+    events: MediaEvents
+  ) {
+    if (!layer?.displayPreviewURL || layer.isStreaming) {
+      return undefined;
+    }
     const duration =
       isEmbeddedHeavy(layer.previewType) ||
       layer.previewType === PreviewHTMLTag.iframePDF
         ? 45000
         : 15000;
-    this.artworkLoadWatchdogRef.current[slotIndex] = setTimeout(() => {
-      this.artworkLoadWatchdogRef.current[slotIndex] = undefined;
+    const timer = setTimeout(() => {
       if (
-        attempt.cancelled ||
+        !events.isCurrent(slotIndex, layer) ||
         !events.matchesTarget(layer.previewURL, layer.itemIdentity) ||
         (events.status() !== RenderStatus.pending &&
           events.status() !== RenderStatus.loading)
@@ -241,6 +243,9 @@ export class SlotMediaResources {
       }
       events.failed(slotIndex, layer);
     }, duration);
+    return () => {
+      clearTimeout(timer);
+    };
   }
   private handleMediaError(
     attempt: MediaAttempt,
@@ -406,7 +411,5 @@ export class SlotMediaResources {
       cleanup();
     });
     this.mediaLoaders.current[slotIndex].cleanup();
-    clearTimeout(this.artworkLoadWatchdogRef.current[slotIndex]);
-    this.artworkLoadWatchdogRef.current[slotIndex] = undefined;
   }
 }

@@ -36,11 +36,15 @@ export class RecentPlaybackService {
 
   // True only while the device cannot yet say whether a retained record is on
   // the wall: from a commit until its record is durable or found too large to
-  // keep, after a player restart until the first commit, and after a failed
-  // render (see setRenderStatus). Every stop is a known answer instead (no
+  // keep, and after a player restart until the first commit. Render failures
+  // have their own suspension flag below. Every stop is a known answer (no
   // retained record is showing), so History never waits on a commit that a
   // sleeping wall or a single-work cast may not make.
   private activeOccurrencePending = true;
+
+  // Failure suspends the occurrence without discarding its durable-write
+  // generation. Only its renderer-held recovery receipt may restore it.
+  private occurrenceFailed = false;
 
   private recentlyPlayedWrite: Promise<void> = Promise.resolve();
 
@@ -77,6 +81,7 @@ export class RecentPlaybackService {
     this.activeRecentlyPlayedRecordId = null;
     this.activeOccurrencePending = false;
     this.occurrenceItem = null;
+    this.occurrenceFailed = false;
   }
 
   /**
@@ -131,12 +136,16 @@ export class RecentPlaybackService {
     return load;
   }
 
-  /** Called only from ArtworkPlayer's visual-commit callback. */
+  /**
+   * Called only from a successful visual commit. The returned receipt restores
+   * this occurrence after genuine in-place recovery without appending a repeat.
+   * A stop or another commit invalidates the receipt, including pending writes.
+   */
   public recordRecentlyPlayed(
     item: DP1Item,
     defaults: DP1Defaults | null = null,
     contentContext: ContentContext = 'curated'
-  ): void {
+  ): () => void {
     // A new work is committing, so the previous occurrence is no longer the
     // active one. Retire it here, synchronously, rather than after the durable
     // write: between the two, the honest answer is "not known yet", never the
@@ -224,6 +233,11 @@ export class RecentPlaybackService {
           );
         }
       });
+    return () => {
+      if (generation === this.playbackGeneration && this.occurrenceItem) {
+        this.occurrenceFailed = false;
+      }
+    };
   }
 
   public getRecentlyPlayed(): Reply & {
@@ -260,7 +274,7 @@ export class RecentPlaybackService {
     try {
       records = recentlyPlayedMetadata(
         this.recentlyPlayedRecords,
-        this.activeRecentlyPlayedRecordId
+        this.occurrenceFailed ? null : this.activeRecentlyPlayedRecordId
       );
     } catch (error: unknown) {
       // The projection reads labels from documents the device did not author.
@@ -284,7 +298,8 @@ export class RecentPlaybackService {
       status: records.length === 0 ? 'empty' : 'ok',
       records,
       incomplete: this.recentlyPlayedIncomplete,
-      activeOccurrenceKnown: !this.activeOccurrencePending,
+      activeOccurrenceKnown:
+        !this.activeOccurrencePending && !this.occurrenceFailed,
     };
   }
 
@@ -386,7 +401,6 @@ export class RecentPlaybackService {
     return this.occurrenceItem;
   }
   markRenderFailed(): void {
-    this.retireActiveRecentlyPlayed();
-    this.activeOccurrencePending = true;
+    this.occurrenceFailed = true;
   }
 }

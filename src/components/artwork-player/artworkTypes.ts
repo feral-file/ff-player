@@ -56,7 +56,11 @@ export interface ArtworkPlayerProps {
   onItemCommitted?: (itemIdentity: string) => void;
   // Unlike onItemCommitted, this is never called for a failed transition.
   // Playback history uses it; tombstone keeps the established transition hook.
-  onItemPlayed?: (itemIdentity: string) => void;
+  // A consumer may return a receipt for this occurrence. The renderer invokes
+  // it on genuine recovery of the same showing, never on a bare ready status.
+  onItemPlayed?:
+    | ((itemIdentity: string) => void)
+    | ((itemIdentity: string) => () => void);
 }
 export type SlotIndex = 0 | 1;
 export interface SlotLayer {

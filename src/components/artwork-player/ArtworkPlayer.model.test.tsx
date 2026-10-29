@@ -72,6 +72,13 @@ function renderWithDisplaySettings(
   );
 }
 
+/** Flush the mount effects before firing the custom element's native event. */
+async function emitModelEvent(element: Element, type: 'load' | 'error') {
+  // DOM presence can precede the passive effect that registers these listeners.
+  await act(async () => { await Promise.resolve(); });
+  act(() => { element.dispatchEvent(new Event(type)); });
+}
+
 afterEach(() => {
   helperMocks.getContentTypeFromURL.mockReset();
   canvasService.setCastInfo(null, false);
@@ -240,7 +247,7 @@ describe('ArtworkPlayer — model successful transition', () => {
       return node;
     });
 
-    modelViewerEl.dispatchEvent(new Event('load'));
+    await emitModelEvent(modelViewerEl, 'load');
 
     await waitFor(() => {
       expect(container.querySelector('img')).toBeNull();
@@ -295,7 +302,7 @@ describe('ArtworkPlayer — model runtime error handling', () => {
       return node;
     });
 
-    modelViewerEl.dispatchEvent(new Event('error'));
+    await emitModelEvent(modelViewerEl, 'error');
 
     await waitFor(() => {
       expect(screen.getByText('The artwork cannot be displayed correctly on this device.')).toBeTruthy();
@@ -354,7 +361,7 @@ describe('ArtworkPlayer — stale model error handling', () => {
       expect(container.querySelectorAll('model-viewer')).toHaveLength(2);
     });
 
-    staleModelViewerEl.dispatchEvent(new Event('error'));
+    await emitModelEvent(staleModelViewerEl, 'error');
 
     await waitFor(() => {
       expect(screen.queryByText('Unable to load 3D model')).toBeNull();
@@ -382,7 +389,7 @@ describe('ArtworkPlayer — model render status', () => {
 
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
 
-    modelViewerEl.dispatchEvent(new Event('load'));
+    await emitModelEvent(modelViewerEl, 'load');
 
     await waitFor(() => {
       expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
@@ -406,7 +413,7 @@ describe('ArtworkPlayer — model render status', () => {
       return node;
     });
 
-    modelViewerEl.dispatchEvent(new Event('error'));
+    await emitModelEvent(modelViewerEl, 'error');
 
     await waitFor(() => {
       expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
