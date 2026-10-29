@@ -53,13 +53,12 @@ vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
       return () => {
         reg(null);
       };
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- module-level probe
-    }, [props.onRegisterArtworkReload]);
+    }, [props.onRegisterArtworkReload, g]);
     return null;
   },
 }));
 
-function countUpdateIndexCalls(spy: ReturnType<typeof vi.spyOn>): number {
+function countUpdateIndexCalls(spy: { mock: { calls: [CastInfo | null][] } }): number {
   return spy.mock.calls.filter(
     args =>
       (args[0] as { castCommand?: string } | null)?.castCommand ===
@@ -227,8 +226,8 @@ describe('PlaylistClient — same-tick race', () => {
     canvasService.setCastInfo(displayCast(items, 0, LoopMode.playlist), false);
     render(<PlaylistHarness castInfo={displayCast(items, 0, LoopMode.playlist)} />);
 
-    const setCastSpy = vi.spyOn(canvasService, 'setCastInfo');
-    setCastSpy.mockClear();
+    const setCastSpy = vi.fn<(cast: CastInfo | null) => void>();
+    canvasService.onCastInfoChange = setCastSpy;
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);
@@ -237,7 +236,7 @@ describe('PlaylistClient — same-tick race', () => {
 
     expect(countUpdateIndexCalls(setCastSpy)).toBe(1);
     expect(canvasService.getCastInfo()?.index).toBe(1);
-    setCastSpy.mockRestore();
+    canvasService.onCastInfoChange = null;
   });
 
   it('only publishes one updateIndex when LoopMode.one races', async () => {
@@ -249,8 +248,8 @@ describe('PlaylistClient — same-tick race', () => {
     canvasService.setCastInfo(displayCast(items, 0, LoopMode.one), false);
     render(<PlaylistHarness castInfo={displayCast(items, 0, LoopMode.one)} />);
 
-    const setCastSpy = vi.spyOn(canvasService, 'setCastInfo');
-    setCastSpy.mockClear();
+    const setCastSpy = vi.fn<(cast: CastInfo | null) => void>();
+    canvasService.onCastInfoChange = setCastSpy;
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);
@@ -259,7 +258,7 @@ describe('PlaylistClient — same-tick race', () => {
 
     expect(countUpdateIndexCalls(setCastSpy)).toBe(1);
     expect(canvasService.getCastInfo()?.index).toBe(0);
-    setCastSpy.mockRestore();
+    canvasService.onCastInfoChange = null;
   });
 });
 

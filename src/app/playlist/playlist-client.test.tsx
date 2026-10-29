@@ -44,9 +44,7 @@ vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
       return () => {
         reg(null);
       };
-      // Test double: `g` is a module-level probe on globalThis, not a hook dep.
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
-    }, [props.onRegisterArtworkReload]);
+    }, [props.onRegisterArtworkReload, g]);
     return null;
   },
 }));
@@ -57,12 +55,12 @@ function canvasInternals(): {
   originalPlaylistItems: unknown;
   refreshPlaylist: (newItems: DP1Item[] | undefined) => { ok: boolean };
 } {
-  return canvasService as unknown as {
+  return (canvasService as unknown as { session: {
     queuedPlaylistPending: boolean;
     deferredRefreshPlaylist: unknown;
     originalPlaylistItems: unknown;
     refreshPlaylist: (newItems: DP1Item[] | undefined) => { ok: boolean };
-  };
+  } }).session;
 }
 
 function dp1Call(id: string, items: DP1Item[]): DP1Call {
