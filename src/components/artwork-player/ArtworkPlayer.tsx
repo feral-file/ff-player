@@ -19,6 +19,19 @@ import MessageModal from '../MessageModal';
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
 import { createMediaLoader, BlobLoadedMediaType } from '@/utils/mediaLoader';
 import {
+  artworkIframeSandbox,
+  dataDocumentURL,
+  releaseDataDocumentURLs,
+} from '@/utils/dataDocument';
+import {
+  WORK_ORIGIN_MESSAGE,
+  forgetWorkOrigins,
+  isWorkOriginURL,
+  resolveWorkOrigin,
+  subscribeWorkOrigins,
+  usesWorkOrigin,
+} from '@/utils/workOrigin';
+import {
   FileUseAudio,
   FileUseIframePDF,
   FileUseImage,
@@ -206,6 +219,9 @@ const ArtworkPlayer = ({
       onRegisterArtworkReload(null);
     };
   }, [onRegisterArtworkReload, performArtworkReload]);
+  // Bumped when an on-chain work's origin is resolved (label hashed, works
+  // server probed), so the software-URL effect can point its iframe there.
+  const [workOriginsReady, setWorkOriginsReady] = useState(0);
   const [slots, setSlots] = useState<[SlotLayer | null, SlotLayer | null]>([
     null,
     null,
@@ -1599,7 +1615,14 @@ const ArtworkPlayer = ({
             previewType: cfg.previewType,
             isStreaming: cfg.isStreaming,
             displayPreviewURL: url,
-            displaySoftwareURL: url,
+            // An on-chain work waits for its own origin (software-URL
+            // effect) rather than loading once as a bare data: document.
+            displaySoftwareURL:
+              cfg.previewType === PreviewHTMLTag.iframe &&
+              !isModelMimeType(resolvedMimeType) &&
+              usesWorkOrigin(url)
+                ? ''
+                : url,
             mimeType: resolvedMimeType,
           };
           return next;
@@ -1679,7 +1702,7 @@ const ArtworkPlayer = ({
             previewType: PreviewHTMLTag.iframe,
             isStreaming: false,
             displayPreviewURL: url,
-            displaySoftwareURL: url,
+            displaySoftwareURL: usesWorkOrigin(url) ? '' : url,
             mimeType: null,
           };
           return next;
@@ -2121,7 +2144,27 @@ const ArtworkPlayer = ({
           // mutating it corrupts raw HTML/SVG payloads accepted at the cast
           // boundary. Relative web URLs are resolved only for this iframe
           // setting, leaving the persisted/display source unchanged.
-          if (resolvedURL.protocol !== 'data:') {
+          if (resolvedURL.protocol === 'data:') {
+            // An on-chain HTML work plays in a device-local origin of its own
+            // (storage, WebGPU; utils/workOrigin), '' while that is resolved;
+            // otherwise as a sandboxed blob document (WebGPU; utils/dataDocument).
+            // A slot keeps the path it first took: re-routing a playing work
+            // would reload it and replay its completion.
+            const chosen =
+              slot.displaySoftwareURL !== '' &&
+              slot.displaySoftwareURL !== slot.displayPreviewURL;
+            if (chosen) {
+              softwareURL = slot.displaySoftwareURL;
+            } else {
+              const origin = resolveWorkOrigin(slot.displayPreviewURL);
+              softwareURL =
+                origin.kind === 'ready'
+                  ? origin.url
+                  : origin.kind === 'pending'
+                    ? ''
+                    : dataDocumentURL(slot.displayPreviewURL);
+            }
+          } else {
             // Delegated so the reversibility contract lives beside the rule
             // it protects: controld's offline-cache replay strips
             // `display_mode` back off and matches the remainder against the
@@ -2148,7 +2191,117 @@ const ArtworkPlayer = ({
     committedVisualSettings,
     context.deviceRotation?.viewMode,
     slots,
+    workOriginsReady,
   ]);
+
+  // A data: source's blob document and work-origin label live as long as a
+  // slot shows the source.
+  useEffect(() => {
+    const shown = slots.flatMap(slot => (slot ? [slot.displayPreviewURL] : []));
+    releaseDataDocumentURLs(shown);
+    forgetWorkOrigins(shown);
+  }, [slots]);
+
+  // Re-run the software-URL effect whenever a work-origin probe or label
+  // settles, including ones another mount started.
+  useEffect(
+    () =>
+      subscribeWorkOrigins(() => {
+        setWorkOriginsReady(n => n + 1);
+      }),
+    []
+  );
+
+  // Frames whose completion has been consumed. Every load attempt mounts a
+  // new iframe element, so the element is the attempt: a second completion
+  // would reopen a committed transition.
+  const workOriginCompletedRef = useRef(new WeakSet<HTMLIFrameElement>());
+  // Frames whose shell has been sent its source and port: the first `ready`
+  // per frame element is the shell's (the work does not exist yet); a later
+  // one could come from the work posing as the shell to win a port.
+  const workOriginOpenedRef = useRef(new WeakSet<HTMLIFrameElement>());
+
+  // Latest refs and handlers for the work-origin message listener below,
+  // which subscribes once.
+  const workOriginFramesRef = useRef<{
+    iframeRefs: typeof iframeRefs;
+    onLoad: ((slotIndex: SlotIndex, layer: SlotLayer) => void) | null;
+    onError: ((slotIndex: SlotIndex, layer: SlotLayer) => void) | null;
+  }>({ iframeRefs, onLoad: null, onError: null });
+
+  // A work-origin frame reports through its shell, over a private channel.
+  // The frame's own load event comes from the shell, before the work exists,
+  // so the shell's report is the completion signal (utils/workOrigin). The
+  // shell asks with `ready`, answered once per frame element with the slot's
+  // source (to the frame's own origin only) and a fresh MessagePort; only that
+  // port is trusted for `loaded`/`error`. The work is same-origin with its
+  // shell and can post as it on `window`, but it cannot reach the port.
+  useEffect(() => {
+    const slotOf = (frame: HTMLIFrameElement) =>
+      SLOT_INDICES.find(
+        i => workOriginFramesRef.current.iframeRefs[i].current === frame
+      );
+    const onReport = (frame: HTMLIFrameElement, type: unknown) => {
+      const i = slotOf(frame);
+      const slot = i === undefined ? null : slotsRef.current[i];
+      if (
+        i === undefined ||
+        !slot ||
+        !isWorkOriginURL(slot.displaySoftwareURL) ||
+        workOriginCompletedRef.current.has(frame)
+      ) {
+        return;
+      }
+      const frames = workOriginFramesRef.current;
+      if (type === WORK_ORIGIN_MESSAGE.loaded) {
+        workOriginCompletedRef.current.add(frame);
+        frames.onLoad?.(i, slot);
+      } else if (type === WORK_ORIGIN_MESSAGE.error) {
+        workOriginCompletedRef.current.add(frame);
+        frames.onError?.(i, slot);
+      }
+    };
+    const onMessage = (event: MessageEvent) => {
+      const type = (event.data as { type?: unknown } | null)?.type;
+      if (type !== WORK_ORIGIN_MESSAGE.ready) {
+        return;
+      }
+      SLOT_INDICES.forEach(i => {
+        const frame = workOriginFramesRef.current.iframeRefs[i].current;
+        const slot = slotsRef.current[i];
+        if (
+          !frame ||
+          !slot ||
+          event.source !== frame.contentWindow ||
+          !isWorkOriginURL(slot.displaySoftwareURL) ||
+          event.origin !== new URL(slot.displaySoftwareURL).origin ||
+          workOriginOpenedRef.current.has(frame)
+        ) {
+          return;
+        }
+        workOriginOpenedRef.current.add(frame);
+        const channel = new MessageChannel();
+        channel.port1.onmessage = report => {
+          onReport(frame, (report.data as { type?: unknown } | null)?.type);
+        };
+        frame.contentWindow?.postMessage(
+          // Exactly the string the label was hashed from (workOrigin).
+          {
+            type: WORK_ORIGIN_MESSAGE.open,
+            source: slot.displayPreviewURL.trim(),
+          },
+          event.origin,
+          [channel.port2]
+        );
+      });
+    };
+    window.addEventListener('message', onMessage);
+    return () => {
+      window.removeEventListener('message', onMessage);
+    };
+  }, []);
+
+  useEffect(() => () => { releaseDataDocumentURLs([]); }, []);
 
   const handleLoadIframeError = (slotIndex: SlotIndex, layer: SlotLayer) => {
     // Failure still consumes the current incoming slot. Without this, an
@@ -2163,6 +2316,14 @@ const ArtworkPlayer = ({
     // RenderStatus.failed, and raises the modal.
     handleArtworkRenderFailure(slotIndex, layer);
   };
+
+  useEffect(() => {
+    workOriginFramesRef.current = {
+      iframeRefs,
+      onLoad: handleIframeLoad,
+      onError: handleLoadIframeError,
+    };
+  });
 
   const reloadIframe = (slotIndex: SlotIndex) => {
     setSlots(prev => {
@@ -2545,17 +2706,26 @@ const ArtworkPlayer = ({
         {slot.displaySoftwareURL &&
           slot.previewType === PreviewHTMLTag.iframe && (
             <iframe
-              key={slot.iframeKey}
+              // The sandbox mode is part of the key so a change of mode mounts
+              // a fresh element: on a live iframe, a src set before the new
+              // sandbox could load the blob document with allow-same-origin,
+              // i.e. as the player's own origin.
+              key={`${String(slot.iframeKey)}-${artworkIframeSandbox(slot.displaySoftwareURL)}`}
               ref={iframeRefs[slotIndex]}
               className={styles.iframe}
               src={slot.displaySoftwareURL}
               onLoad={() => {
-                handleIframeLoad(slotIndex, slot);
+                // Work-origin frames complete through their shell's message.
+                if (!isWorkOriginURL(slot.displaySoftwareURL)) {
+                  handleIframeLoad(slotIndex, slot);
+                }
               }}
               onError={() => {
-                handleLoadIframeError(slotIndex, slot);
+                if (!isWorkOriginURL(slot.displaySoftwareURL)) {
+                  handleLoadIframeError(slotIndex, slot);
+                }
               }}
-              sandbox="allow-same-origin allow-scripts"
+              sandbox={artworkIframeSandbox(slot.displaySoftwareURL)}
               tabIndex={0}
             />
           )}

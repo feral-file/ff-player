@@ -187,6 +187,48 @@ renderer error surfaces as `renderStatus: failed`, rather than being rejected at
 cast time. The iframe/PDF caveat above still applies — a navigation the browser
 reports as a successful load is indistinguishable from a real render there.
 
+### `data:` artworks
+
+A document loaded straight from a `data:` URL has an opaque origin with no
+storage and no secure context, so a fully on-chain work (a token whose
+`animation_url` is `data:text/html;...`) dies on its first `localStorage`
+read and loses WebGPU. The player never mounts one that way:
+
+- **Work origin** (`src/utils/workOrigin.ts`): on a loopback player whose OS
+  runs the works server, an HTML `data:` work loads at
+  `http://<label>.localhost:8081/`, where `<label>` is the hex of the first 16
+  bytes of SHA-256 over the `data:` URL (fragment excluded). FF OS
+  (`serve-feral-player.sh` in ffos-user) serves that port from this bundle's
+  `data-document/` directory, which holds only the shell
+  (`public/data-document/index.html`), so no other bundle page can boot in a
+  work's origin. The shell posts `ready`; the player answers once per frame,
+  to that origin only, with the source and a private MessagePort; the shell
+  refuses bytes whose hash is not its hostname (reporting `error`), and
+  otherwise shows the work in a child frame pointed at a blob of the bytes.
+  The child is a real navigation of the work's origin, so Chromium decodes
+  and runs the work exactly as a direct load would; the shell declares no
+  charset (it is pure ASCII), so a work that declares none inherits the same
+  fallback a direct load uses. The shell stays alive under it because it
+  owns the blob URL, so a work that reloads itself keeps working. The shell
+  reports `loaded` over the port on the child's first trusted load; that
+  report, counted once per frame, is the completion signal, and the frame's
+  own `load` events (the shell's) are ignored. The work is same-origin with
+  its shell and can run code in it, but it cannot reach the port, which lives
+  in the shell's closure. The shell hands keyboard focus to the work only
+  while it holds focus itself, so an outgoing work cannot take it. The player
+  probes for the works server when a work chooses its path, at most once a
+  minute, and a slot keeps the path it took, so a playing work is never
+  re-routed. Each work gets WebGPU and persistent storage of its own,
+  cross-origin to the player and to every other work, under the usual
+  `allow-same-origin allow-scripts` sandbox.
+- **Blob document** (`src/utils/dataDocument.ts`): otherwise (an OS without
+  the works server, a non-HTML `data:` type, or a player off loopback) the
+  source plays as a blob URL the player creates, in a frame sandboxed
+  `allow-scripts` only. That is a secure context (WebGPU) but has no storage.
+
+The works port (8081), the shell's location, and the label rule are a
+contract with ffos-user; change them together.
+
 Boot playlist, cast-info, and scheduled-task records are recovery snapshots
 rather than new cast commands. They are intentionally restored or executed
 without source validation so an upgrade does not interrupt a previously

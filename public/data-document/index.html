@@ -1,0 +1,131 @@
+<!doctype html>
+<html>
+  <head>
+    <!-- No charset on purpose: this page is pure ASCII, so it decodes under
+         the browser's fallback encoding, and a work that declares none
+         inherits that same fallback from this same-origin parent, exactly
+         as when the work is loaded directly. Declaring one here would hand
+         it to every undeclared work instead. Keep this file ASCII. -->
+    <title></title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+      }
+      iframe {
+        display: block;
+        border: 0;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+    <script>
+      // The shell for a fully on-chain (data:) work's device-local origin,
+      // http://<label>.localhost:8081/. FF OS serves this directory, and only
+      // this directory, on that port; see src/utils/workOrigin.ts, which this
+      // page must stay in step with. It tells the player it is ready, takes
+      // the work's data: URL by postMessage, refuses it unless its SHA-256
+      // label is this page's hostname (so an origin can only ever run the
+      // bytes it names), then shows the work in a child frame pointed at a
+      // blob of those bytes, and reports "loaded" on the child's first load
+      // over the private port the player sent.
+      // The child is a real navigation of this origin, so Chromium decodes
+      // and runs the work exactly as a direct load (encoding fallback
+      // included). This page stays alive under it because it owns the blob
+      // URL: replacing itself would revoke the URL, and a work that reloads
+      // itself would land on an error page.
+      (() => {
+        const PREFIX = 'ff-data-document:';
+        const label = location.hostname.endsWith('.localhost')
+          ? location.hostname.slice(0, -'.localhost'.length)
+          : '';
+        let opened = false;
+
+        // report goes over the MessagePort the player sent with "open". The
+        // port lives only in this closure: the work is same-origin with this
+        // page and can run code in its realm (parent.eval), but it cannot
+        // reach a closure, so it cannot report on this page's behalf.
+        async function open(source, report) {
+          const hashAt = source.indexOf('#');
+          const body = hashAt === -1 ? source : source.slice(0, hashAt);
+          const fragment = hashAt === -1 ? '' : source.slice(hashAt);
+          const digest = await crypto.subtle.digest(
+            'SHA-256',
+            new TextEncoder().encode(body)
+          );
+          const computed = Array.from(new Uint8Array(digest).slice(0, 16), b =>
+            b.toString(16).padStart(2, '0')
+          ).join('');
+          if (!/^data:text\/html\s*[;,]/i.test(body) || computed !== label) {
+            throw new Error('refused: content does not match this origin');
+          }
+          const blob = await (await fetch(body)).blob();
+          const frame = document.createElement('iframe');
+          // Keys go to the focused document, and the player focuses this
+          // page: hand focus on to the work when this page gets it and on
+          // every load (reloads included), but only while this page still
+          // holds focus, so an outgoing work that reloads mid-transition
+          // cannot take it from the incoming one. Deferred one task, because
+          // a focus move inside the focus event itself does not stick.
+          const handOffFocus = () =>
+            setTimeout(() => {
+              if (!document.hasFocus()) {
+                return;
+              }
+              frame.focus();
+              if (frame.contentWindow) {
+                frame.contentWindow.focus();
+              }
+            }, 0);
+          let loaded = false;
+          frame.addEventListener('load', event => {
+            // Only the browser's own load event counts; the work could
+            // dispatch a synthetic one on this frame.
+            if (!event.isTrusted) {
+              return;
+            }
+            handOffFocus();
+            if (!loaded) {
+              loaded = true;
+              report('loaded');
+            }
+          });
+          frame.src = URL.createObjectURL(blob) + fragment;
+          document.body.appendChild(frame);
+          addEventListener('focus', handOffFocus);
+        }
+
+        addEventListener('message', event => {
+          const data = event.data;
+          const port = event.ports && event.ports[0];
+          if (
+            opened ||
+            event.source !== parent ||
+            !data ||
+            data.type !== PREFIX + 'open' ||
+            typeof data.source !== 'string' ||
+            !port
+          ) {
+            return;
+          }
+          opened = true;
+          // Bind the native sender now, before the work exists: the work
+          // shares this realm and could later replace
+          // MessagePort.prototype.postMessage, which a lookup at report time
+          // would then call with the private port.
+          const send = MessagePort.prototype.postMessage.bind(port);
+          const report = type => send({ type: PREFIX + type });
+          open(data.source, report).catch(error => {
+            console.error('[data-document]', error);
+            report('error');
+          });
+        });
+        parent.postMessage({ type: PREFIX + 'ready' }, '*');
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>
