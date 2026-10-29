@@ -152,6 +152,19 @@ describe('recently played active occurrence follows the wall', () => {
     // withheld, so nothing else would retire the previous work's record.
     canvasService.setRenderStatus(RenderStatus.failed);
 
+    // Pending rather than "nothing on the wall": the recorded work itself may
+    // be the one that failed, and it can recover without committing again.
+    expect(history().activeOccurrenceKnown).toBe(false);
+    expect(history().records?.some(record => record.isActive)).toBe(false);
+  });
+
+  it('lets a stop after a failed render answer that nothing is on the wall', async () => {
+    canvasService.recordRecentlyPlayed(item('a'));
+    await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
+
+    canvasService.setRenderStatus(RenderStatus.failed);
+    canvasService.setSleepMode({ sleepMode: true });
+
     expectNoActiveRecord();
   });
 

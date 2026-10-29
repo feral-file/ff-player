@@ -425,9 +425,10 @@ class CanvasService {
   private activeRecentlyPlayedRecordId: string | null = null;
   // True only while the device cannot yet say whether a retained record is on
   // the wall: from a commit until its record is durable or found too large to
-  // keep, and after a player restart until the first commit. Every stop is a
-  // known answer instead (no retained record is showing), so History never
-  // waits on a commit that a sleeping wall or a single-work cast may not make.
+  // keep, after a player restart until the first commit, and after a failed
+  // render (see setRenderStatus). Every stop is a known answer instead (no
+  // retained record is showing), so History never waits on a commit that a
+  // sleeping wall or a single-work cast may not make.
   private activeOccurrencePending = true;
   private recentlyPlayedWrite: Promise<void> = Promise.resolve();
   private recentlyPlayedSequence = 0;
@@ -974,8 +975,16 @@ class CanvasService {
     // calls onItemCommitted and deliberately withholds onItemPlayed), so
     // without this the previous work's record would keep claiming to be active
     // behind a replacement that never rendered.
+    //
+    // Unlike a stop, a failure stays pending. The failed work may be an
+    // incoming one, or the recorded work failing in place (WebGL context loss,
+    // a mid-playback media error), which can recover without committing again
+    // because ArtworkPlayer reports a showing as played only once. This
+    // service cannot tell the two apart, and answering "nothing on the wall"
+    // would list a recovered work as past.
     if (renderStatus === RenderStatus.failed) {
       this.retireActiveRecentlyPlayed();
+      this.activeOccurrencePending = true;
     }
     this.renderStatus = renderStatus;
     if (!this.castInfo) {
