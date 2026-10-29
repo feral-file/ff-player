@@ -225,3 +225,78 @@ describe('PlaylistClient — series playback narrowing: queued/deferred apply an
     expect(shownItemIdentity()).toBe('edition-0');
   });
 });
+
+describe('PlaylistClient — series playback narrowing: a queued refresh\'s own natural advance', () => {
+  useFakeTimersForSeriesPlayback();
+
+  // A refresh whose new list still contains the item on screen is published
+  // onto castInfo immediately but left QUEUED (queuedPlaylistPending), so it
+  // is applied by the next natural advance — `applyQueuedPlaylistIfExists()`
+  // with no targetIndex, the one branch that derives the next position from
+  // the item on screen rather than from a controller's index.
+  function queueChangedRefresh(items: DP1Item[]): void {
+    const refreshed = (
+      canvasService as unknown as {
+        refreshPlaylist: (next: DP1Item[]) => { ok: boolean };
+      }
+    ).refreshPlaylist(items);
+    expect(refreshed).toEqual({ ok: true });
+    expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
+    expect(canvasService.hasDeferredRefreshPlaylist()).toBe(false);
+  }
+
+  it('steps past the collapsed group to the item after it, instead of replaying the edition on screen (feralfile-bot F3)', async () => {
+    // Raw ["edition-0", "edition-1", "after"] narrows to
+    // ["edition-0", "after"]: resolved in RAW space the successor of
+    // "edition-0" is "edition-1", its own collapsed sibling, which maps
+    // straight back onto the slot already showing — so every queued refresh
+    // replayed "edition-0" and playback never left the group.
+    const items = [
+      seriesEdition('edition-0'),
+      seriesEdition('edition-1'),
+      item('after', 1),
+    ];
+    const cast = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(cast, false);
+    render(<LivePlaylistHarness />);
+    expect(shownItemIdentity()).toBe('edition-0');
+
+    queueChangedRefresh([
+      seriesEdition('edition-0'),
+      seriesEdition('edition-1'),
+      item('after-2', 1),
+    ]);
+
+    await advanceMs(1000);
+    expect(shownItemIdentity()).toBe('after-2');
+
+    // And it keeps moving: the narrowed list is ["edition-0", "after-2"], so
+    // the next advance wraps rather than sticking at the end.
+    await advanceMs(1000);
+    expect(shownItemIdentity()).toBe('edition-0');
+  });
+
+  it('keeps the edition on screen when a queued refresh lands under LoopMode.one', async () => {
+    // The sibling of the branch above: keepCurrent asks for the on-screen
+    // item's own slot, and `currentItemRef` holds an item of the narrowed
+    // list, so it is resolved in that same space.
+    const items = [
+      seriesEdition('edition-0'),
+      seriesEdition('edition-1'),
+      item('after', 1),
+    ];
+    const cast = displayCast(items, 0, LoopMode.one);
+    canvasService.setCastInfo(cast, false);
+    render(<LivePlaylistHarness />);
+    expect(shownItemIdentity()).toBe('edition-0');
+
+    queueChangedRefresh([
+      seriesEdition('edition-0'),
+      seriesEdition('edition-1'),
+      item('after-2', 1),
+    ]);
+
+    await advanceMs(1000);
+    expect(shownItemIdentity()).toBe('edition-0');
+  });
+});

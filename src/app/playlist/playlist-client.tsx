@@ -192,27 +192,55 @@ export default function PlaylistClient() {
 
       const hasDeferredRefresh = canvasService.hasDeferredRefreshPlaylist();
       const currentCastInfo = canvasService.getCastInfo();
-      // resolveQueuedPlaylistNextIndex works in RAW space: queuedPlaylist and
-      // previousItems both come straight from CanvasService, which never
-      // narrows (see the updateSeriesPlayback case above). consumeDeferredRefreshPlaylist
-      // below needs that raw value; the playable list itself is narrowed
-      // here — the one call site this file's own series-playback cascade had
-      // missed (run-reviewer F2, round 2) — with nextIndex carried across via
-      // mapIndex, the same pattern every other cast-command branch uses.
-      const nextIndex = resolveQueuedPlaylistNextIndex({
-        targetIndex,
-        queuedPlaylist,
-        previousItems: currentCastInfo?.playlist?.items,
-        hasDeferredRefresh,
-        currentItemId: currentItemRef.current?.id,
-        keepCurrent,
-      });
-      const { items: narrowedQueued, mapIndex } = narrowSeriesPlaylist(
-        queuedPlaylist,
-        DeviceManager.getCachedSeriesPlayback()
-      );
+      // The playable list is narrowed here — the one call site this file's
+      // own series-playback cascade had missed (run-reviewer F2, round 2).
+      const { items: narrowedQueued, mapIndex, rawIndexOf } =
+        narrowSeriesPlaylist(
+          queuedPlaylist,
+          DeviceManager.getCachedSeriesPlayback()
+        );
+
+      // Which space the next index is resolved in depends on where it came
+      // from, and the two cannot share one call:
+      //
+      // - A `targetIndex` is a RAW position — a controller's castInfo.index,
+      //   remapped onto the new raw list when the refresh was deferred. It is
+      //   resolved against `queuedPlaylist` and carried across with
+      //   `mapIndex`, the pattern every other cast-command branch uses.
+      // - A natural advance (no targetIndex) has to step through the list the
+      //   viewer actually sees. Resolved in raw space, the successor of the
+      //   item on screen is the next EDITION of its own collapsed series
+      //   group, which `mapIndex` sends straight back to the slot already
+      //   showing — so each queued refresh replays the same item and playback
+      //   never leaves the group (feralfile-bot F3, bot round 4). Resolving
+      //   against `narrowedQueued` steps to the group's successor instead.
+      //   `keepCurrent` belongs in the same space for the same reason:
+      //   `currentItemRef` holds an item of the NARROWED list, so that is
+      //   where its id is looked up.
       const narrowedIndex = normalizePlaylistIndex(
-        mapIndex(nextIndex), narrowedQueued.length);
+        targetIndex === undefined
+          ? resolveQueuedPlaylistNextIndex({
+              queuedPlaylist: narrowedQueued,
+              currentItemId: currentItemRef.current?.id,
+              keepCurrent,
+            })
+          : mapIndex(
+              resolveQueuedPlaylistNextIndex({
+                targetIndex,
+                queuedPlaylist,
+                previousItems: currentCastInfo?.playlist?.items,
+                hasDeferredRefresh,
+              })
+            ),
+        narrowedQueued.length
+      );
+      // Everything that reads castInfo.index — moveToArtwork, getStatus,
+      // triggerArtworkRefresh — expects RAW space, which CanvasService never
+      // narrows, so the selected slot is translated back exactly once here.
+      // `rawIndexOf` is the inverse of the traversal that built
+      // `narrowedQueued`, so it names the raw position of the item that
+      // actually plays rather than the one the command happened to ask for.
+      const rawNextIndex = rawIndexOf(narrowedIndex);
 
       setPlaylist(narrowedQueued);
       setCurrentIndex(narrowedIndex);
@@ -228,7 +256,8 @@ export default function PlaylistClient() {
       // stay owned by the active playlist contract and are intentionally left as-is.
       // This takes the RAW index: castInfo.playlist/castInfo.index are never
       // narrowed (see publishCurrentIndex above for why that has to hold).
-      const consumed = canvasService.consumeDeferredRefreshPlaylist(nextIndex);
+      const consumed =
+        canvasService.consumeDeferredRefreshPlaylist(rawNextIndex);
       if (!consumed) {
         canvasService.clearQueuedPlaylistPending();
         publishCurrentIndex(narrowedIndex);
