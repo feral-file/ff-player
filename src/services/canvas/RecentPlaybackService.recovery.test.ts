@@ -52,11 +52,14 @@ it('restores the same durable occurrence without changing its record or timestam
   const recover = history.recordRecentlyPlayed(work);
   await settle();
   const before = history.getRecentlyPlayed();
+  expect(history.currentItem).toEqual(work);
   history.markRenderFailed();
+  expect(history.currentItem).toBeNull();
   expect(history.getRecentlyPlayed().activeOccurrenceKnown).toBe(false);
   expect(active()).toEqual([]);
   recover();
   expect(history.getRecentlyPlayed()).toEqual(before);
+  expect(history.currentItem).toEqual(work);
   expect(writeHistory).toHaveBeenCalledTimes(1);
 });
 

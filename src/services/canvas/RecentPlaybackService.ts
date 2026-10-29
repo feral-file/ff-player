@@ -368,14 +368,14 @@ export class RecentPlaybackService {
       return;
     }
     // A cast with nothing to show is a stop whatever came before it. Checked
-    // before the occurrence guard: after a failed render or a restart there is
-    // no tracked occurrence, and no commit will follow to end the pending
+    // before the occurrence guard: after failure or restart there is no known
+    // visible occurrence, and no commit will follow to end the pending
     // answer, which would hold History at its loading view.
     if ((applied?.playlist?.items?.length ?? 0) === 0) {
       this.retireActiveRecentlyPlayed();
       return;
     }
-    const onScreen = this.occurrenceItem;
+    const onScreen = this.currentItem;
     if (onScreen === null) {
       return;
     }
@@ -397,8 +397,9 @@ export class RecentPlaybackService {
       this.retireActiveRecentlyPlayed();
     }
   }
+  /** A suspended receipt is not evidence for policy's visible-work checks. */
   get currentItem() {
-    return this.occurrenceItem;
+    return this.occurrenceFailed ? null : this.occurrenceItem;
   }
   markRenderFailed(): void {
     this.occurrenceFailed = true;

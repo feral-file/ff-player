@@ -139,6 +139,8 @@ session-only recovery receipt to its renderer. Genuine recovery of that same
 showing restores its occurrence without appending a duplicate; a pending write
 must still settle before history becomes known. Stops and newer commits
 invalidate older receipts. A bare `ready` status cannot restore an occurrence.
+A suspended receipt does not identify a visible work for policy/refresh checks;
+otherwise relabelling an already-retired predecessor could restart the cast.
 
 ## Offline recovery and connectivity
 
