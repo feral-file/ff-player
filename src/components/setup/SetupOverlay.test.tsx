@@ -296,12 +296,15 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
             'Then open the app and look for FF1-8EVTK3RE, or scan this code.'
       )
     ).toBeTruthy();
-    // The reason, so the requirement reads as protection.
+    // The code is a live first-owner invitation: ask to keep it private,
+    // and never claim the same-Wi-Fi rule alone protects it (while the
+    // legacy relayer exists it does not).
     expect(
       screen.getByText(
-        'Setup only works on the same Wi-Fi, so no one can take over this Art Computer just by seeing this screen.'
+        'Keep this code private: anyone who has it can set up this Art Computer for the next few minutes.'
       )
     ).toBeTruthy();
+    expect(screen.queryByText(/just by seeing this screen/)).toBeNull();
     expect(container.querySelector('svg')).not.toBeNull();
   });
 

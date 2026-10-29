@@ -412,12 +412,13 @@ function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
             "If pairing doesn't start automatically, add ... in the app"
             conditional routed the second case explicitly; looking for the
             name routes both. */}
-        {/* The same-Wi-Fi requirement leads, as its own line: first-owner
-            enrollment is LAN-only by protocol (ffos-user
-            docs/ff1-control-v1.md §5.1), so a phone on mobile data or
-            another network cannot finish here at all. The security line
-            says why, so the requirement reads as protection rather than a
-            limitation. */}
+        {/* The same-Wi-Fi requirement leads, as its own line: the app sets
+            up a first owner only on the frame's Wi-Fi, so a phone on mobile
+            data or another network cannot finish here. The last line asks
+            to keep the code private, and must not promise more: while the
+            legacy relayer exists the QR carries its topic, and the
+            invitation in it can enroll over that relayer from anywhere
+            (ffos-user docs/ff1-control-v1.md §5.1, §11). */}
         <p className={styles.subtitle}>
           Connect your phone to the same Wi-Fi as this Art Computer.
         </p>
@@ -432,8 +433,8 @@ function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
           </div>
         ) : null}
         <p className={styles.securityNote}>
-          Setup only works on the same Wi-Fi, so no one can take over this Art
-          Computer just by seeing this screen.
+          Keep this code private: anyone who has it can set up this Art
+          Computer for the next few minutes.
         </p>
       </div>
     </section>
