@@ -23,12 +23,12 @@ export function canvasInternals(): {
   originalPlaylistItems: unknown;
   refreshPlaylist: (newItems: DP1Item[] | undefined) => { ok: boolean };
 } {
-  return canvasService as unknown as {
+  return (canvasService as unknown as { session: {
     queuedPlaylistPending: boolean;
     deferredRefreshPlaylist: unknown;
     originalPlaylistItems: unknown;
     refreshPlaylist: (newItems: DP1Item[] | undefined) => { ok: boolean };
-  };
+  } }).session;
 }
 
 export function dp1Call(id: string, items: DP1Item[]): DP1Call {

@@ -1,11 +1,11 @@
 import { NO_DURATION_VALUE } from '@/constants';
 import { CastCommand } from '@/models';
-import type { CastInfo } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
-import { DP1Action, type DP1Call, type DP1Item } from '@/models/dp1.model';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { canvasService } from './CanvasService';
+import { DP1Action,type DP1Call,type DP1Item } from '@/models/dp1.model';
 import DeviceManager from '@/utils/DeviceManager';
+import { afterEach,describe,expect,it,vi } from 'vitest';
+import type { PlaybackSession } from './canvas/PlaybackSession';
+import { canvasService } from './CanvasService';
 
 const item = (id: string): DP1Item =>
   ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
@@ -31,10 +31,7 @@ const playlist = (
 const service = canvasService as unknown as {
   refreshPlaylist(newItems: DP1Item[] | undefined): { ok: boolean };
   setShuffle(request: { enabled: boolean }): { ok: boolean };
-  deferredRefreshPlaylist: DP1Call | null;
-  originalPlaylistItems: DP1Item[] | null;
-  castInfo: CastInfo | null;
-  queuedPlaylistPending: boolean;
+  session: PlaybackSession;
   onRefreshArtwork: (() => boolean) | null;
 };
 
@@ -214,9 +211,7 @@ describe('CanvasService refreshArtwork replay', () => {
 describe('CanvasService deferred refresh', () => {
   afterEach(() => {
     canvasService.setCastInfo(null, false);
-    service.deferredRefreshPlaylist = null;
-    service.originalPlaylistItems = null;
-    service.queuedPlaylistPending = false;
+    service.session.resetPlaylistOrder();
   });
 
   it('defers refresh when the current item is absent from the new playlist', () => {
