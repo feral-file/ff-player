@@ -397,8 +397,10 @@ function FactoryResetPanel() {
  * frame manually inside the app — "look for <name>" is the one instruction
  * that routes both cases without a separate screen. The QR code is
  * deliberately framed as the backup for when discovery fails (cross-VLAN,
- * multicast-filtering APs). Either way the phone must be on the frame's
- * Wi-Fi: the claim itself only completes on the LAN.
+ * multicast-filtering APs). Either way the app asks for the frame's Wi-Fi:
+ * it sets up a first owner only there, and the claim will only complete on
+ * the LAN once the legacy relayer is gone (until then a code from this
+ * screen can also enroll over it, ffos-user docs/ff1-control-v1.md §5.1).
  */
 function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
   const frameName = display.device_name?.trim();
@@ -418,7 +420,10 @@ function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
             to keep the code private, and must not promise more: while the
             legacy relayer exists the QR carries its topic, and the
             invitation in it can enroll over that relayer from anywhere
-            (ffos-user docs/ff1-control-v1.md §5.1, §11). */}
+            (ffos-user docs/ff1-control-v1.md §5.1, §11). It must also stay
+            true on every QR this panel shows: first claim, "Secure this Art
+            Computer", and an owned frame's code for another phone, which
+            carries no invitation and expires in no minutes. */}
         <p className={styles.subtitle}>
           Connect your phone to the same Wi-Fi as this Art Computer.
         </p>
@@ -428,14 +433,16 @@ function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
           {display.url ? ', or scan this code.' : '.'}
         </p>
         {display.url ? (
-          <div className={styles.qrFrame}>
-            <QRCodeSVG value={display.url} size={qrSize} marginSize={2} />
-          </div>
+          <>
+            <div className={styles.qrFrame}>
+              <QRCodeSVG value={display.url} size={qrSize} marginSize={2} />
+            </div>
+            <p className={styles.securityNote}>
+              Keep this code private: it can be used to pair with this Art
+              Computer.
+            </p>
+          </>
         ) : null}
-        <p className={styles.securityNote}>
-          Keep this code private: anyone who has it can set up this Art
-          Computer for the next few minutes.
-        </p>
       </div>
     </section>
   );

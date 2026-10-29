@@ -296,12 +296,13 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
             'Then open the app and look for FF1-8EVTK3RE, or scan this code.'
       )
     ).toBeTruthy();
-    // The code is a live first-owner invitation: ask to keep it private,
-    // and never claim the same-Wi-Fi rule alone protects it (while the
-    // legacy relayer exists it does not).
+    // Ask to keep the code private, and never claim the same-Wi-Fi rule
+    // alone protects it (while the legacy relayer exists it does not). The
+    // sentence must hold on every QR this panel shows, an owned frame's
+    // code included.
     expect(
       screen.getByText(
-        'Keep this code private: anyone who has it can set up this Art Computer for the next few minutes.'
+        'Keep this code private: it can be used to pair with this Art Computer.'
       )
     ).toBeTruthy();
     expect(screen.queryByText(/just by seeing this screen/)).toBeNull();

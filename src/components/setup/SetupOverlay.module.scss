@@ -77,8 +77,8 @@
   letter-spacing: 0;
 }
 
-// The claim_qr panel's closing reason for the same-Wi-Fi requirement: read
-// last, so it steps down and dims below the instructions and the QR.
+// The claim_qr panel's closing line, under the QR: keep the code private.
+// Read last, so it steps down and dims below the instructions and the QR.
 .securityNote {
   max-width: min(86vw, 96vmin);
   margin-top: 4vh;
