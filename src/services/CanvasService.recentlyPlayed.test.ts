@@ -18,10 +18,20 @@ const history = () => canvasService.processMessage({
 }) as { ok: boolean; status?: string; records?: { recordId: string; isActive?: boolean }[];
   incomplete?: boolean; activeOccurrenceKnown?: boolean };
 
+/**
+ * A stop is a known answer, not a pending one: no retained record is on the
+ * wall, so History can show the timeline instead of waiting on a commit.
+ */
+const expectNoActiveRecord = () => {
+  expect(history().activeOccurrenceKnown).toBe(true);
+  expect(history().records?.some(record => record.isActive)).toBe(false);
+};
+
 /** Lets a test resolve the queued durable write at a moment of its choosing. */
 let releaseWrite: (() => void) | null = null;
 /** Held from the spy itself; reading it back off DeviceManager would be an unbound method reference. */
 let setRecentlyPlayed: MockInstance<(records: RecentlyPlayedRecord[]) => Promise<void>>;
+let setRecentlyPlayedIncomplete: MockInstance<(incomplete: boolean) => Promise<void>>;
 
 beforeEach(async () => {
   vi.spyOn(DeviceManager, 'getContentPolicyRecord').mockResolvedValue(null);
@@ -29,7 +39,8 @@ beforeEach(async () => {
   vi.spyOn(DeviceManager, 'getRecentlyPlayed').mockResolvedValue([]);
   vi.spyOn(DeviceManager, 'getRecentlyPlayedIncomplete').mockResolvedValue(false);
   setRecentlyPlayed = vi.spyOn(DeviceManager, 'setRecentlyPlayed').mockResolvedValue(undefined);
-  vi.spyOn(DeviceManager, 'setRecentlyPlayedIncomplete').mockResolvedValue(undefined);
+  setRecentlyPlayedIncomplete = vi.spyOn(DeviceManager, 'setRecentlyPlayedIncomplete')
+    .mockResolvedValue(undefined);
   releaseWrite = null;
   await contentPolicyStore.initialize();
   // Settle the lazy history load so the first getRecentlyPlayed in a test is
@@ -90,8 +101,7 @@ describe('recently played active occurrence follows the wall', () => {
 
     // The record is retained — history is a timeline — but nothing is on the
     // wall, so no occurrence may be marked active.
-    expect(history().activeOccurrenceKnown).toBe(false);
-    expect(history().records?.some(record => record.isActive)).toBe(false);
+    expectNoActiveRecord();
     expect(history().records?.length).toBeGreaterThan(0);
   });
 
@@ -120,7 +130,7 @@ describe('recently played active occurrence follows the wall', () => {
       expect(setRecentlyPlayed).toHaveBeenCalled();
     });
 
-    expect(history().activeOccurrenceKnown).toBe(false);
+    expectNoActiveRecord();
   });
 
   it('stops claiming an active occurrence while the device is asleep', async () => {
@@ -130,7 +140,7 @@ describe('recently played active occurrence follows the wall', () => {
     // Sleep keeps castInfo, so the stop is invisible to setCastInfo(null).
     canvasService.setSleepMode({ sleepMode: true });
 
-    expect(history().activeOccurrenceKnown).toBe(false);
+    expectNoActiveRecord();
     expect(history().records?.length).toBeGreaterThan(0);
   });
 
@@ -142,7 +152,20 @@ describe('recently played active occurrence follows the wall', () => {
     // withheld, so nothing else would retire the previous work's record.
     canvasService.setRenderStatus(RenderStatus.failed);
 
+    // Pending rather than "nothing on the wall": the recorded work itself may
+    // be the one that failed, and it can recover without committing again.
     expect(history().activeOccurrenceKnown).toBe(false);
+    expect(history().records?.some(record => record.isActive)).toBe(false);
+  });
+
+  it('lets a stop after a failed render answer that nothing is on the wall', async () => {
+    canvasService.recordRecentlyPlayed(item('a'));
+    await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
+
+    canvasService.setRenderStatus(RenderStatus.failed);
+    canvasService.setSleepMode({ sleepMode: true });
+
+    expectNoActiveRecord();
   });
 
 });
@@ -177,7 +200,7 @@ describe('recently played active occurrence across cast replacement', () => {
     canvasService.setCastInfo(
       castOf([{ ...painted, contentRating: 'mature' }, item('other')]), false);
 
-    expect(history().activeOccurrenceKnown).toBe(false);
+    expectNoActiveRecord();
   });
 
   it('retires the active occurrence when the cast empties', async () => {
@@ -189,7 +212,21 @@ describe('recently played active occurrence across cast replacement', () => {
     // gate stops painting and history must stop claiming.
     canvasService.setCastInfo(castOf([]), false);
 
+    expectNoActiveRecord();
+  });
+
+  it('answers an emptied cast after a failed render, when no occurrence is tracked', async () => {
+    canvasService.setCastInfo(castOf([item('a')]), false);
+    canvasService.recordRecentlyPlayed(item('a'));
+    await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
+    canvasService.setRenderStatus(RenderStatus.failed);
     expect(history().activeOccurrenceKnown).toBe(false);
+
+    // The renderer will not commit anything from an empty cast, so only this
+    // cast can end the pending answer.
+    canvasService.setCastInfo(castOf([]), false);
+
+    expectNoActiveRecord();
   });
 
   it('cannot let a pending write promote a work the new cast blocks', async () => {
@@ -205,7 +242,7 @@ describe('recently played active occurrence across cast replacement', () => {
     releaseWrite?.();
     await vi.waitFor(() => { expect(setRecentlyPlayed).toHaveBeenCalled(); });
 
-    expect(history().activeOccurrenceKnown).toBe(false);
+    expectNoActiveRecord();
   });
 
   it('retires the visible work when reconciliation drops it mid-handoff', async () => {
@@ -226,7 +263,7 @@ describe('recently played active occurrence across cast replacement', () => {
     await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
 
     expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['next']);
-    expect(history().activeOccurrenceKnown).toBe(false);
+    expectNoActiveRecord();
   });
 
   it('keeps the active occurrence while advancing within the same playlist', async () => {
@@ -238,7 +275,7 @@ describe('recently played active occurrence across cast replacement', () => {
     canvasService.setCastInfo(castOf(items, 1, CastCommand.moveToArtwork), false);
 
     // 'a' is genuinely still on the wall until 'b' commits, and that commit
-    // retires it. Retiring here would report pending while it is displayed.
+    // retires it. Retiring here would report nothing on the wall while it is displayed.
     expect(history().activeOccurrenceKnown).toBe(true);
   });
 });
@@ -262,7 +299,7 @@ describe('recently played active occurrence under policy changes', () => {
     await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
 
     expect(canvasService.getCastInfo()?.playlist?.items?.[0].id).toBe('allowed');
-    expect(history().activeOccurrenceKnown).toBe(false);
+    expectNoActiveRecord();
   });
 
   it('keeps the active occurrence when a policy change leaves the same work playing', async () => {
@@ -278,28 +315,59 @@ describe('recently played active occurrence under policy changes', () => {
 
     await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
 
-    // Blanking this would leave History pending until the next advance, which
-    // on a single-work cast may never come.
+    // Retiring this would deny a work that is still on the wall: History would
+    // list it as past until the next advance, which on a single-work cast may
+    // never come.
     expect(history().activeOccurrenceKnown).toBe(true);
+    expect(history().records?.some(record => record.isActive)).toBe(true);
   });
 
 });
 
 describe('recently played record capacity', () => {
+  const oversize: DP1Item = {
+    ...item('huge'),
+    source: `data:text/html,${'x'.repeat(RECENTLY_PLAYED_MAX_RECORD_BYTES)}`,
+  };
+
   it('leaves no stale active occurrence when an oversize record is omitted', async () => {
     canvasService.recordRecentlyPlayed(item('a'));
     await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
 
-    const oversize: DP1Item = {
-      ...item('huge'),
-      source: `data:text/html,${'x'.repeat(RECENTLY_PLAYED_MAX_RECORD_BYTES)}`,
-    };
     canvasService.recordRecentlyPlayed(oversize);
 
     await vi.waitFor(() => { expect(history().incomplete).toBe(true); });
     // The omitted work is the one on the wall. Reporting the previous record
-    // as active would name the wrong work.
+    // as active would name the wrong work, and staying pending would hold
+    // History at a spinner for as long as the omitted work plays.
+    expectNoActiveRecord();
+  });
+
+  it('cannot let a late oversize omission end a newer commit\'s pending window', async () => {
+    let releaseMarker: () => void = () => undefined;
+    setRecentlyPlayedIncomplete.mockImplementationOnce(
+      () => new Promise<void>(resolve => { releaseMarker = resolve; }));
+    const gate = new Promise<void>(resolve => { releaseWrite = resolve; });
+    setRecentlyPlayed.mockImplementationOnce(async () => gate);
+    const markers = setRecentlyPlayedIncomplete.mock.calls.length;
+    const writes = setRecentlyPlayed.mock.calls.length;
+
+    canvasService.recordRecentlyPlayed(oversize);
+    await vi.waitFor(() => {
+      expect(setRecentlyPlayedIncomplete.mock.calls.length).toBeGreaterThan(markers);
+    });
+    canvasService.recordRecentlyPlayed(item('b'));
+    releaseMarker();
+    await vi.waitFor(() => {
+      expect(setRecentlyPlayed.mock.calls.length).toBeGreaterThan(writes);
+    });
+
+    // The omission resolved for a work that has already left the wall, and
+    // 'b' is still being written, so the honest answer is still pending.
     expect(history().activeOccurrenceKnown).toBe(false);
+    releaseWrite?.();
+    await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
+    expect(history().records?.some(record => record.isActive)).toBe(true);
   });
 
 });
