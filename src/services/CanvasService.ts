@@ -423,6 +423,12 @@ class CanvasService {
   // until the current successful commit is observed; guessing by item id
   // would suppress prior repeats from the reverse-chronological history.
   private activeRecentlyPlayedRecordId: string | null = null;
+  // True only while the device cannot yet say whether a retained record is on
+  // the wall: from a commit until its record is durable or found too large to
+  // keep, and after a player restart until the first commit. Every stop is a
+  // known answer instead (no retained record is showing), so History never
+  // waits on a commit that a sleeping wall or a single-work cast may not make.
+  private activeOccurrencePending = true;
   private recentlyPlayedWrite: Promise<void> = Promise.resolve();
   private recentlyPlayedSequence = 0;
   // Bumped on every new commit and every hard stop. A queued durable write
@@ -481,14 +487,16 @@ class CanvasService {
   }
 
   /**
-   * Retire the active occurrence. `getRecentlyPlayed` then reports
-   * `activeOccurrenceKnown: false`, which the app renders as pending rather
-   * than as a claim about what is on the wall. Called when a new work begins
-   * committing and when playback stops.
+   * Retire the active occurrence: no retained record is on the wall.
+   * `getRecentlyPlayed` then marks no record active and reports
+   * `activeOccurrenceKnown: true`, so History shows the timeline instead of
+   * waiting. Called when playback stops, and when a new work begins committing,
+   * which then reopens the pending window itself.
    */
   private retireActiveRecentlyPlayed(): void {
     this.playbackGeneration += 1;
     this.activeRecentlyPlayedRecordId = null;
+    this.activeOccurrencePending = false;
     this.occurrenceItem = null;
   }
 
@@ -550,6 +558,7 @@ class CanvasService {
     // below, which records nothing and must not leave a stale active record
     // standing behind the work now displayed.
     this.retireActiveRecentlyPlayed();
+    this.activeOccurrencePending = true;
     // Claim the identity for the pending window as well as the active one: a
     // displacement before this write lands must still invalidate it.
     this.occurrenceItem = item;
@@ -572,6 +581,12 @@ class CanvasService {
           console.warn('[CanvasService] Recently played record exceeds byte budget');
           await DeviceManager.setRecentlyPlayedIncomplete(true);
           this.recentlyPlayedIncomplete = true;
+          // The wall shows a work History does not hold, which is a known
+          // answer. Leaving it pending would hold History at a spinner for as
+          // long as the work plays, typically a large on-chain `data:` work.
+          if (generation === this.playbackGeneration) {
+            this.activeOccurrencePending = false;
+          }
           return;
         }
         await DeviceManager.setRecentlyPlayed(next);
@@ -592,6 +607,7 @@ class CanvasService {
         // during the write moved the generation on.
         if (generation === this.playbackGeneration) {
           this.activeRecentlyPlayedRecordId = next[0]?.recordId ?? null;
+          this.activeOccurrencePending = false;
         }
       })
       .catch(async (error: unknown) => {
@@ -656,7 +672,7 @@ class CanvasService {
       status: records.length === 0 ? 'empty' : 'ok',
       records,
       incomplete: this.recentlyPlayedIncomplete,
-      activeOccurrenceKnown: this.activeRecentlyPlayedRecordId !== null,
+      activeOccurrenceKnown: !this.activeOccurrencePending,
     };
   }
 
