@@ -158,6 +158,15 @@ export interface SeriesOverrideRebuild {
  * no command left that can restart it.
  */
 export function resolveSeriesOverrideRebuild(params: {
+  /**
+   * The raw cast order the playable list on screen was narrowed FROM — the
+   * caller's own record of it, not `castInfo.playlist.items`. A queued
+   * shuffle or refresh publishes its replacement onto `castInfo` the moment
+   * it arrives and waits for the slot boundary to install it, and
+   * `previousIndex` below names a slot of the installed order, so narrowing
+   * the replacement and indexing it with that position would select an
+   * unrelated work.
+   */
   rawItems: DP1Item[];
   /**
    * The override the playable list on screen was narrowed with, so the

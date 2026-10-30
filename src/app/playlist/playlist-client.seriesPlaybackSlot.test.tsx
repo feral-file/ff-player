@@ -17,6 +17,16 @@
  * which re-runs the route's slot-entry effect and granted the artwork on
  * screen a whole new interval — a 10s slot asked to change series mode at
  * second 9 advanced at second 19.
+ *
+ * F9: a queued shuffle publishes its new order onto `castInfo` at once and
+ * waits for the slot boundary to install it, so the rebuild narrowed the
+ * order waiting to replace the list while indexing it with a position that
+ * named a slot of the list on screen — and interrupted an ordinary playlist
+ * carrying no series at all.
+ *
+ * F7 again: the showing key still carried the slot index for an artwork whose
+ * id AND source repeat elsewhere in the same playlist, so the first fix left
+ * a repeated ended tail being replayed when a series ahead of it expanded.
  */
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
@@ -95,6 +105,15 @@ function sendSeriesPlayback(mode: DP1SeriesPlayback): void {
     canvasService.processMessage({
       command: CastCommand.updateSeriesPlayback,
       request: { mode },
+    });
+  });
+}
+
+function sendShuffle(enabled: boolean): void {
+  act(() => {
+    canvasService.processMessage({
+      command: CastCommand.setShuffle,
+      request: { enabled },
     });
   });
 }
@@ -249,5 +268,115 @@ describe('PlaylistClient — updateSeriesPlayback keeps the running deadline', (
     // left over from the slot it replaced.
     await advanceMs(1000);
     expect(shownSource()).toBe('https://example.com/edition-0.jpg');
+  });
+});
+
+describe('PlaylistClient — updateSeriesPlayback keeps a queued replacement queued', () => {
+  useFakeTimersForSlotSuite();
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('keeps the artwork on screen when a shuffle is still waiting to apply', async () => {
+    // `setShuffle` publishes its new order onto castInfo immediately and
+    // leaves it queued until the current slot finishes, so for that whole
+    // interval castInfo's order is NOT the order on screen. Resolving the
+    // selected slot against castInfo's copy moved an ordinary playlist with
+    // no series in it at all (feralfile-bot F9 on #320).
+    //
+    // Fisher-Yates over the two items that are not current: random >= 0.5
+    // leaves them in place, so the queued order is deterministically
+    // [b, a, c] — `a` landing exactly where `b`'s own local index pointed.
+    vi.spyOn(Math, 'random').mockReturnValue(0.9);
+    const items = [item('a', 100), item('b', 100), item('c', 100)];
+    canvasService.setCastInfo(displayCast(items, 1, LoopMode.playlist), false);
+    render(<LivePlaylistHarness />);
+
+    expect(shownSource()).toBe('https://example.com/b.jpg');
+
+    sendShuffle(true);
+    await advanceMs(0);
+    expect(shownSource()).toBe('https://example.com/b.jpg');
+
+    sendSeriesPlayback(DP1SeriesPlayback.Full);
+    await advanceMs(0);
+
+    expect(shownSource()).toBe('https://example.com/b.jpg');
+  });
+
+  it('still applies the queued shuffle at the slot boundary afterwards', async () => {
+    // The other half of the same claim: the command may not consume the
+    // queue either. `b` holds its own slot to the end, and the shuffled
+    // order takes over from there — `a` next, as [b, a, c] says.
+    vi.spyOn(Math, 'random').mockReturnValue(0.9);
+    const items = [item('a', 10), item('b', 10), item('c', 10)];
+    canvasService.setCastInfo(displayCast(items, 1, LoopMode.playlist), false);
+    render(<LivePlaylistHarness />);
+
+    sendShuffle(true);
+    sendSeriesPlayback(DP1SeriesPlayback.Full);
+    await advanceMs(0);
+    expect(shownSource()).toBe('https://example.com/b.jpg');
+
+    await advanceMs(10000);
+    expect(shownSource()).toBe('https://example.com/a.jpg');
+  });
+});
+
+describe('PlaylistClient — updateSeriesPlayback keeps a repeated tail showing', () => {
+  useFakeTimersForSlotSuite();
+
+  it('does not remount an ended tail that repeats an earlier id and source', async () => {
+    // The tail is the same artwork as the group's first edition, cast a
+    // second time after a separator. Identity and source alone cannot tell
+    // the two slots apart, so the showing key fell back to the slot index —
+    // and expansion ahead of the tail moved it, remounting an artwork the
+    // hold resolver had just decided to keep (feralfile-bot F7, second pass).
+    await DeviceManager.setSeriesPlayback(DP1SeriesPlayback.First);
+    const items = [
+      seriesEdition('edition-0', 1),
+      seriesEdition('edition-1', 1),
+      item('separator', 1),
+      { ...seriesEdition('edition-0'), duration: undefined } as DP1Item,
+    ];
+    canvasService.setCastInfo(displayCast(items, 3, LoopMode.none), false);
+    render(<LivePlaylistHarness />);
+
+    expect(shownSource()).toBe('https://example.com/edition-0.jpg');
+    callSourceEnded(playerProps().itemIdentity as string);
+    await advanceMs(0);
+
+    const keyBefore = shownSessionKey();
+
+    sendSeriesPlayback(DP1SeriesPlayback.Full);
+    await advanceMs(0);
+
+    // The tail moved from local index 2 to local index 3 and is still the
+    // second occurrence of that artwork, so it is still the same showing.
+    expect(shownSource()).toBe('https://example.com/edition-0.jpg');
+    expect(shownSessionKey()).toBe(keyBefore);
+  });
+
+  it('still tells the two occurrences of one artwork apart', async () => {
+    // The index was in the key for a reason, and the occurrence has to keep
+    // doing that job: advancing from the group's own edition to the repeat
+    // of it at the tail is a new showing, not a re-render of the same one.
+    await DeviceManager.setSeriesPlayback(DP1SeriesPlayback.First);
+    const items = [
+      seriesEdition('edition-0', 1),
+      item('separator', 1),
+      { ...seriesEdition('edition-0'), duration: 1 } as DP1Item,
+    ];
+    canvasService.setCastInfo(displayCast(items, 0, LoopMode.playlist), false);
+    render(<LivePlaylistHarness />);
+
+    const headKey = shownSessionKey();
+    await advanceMs(1000);
+    expect(shownSource()).toBe('https://example.com/separator.jpg');
+    await advanceMs(1000);
+
+    expect(shownSource()).toBe('https://example.com/edition-0.jpg');
+    expect(shownSessionKey()).not.toBe(headKey);
   });
 });

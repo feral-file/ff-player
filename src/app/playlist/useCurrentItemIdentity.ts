@@ -1,5 +1,9 @@
 import type { DP1Item } from '@/models/dp1.model';
-import { itemIdentityFor, normalizePlaylistIndex } from '@/utils/playlist';
+import {
+  itemIdentityFor,
+  normalizePlaylistIndex,
+  showingIdentityFor,
+} from '@/utils/playlist';
 import { useMemo } from 'react';
 
 /**
@@ -32,47 +36,29 @@ export function useCurrentItemIdentity(
  * and the mount decision in useArtworkSource. Coarser than a preference
  * object (a same-slot re-merge, e.g. the device scaling record landing late,
  * must not reset the session) and finer than useCurrentItemIdentity (a new
- * cast may reuse an id for a different source), so the key carries the item
- * identity and the source.
+ * cast may reuse an id for a different source).
  *
- * The slot index joins them only when identity and source together cannot
- * stand on their own: two slots of this playlist carrying the same id AND the
- * same source, which is the case the index was there to separate. That is
- * exactly `slotShowingUnchanged`'s test for one showing, and the two must
- * agree — the rebuild decides whether to keep a running deadline by that
- * function, so a key that called a pair ambiguous where it does not would
- * remount an artwork whose timer had just been preserved, cutting it off with
- * whatever was left of the interval. The same id under a different source
- * needs no index: `[identity, source]` already separates those two.
+ * It is `showingIdentityFor` verbatim, and has to be: the rebuild that
+ * changes the series-playback override decides by that same function whether
+ * the slot on screen keeps its running deadline and its repeat-off hold, so a
+ * key computed any other way would remount an artwork whose timer had just
+ * been preserved — cutting it off with whatever was left of the interval — or
+ * replay an ended one the resolver had deliberately held. One definition,
+ * read by both sides, is the only arrangement in which they cannot drift.
  *
- * So an unambiguous item keeps its key when a rebuild moves it — a series
- * group expanding earlier in the list shifts every later slot — and the same
- * artwork is not torn down and replayed for having changed position. That is
- * the reading `slotShowingUnchanged` already states ("an id-carrying item
- * moved by a rebuild is still the same showing"), and an ended artwork held
- * by repeat-off depends on the two agreeing: a key that moved with the index
- * would remount it and start it over. An id-less item is unaffected, because
- * `itemIdentityFor` makes its position part of its identity, which is the
- * same answer the resolver gives it.
- *
- * Encode the tuple without delimiters that can also occur inside an id or URL.
+ * What that buys here: an artwork keeps its key when a rebuild moves it (a
+ * series group expanding earlier in the list shifts every later slot), while
+ * two slots carrying the same id and the same source are still told apart by
+ * which occurrence of that pair they are.
  */
 export function useShowingKey(playlist: DP1Item[], currentIndex: number): string {
   return useMemo(() => {
     if (currentIndex < 0 || playlist.length === 0) {
       return '';
     }
-    const index = normalizePlaylistIndex(currentIndex, playlist.length);
-    const identity = itemIdentityFor(playlist, index);
-    const source = playlist[index]?.source ?? '';
-    const ambiguous = playlist.some(
-      (other, otherIndex) =>
-        otherIndex !== index &&
-        itemIdentityFor(playlist, otherIndex) === identity &&
-        other.source === source
-    );
-    return JSON.stringify(
-      ambiguous ? [index, identity, source] : [identity, source]
+    return showingIdentityFor(
+      playlist,
+      normalizePlaylistIndex(currentIndex, playlist.length)
     );
   }, [currentIndex, playlist]);
 }

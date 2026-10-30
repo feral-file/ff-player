@@ -468,6 +468,35 @@ describe('slotShowingUnchanged', () => {
     expect(slotShowingUnchanged([], 0, [], 0)).toBe(false);
     expect(slotShowingUnchanged([slot('a', 's/a')], 0, [], 0)).toBe(false);
   });
+
+  it('tracks which occurrence of a repeated artwork the slot is', () => {
+    // The same artwork cast twice: identity and source match both slots, so
+    // only the occurrence tells them apart — and it has to survive a rebuild
+    // that moves the later copy, or the showing key moves with it and an
+    // ended tail is replayed (feralfile-bot F7 on #320, second pass).
+    const before = [slot('dup', 's/d'), slot('mid', 's/m'), slot('dup', 's/d')];
+    const after = [
+      slot('dup', 's/d'),
+      slot('expanded', 's/e'),
+      slot('mid', 's/m'),
+      slot('dup', 's/d'),
+    ];
+    expect(slotShowingUnchanged(before, 2, after, 3)).toBe(true);
+    expect(slotShowingUnchanged(before, 2, after, 0)).toBe(false);
+    expect(slotShowingUnchanged(before, 0, after, 3)).toBe(false);
+  });
+
+  it('leaves a repeated id under different sources on its own occurrence', () => {
+    // `[identity, source]` already separates these, so neither slot is a
+    // second occurrence of anything and both keep matching across a move.
+    const before = [slot('dup', 's/first'), slot('dup', 's/second')];
+    const after = [
+      slot('dup', 's/first'),
+      slot('inserted', 's/i'),
+      slot('dup', 's/second'),
+    ];
+    expect(slotShowingUnchanged(before, 1, after, 2)).toBe(true);
+  });
 });
 
 describe('resolveRepeatOffHoldAfterRebuild', () => {

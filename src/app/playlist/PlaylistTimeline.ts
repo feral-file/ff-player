@@ -17,6 +17,7 @@ import {
   shouldApplyQueuedPlaylistOnShuffleOrRefresh,
   shouldHoldForPendingMerge,
   shouldResumeSlotTimerAfterSetLoop,
+  showingIdentityFor,
 } from '@/utils/playlist';
 import {
   narrowForDevice,
@@ -66,6 +67,16 @@ export class PlaylistTimeline {
    * value already recorded here.
    */
   private narrowedWith: DP1SeriesPlayback | null = null;
+  /**
+   * The RAW cast items the playable list on screen was narrowed from.
+   * Normally the same array `castInfo.playlist.items` holds, but a queued
+   * shuffle or refresh publishes its replacement onto `castInfo` at once and
+   * waits for the slot boundary to install it, so the two diverge for as long
+   * as that queue is pending. `rebuildForSeriesOverride` must narrow the list
+   * the viewer is actually watching, not the one waiting to replace it.
+   * Recorded wherever a playable list is installed from raw items.
+   */
+  private narrowedRaw: DP1Item[] = [];
   /**
    * One-shot: the identity of the showing whose running deadline the next arm
    * must keep. `updateSeriesPlayback` rebuilds the playable list into a fresh
@@ -120,6 +131,7 @@ export class PlaylistTimeline {
   };
   private clearPlayable() {
     this.currentItem = undefined;
+    this.narrowedRaw = [];
     this.ui.setPlaylist([]);
     this.ui.setIndex(-1);
     this.ui.setDefaults(null);
@@ -175,6 +187,7 @@ export class PlaylistTimeline {
 
     this.ui.setPlaylist(nextItems);
     this.ui.setIndex(nextIndex);
+    this.narrowedRaw = queuedPlaylist;
     // Sync the selection immediately so a same-tick concurrent caller sees the
     // new state instead of re-entering against the old snapshot.
     this.items = nextItems;
@@ -289,7 +302,7 @@ export class PlaylistTimeline {
     const preserve =
       preserveElapsed ||
       (pendingPreserve !== null &&
-        pendingPreserve === itemIdentityFor(snapshot, normalizedIndex));
+        pendingPreserve === showingIdentityFor(snapshot, normalizedIndex));
     if (!preserve) {
       this.slotStartedAt = Date.now();
       this.armed = null;
@@ -433,6 +446,7 @@ export class PlaylistTimeline {
       // playable list.
       const { items, mapIndex } = narrowForDevice(rawItems);
       this.narrowedWith = DeviceManager.getCachedSeriesPlayback();
+      this.narrowedRaw = rawItems;
       this.ui.setPlaylist(
         items.map(item => ({
           ...item,
@@ -483,6 +497,7 @@ export class PlaylistTimeline {
         );
         this.index = resolvedIndex;
         this.ui.setIndex(resolvedIndex);
+        this.narrowedRaw = rawIncoming;
         canvasService.clearQueuedPlaylistPending();
         return;
       }
@@ -532,7 +547,16 @@ export class PlaylistTimeline {
    * changed, and resumes a repeat-off hold the rebuild has outgrown.
    */
   private rebuildForSeriesOverride(castInfo: CastInfo) {
-    const rawItems = castInfo.playlist?.items;
+    // The raw order the list on screen came from, not castInfo's: a queued
+    // shuffle or refresh has already published its replacement there, and the
+    // selected position only ever named a slot of the installed order.
+    // Narrowing the replacement and then indexing it with that position
+    // selects whatever the new order happens to carry there — on an ordinary
+    // playlist with no series in it at all. The queue is left pending, so it
+    // still applies at the slot boundary, narrowed with the new override.
+    const rawItems = this.narrowedRaw.length
+      ? this.narrowedRaw
+      : castInfo.playlist?.items;
     if (!rawItems?.length) {
       return;
     }
@@ -545,11 +569,12 @@ export class PlaylistTimeline {
         holdAfterFinalSlot: this.holding,
       });
     this.narrowedWith = DeviceManager.getCachedSeriesPlayback();
+    this.narrowedRaw = rawItems;
     if (holdOutcome !== 'keep') {
       this.holding = false;
     }
     this.preserveArmFor = preserveActiveDeadline
-      ? itemIdentityFor(nextPlaylist, nextIndex)
+      ? showingIdentityFor(nextPlaylist, nextIndex)
       : null;
     this.ui.setPlaylist(nextPlaylist);
     this.index = nextIndex;

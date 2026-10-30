@@ -131,3 +131,47 @@ describe('useShowingKey — position is not part of an unambiguous showing', () 
     expect(result.current).toBe(first);
   });
 });
+
+describe('useShowingKey — a repeated artwork keeps its own occurrence', () => {
+  it('is stable when a slot sharing id AND source is moved by a rebuild', () => {
+    // Identity and source cannot separate these two slots, so something
+    // positional has to — and the slot index was the wrong thing, because a
+    // series expanding ahead of the tail moves it without making it a new
+    // showing. The occurrence of the pair does not move with the list
+    // (feralfile-bot F7 on #320, second pass).
+    const before = [
+      work('dup', 'https://same'),
+      work('separator', 'https://s'),
+      work('dup', 'https://same'),
+    ];
+    const after = [
+      work('dup', 'https://same'),
+      work('expanded', 'https://e'),
+      work('separator', 'https://s'),
+      work('dup', 'https://same'),
+    ];
+    const { result, rerender } = renderHook(
+      ({ playlist, index }: { playlist: DP1Item[]; index: number }) =>
+        useShowingKey(playlist, index),
+      { initialProps: { playlist: before, index: 2 } }
+    );
+    const first = result.current;
+    rerender({ playlist: after, index: 3 });
+    expect(result.current).toBe(first);
+  });
+
+  it('still separates the two occurrences of that same artwork', () => {
+    const playlist = [
+      work('dup', 'https://same'),
+      work('separator', 'https://s'),
+      work('dup', 'https://same'),
+    ];
+    const { result, rerender } = renderHook(
+      ({ index }: { index: number }) => useShowingKey(playlist, index),
+      { initialProps: { index: 0 } }
+    );
+    const first = result.current;
+    rerender({ index: 2 });
+    expect(result.current).not.toBe(first);
+  });
+});

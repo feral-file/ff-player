@@ -435,12 +435,52 @@ export function shouldResumeSlotTimerAfterSetLoop(params: {
 }
 
 /**
- * Whether two slots describe the same showing: the same `itemIdentityFor`
- * and the same `source`. That pair is what decides whether ArtworkPlayer
- * keeps the element on screen or recreates it — the route passes identity as
- * `itemIdentity` and the source through `castPreviewURL`, so when both hold,
- * nothing remounts and nothing reloads on its own. Compared this way rather
- * than by object identity, which a playlist rebuild never preserves.
+ * Identity of one SHOWING at a slot — what decides whether ArtworkPlayer
+ * keeps the element on screen or recreates it. Three parts: the item's
+ * `itemIdentityFor`, its `source` (the route passes the first as
+ * `itemIdentity` and the second through `castPreviewURL`), and which
+ * occurrence of that pair this slot is, counted from the start of the list.
+ *
+ * The occurrence is what a raw slot index used to be, without its one
+ * defect. A rebuild that expands a series group earlier in the list shifts
+ * every later slot, so an identity carrying the index called the same
+ * artwork a new showing for having moved — and an ended artwork held by
+ * repeat-off was torn down and replayed. An occurrence does not move with
+ * the list: the second copy of one artwork stays the second copy whatever
+ * happens ahead of it, while two slots carrying the same id AND the same
+ * source stay distinguishable, which is the only thing the index was ever
+ * there for.
+ *
+ * Three shapes are unaffected, all landing on occurrence 0: an item with a
+ * unique id, an item sharing an id under a different source (identity and
+ * source already tell those apart), and an id-less item, whose own position
+ * `itemIdentityFor` folds into its identity so that no two id-less slots
+ * ever share one.
+ *
+ * Encoded without delimiters that can also occur inside an id or a URL.
+ */
+export function showingIdentityFor(items: DP1Item[], index: number): string {
+  const identity = itemIdentityFor(items, index);
+  const source = items[index]?.source ?? '';
+  let occurrence = 0;
+  for (let before = 0; before < index; before += 1) {
+    if (
+      itemIdentityFor(items, before) === identity &&
+      (items[before]?.source ?? '') === source
+    ) {
+      occurrence += 1;
+    }
+  }
+  return JSON.stringify([identity, source, occurrence]);
+}
+
+/**
+ * Whether two slots describe the same showing, by `showingIdentityFor`.
+ * Compared this way rather than by object identity, which a playlist rebuild
+ * never preserves — and through the same function the render-side showing key
+ * uses, because the two must agree: this one decides whether a running
+ * deadline and a repeat-off hold survive a rebuild, and a key that disagreed
+ * would remount an artwork whose timer had just been preserved.
  *
  * Positions may differ: an id-carrying item moved by a rebuild is still the
  * same showing, while an id-less item's identity is its own position, so
@@ -455,10 +495,7 @@ export function slotShowingUnchanged(
   if (!a[indexA] || !b[indexB]) {
     return false;
   }
-  return (
-    itemIdentityFor(a, indexA) === itemIdentityFor(b, indexB) &&
-    (a[indexA]?.source ?? '') === (b[indexB]?.source ?? '')
-  );
+  return showingIdentityFor(a, indexA) === showingIdentityFor(b, indexB);
 }
 
 /** What a playable-list rebuild must do with a repeat-off hold in effect. */
