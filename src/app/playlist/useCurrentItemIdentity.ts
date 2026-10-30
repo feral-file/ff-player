@@ -8,8 +8,10 @@ import { useMemo } from 'react';
 
 /**
  * Stable identity of the item at the active slot: the item id when it has
- * one, else an index-plus-source key. Recomputed only when the playlist or
- * the current index changes. Passed to ArtworkPlayer so the end-of-stream
+ * one, else a position-plus-source key — the position of its RAW cast slot
+ * once the list has been narrowed, so a First<->Full flip that moves the
+ * slot does not rename the artwork standing in it. Recomputed only when the
+ * playlist or the current index changes. Passed to ArtworkPlayer so the end-of-stream
  * gate can reject events from a previous adjacent item that happens to share
  * the same source URL, and so useArtworkSettings can scope a viewer's
  * session adjustment to one showing. Its own file so the route stays within
@@ -47,9 +49,12 @@ export function useCurrentItemIdentity(
  * read by both sides, is the only arrangement in which they cannot drift.
  *
  * What that buys here: an artwork keeps its key when a rebuild moves it (a
- * series group expanding earlier in the list shifts every later slot), while
- * two slots carrying the same id and the same source are still told apart by
- * which occurrence of that pair they are.
+ * series group expanding or collapsing earlier in the list shifts every later
+ * slot), while two slots carrying the same id and the same source are still
+ * told apart by which occurrence of that pair they are — counted over the raw
+ * cast list, which a narrowing does not reorder, so the surviving copy of a
+ * repeated artwork keeps its number even when the copy it was counting is
+ * narrowed away.
  */
 export function useShowingKey(playlist: DP1Item[], currentIndex: number): string {
   return useMemo(() => {

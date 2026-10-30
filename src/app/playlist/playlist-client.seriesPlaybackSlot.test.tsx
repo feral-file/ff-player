@@ -27,6 +27,12 @@
  * F7 again: the showing key still carried the slot index for an artwork whose
  * id AND source repeat elsewhere in the same playlist, so the first fix left
  * a repeated ended tail being replayed when a series ahead of it expanded.
+ *
+ * F7 a third time: the occurrence that replaced the index was counted over
+ * the narrowed list, so narrowing away the EARLIER copy of a repeated pair
+ * renumbered the survivor — and an id-less item still had nothing but its
+ * local position to be identified by. Both are answered by the raw slot a
+ * playable item was narrowed from, which a First<->Full flip never moves.
  */
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
@@ -378,5 +384,62 @@ describe('PlaylistClient — updateSeriesPlayback keeps a repeated tail showing'
 
     expect(shownSource()).toBe('https://example.com/edition-0.jpg');
     expect(shownSessionKey()).not.toBe(headKey);
+  });
+
+  it('does not remount an ended tail whose earlier copy is narrowed away', async () => {
+    // The mirror of the case above, and the one the occurrence count could
+    // not survive: the tail repeats the group's SECOND edition, so First
+    // deletes the very occurrence the tail was counting. Its key dropped
+    // from occurrence 1 to 0, the hold resolver read a different showing and
+    // cleared the hold, and the renderer mounted another video for an
+    // artwork that had ended and never left the screen (feralfile-bot F7,
+    // review of 5936d6c).
+    await DeviceManager.setSeriesPlayback(DP1SeriesPlayback.Full);
+    const items = [
+      seriesEdition('edition-0', 1),
+      seriesEdition('edition-1', 1),
+      item('separator', 1),
+      { ...seriesEdition('edition-1'), duration: undefined } as DP1Item,
+    ];
+    canvasService.setCastInfo(displayCast(items, 3, LoopMode.none), false);
+    render(<LivePlaylistHarness />);
+
+    expect(shownSource()).toBe('https://example.com/edition-1.jpg');
+    callSourceEnded(playerProps().itemIdentity as string);
+    await advanceMs(0);
+
+    const keyBefore = shownSessionKey();
+
+    sendSeriesPlayback(DP1SeriesPlayback.First);
+    await advanceMs(0);
+
+    expect(shownSource()).toBe('https://example.com/edition-1.jpg');
+    expect(shownSessionKey()).toBe(keyBefore);
+  });
+
+  it('does not remount an ended id-less tail when a group expands ahead of it', async () => {
+    // The other half of the same finding: an item with no `id` has nothing
+    // but its position to be identified by, and expansion ahead of it is
+    // exactly what moves that position. Its raw slot does not move.
+    await DeviceManager.setSeriesPlayback(DP1SeriesPlayback.First);
+    const items = [
+      seriesEdition('edition-0', 1),
+      seriesEdition('edition-1', 1),
+      idlessItem('tail'),
+    ];
+    canvasService.setCastInfo(displayCast(items, 2, LoopMode.none), false);
+    render(<LivePlaylistHarness />);
+
+    expect(shownSource()).toBe('https://example.com/tail.jpg');
+    callSourceEnded(playerProps().itemIdentity as string);
+    await advanceMs(0);
+
+    const keyBefore = shownSessionKey();
+
+    sendSeriesPlayback(DP1SeriesPlayback.Full);
+    await advanceMs(0);
+
+    expect(shownSource()).toBe('https://example.com/tail.jpg');
+    expect(shownSessionKey()).toBe(keyBefore);
   });
 });

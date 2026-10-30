@@ -3,6 +3,7 @@ import {
   DP1ProvenanceType,
   DP1SeriesPlayback,
 } from '@/models/dp1.model';
+import { rawSlotIdentities, withRawSlotIdentity } from '@/utils/playlist';
 
 /** Set of known `DP1SeriesPlayback` string values from cast / wire payloads. */
 export const VALID_SERIES_PLAYBACK = new Set<string>(
@@ -280,8 +281,18 @@ export function narrowSeriesPlaylist(
     i += 1;
   }
 
+  // Every survivor carries the identity of the raw slot it came from, not of
+  // the neighbours narrowing has left it with. Narrowing is the one operation
+  // that changes what sits ahead of a slot while the artwork there never
+  // leaves the screen, so a positionally-counted identity would call it a new
+  // showing and replay it — see `RawSlotIdentity`.
+  const rawSlots = rawSlotIdentities(items);
+  const playableItems = outItems.map((item, local) =>
+    withRawSlotIdentity(item, rawSlots[outToRaw[local]])
+  );
+
   return {
-    items: outItems,
+    items: playableItems,
     mapIndex: rawIndex => {
       if (!rawToOut.length) {return 0;}
       const clamped = Math.min(Math.max(rawIndex, 0), rawToOut.length - 1);

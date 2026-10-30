@@ -187,7 +187,55 @@ describe('PlaylistClient — updateSeriesPlayback keeps a hold it did not move',
 
     expect(reloadCount()).toBe(reloadsBefore + 1);
   });
+});
 
+describe('PlaylistClient — updateSeriesPlayback keeps a hold whose repeated copy it narrowed away', () => {
+  useFakeTimersForHoldSuite();
+
+  it('keeps the hold when the ended tail only loses the earlier copy of itself', async () => {
+    // Full -> First on a group that does NOT carry the held slot: the tail is
+    // a second cast of the group's own second edition, so collapsing the
+    // group removes a slot that is not the one on screen. The tail is still
+    // the final slot and the hold still describes it — but the showing it was
+    // compared by counted that removed slot, so the resolver read a different
+    // showing and cleared the hold, leaving setLoop nothing to resume
+    // (feralfile-bot F7, review of 5936d6c).
+    await DeviceManager.setSeriesPlayback(DP1SeriesPlayback.Full);
+    const items = [
+      seriesEdition('edition-0', 1),
+      seriesEdition('edition-1', 1),
+      item('separator', 1),
+      { ...seriesEdition('edition-1'), duration: undefined } as DP1Item,
+    ];
+    const cast = displayCast(items, 3, LoopMode.none);
+    canvasService.setCastInfo(cast, false);
+    render(<LivePlaylistHarness />);
+
+    expect(shownItemIdentity()).toBe('edition-1');
+    endFinalSlot();
+    await advanceMs(0);
+
+    act(() => {
+      canvasService.processMessage({
+        command: CastCommand.updateSeriesPlayback,
+        request: { mode: DP1SeriesPlayback.First },
+      });
+    });
+    await advanceMs(0);
+
+    // Nothing restarts now: repeat-off is still correctly parked on the tail.
+    const reloadsBefore = reloadCount();
+
+    act(() => {
+      canvasService.processMessage({
+        command: CastCommand.setLoop,
+        request: { mode: LoopMode.playlist },
+      });
+    });
+    await advanceMs(0);
+
+    expect(reloadCount()).toBe(reloadsBefore + 1);
+  });
 });
 
 describe('PlaylistClient — updateSeriesPlayback resumes a hold it outgrew', () => {

@@ -217,15 +217,106 @@ export function resolveSlotDurationSeconds({
 }
 
 /**
+ * What the RAW cast slot a playable item was narrowed from says about its
+ * identity — the half that must not move when the list around it does.
+ *
+ * Both identity functions below read a list POSITIONALLY, and the two things
+ * they read positionally shift when narrowing changes the slots *ahead* of
+ * the one asked about: an id-less item's identity embeds its own index, and
+ * the occurrence of a repeated id-and-source pair counts the earlier slots
+ * carrying that pair. A First<->Full flip does exactly that — it collapses
+ * or expands a series group earlier in the list — so an artwork that never
+ * left the screen was handed a new identity for having moved, and everything
+ * keyed on it (the renderer's mount decision, the repeat-off hold, the
+ * preserved deadline) read it as a different showing and replayed an ended
+ * work.
+ *
+ * The raw cast order does not move across a narrowing — the override changes
+ * what plays, never what was cast — so both values are computed once against
+ * it and carried on the playable item by `narrowSeriesPlaylist`.
+ */
+export interface RawSlotIdentity {
+  /** `itemIdentityFor` of this item's own position in the raw list. */
+  identity: string;
+  /** How many earlier RAW slots carry the same identity-and-source pair. */
+  occurrence: number;
+}
+
+/**
+ * Where that stamp lives on a playable item.
+ *
+ * A Symbol deliberately, not a field on `DP1Item`: `JSON.stringify` does not
+ * see symbol keys, so an item recorded into recently-played history — where
+ * `appendRecentlyPlayed` stores it verbatim, under a byte budget — persists
+ * exactly the wire shape it did before this existed, and `DP1Item` goes on
+ * meaning only what DP-1 says it means. What it does have to survive is the
+ * `{...item, duration}` spread every install path applies, and object spread
+ * copies own enumerable symbol keys.
+ */
+export const RAW_SLOT_IDENTITY = Symbol('rawSlotIdentity');
+
+type RawSlotStamped = DP1Item & { [RAW_SLOT_IDENTITY]?: RawSlotIdentity };
+
+/** The stamp a narrowing left on a playable item, when it has one. */
+function rawSlotIdentityOf(
+  item: DP1Item | undefined
+): RawSlotIdentity | undefined {
+  return (item as RawSlotStamped | undefined)?.[RAW_SLOT_IDENTITY];
+}
+
+/**
+ * The stable raw-slot identity of every slot of a RAW cast list, in list
+ * order and in one pass. `narrowSeriesPlaylist` indexes this by each
+ * survivor's own raw position, so a playable item carries what its raw slot
+ * said rather than what its new neighbours say.
+ */
+export function rawSlotIdentities(items: DP1Item[]): RawSlotIdentity[] {
+  const seen = new Map<string, number>();
+  return items.map((item, index) => {
+    const identity = itemIdentityFor(items, index);
+    const key = JSON.stringify([identity, item.source]);
+    const occurrence = seen.get(key) ?? 0;
+    seen.set(key, occurrence + 1);
+    return { identity, occurrence };
+  });
+}
+
+/**
+ * Stamps one playable item with the raw slot it was narrowed from. Returns
+ * the item untouched when there is no stamp to apply, so a caller that
+ * cannot name a raw slot never fabricates one.
+ */
+export function withRawSlotIdentity(
+  item: DP1Item,
+  rawSlot: RawSlotIdentity | undefined
+): DP1Item {
+  if (!rawSlot) {
+    return item;
+  }
+  const stamped: RawSlotStamped = { ...item };
+  stamped[RAW_SLOT_IDENTITY] = rawSlot;
+  return stamped;
+}
+
+/**
  * Stable identity for a playlist slot. DP-1 PlaylistItem.id is optional, so
  * we synthesise one from the position and source when missing. Adjacent
  * items sharing a source must produce different identities so the player
  * can recreate the slot (and remount the <video>) between them.
+ *
+ * A narrowed slot answers with the identity of its own RAW slot instead,
+ * which is the same answer for an id-carrying item and a *stable* one for an
+ * id-less item: its synthetic key then names the position it was cast at,
+ * not the position narrowing happens to have left it in.
  */
 export function itemIdentityFor(items: DP1Item[], index: number): string {
   const item = items[index] as DP1Item | undefined;
   if (!item) {
     return '';
+  }
+  const rawSlot = rawSlotIdentityOf(item);
+  if (rawSlot) {
+    return rawSlot.identity;
   }
   const id = item.id;
   if (typeof id === 'string' && id.length > 0) {
@@ -453,15 +544,26 @@ export function shouldResumeSlotTimerAfterSetLoop(params: {
  *
  * Three shapes are unaffected, all landing on occurrence 0: an item with a
  * unique id, an item sharing an id under a different source (identity and
- * source already tell those apart), and an id-less item, whose own position
- * `itemIdentityFor` folds into its identity so that no two id-less slots
- * ever share one.
+ * source already tell those apart), and an id-less item, whose own RAW
+ * position `itemIdentityFor` folds into its identity so that no two id-less
+ * slots ever share one.
+ *
+ * Counting the occurrence from the list in hand is still not enough on its
+ * own: narrowing can remove the *earlier* copy of a repeated pair, which
+ * takes the survivor from occurrence 1 to 0 although nothing about it
+ * changed. So a narrowed slot answers from its `RawSlotIdentity` stamp —
+ * identity and occurrence as its raw cast slot had them — and only an
+ * un-narrowed list is counted in place.
  *
  * Encoded without delimiters that can also occur inside an id or a URL.
  */
 export function showingIdentityFor(items: DP1Item[], index: number): string {
   const identity = itemIdentityFor(items, index);
   const source = items[index]?.source ?? '';
+  const rawSlot = rawSlotIdentityOf(items[index]);
+  if (rawSlot) {
+    return JSON.stringify([identity, source, rawSlot.occurrence]);
+  }
   let occurrence = 0;
   for (let before = 0; before < index; before += 1) {
     if (
@@ -482,9 +584,11 @@ export function showingIdentityFor(items: DP1Item[], index: number): string {
  * deadline and a repeat-off hold survive a rebuild, and a key that disagreed
  * would remount an artwork whose timer had just been preserved.
  *
- * Positions may differ: an id-carrying item moved by a rebuild is still the
- * same showing, while an id-less item's identity is its own position, so
- * moving it does change the showing — exactly as the player sees it.
+ * Positions may differ, and that is the point: a slot carried across a
+ * rebuild answers from the raw cast slot it was narrowed from, so neither an
+ * id-carrying nor an id-less item becomes a new showing for having been
+ * moved by what a narrowing did to the slots ahead of it. Two slots of one
+ * artwork are still two showings, by the occurrence their raw slots had.
  */
 export function slotShowingUnchanged(
   a: DP1Item[],
