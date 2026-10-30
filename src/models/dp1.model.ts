@@ -147,9 +147,22 @@ export interface DP1Provenance {
   contract?: {
     chain: DP1Chain;
     standard?: string;
-    address: string;
-    seriesId?: number;
-    tokenId: string;
+    // Optional, because a `seriesRegistry` item has no one address to give:
+    // it names the series and leaves the contracts to the reader, since one
+    // address cannot name a series whose editions sit under two or three of
+    // them (Sean, 2026-10-27), and a series whose editions never left
+    // Bitmark has none at all. Such an item reaches this player when
+    // `feral-controld` could not expand the series — the catalog was
+    // unreachable — and it then plays the representative edition its
+    // `source` names, like any other item.
+    address?: string;
+    // An integer when the contract numbers its series with small values, a
+    // decimal string when the id is a 256-bit value no JSON number holds
+    // exactly — Feral File's V1–V3 contracts (dp1#55, core 1.1.0 §6).
+    seriesId?: number | string;
+    // Absent on a `seriesRegistry` item: core 1.1.0 §6's whole-series form
+    // is the series with no token of its own.
+    tokenId?: string;
     uri?: string;
     metaHash?: string;
   };

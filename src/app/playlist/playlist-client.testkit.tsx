@@ -12,7 +12,7 @@ import type { CastInfo } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
-import { act } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
 import * as React from 'react';
 import { vi } from 'vitest';
 import PlaylistClient from './playlist-client';
@@ -93,6 +93,11 @@ export async function advanceMs(ms: number): Promise<void> {
 }
 
 export function teardownPlaylistWiringTest(): void {
+  // Unmounts every tree still rendered by this test, so a pending slot
+  // timer it left scheduled (a finite-duration slot whose test ended before
+  // advancing past it) cannot later fire against a different suite's fake
+  // clock and overwrite the shared ArtworkPlayer probe with a stale item.
+  cleanup();
   vi.useRealTimers();
   canvasService.setCastInfo(null, false);
   const s = canvasInternals();
