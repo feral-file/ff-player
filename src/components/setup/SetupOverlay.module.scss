@@ -77,6 +77,17 @@
   letter-spacing: 0;
 }
 
+// The claim_qr panel's closing line, under the QR: keep the code private.
+// Read last, so it steps down and dims below the instructions and the QR.
+.securityNote {
+  max-width: min(86vw, 96vmin);
+  margin-top: 4vh;
+  font-size: clamp(20px, 2.6vmin, 36px);
+  line-height: 1.2;
+  letter-spacing: 0;
+  opacity: 0.72;
+}
+
 // The softap_qr panel's compact action/fallback lines
 // step down from the shared .subtitle scale so the QR stays the subject.
 // This override shares specificity with .subtitle and MUST stay below it in

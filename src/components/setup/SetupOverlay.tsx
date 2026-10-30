@@ -397,7 +397,10 @@ function FactoryResetPanel() {
  * frame manually inside the app — "look for <name>" is the one instruction
  * that routes both cases without a separate screen. The QR code is
  * deliberately framed as the backup for when discovery fails (cross-VLAN,
- * multicast-filtering APs, or the phone on a different network).
+ * multicast-filtering APs). Either way the app asks for the frame's Wi-Fi:
+ * it sets up a first owner only there, and the claim will only complete on
+ * the LAN once the legacy relayer is gone (until then a code from this
+ * screen can also enroll over it, ffos-user docs/ff1-control-v1.md §5.1).
  */
 function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
   const frameName = display.device_name?.trim();
@@ -411,16 +414,33 @@ function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
             "If pairing doesn't start automatically, add ... in the app"
             conditional routed the second case explicitly; looking for the
             name routes both. */}
+        {/* The same-Wi-Fi requirement leads, as its own line: the app sets
+            up a first owner only on the frame's Wi-Fi, so a phone on mobile
+            data or another network cannot finish here. The last line asks
+            to keep the code private, and must not promise more: while the
+            legacy relayer exists the QR carries its topic, and the
+            invitation in it can enroll over that relayer from anywhere
+            (ffos-user docs/ff1-control-v1.md §5.1, §11). It must also stay
+            true on every QR this panel shows: first claim, "Secure this Art
+            Computer", and an owned frame's code for another phone, which
+            carries no invitation and expires in no minutes. */}
         <p className={styles.subtitle}>
-          Open the app on a phone on the same Wi-Fi and look for{' '}
-          {frameName ? <strong>{frameName}</strong> : 'this Art Computer'}.
+          Connect your phone to the same Wi-Fi as this Art Computer.
+        </p>
+        <p className={styles.stepLabel}>
+          Then open the app and look for{' '}
+          {frameName ? <strong>{frameName}</strong> : 'this Art Computer'}
+          {display.url ? ', or scan this code.' : '.'}
         </p>
         {display.url ? (
           <>
-            <p className={styles.stepLabel}>Or scan this code.</p>
             <div className={styles.qrFrame}>
               <QRCodeSVG value={display.url} size={qrSize} marginSize={2} />
             </div>
+            <p className={styles.securityNote}>
+              Keep this code private: it can be used to pair with this Art
+              Computer.
+            </p>
           </>
         ) : null}
       </div>
