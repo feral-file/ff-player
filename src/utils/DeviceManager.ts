@@ -1,7 +1,7 @@
 import { LocalStorageItem } from '@/constants';
 import { DisplaySettings } from '@/models/display_settings.model';
 import { CastInfo, ViewMode } from '@/models';
-import { DP1Call, DP1SeriesPlayback } from '@/models/dp1.model';
+import { DP1Call } from '@/models/dp1.model';
 import {
   parseRecentlyPlayed,
   RecentlyPlayedRecord,
@@ -21,7 +21,6 @@ const PRELOAD_KEYS: string[] = [
   LocalStorageItem.displaySettings,
   LocalStorageItem.viewMode,
   LocalStorageItem.criticalTemp,
-  LocalStorageItem.seriesPlayback,
   LocalStorageItem.dp1ScheduledTask,
   LocalStorageItem.bootPlaylist,
   LocalStorageItem.defaultItemDuration,
@@ -43,22 +42,6 @@ function parseDurationSeconds(raw: string | null): number | null {
     return null;
   }
   return parsed;
-}
-
-/**
- * A stored series-playback value, or null for "auto".
- *
- * An unknown string is "auto" rather than a mode: a value this build does
- * not know cannot be honoured, and falling back to the item's own intent is
- * closer to what the viewer last meant than silently picking one.
- */
-function parseSeriesPlayback(raw: string | null): DP1SeriesPlayback | null {
-  if (raw === null || raw === '') {
-    return null;
-  }
-  return (Object.values(DP1SeriesPlayback) as string[]).includes(raw)
-    ? (raw as DP1SeriesPlayback)
-    : null;
 }
 
 /**
@@ -396,42 +379,6 @@ class DeviceManager {
   public getCachedDefaultItemDurationSeconds(): number | null {
     return parseDurationSeconds(
       this.getCachedValue(LocalStorageItem.defaultItemDuration)
-    );
-  }
-
-  /**
-   * Device-level series playback override: how a `seriesRegistry` item plays
-   * on this screen, whatever the item asked for. `null` means "auto" — no
-   * override, and the item's own `seriesPlayback` stands
-   * (`resolveSeriesPlayback`). Set by the `updateSeriesPlayback` cast
-   * command; read synchronously when a slot is selected, so it mirrors
-   * `getDefaultItemDurationSeconds` in every respect.
-   */
-  public async getSeriesPlayback(): Promise<DP1SeriesPlayback | null> {
-    await this.ensureInitialized();
-    const raw = await this.fetchAndCache(LocalStorageItem.seriesPlayback);
-    return parseSeriesPlayback(raw);
-  }
-
-  /** Persist (or clear, with `null`) the device-level series playback override. */
-  public async setSeriesPlayback(mode: DP1SeriesPlayback | null): Promise<void> {
-    if (mode === null) {
-      this.cache.set(LocalStorageItem.seriesPlayback, null);
-      await this.removeItem(LocalStorageItem.seriesPlayback);
-      return;
-    }
-    this.cache.set(LocalStorageItem.seriesPlayback, mode);
-    await this.ensureInitialized();
-    // Re-assert after initialization settles, for the same reason
-    // setDefaultItemDurationSeconds does: an in-flight preload read would
-    // otherwise resolve with the stale stored value and overwrite this one.
-    this.cache.set(LocalStorageItem.seriesPlayback, mode);
-    await indexedDBStorage.setItem(LocalStorageItem.seriesPlayback, mode);
-  }
-
-  public getCachedSeriesPlayback(): DP1SeriesPlayback | null {
-    return parseSeriesPlayback(
-      this.getCachedValue(LocalStorageItem.seriesPlayback)
     );
   }
 

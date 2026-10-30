@@ -121,12 +121,6 @@ export class CanvasStatus {
           tombstone: coerceTombstoneMode(
             DeviceManager.getCachedDeviceDisplaySettings()?.tombstone
           ),
-          // Absent means "auto": no override, and each item's own
-          // `seriesPlayback` stands. Reported raw rather than coerced,
-          // unlike `tombstone` above, because absent and `first` are
-          // different states here — a controller has to be able to show
-          // "following the playlist" apart from "always one edition".
-          seriesPlayback: DeviceManager.getCachedSeriesPlayback() ?? undefined,
         },
 
         isPaused: window.location.pathname === '/sleep',

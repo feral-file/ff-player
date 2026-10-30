@@ -2,7 +2,7 @@ import { NO_DURATION_VALUE } from '@/constants';
 import type { CastInfo } from '@/models';
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
-import { DP1Defaults, DP1Item, DP1SeriesPlayback } from '@/models/dp1.model';
+import { DP1Defaults, DP1Item } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
@@ -12,19 +12,13 @@ import {
   itemIdentityFor,
   mergedDisplayForSlot,
   normalizePlaylistIndex,
+  resolveQueuedPlaylistNextIndex,
   resolveSequentialPlaylistAdvance,
   resolveSlotDurationSeconds,
   shouldApplyQueuedPlaylistOnShuffleOrRefresh,
   shouldHoldForPendingMerge,
   shouldResumeSlotTimerAfterSetLoop,
-  showingIdentityFor,
 } from '@/utils/playlist';
-import {
-  narrowForDevice,
-  rawIndexForLocal,
-  resolveQueuedSeriesSelection,
-  resolveSeriesOverrideRebuild,
-} from './seriesPlaybackView';
 import { isSourceReplacement } from './sourceReplacement';
 export interface TimelineEffects {
   readMergedDisplay: () => SlotMergedDisplay | null;
@@ -56,38 +50,6 @@ export class PlaylistTimeline {
   private defaults: DP1Defaults | null = null;
   private loop = LoopMode.playlist;
   private holding = false;
-  /**
-   * The series-playback override the playable list on screen was narrowed
-   * with. `rebuildForSeriesOverride` needs it to carry the selected slot
-   * across a First<->Full flip, and cannot read it from DeviceManager: the
-   * command has already stored the new value by the time it runs. Recorded
-   * only where a list is built from a value that may have changed — a fresh
-   * cast, and the flip itself — because the override changes through
-   * `updateSeriesPlayback` alone, so every other command narrows with the
-   * value already recorded here.
-   */
-  private narrowedWith: DP1SeriesPlayback | null = null;
-  /**
-   * The RAW cast items the playable list on screen was narrowed from.
-   * Normally the same array `castInfo.playlist.items` holds, but a queued
-   * shuffle or refresh publishes its replacement onto `castInfo` at once and
-   * waits for the slot boundary to install it, so the two diverge for as long
-   * as that queue is pending. `rebuildForSeriesOverride` must narrow the list
-   * the viewer is actually watching, not the one waiting to replace it.
-   * Recorded wherever a playable list is installed from raw items.
-   */
-  private narrowedRaw: DP1Item[] = [];
-  /**
-   * One-shot: the identity of the showing whose running deadline the next arm
-   * must keep. `updateSeriesPlayback` rebuilds the playable list into a fresh
-   * array even when it narrows nothing away, which re-runs the route's
-   * slot-entry effect; without this the artwork on screen would be granted a
-   * whole new interval, so a 10s slot asked to change series mode at second 9
-   * would advance at second 19. Keyed by the showing rather than held as a
-   * bare flag, so a slot entry that never arms — content policy blocking the
-   * work — cannot leak the preserve onto an unrelated slot later.
-   */
-  private preserveArmFor: string | null = null;
   private effects: TimelineEffects | undefined;
   constructor(private readonly ui: TimelineUI) {}
   bind(effects: TimelineEffects) {
@@ -119,10 +81,6 @@ export class PlaylistTimeline {
     this.holding = false;
     this.clearTimer();
   }
-  /** Publishes a local (narrowed) selection in the raw space castInfo uses. */
-  private publishIndex(localIndex: number) {
-    canvasService.publishIndexUpdate(rawIndexForLocal(localIndex));
-  }
   clearTimer = () => {
     if (this.timer) {
       clearTimeout(this.timer);
@@ -131,7 +89,6 @@ export class PlaylistTimeline {
   };
   private clearPlayable() {
     this.currentItem = undefined;
-    this.narrowedRaw = [];
     this.ui.setPlaylist([]);
     this.ui.setIndex(-1);
     this.ui.setDefaults(null);
@@ -169,14 +126,7 @@ export class PlaylistTimeline {
 
     const hasDeferredRefresh = canvasService.hasDeferredRefreshPlaylist();
     const currentCastInfo = canvasService.getCastInfo();
-    // A queued refresh/shuffle installs items straight from CanvasService,
-    // so this path has to narrow them itself: it is not reached through any
-    // of the cast-command branches that already do.
-    const {
-      items: nextItems,
-      localIndex: nextIndex,
-      rawIndex: rawNextIndex,
-    } = resolveQueuedSeriesSelection({
+    const nextIndex = resolveQueuedPlaylistNextIndex({
       targetIndex,
       queuedPlaylist,
       previousItems: currentCastInfo?.playlist?.items,
@@ -185,25 +135,21 @@ export class PlaylistTimeline {
       keepCurrent,
     });
 
-    this.ui.setPlaylist(nextItems);
+    this.ui.setPlaylist(queuedPlaylist);
     this.ui.setIndex(nextIndex);
-    this.narrowedRaw = queuedPlaylist;
     // Sync the selection immediately so a same-tick concurrent caller sees the
     // new state instead of re-entering against the old snapshot.
-    this.items = nextItems;
+    this.items = queuedPlaylist;
     this.index = nextIndex;
 
     // consumeDeferredRefreshPlaylist atomically promotes the deferred refresh
     // onto castInfo so getStatus reflects the new list from the first frame.
     // Queued refresh/shuffle only changes playlist items and index; defaults
     // stay owned by the active playlist contract and are intentionally left as-is.
-    // This takes the RAW index: castInfo.playlist and castInfo.index are
-    // never narrowed (see rawIndexForLocal for why that has to hold).
-    const consumed =
-      canvasService.consumeDeferredRefreshPlaylist(rawNextIndex);
+    const consumed = canvasService.consumeDeferredRefreshPlaylist(nextIndex);
     if (!consumed) {
       canvasService.clearQueuedPlaylistPending();
-      this.publishIndex(nextIndex);
+      canvasService.publishIndexUpdate(nextIndex);
     }
 
     return { applied: true };
@@ -234,7 +180,7 @@ export class PlaylistTimeline {
         this.replay(this.index, this.items, cause);
         return;
       }
-      this.publishIndex(fromIndex);
+      canvasService.publishIndexUpdate(fromIndex);
       this.schedule(fromIndex, snapshot);
       this.replay(fromIndex, snapshot, cause);
       return;
@@ -271,7 +217,7 @@ export class PlaylistTimeline {
     // setCurrentIndex would be a no-op and React would not re-run the
     // scheduling effect. Reschedule directly to keep the loop alive.
     if (nextIndex === fromIndex) {
-      this.publishIndex(nextIndex);
+      canvasService.publishIndexUpdate(nextIndex);
       this.schedule(nextIndex, snapshot);
       this.replay(nextIndex, snapshot, cause);
       return;
@@ -281,7 +227,7 @@ export class PlaylistTimeline {
     // sees the new index and bails on the guard above.
     this.index = nextIndex;
     this.ui.setIndex(nextIndex);
-    this.publishIndex(nextIndex);
+    canvasService.publishIndexUpdate(nextIndex);
   }
   schedule(
     index: number,
@@ -294,20 +240,12 @@ export class PlaylistTimeline {
     if (!snapshot.length) {
       return;
     }
-    const normalizedIndex = normalizePlaylistIndex(index, snapshot.length);
-    // Consume the one-shot unconditionally: it describes exactly one arm, and
-    // leaving it set would apply it to whatever slot armed next.
-    const pendingPreserve = this.preserveArmFor;
-    this.preserveArmFor = null;
-    const preserve =
-      preserveElapsed ||
-      (pendingPreserve !== null &&
-        pendingPreserve === showingIdentityFor(snapshot, normalizedIndex));
-    if (!preserve) {
+    if (!preserveElapsed) {
       this.slotStartedAt = Date.now();
       this.armed = null;
     }
 
+    const normalizedIndex = normalizePlaylistIndex(index, snapshot.length);
     const currentItem = snapshot[normalizedIndex];
 
     // Device-level default duration (viewer override): applied only once
@@ -355,11 +293,12 @@ export class PlaylistTimeline {
     // restarts from zero (the override just arrived, or the owner changed
     // the pacing).
     const remainingMs =
-      preserve && this.armed?.duration === duration
+      preserveElapsed && this.armed?.duration === duration
         ? Math.max(this.armed.deadline - Date.now(), 0)
         : null;
     const keepElapsed =
-      preserve && duration === (currentItem.duration ?? NO_DURATION_VALUE);
+      preserveElapsed &&
+      duration === (currentItem.duration ?? NO_DURATION_VALUE);
     const delayMs =
       remainingMs ??
       Math.max(
@@ -426,9 +365,6 @@ export class PlaylistTimeline {
       case CastCommand.updateDefaultDuration:
         this.schedule(this.index, this.items);
         break;
-      case CastCommand.updateSeriesPlayback:
-        this.rebuildForSeriesOverride(castInfo);
-        break;
       case CastCommand.setLoop:
         this.changeLoop(castInfo);
         break;
@@ -440,26 +376,17 @@ export class PlaylistTimeline {
     this.loop = coerceLoopMode(castInfo.loopMode);
     if (castInfo.playlist?.items?.length) {
       this.ui.setDefaults(castInfo.playlist.defaults ?? null);
-      const rawItems = castInfo.playlist.items;
-      // Narrows any seriesRegistry item or expanded series group per the
-      // item's own intent and the device override before this becomes the
-      // playable list.
-      const { items, mapIndex } = narrowForDevice(rawItems);
-      this.narrowedWith = DeviceManager.getCachedSeriesPlayback();
-      this.narrowedRaw = rawItems;
       this.ui.setPlaylist(
-        items.map(item => ({
+        castInfo.playlist.items.map(item => ({
           ...item,
           duration: item.duration ?? NO_DURATION_VALUE,
         }))
       );
-      const rawStartIndex = normalizePlaylistIndex(
+      const startIndex = normalizePlaylistIndex(
         castInfo.index ?? 0,
-        rawItems.length
+        castInfo.playlist.items.length
       );
-      this.ui.setIndex(
-        normalizePlaylistIndex(mapIndex(rawStartIndex), items.length)
-      );
+      this.ui.setIndex(startIndex);
     } else {
       this.clearPlayable();
     }
@@ -467,8 +394,7 @@ export class PlaylistTimeline {
   private replaceQueued(castInfo: CastInfo) {
     if (castInfo.playlist?.items?.length) {
       // See isSourceReplacement: a same-id source swap must hand over now.
-      const rawIncoming = castInfo.playlist.items;
-      const { items: incoming, mapIndex } = narrowForDevice(rawIncoming);
+      const incoming = castInfo.playlist.items;
       if (
         isSourceReplacement(
           this.items[normalizePlaylistIndex(this.index, this.items.length)],
@@ -487,17 +413,12 @@ export class PlaylistTimeline {
         // index would render one work while the controller reports another.
         // The index is mirrored synchronously, the way every other index
         // handoff in this file does, so a same-tick reader is not stale.
-        const rawResolvedIndex = normalizePlaylistIndex(
-          castInfo.index ?? 0,
-          rawIncoming.length
-        );
         const resolvedIndex = normalizePlaylistIndex(
-          mapIndex(rawResolvedIndex),
+          castInfo.index ?? 0,
           incoming.length
         );
         this.index = resolvedIndex;
         this.ui.setIndex(resolvedIndex);
-        this.narrowedRaw = rawIncoming;
         canvasService.clearQueuedPlaylistPending();
         return;
       }
@@ -532,63 +453,11 @@ export class PlaylistTimeline {
 
     this.holding = false;
     if (castInfo.playlist?.items?.length) {
-      const rawItems = castInfo.playlist.items;
-      const { items, mapIndex } = narrowForDevice(rawItems);
-      const rawIndex = normalizePlaylistIndex(castInfo.index, rawItems.length);
       this.ui.setIndex(
-        normalizePlaylistIndex(mapIndex(rawIndex), items.length)
+        normalizePlaylistIndex(castInfo.index, castInfo.playlist.items.length)
       );
     } else {
       this.ui.setIndex(castInfo.index);
-    }
-  }
-  /**
-   * Rebuilds the playable list after the device series-playback override
-   * changed, and resumes a repeat-off hold the rebuild has outgrown.
-   */
-  private rebuildForSeriesOverride(castInfo: CastInfo) {
-    // The raw order the list on screen came from, not castInfo's: a queued
-    // shuffle or refresh has already published its replacement there, and the
-    // selected position only ever named a slot of the installed order.
-    // Narrowing the replacement and then indexing it with that position
-    // selects whatever the new order happens to carry there — on an ordinary
-    // playlist with no series in it at all. The queue is left pending, so it
-    // still applies at the slot boundary, narrowed with the new override.
-    const rawItems = this.narrowedRaw.length
-      ? this.narrowedRaw
-      : castInfo.playlist?.items;
-    if (!rawItems?.length) {
-      return;
-    }
-    const { nextPlaylist, nextIndex, holdOutcome, preserveActiveDeadline } =
-      resolveSeriesOverrideRebuild({
-        rawItems,
-        previousOverride: this.narrowedWith,
-        previousPlaylist: this.items,
-        previousIndex: this.index,
-        holdAfterFinalSlot: this.holding,
-      });
-    this.narrowedWith = DeviceManager.getCachedSeriesPlayback();
-    this.narrowedRaw = rawItems;
-    if (holdOutcome !== 'keep') {
-      this.holding = false;
-    }
-    this.preserveArmFor = preserveActiveDeadline
-      ? showingIdentityFor(nextPlaylist, nextIndex)
-      : null;
-    this.ui.setPlaylist(nextPlaylist);
-    this.index = nextIndex;
-    this.ui.setIndex(nextIndex);
-    if (holdOutcome === 'resume') {
-      // Expansion added editions after the ended item, so the playlist is
-      // unfinished again — but the showing is unchanged, so the player
-      // neither remounts nor reloads and the source would stay ended
-      // forever. Same pair setLoop uses to leave repeat-off: the reload
-      // restarts the media (a no-duration source then drives its own
-      // advance into the new editions), and the timer is re-armed for a
-      // finite-duration slot.
-      this.ports.reload();
-      this.schedule(nextIndex, nextPlaylist);
     }
   }
   private changeLoop(castInfo: CastInfo) {

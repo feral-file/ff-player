@@ -86,24 +86,6 @@ export function PlaylistHarness(props: {
   );
 }
 
-/** Mirrors AppProvider's CanvasService subscription for command replay tests. */
-export function LivePlaylistHarness(): React.ReactElement {
-  const [castInfo, setCastInfo] = React.useState<CastInfo | null>(() =>
-    canvasService.getCastInfo()
-  );
-
-  React.useEffect(() => {
-    canvasService.onCastInfoChange = nextCastInfo => {
-      setCastInfo(nextCastInfo);
-    };
-    return () => {
-      canvasService.onCastInfoChange = null;
-    };
-  }, []);
-
-  return <PlaylistHarness castInfo={castInfo} />;
-}
-
 export async function advanceMs(ms: number): Promise<void> {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms);

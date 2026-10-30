@@ -24,12 +24,6 @@ const useCastInfo = () => {
         // others above, a duration change mid-playback must recover as a
         // full displayPlaylist.
         CastCommand.updateDefaultDuration,
-        // Same reason as updateDefaultDuration: a device-setting command
-        // that republishes castInfo to re-select the active slot. AppWrapper
-        // navigates to /playlist for displayPlaylist alone, so a device whose
-        // last command was a series-override change would restore the cast
-        // and then sit on the entry route (feralfile-bot F5).
-        CastCommand.updateSeriesPlayback,
       ].includes(castInfo.castCommand)
     );
   };

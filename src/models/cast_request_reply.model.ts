@@ -1,13 +1,7 @@
 import { CursorPosition } from '@/services/custom-hooks/useCursorPositions';
 import { TokenDisplaySettings, TombstoneMode } from './display_settings.model';
 import { ErrorType } from './error.model';
-import {
-  DP1Call,
-  DP1Intent,
-  DP1Item,
-  DP1SeriesPlayback,
-  Scaling,
-} from './dp1.model';
+import { DP1Call, DP1Intent, DP1Item, Scaling } from './dp1.model';
 import { CastCommand, LoopMode, RenderStatus, ViewMode } from '.';
 import type { ContentContext } from '@/services/contentPolicy';
 import type { DeviceFraming } from '@/utils/deviceFraming';
@@ -113,11 +107,6 @@ export interface CheckDeviceStatusReply extends Reply {
     // Tombstone (museum label) state so ff-app can render the control's
     // current selection (feral-file#3452).
     tombstone?: TombstoneMode;
-    // Device-level series playback override; absent means "auto" (no
-    // override, each `seriesRegistry` item's own `seriesPlayback` stands).
-    // Absent and `first` are different states: a controller shows
-    // "following the playlist" apart from "always one edition".
-    seriesPlayback?: DP1SeriesPlayback;
   };
 
   sleepMode?: boolean;
@@ -223,18 +212,3 @@ export interface UpdateDefaultDurationRequest extends Request {
   durationSeconds?: number | null;
 }
 export type UpdateDefaultDurationReply = Reply;
-
-/**
- * Sets the device-level series playback override: how a `seriesRegistry`
- * item plays on this screen, whatever the item itself asked for (core 1.1.0
- * §6). `mode` null/absent clears the override ("auto"), leaving the item's
- * own `seriesPlayback` to decide — the same shape
- * `UpdateDefaultDurationRequest` has, for the same reason.
- *
- * `random` is accepted and stored, and resolves to `first` at playback:
- * re-rolling an edition each loop is a behaviour this player does not have.
- */
-export interface UpdateSeriesPlaybackRequest extends Request {
-  mode?: DP1SeriesPlayback | null;
-}
-export type UpdateSeriesPlaybackReply = Reply;

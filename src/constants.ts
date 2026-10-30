@@ -11,9 +11,6 @@ export enum LocalStorageItem {
   bootPlaylist = 'boot_playlist',
   versionUpdateReload = 'versionUpdateReload',
   defaultItemDuration = 'defaultItemDuration',
-  // The device-level series playback override, beside the duration override
-  // it mirrors: absent means "auto", the item's own seriesPlayback stands.
-  seriesPlayback = 'seriesPlayback',
   // Bounded device-local evidence of artworks that reached the viewer's
   // visual commit boundary. This is deliberately independent from castInfo:
   // castInfo is recovery state for one current cast, not a playback timeline.

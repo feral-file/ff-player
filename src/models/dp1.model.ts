@@ -86,15 +86,6 @@ export interface DP1Item {
   // needs no network round trip, so an item carrying only this resolves
   // its label and display preferences synchronously.
   inlineManifest?: RefManifest;
-  // How to play a `seriesRegistry` item, whose source is one representative
-  // edition rather than the whole series (core 1.1.0 §6, "Entire series
-  // only"). The item states what the publisher intends; the viewer's device
-  // setting overrides it, the same cascade `duration` already has
-  // (`resolveSeriesPlayback`). Absent means `First`.
-  //
-  // Not in DP-1 core — carried here ahead of a spec proposal, so an unknown
-  // value degrades to `First` rather than refusing the item.
-  seriesPlayback?: DP1SeriesPlayback;
   // Tolerant read of inline label metadata mirroring the ref-manifest
   // metadata block (dp1 core/v1.1.0 ref-manifest.md §4). Not in playlist
   // core: playlist builders that host no ref manifest (today's ff-cli) can
@@ -156,10 +147,14 @@ export interface DP1Provenance {
   contract?: {
     chain: DP1Chain;
     standard?: string;
-    // Optional: a `seriesRegistry` item names the series and leaves its
-    // contracts to the reader, because one address cannot name a series
-    // whose editions sit under two or three of them (Sean, 2026-10-27). A
-    // series whose editions never left Bitmark has no address at all.
+    // Optional, because a `seriesRegistry` item has no one address to give:
+    // it names the series and leaves the contracts to the reader, since one
+    // address cannot name a series whose editions sit under two or three of
+    // them (Sean, 2026-10-27), and a series whose editions never left
+    // Bitmark has none at all. Such an item reaches this player when
+    // `feral-controld` could not expand the series — the catalog was
+    // unreachable — and it then plays the representative edition its
+    // `source` names, like any other item.
     address?: string;
     // An integer when the contract numbers its series with small values, a
     // decimal string when the id is a 256-bit value no JSON number holds
@@ -196,20 +191,6 @@ export enum DP1Type {
   SeriesRegistry = 'seriesRegistry',
   OnChainURI = 'onChainURI',
   OffChainURI = 'offChainURI',
-}
-
-/**
- * The playback intent of a `seriesRegistry` item.
- *
- * `Full` plays every edition of the series; `First` plays the one the item's
- * own `source` names. `Random` is accepted from the wire and treated as
- * `First`: picking one edition per loop is a player behaviour FF1 does not
- * have, and silently playing a fixed one is the honest approximation.
- */
-export enum DP1SeriesPlayback {
-  Full = 'full',
-  First = 'first',
-  Random = 'random',
 }
 
 export enum DP1ProvenanceType {

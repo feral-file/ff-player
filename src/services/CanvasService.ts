@@ -25,7 +25,6 @@ import {
   CheckDeviceStatusReply,
   Reply,
   UpdateDefaultDurationRequest,
-  UpdateSeriesPlaybackRequest,
 } from '@/models/cast_request_reply.model';
 import {
   DP1Call,
@@ -129,10 +128,6 @@ class CanvasService {
         case CastCommand.updateDefaultDuration:
           return this.updateDefaultDuration(
             requestJson as UpdateDefaultDurationRequest
-          );
-        case CastCommand.updateSeriesPlayback:
-          return this.updateSeriesPlayback(
-            requestJson as UpdateSeriesPlaybackRequest
           );
         case CastCommand.getRecentlyPlayed:
           return this.getRecentlyPlayed();
@@ -342,12 +337,6 @@ class CanvasService {
     request: UpdateDefaultDurationRequest | undefined
   ): Reply {
     return this.session.updateDefaultDuration(request);
-  }
-
-  private updateSeriesPlayback(
-    request: UpdateSeriesPlaybackRequest | undefined
-  ): Reply {
-    return this.session.updateSeriesPlayback(request);
   }
 
   private setLoop(request: SetLoopRequest): Reply {

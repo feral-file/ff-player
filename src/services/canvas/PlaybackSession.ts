@@ -10,7 +10,6 @@ import {
 import {
   Reply,
   UpdateDefaultDurationRequest,
-  UpdateSeriesPlaybackRequest,
 } from '@/models/cast_request_reply.model';
 import { DP1Call, DP1Item } from '@/models/dp1.model';
 import DeviceManager from '@/utils/DeviceManager';
@@ -32,7 +31,6 @@ import {
 } from '../contentPolicy';
 import { RecentPlaybackService } from './RecentPlaybackService';
 import { findInvalidArtworkSource } from './artworkSourceValidation';
-import { applyUpdateSeriesPlayback } from './deviceSeriesPlayback';
 import {
   isSamePlaylistContent,
   normalizeItemDurations,
@@ -570,19 +568,6 @@ export class PlaybackSession {
     }
 
     return { ok: true };
-  }
-
-  /**
-   * Sets (or clears, with null/absent `mode`) the persisted device-level
-   * series playback override — how a `seriesRegistry` item plays on this
-   * screen whatever the item asked for. Same shape, and same reasons, as
-   * `updateDefaultDuration` above; the implementation itself lives in
-   * `./deviceSeriesPlayback.ts`, alongside `getStatus`/`PlaylistCommands`'s
-   * other small split-out owners, so this class's own line budget — already
-   * close to the cap before this override existed — stays intact.
-   */
-  public updateSeriesPlayback(request: UpdateSeriesPlaybackRequest | undefined): Reply {
-    return applyUpdateSeriesPlayback(this, request);
   }
 
   public setLoop(request: SetLoopRequest): Reply {
