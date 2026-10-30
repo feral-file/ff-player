@@ -1,11 +1,12 @@
 import { NO_DURATION_VALUE } from '@/constants';
-import { DP1Item } from '@/models/dp1.model';
+import { DP1Item, DP1SeriesPlayback } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
 import DeviceManager from '@/utils/DeviceManager';
 import {
   normalizePlaylistIndex,
   resolveQueuedPlaylistNextIndex,
   resolveRepeatOffHoldAfterRebuild,
+  slotShowingUnchanged,
   type RepeatOffHoldAfterRebuild,
 } from '@/utils/playlist';
 import {
@@ -122,18 +123,33 @@ export interface SeriesOverrideRebuild {
   nextPlaylist: DP1Item[];
   nextIndex: number;
   holdOutcome: RepeatOffHoldAfterRebuild;
+  /**
+   * Whether the next arm must keep the deadline already running instead of
+   * granting the slot a fresh interval — true when the rebuild leaves the
+   * showing on screen in place.
+   */
+  preserveActiveDeadline: boolean;
 }
 
 /**
  * The playable list a changed series-playback override rebuilds to, and what
- * that rebuild means for a repeat-off hold.
+ * that rebuild means for a repeat-off hold and for the deadline already
+ * running.
  *
  * Unlike a duration change, the override can change WHICH items play (`First`
  * collapses an expanded series to one edition; `Full` restores every edition
  * it narrowed away), so the list itself is rebuilt — always from the raw cast
- * items, never from the already-narrowed playable list. The slot carrying the
- * item on screen is tracked by id, since a First<->Full flip changes the
- * array's length and positions.
+ * items, never from the already-narrowed playable list.
+ *
+ * The slot carrying the item on screen is carried across POSITIONALLY: the
+ * previous narrowing's own reverse map turns the selected local index back
+ * into its raw position, which the new narrowing then maps forward. It is not
+ * resolved by item id, which fails three ways on shapes DP-1 allows — an item
+ * with no `id` at all (the schema permits it) would default to raw 0 and
+ * interrupt unrelated ordinary playback, an id the raw list does not carry
+ * would do the same, and two items sharing one id cannot be told apart by a
+ * first-match lookup. `rawIndexOf` has none of those failure modes because it
+ * is built from the same traversal that produced the list.
  *
  * A repeat-off hold claims "the ended item on screen is the last thing this
  * playlist had to play". A rebuild can leave that claim standing, falsify it,
@@ -143,26 +159,30 @@ export interface SeriesOverrideRebuild {
  */
 export function resolveSeriesOverrideRebuild(params: {
   rawItems: DP1Item[];
-  currentItemId?: string;
+  /**
+   * The override the playable list on screen was narrowed with, so the
+   * selected slot can be carried across the flip. Not the current cached
+   * value: by the time this runs, the command has already stored the new one.
+   */
+  previousOverride?: DP1SeriesPlayback | null;
   previousPlaylist: DP1Item[];
   previousIndex: number;
   holdAfterFinalSlot: boolean;
 }): SeriesOverrideRebuild {
   const {
     rawItems,
-    currentItemId,
+    previousOverride,
     previousPlaylist,
     previousIndex,
     holdAfterFinalSlot,
   } = params;
   const { items, mapIndex } = narrowForDevice(rawItems);
-  const rawCurrentIndex =
-    currentItemId === undefined
-      ? 0
-      : Math.max(
-          0,
-          rawItems.findIndex(raw => raw.id === currentItemId)
-        );
+  const rawCurrentIndex = narrowSeriesPlaylist(
+    rawItems,
+    previousOverride
+  ).rawIndexOf(
+    normalizePlaylistIndex(previousIndex, previousPlaylist.length)
+  );
   const nextIndex = normalizePlaylistIndex(
     mapIndex(rawCurrentIndex),
     items.length
@@ -171,15 +191,28 @@ export function resolveSeriesOverrideRebuild(params: {
     ...item,
     duration: item.duration ?? NO_DURATION_VALUE,
   }));
+  const holdOutcome = resolveRepeatOffHoldAfterRebuild({
+    holdAfterFinalSlot,
+    previousPlaylist,
+    previousIndex,
+    nextPlaylist,
+    nextIndex,
+  });
   return {
     nextPlaylist,
     nextIndex,
-    holdOutcome: resolveRepeatOffHoldAfterRebuild({
-      holdAfterFinalSlot,
-      previousPlaylist,
-      previousIndex,
-      nextPlaylist,
-      nextIndex,
-    }),
+    holdOutcome,
+    // The showing is unchanged, so the artwork has been on screen since its
+    // own slot entry and its deadline is still the right one. `resume` is the
+    // exception: there the source is deliberately reloaded, which starts the
+    // artwork over and so earns a fresh interval.
+    preserveActiveDeadline:
+      holdOutcome !== 'resume' &&
+      slotShowingUnchanged(
+        previousPlaylist,
+        previousIndex,
+        nextPlaylist,
+        nextIndex
+      ),
   };
 }

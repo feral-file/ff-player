@@ -2,7 +2,7 @@ import { NO_DURATION_VALUE } from '@/constants';
 import type { CastInfo } from '@/models';
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
-import { DP1Defaults, DP1Item } from '@/models/dp1.model';
+import { DP1Defaults, DP1Item, DP1SeriesPlayback } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
@@ -55,6 +55,28 @@ export class PlaylistTimeline {
   private defaults: DP1Defaults | null = null;
   private loop = LoopMode.playlist;
   private holding = false;
+  /**
+   * The series-playback override the playable list on screen was narrowed
+   * with. `rebuildForSeriesOverride` needs it to carry the selected slot
+   * across a First<->Full flip, and cannot read it from DeviceManager: the
+   * command has already stored the new value by the time it runs. Recorded
+   * only where a list is built from a value that may have changed — a fresh
+   * cast, and the flip itself — because the override changes through
+   * `updateSeriesPlayback` alone, so every other command narrows with the
+   * value already recorded here.
+   */
+  private narrowedWith: DP1SeriesPlayback | null = null;
+  /**
+   * One-shot: the identity of the showing whose running deadline the next arm
+   * must keep. `updateSeriesPlayback` rebuilds the playable list into a fresh
+   * array even when it narrows nothing away, which re-runs the route's
+   * slot-entry effect; without this the artwork on screen would be granted a
+   * whole new interval, so a 10s slot asked to change series mode at second 9
+   * would advance at second 19. Keyed by the showing rather than held as a
+   * bare flag, so a slot entry that never arms — content policy blocking the
+   * work — cannot leak the preserve onto an unrelated slot later.
+   */
+  private preserveArmFor: string | null = null;
   private effects: TimelineEffects | undefined;
   constructor(private readonly ui: TimelineUI) {}
   bind(effects: TimelineEffects) {
@@ -259,12 +281,20 @@ export class PlaylistTimeline {
     if (!snapshot.length) {
       return;
     }
-    if (!preserveElapsed) {
+    const normalizedIndex = normalizePlaylistIndex(index, snapshot.length);
+    // Consume the one-shot unconditionally: it describes exactly one arm, and
+    // leaving it set would apply it to whatever slot armed next.
+    const pendingPreserve = this.preserveArmFor;
+    this.preserveArmFor = null;
+    const preserve =
+      preserveElapsed ||
+      (pendingPreserve !== null &&
+        pendingPreserve === itemIdentityFor(snapshot, normalizedIndex));
+    if (!preserve) {
       this.slotStartedAt = Date.now();
       this.armed = null;
     }
 
-    const normalizedIndex = normalizePlaylistIndex(index, snapshot.length);
     const currentItem = snapshot[normalizedIndex];
 
     // Device-level default duration (viewer override): applied only once
@@ -312,12 +342,11 @@ export class PlaylistTimeline {
     // restarts from zero (the override just arrived, or the owner changed
     // the pacing).
     const remainingMs =
-      preserveElapsed && this.armed?.duration === duration
+      preserve && this.armed?.duration === duration
         ? Math.max(this.armed.deadline - Date.now(), 0)
         : null;
     const keepElapsed =
-      preserveElapsed &&
-      duration === (currentItem.duration ?? NO_DURATION_VALUE);
+      preserve && duration === (currentItem.duration ?? NO_DURATION_VALUE);
     const delayMs =
       remainingMs ??
       Math.max(
@@ -403,6 +432,7 @@ export class PlaylistTimeline {
       // item's own intent and the device override before this becomes the
       // playable list.
       const { items, mapIndex } = narrowForDevice(rawItems);
+      this.narrowedWith = DeviceManager.getCachedSeriesPlayback();
       this.ui.setPlaylist(
         items.map(item => ({
           ...item,
@@ -506,17 +536,21 @@ export class PlaylistTimeline {
     if (!rawItems?.length) {
       return;
     }
-    const { nextPlaylist, nextIndex, holdOutcome } =
+    const { nextPlaylist, nextIndex, holdOutcome, preserveActiveDeadline } =
       resolveSeriesOverrideRebuild({
         rawItems,
-        currentItemId: this.currentItem?.id,
+        previousOverride: this.narrowedWith,
         previousPlaylist: this.items,
         previousIndex: this.index,
         holdAfterFinalSlot: this.holding,
       });
+    this.narrowedWith = DeviceManager.getCachedSeriesPlayback();
     if (holdOutcome !== 'keep') {
       this.holding = false;
     }
+    this.preserveArmFor = preserveActiveDeadline
+      ? itemIdentityFor(nextPlaylist, nextIndex)
+      : null;
     this.ui.setPlaylist(nextPlaylist);
     this.index = nextIndex;
     this.ui.setIndex(nextIndex);

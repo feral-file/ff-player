@@ -84,3 +84,50 @@ describe('useShowingKey', () => {
     unmount();
   });
 });
+
+describe('useShowingKey — position is not part of an unambiguous showing', () => {
+  it('is stable when an unambiguous work moves position in a rebuilt list', () => {
+    // A series group expanding earlier in the playlist shifts every later
+    // slot. The work on screen is the same showing — `slotShowingUnchanged`
+    // says so — and an ended artwork held by repeat-off is remounted and
+    // replayed if the key moves with the index (feralfile-bot F7 on #320).
+    const before = [work('group-0', 'https://g0'), work('tail', 'https://t')];
+    const after = [
+      work('group-0', 'https://g0'),
+      work('group-1', 'https://g1'),
+      work('tail', 'https://t'),
+    ];
+    const { result, rerender } = renderHook(
+      ({ playlist, index }: { playlist: DP1Item[]; index: number }) =>
+        useShowingKey(playlist, index),
+      { initialProps: { playlist: before, index: 1 } }
+    );
+    const first = result.current;
+    rerender({ playlist: after, index: 2 });
+    expect(result.current).toBe(first);
+  });
+
+  it('is stable when a work sharing an id under a different source moves', () => {
+    // The same id twice is legitimate, and `[identity, source]` already tells
+    // the two apart — so the index is not needed and must not be added, or the
+    // rebuild would remount a showing whose deadline it had just preserved and
+    // cut it off with the remainder of the interval.
+    const before = [
+      work('dup', 'https://first'),
+      work('dup', 'https://second'),
+    ];
+    const after = [
+      work('dup', 'https://first'),
+      work('inserted', 'https://ins'),
+      work('dup', 'https://second'),
+    ];
+    const { result, rerender } = renderHook(
+      ({ playlist, index }: { playlist: DP1Item[]; index: number }) =>
+        useShowingKey(playlist, index),
+      { initialProps: { playlist: before, index: 1 } }
+    );
+    const first = result.current;
+    rerender({ playlist: after, index: 2 });
+    expect(result.current).toBe(first);
+  });
+});
