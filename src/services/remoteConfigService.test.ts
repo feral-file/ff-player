@@ -39,6 +39,20 @@ describe('RemoteConfigService defaults', () => {
     });
   });
 
+  // The local default is what a device plays when display.json gives none. It
+  // must be the playlist display.json serves (feed.feralfile.com), never a host
+  // someone else could register: the former default named
+  // dp1-feed-operator-api-prod.autonomy-system.workers.dev, a deleted worker
+  // whose zone belongs to an account being retired.
+  it('the local playlist default is the display.json playlist on feed.feralfile.com', () => {
+    const url = new URL(AppSettings.DEFAULT_PLAYLIST_URL);
+    expect(url.protocol).toBe('https:');
+    expect(url.host).toBe('feed.feralfile.com');
+    expect(url.pathname).toBe(
+      '/api/v1/playlists/1bbefbc9-0226-439a-921b-12c6cf6a809e'
+    );
+  });
+
   it('keeps a legacy duration payload while still using the local playlist default', async () => {
     vi.stubEnv('NEXT_PUBLIC_PUB_DOC_URL', 'https://docs.example.com');
     axiosGet.mockResolvedValueOnce({
