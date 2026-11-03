@@ -117,6 +117,12 @@ Use the real player in Chromium or on an FF1; jsdom cannot verify layout.
 4. Check a video and a responsive iframe with a nonzero margin. Their bounds
    must respect the same inset. A slow load's global overlay and the cursor
    must continue using the full screen.
+5. Display a small pixel-art image (64 px or less) and a still larger than the
+   screen, both with no `imageRendering`. The small one must show square,
+   hard-edged pixels; the large one must show no moire or shimmering fine
+   lines. A 2048 px square still on a 4K panel (1.05x) must look smooth, with
+   no doubled rows. A work with `imageRendering: "pixelated"` keeps hard edges
+   at every size.
 
 ## Manual smoke: saved device framing
 

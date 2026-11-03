@@ -102,8 +102,18 @@ export enum Scaling {
   Auto = 'auto',
 }
 
+/**
+ * DP-1 core/v1.1.0 §4 `imageRendering`: how raster images are resampled when
+ * scaled. `pixelated` always keeps hard pixel edges; `auto` (the spec
+ * default, and what an absent field means) leaves the choice to the player,
+ * which draws hard edges on a large enlargement and smooths everything else
+ * (see `artwork-player/imageRendering.ts`).
+ */
+export type DP1ImageRendering = 'auto' | 'pixelated';
+
 export interface DP1DisplayPreference {
   scaling?: Scaling;
+  imageRendering?: DP1ImageRendering;
   margin?: number | string;
   background?: string;
   autoPlay?: boolean;
