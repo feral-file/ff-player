@@ -123,11 +123,12 @@ settings rather than visual latches.
 
 A still's resampling is decided per image: the work's `imageRendering:
 "pixelated"` keeps hard edges at any size; otherwise the slot measures the
-image against its box in device pixels on every load and resize, and draws hard
-edges from a 2x enlargement up (`HARD_EDGE_MIN_ENLARGEMENT`) and smooths below
-it. Never hard edges on a reduction: Chromium's `pixelated` uses
-nearest-neighbor when shrinking too, which aliases any image larger than the
-screen. Video and software works keep the browser's own resampling.
+image against its box in device pixels on every load, resize and
+pixel-density change, and draws hard edges from a 2x enlargement up
+(`HARD_EDGE_MIN_ENLARGEMENT`) and smooths below it. Never hard edges on a
+reduction: Chromium's `pixelated` uses nearest-neighbor when shrinking too,
+which aliases any image larger than the screen. Video and software works keep
+the browser's own resampling.
 
 Same-showing adjustments apply in layout when no transition is pending. The
 composition reporter carries the committed showing and whether it can accept

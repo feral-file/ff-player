@@ -65,15 +65,60 @@ export function resolveImageRendering(
   return enlargement >= HARD_EDGE_MIN_ENLARGEMENT ? 'pixelated' : 'auto';
 }
 
+/** Calls `onChange` on every resize of the element's layout box; returns the unsubscribe. */
+function observeBox(el: HTMLElement, onChange: () => void): () => void {
+  if (typeof ResizeObserver === 'undefined') {
+    return () => undefined;
+  }
+  const observer = new ResizeObserver(onChange);
+  observer.observe(el);
+  return () => {
+    observer.disconnect();
+  };
+}
+
+/**
+ * Calls `onChange` whenever the pixel density changes, and returns the
+ * unsubscribe.
+ *
+ * A density change with no layout change (a browser window moved to a monitor
+ * with another density) reaches no ResizeObserver, `device-pixel-content-box`
+ * included: in Chromium 155 only a resolution media query reports it. So this
+ * listens to a query for the current density and re-arms it for the new one
+ * at each change. FF OS sets no output scale, so on an FF1 a panel change
+ * arrives as a viewport resize instead.
+ */
+function watchPixelDensity(onChange: () => void): () => void {
+  if (typeof window.matchMedia !== 'function') {
+    return () => undefined;
+  }
+  let query: MediaQueryList | undefined;
+  const arm = () => {
+    query = window.matchMedia(
+      `(resolution: ${String(window.devicePixelRatio || 1)}dppx)`
+    );
+    // `once`: the query for the old density is spent after its change.
+    query.addEventListener('change', onDensityChange, { once: true });
+  };
+  function onDensityChange() {
+    arm();
+    onChange();
+  }
+  arm();
+  return () => {
+    query?.removeEventListener('change', onDensityChange);
+  };
+}
+
 /**
  * Measures an `<img>` against its own box and returns the rendering to apply.
  *
  * Re-measures on every `load` (the slot's media loader sets `src` after
- * mount) and on every box resize (a rotation is display-level on the FF1, so
- * it arrives as a viewport change; a margin change shrinks the box).
- * `clientWidth`/`clientHeight` are layout sizes, so CSS transforms never skew
- * them; multiplying by `devicePixelRatio` puts the box in device pixels, which
- * is where resampling happens.
+ * mount), on every resize of its box (a rotation is display-level on the
+ * FF1, so it arrives as a viewport change; a margin change shrinks the box),
+ * and on every pixel-density change. `clientWidth`/`clientHeight` are layout sizes, so
+ * CSS transforms never skew them; multiplying by `devicePixelRatio` puts the
+ * box in device pixels, which is where resampling happens.
  */
 export function useImageRendering(
   imageRef: RefObject<HTMLImageElement | null>,
@@ -98,14 +143,12 @@ export function useImageRendering(
     };
     measure();
     el.addEventListener('load', measure);
-    const observer =
-      typeof ResizeObserver === 'undefined'
-        ? null
-        : new ResizeObserver(measure);
-    observer?.observe(el);
+    const unobserve = observeBox(el, measure);
+    const unwatch = watchPixelDensity(measure);
     return () => {
       el.removeEventListener('load', measure);
-      observer?.disconnect();
+      unobserve();
+      unwatch();
     };
   }, [imageRef, objectFit]);
   return resolveImageRendering(authored, enlargement);

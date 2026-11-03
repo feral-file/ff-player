@@ -6,7 +6,7 @@
  * smooths below it, and lets a work's own `pixelated` win in every case.
  */
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   HARD_EDGE_MIN_ENLARGEMENT,
   imageEnlargement,
@@ -103,6 +103,61 @@ describe('useImageRendering', () => {
       img.dispatchEvent(new Event('load'));
     });
     expect(result.current).toBe('auto');
+  });
+
+  it('re-measures on each pixel-density change with no layout change', () => {
+    // A density change alone reaches no ResizeObserver; only a resolution
+    // media query reports it, so the hook must hold one for the current
+    // density and re-arm it for the next.
+    const queries: { media: string; listeners: Set<() => void> }[] = [];
+    vi.stubGlobal('matchMedia', (media: string) => {
+      const query = { media, listeners: new Set<() => void>() };
+      queries.push(query);
+      return {
+        media,
+        addEventListener: (_type: string, listener: () => void) => {
+          query.listeners.add(listener);
+        },
+        removeEventListener: (_type: string, listener: () => void) => {
+          query.listeners.delete(listener);
+        },
+      };
+    });
+    const fire = (index: number) => {
+      act(() => {
+        for (const listener of Array.from(queries[index].listeners)) {
+          queries[index].listeners.delete(listener); // `once`
+          listener();
+        }
+      });
+    };
+    try {
+      const dpr = vi
+        .spyOn(window, 'devicePixelRatio', 'get')
+        .mockReturnValue(1);
+      // 480 px drawn into 720 CSS px: 1.5x at density 1, 3x at density 2.
+      const { img } = sizedImage(480, 720);
+      const ref = { current: img }; // stable, like the slot's createRef
+      const { result, unmount } = renderHook(() =>
+        useImageRendering(ref, undefined, 'contain')
+      );
+      expect(result.current).toBe('auto');
+      expect(queries.map(q => q.media)).toEqual(['(resolution: 1dppx)']);
+
+      dpr.mockReturnValue(2);
+      fire(0);
+      expect(result.current).toBe('pixelated');
+      expect(queries[1].media).toBe('(resolution: 2dppx)');
+
+      dpr.mockReturnValue(1);
+      fire(1);
+      expect(result.current).toBe('auto');
+
+      unmount();
+      expect(queries[2].listeners.size).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('smooths before the image has decoded', () => {
