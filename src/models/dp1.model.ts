@@ -116,7 +116,13 @@ export interface DP1DisplayPreference {
   imageRendering?: DP1ImageRendering;
   margin?: number | string;
   background?: string;
-  autoPlay?: boolean;
+  /**
+   * DP-1 §4 `autoplay`. Typed so the merge carries it, read nowhere on
+   * purpose: the FF1 always plays. It has no play control, so a work that
+   * waited for a gesture would sit silent or frozen on a wall (Sean,
+   * 2026-11-03). Feral File's own playlists never set it.
+   */
+  autoplay?: boolean;
   loop?: boolean;
   interaction?: {
     keyboard?: string[];
@@ -213,7 +219,6 @@ export const defaultDP1DisplayPreference: DP1DisplayPreference = {
   scaling: Scaling.Fit,
   margin: 0,
   background: '#000000',
-  autoPlay: true,
   loop: true,
   interaction: {
     keyboard: [],

@@ -118,17 +118,20 @@ inside the stage's matte; cursor and global overlays cover the full screen.
 During an overlap, the incoming work briefly uses outgoing scaling until the
 fade-end latch. Iframe `display_mode` is per-slot: the incoming target uses
 selected settings; other layers retain committed settings. A data-document slot
-keeps its chosen origin/blob path. `loop` and `autoPlay` remain live behavioral
-settings rather than visual latches.
+keeps its chosen origin/blob path. `loop` remains a live behavioral setting
+rather than a visual latch. DP-1 `autoplay` is read nowhere: the FF1 always
+plays, since it has no play control and a work waiting for a gesture would sit
+silent or frozen on a wall.
 
-A still's resampling is decided per image: the work's `imageRendering:
-"pixelated"` keeps hard edges at any size; otherwise the slot measures the
-image against its box in device pixels on every load, resize and
-pixel-density change, and draws hard edges from a 2x enlargement up
-(`HARD_EDGE_MIN_ENLARGEMENT`) and smooths below it. Never hard edges on a
-reduction: Chromium's `pixelated` uses nearest-neighbor when shrinking too,
-which aliases any image larger than the screen. Video and software works keep
-the browser's own resampling.
+A still's or a video's resampling is decided per source: the work's
+`imageRendering: "pixelated"` keeps hard edges at any size; otherwise the slot
+measures the source (an image's natural size, a video's frame size) against
+its box in device pixels on every load, frame-size change (an HLS rendition
+switch fires `resize`), box resize and pixel-density change, and draws hard
+edges from a 2x enlargement up (`HARD_EDGE_MIN_ENLARGEMENT`) and smooths below
+it. Never hard edges on a reduction: Chromium's `pixelated` uses
+nearest-neighbor when shrinking too, which aliases any source larger than the
+screen. Software works keep the browser's own resampling.
 
 Same-showing adjustments apply in layout when no transition is pending. The
 composition reporter carries the committed showing and whether it can accept
