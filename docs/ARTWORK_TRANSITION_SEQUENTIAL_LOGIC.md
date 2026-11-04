@@ -118,8 +118,10 @@ inside the stage's matte; cursor and global overlays cover the full screen.
 During an overlap, the incoming work briefly uses outgoing scaling until the
 fade-end latch. Iframe `display_mode` is per-slot: the incoming target uses
 selected settings; other layers retain committed settings. A data-document slot
-keeps its chosen origin/blob path. `loop` and `autoPlay` remain live behavioral
-settings rather than visual latches.
+keeps its chosen origin/blob path. `loop` remains a live behavioral setting
+rather than a visual latch. DP-1 `autoplay` is read nowhere: the FF1 always
+plays, since it has no play control and a work waiting for a gesture would sit
+silent or frozen on a wall.
 
 A still's or a video's resampling is decided per source: the work's
 `imageRendering: "pixelated"` keeps hard edges at any size; otherwise the slot
