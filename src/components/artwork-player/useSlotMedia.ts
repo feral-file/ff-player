@@ -25,6 +25,11 @@ export function useMediaEvents(
       incomingSlot: () => transition.incomingSlot,
       status: () => recovery.status,
       matchesTarget: (url, identity) => transition.matchesTarget(url, identity),
+      loadBounded: (index, layer, bounded) => {
+        if (transition.isCurrentArtworkSlot(index, layer)) {
+          recovery.markLoadBounded(bounded);
+        }
+      },
     }),
     [transition, recovery, note]
   );

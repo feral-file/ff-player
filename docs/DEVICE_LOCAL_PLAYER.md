@@ -69,7 +69,8 @@ reports; `contracts.renderStatus` distinguishes that case from unsupported build
 A selected artwork change is identified by both ID and source. It immediately
 publishes pending, including same-ID source replacement. An unchanged selection
 preserves its lifecycle. Renderer status updates do not re-emit cast commands or
-restart playlist timers.
+restart playlist timers; the one coupling is that a slot timer expiring while
+the status is `loading` waits for the load (see `PLAYLIST_LOOP_CONTRACT.md`).
 
 `ready` means load completion accepted by the transition pipeline, with the
 loading overlay removed. It is not verification of painted content. On first
@@ -84,8 +85,18 @@ the distinct callback and composition timings.
   `onArtworkExhausted`. A new item or genuine success resets the budget. A
   same-item remount cancels the old timer but retains the budget.
 - A non-streaming load attempt gets a per-slot watchdog when its load mechanism
-  is ready: 15 s for image/video/audio, 45 s for iframe/object/model/PDF. Failure
-  aborts that slot's pending media fetch. HLS uses its own error classification:
+  is ready. Image/video/audio fail after 20 s without transfer progress (counted
+  from mount, so an origin that never answers is caught) and never later than
+  5 min after mount; a still whose bytes are complete gets 20 s to decode, and a
+  still that fell back to a plain element load (no visible progress) gets a
+  fixed 120 s. Iframe/object/model/PDF expose no progress and keep a fixed 45 s.
+  Chromium itself never times out a stalled image or media request, so this
+  bound is the only one. Failure aborts that slot's pending media fetch.
+- Stills are read as a CORS stream through the HTTP cache and handed to the
+  element as a complete blob (progress is invisible for a plain `<img>`, and
+  some CDNs reject its no-cors request); a refused cached read retries once
+  with `reload`, then falls back to the plain element load. Video and audio
+  always load directly: the element streams with Range and fires `progress`. HLS uses its own error classification:
   fatal errors enter the failure budget; non-fatal errors remain with hls.js.
 - A late genuine success cancels retry, restores readiness, and records played
   at most once for that showing. Failed slots still complete the visual handoff

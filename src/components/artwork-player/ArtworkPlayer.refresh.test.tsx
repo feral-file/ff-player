@@ -119,9 +119,9 @@ vi.mock('hls.js', () => {
 });
 
 const IMAGE_PREVIEW_URL = 'https://feralfile.com/test/artwork-refresh.jpg';
-/** Progressive video: trusted origin + explicit MIME avoids HEAD; non-HLS video path. */
+/** Progressive video: explicit MIME avoids HEAD; video always loads directly. */
 const VIDEO_PREVIEW_URL = 'https://feralfile.com/test/artwork-video-refresh.mp4';
-/** ipfs.io is in KNOWN_ORIGINS so streaming setup can attach without blob fetch. */
+/** HLS sources skip the media loader; hls.js attaches the stream itself. */
 const HLS_PREVIEW_URL = 'https://ipfs.io/ipfs/QmTest/stream.m3u8';
 const HLS_PREVIEW_URL_B = 'https://ipfs.io/ipfs/QmTestB/stream.m3u8';
 const HLS_PREVIEW_URL_C = 'https://ipfs.io/ipfs/QmTestC/stream.m3u8';

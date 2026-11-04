@@ -16,6 +16,7 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
+import { LOAD_IDLE_TIMEOUT_MS } from './LoadWatchdog';
 
 vi.mock('@google/model-viewer', () => {
   if (!customElements.get('model-viewer')) {
@@ -258,9 +259,8 @@ describe('ArtworkPlayer — stuck-load watchdog drives the same retry-then-skip 
   it('treats a load that never calls onLoad or onError as a failure, feeding the same budget a real error does', async () => {
     // feral-file/ff-player#307's own root cause: a gateway that accepts the
     // connection but never replies leaves onLoad/onError unreachable — only
-    // ARTWORK_LOAD_WATCHDOG_MS (15s, hardcoded here: the constant is not
-    // exported, matching this file's own existing convention for
-    // ARTWORK_FAILURE_RETRY_DELAY_MS above) notices. One watchdog-driven
+    // the load watchdog notices: with no progress at all, it fails after
+    // LOAD_IDLE_TIMEOUT_MS (see LoadWatchdog). One watchdog-driven
     // cycle is enough to prove the integration — the 3-attempt counting and
     // exhaustion behavior itself is already covered end to end by the
     // synchronous-onError describe block above, which this one must feed
@@ -273,7 +273,7 @@ describe('ArtworkPlayer — stuck-load watchdog drives the same retry-then-skip 
 
     // Nothing ever settles. Only the watchdog can notice.
     const firstSignal = loaderState.lastSignal;
-    await advanceTimersBy(15000);
+    await advanceTimersBy(LOAD_IDLE_TIMEOUT_MS);
     expect(loaderState.loadCalls).toBe(1);
     expect(onArtworkExhausted).not.toHaveBeenCalled();
     // run-reviewer bot-round-2 pass-3 F2: the still-in-flight fetch for this
@@ -293,7 +293,7 @@ describe('ArtworkPlayer — stuck-load watchdog drives the same retry-then-skip 
 
 describe('ArtworkPlayer — a late real success cancels a watchdog-scheduled retry', () => {
   it('does not force a reload when the real load succeeds between the watchdog firing and the scheduled retry', async () => {
-    // run-reviewer pass 5, F2: the watchdog fires at 15s (slot still
+    // run-reviewer pass 5, F2: the watchdog fires at the idle bound (slot still
     // pending), marks the slot failed, and schedules a retry
     // ARTWORK_FAILURE_RETRY_DELAY_MS (3s) later. If the REAL load was only
     // slow — not actually stuck — and its own onLoad arrives in that 3s
@@ -308,7 +308,7 @@ describe('ArtworkPlayer — a late real success cancels a watchdog-scheduled ret
     expect(loaderState.loadCalls).toBe(1);
 
     // Watchdog fires: marks failed, schedules the retry.
-    await advanceTimersBy(15000);
+    await advanceTimersBy(LOAD_IDLE_TIMEOUT_MS);
 
     // Watchdog fired: the slot reads failed and shows the error modal.
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
@@ -494,7 +494,7 @@ describe('ArtworkPlayer — a scheduled retry bails while WebGL context is lost'
     expect(loaderState.loadCalls).toBe(2);
 
     // Its own watchdog must fire normally, not bail on the stale flag.
-    await advanceTimersBy(15000);
+    await advanceTimersBy(LOAD_IDLE_TIMEOUT_MS);
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
   });
 
@@ -724,10 +724,10 @@ describe('ArtworkPlayer — the stuck-load watchdog resumes through WebGL loss t
     await advanceTimersBy(0);
     expect(loaderState.loadCalls).toBe(2);
 
-    // Item 2's own 15s watchdog fires WHILE the unrelated WebGL recovery is
+    // Item 2's own idle watchdog fires WHILE the unrelated WebGL recovery is
     // still in progress (well inside MAX_RECOVERY_TIME) — must still commit
     // the failure, not silently do nothing.
-    await advanceTimersBy(15000);
+    await advanceTimersBy(LOAD_IDLE_TIMEOUT_MS);
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
 
     // That commit schedules its own 3s retry, which bails on the
@@ -736,8 +736,9 @@ describe('ArtworkPlayer — the stuck-load watchdog resumes through WebGL loss t
     expect(loaderState.loadCalls).toBe(2);
 
     // Recovery never succeeds in jsdom; advance past MAX_RECOVERY_TIME
-    // (605000 total; 18000 of it already elapsed above) so it gives up.
-    await advanceTimersBy(587000);
+    // (605000 total; LOAD_IDLE_TIMEOUT_MS + 3000 of it already elapsed
+    // above) so it gives up.
+    await advanceTimersBy(605000 - LOAD_IDLE_TIMEOUT_MS - 3000);
     expect(
       screen.getByText('Couldn’t restore this artwork. Try another work.')
     ).toBeTruthy();

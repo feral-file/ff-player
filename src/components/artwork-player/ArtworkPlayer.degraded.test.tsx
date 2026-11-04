@@ -13,14 +13,25 @@ import { AppContext } from '@/context/AppContext';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import * as React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
 
-// Trusted origin (KNOWN_ORIGINS) + explicit MIME: the loader assigns
-// `img.src` directly with no HEAD probe and no blob fetch, so the only
-// load/error events are the ones these tests dispatch.
+// Explicit MIME skips the HEAD probe, and the stream read is refused (as an
+// origin without CORS would be), so the loader falls back to assigning
+// `img.src` directly: the only load/error events are the ones these tests
+// dispatch, and no test reaches the network.
 const IMAGE_A = 'https://feralfile.com/test/degraded-a.jpg';
 const IMAGE_B = 'https://feralfile.com/test/degraded-b.jpg';
+
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.reject(new TypeError('no network in tests')))
+  );
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 function playerNode(
   previewURL: string,
