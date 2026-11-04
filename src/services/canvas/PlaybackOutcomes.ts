@@ -8,12 +8,17 @@ import {
 /**
  * The per-play outcome ring reported on `checkStatus.outcomes`.
  *
- * Controld drains it on its 5 s poll and dedupes by `(castSeq, seq)`, so the
- * ring never acknowledges or removes on read: a poll that lands between two
- * failures still sees both, and a poll that misses 64 outcomes sees a `seq`
- * gap rather than silence. Both counters restart with the page, which is why
- * `seq` is monotonic for the page lifetime and never reset per cast: a
- * drained `seq` that goes backwards tells controld the player restarted.
+ * Controld drains it on its 5 s poll and dedupes by the entry's own
+ * `(castSeq, seq)`, so the ring never acknowledges or removes on read: a poll
+ * that lands between two failures still sees both, and a poll that misses 64
+ * outcomes sees a `seq` gap rather than silence. Each entry carries the cast
+ * generation it was recorded under; the snapshot's `castSeq` is only the
+ * current generation and moves on when a new cast opens, while retained
+ * entries keep their identity so an undrained failure is never counted
+ * again as corroboration from a later cast. Both counters restart with the
+ * page, which is why `seq` is monotonic for the page lifetime and never
+ * reset per cast: a drained `seq` that goes backwards tells controld the
+ * player restarted.
  *
  * In memory only. Nothing here is persisted, and a failed status read never
  * blocks playback; the ring is observability, not a gate.
@@ -34,6 +39,7 @@ export class PlaybackOutcomeRing {
     const entry: PlaybackOutcomeEntry = {
       ...input,
       seq: this.seq,
+      castSeq: this.castSeq,
       at: new Date().toISOString(),
     };
     this.entries.push(entry);

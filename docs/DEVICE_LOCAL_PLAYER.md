@@ -137,11 +137,15 @@ passed over is reported as a `skip/hint` outcome.
 
 **Outcomes.** `checkStatus.outcomes` is `{castSeq, entries}`, always present
 on a supporting player and empty until the first mount reports. Entries are
-oldest first, at most 64, each `{seq, source, kind, stage, code?, mediaType?,
-attempt, elapsedMs, at}`. `castSeq` increments on every accepted Now Display;
-`seq` is monotonic for the page and never reset, so a `seq` that goes
-backwards means the player restarted. Nothing is removed on read; controld
-dedupes by `(castSeq, seq)` and reads a jump as a gap. `canvas/PlaybackOutcomes`
+oldest first, at most 64, each `{seq, castSeq, source, kind, stage, code?,
+mediaType?, attempt, elapsedMs, at}`. The outer `castSeq` is the current
+generation and increments on every accepted Now Display; each entry keeps the
+`castSeq` it was recorded under, so its `(castSeq, seq)` identity never
+changes while it is retained and an undrained failure cannot count again as
+corroboration from a later cast. `seq` is monotonic for the page and never
+reset, so a `seq` that goes backwards means the player restarted. Nothing is
+removed on read; controld dedupes by the entry's `(castSeq, seq)` (or `seq`
+alone) and reads a jump as a gap. `canvas/PlaybackOutcomes`
 owns the ring; `ArtworkRecovery` reports through `ArtworkOutcomeReporter`.
 
 | Stage | Kind | Source in the player | `code` |

@@ -155,6 +155,7 @@ describe('CanvasService mediaHealth outcome ring', () => {
       source: item('a').source,
     });
     expect(typeof last?.seq).toBe('number');
+    expect(last?.castSeq).toBe(outcomes?.castSeq);
     expect(typeof last?.at).toBe('string');
   });
 });

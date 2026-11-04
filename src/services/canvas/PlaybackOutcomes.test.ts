@@ -29,6 +29,9 @@ describe('PlaybackOutcomeRing', () => {
     const { castSeq, entries } = ring.snapshot();
     expect(castSeq).toBe(2);
     expect(entries.map(entry => entry.seq)).toEqual([1, 2]);
+    // Each entry keeps the generation it was recorded under: the identity
+    // controld dedupes by must not change when a later cast opens.
+    expect(entries.map(entry => entry.castSeq)).toEqual([1, 2]);
     expect(entries[0].at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
@@ -41,6 +44,16 @@ describe('PlaybackOutcomeRing', () => {
     expect(entries).toHaveLength(PLAYBACK_OUTCOME_RING_SIZE);
     expect(entries[0].seq).toBe(6);
     expect(entries.at(-1)?.seq).toBe(PLAYBACK_OUTCOME_RING_SIZE + 5);
+  });
+
+  it('keeps an undrained entry identity stable across a new cast', () => {
+    const ring = new PlaybackOutcomeRing();
+    ring.beginCast();
+    const first = ring.record(fail('a'));
+    ring.beginCast();
+    const { castSeq, entries } = ring.snapshot();
+    expect(castSeq).toBe(2);
+    expect(entries[0]).toMatchObject({ castSeq: 1, seq: first.seq });
   });
 
   it('does not drain on read: the same entries are visible to a second poll', () => {

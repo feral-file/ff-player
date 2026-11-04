@@ -53,6 +53,12 @@ export type PlaybackOutcomeStage = (typeof PLAYBACK_OUTCOME_STAGES)[number];
 /** One ring entry. `code` is the stage's detail token; `mediaType` the resolved renderer when known. */
 export interface PlaybackOutcomeEntry {
   seq: number;
+  /**
+   * The cast generation this entry was recorded under. Fixed on the entry,
+   * unlike the snapshot's own `castSeq`, so `(castSeq, seq)` stays the same
+   * identity on every later poll even after a new cast opened.
+   */
+  castSeq: number;
   source: string;
   kind: PlaybackOutcomeKind;
   stage: PlaybackOutcomeStage;
@@ -68,14 +74,17 @@ export interface PlaybackOutcomeEntry {
 
 /** What `checkStatus.outcomes` carries. */
 export interface PlaybackOutcomes {
-  /** Increments on every accepted Now Display; resets with the page. */
+  /** The CURRENT cast generation: increments on every accepted Now Display; resets with the page. Entries keep their own. */
   castSeq: number;
   /** Oldest first, at most `PLAYBACK_OUTCOME_RING_SIZE` entries. */
   entries: PlaybackOutcomeEntry[];
 }
 
-/** An entry as a producer records it; the ring assigns `seq` and `at`. */
-export type PlaybackOutcomeInput = Omit<PlaybackOutcomeEntry, 'seq' | 'at'>;
+/** An entry as a producer records it; the ring assigns `seq`, `castSeq`, and `at`. */
+export type PlaybackOutcomeInput = Omit<
+  PlaybackOutcomeEntry,
+  'seq' | 'castSeq' | 'at'
+>;
 
 /** A failure as the renderer sees it, before the attempt and timing are known. */
 export interface PlaybackFailure {
