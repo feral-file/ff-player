@@ -158,8 +158,9 @@ owns the ring; `ArtworkRecovery` reports through `ArtworkOutcomeReporter`.
 One `fail` entry per attempt: competing signals for the same attempt collapse
 at the transition into `failed`, so the ring and the retry budget agree on
 which try a verdict belongs to. `attempt` is 1-based within the per-item budget
-and resets on a new work or a genuine success; an `ok` names the attempt that
-recovered, so a retry success reports `attempt: 2`. `detect` and `webgl`
+and resets on a new work or a genuine success. The number is fixed when the
+mount starts, so a retry success reports `attempt: 2` while a late success
+inside the mount the watchdog already failed keeps that mount's `attempt: 1`. `detect` and `webgl`
 entries are recorded out of band and may precede the same attempt's
 `load`/`decode`/`watchdog` entry (a `.jpg` answering 404 yields `detect/404`
 then `load/image`), and a `detect` failure can precede an `ok` in the same

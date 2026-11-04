@@ -197,6 +197,31 @@ describe('ArtworkPlayer play-outcome ring: success and the retry budget', () => 
 describe('ArtworkPlayer play-outcome ring: decode, detect, and GPU stages', () => {
   useRingHarness();
 
+  it('keeps attempt 1 for a late success inside the mount that the watchdog failed', async () => {
+    vi.spyOn(WebGLRecovery.prototype, 'available').mockReturnValue(true);
+    render(node({ mimeType: 'text/html', previewURL: 'https://art.test/slow' }));
+    await advance(0);
+    await advance(45000);
+    expect(sinceSeq(mark).map(entry => [entry.stage, entry.attempt])).toEqual([
+      ['watchdog', 1],
+    ]);
+    const frame = document.querySelector('iframe');
+    if (!frame) {
+      throw new Error('no iframe mounted');
+    }
+    // The load lands before the 3 s retry would remount: same mount, so
+    // the recovery is attempt 1, not a retry that never ran.
+    await act(async () => {
+      frame.dispatchEvent(new Event('load'));
+      await Promise.resolve();
+    });
+    await until(() => sinceSeq(mark).some(entry => entry.stage === 'ready'));
+    expect(sinceSeq(mark).map(entry => [entry.kind, entry.stage, entry.attempt])).toEqual([
+      ['fail', 'watchdog', 1],
+      ['ok', 'ready', 1],
+    ]);
+  });
+
   it('reads MediaError.code off a media element as the decode stage', async () => {
     loaderState.mode = 'element-error';
     render(node({ mimeType: 'video/mp4', previewURL: SOURCE }));

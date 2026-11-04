@@ -37,10 +37,12 @@ export class ArtworkRecovery {
   // attempt number is the failure budget's own counter, so the ring and the
   // retry/skip rule can never disagree about which try a verdict belongs to.
   private readonly outcomes = new ArtworkOutcomeReporter();
-  // The attempt a success belongs to, captured when the transition accepts
-  // the load (acceptSuccess zeroes the budget) and consumed when `ready`
-  // publishes, which on a crossfade is up to 650 ms later.
-  private readyAttempt: number | null = null;
+  // The attempt this mount IS, fixed at beginMount from the budget counter.
+  // Every outcome of the mount carries it: a failure bumps the counter at
+  // once and a success zeroes it, so reading the counter at report time
+  // would label a late success in the same mount as a retry that never ran,
+  // or a crossfade's ready (up to 650 ms after acceptance) as attempt 1.
+  private mountAttempt = 1;
   constructor(
     private readonly ui: RecoveryUI,
     private readonly performArtworkReload: () => void
@@ -60,9 +62,9 @@ export class ArtworkRecovery {
   get recoveringWebGL() {
     return this.isWebGLContextLost.current;
   }
-  /** The 1-based attempt the next verdict belongs to. */
+  /** The 1-based attempt the current mount's verdicts belong to. */
   private get attempt() {
-    return this.artworkFailureCountRef.current + 1;
+    return this.mountAttempt;
   }
   /** MIME detection settled: the ring labels this mount's entries with the renderer. */
   noteMediaType(previewType: PreviewHTMLTag | null) {
@@ -122,14 +124,7 @@ export class ArtworkRecovery {
     }
     this.renderStatusRef.current = RenderStatus.ready;
     canvasService.setRenderStatus(RenderStatus.ready);
-    // Names the attempt that actually succeeded: the budget was already
-    // reset by acceptSuccess, which captured it.
-    this.outcomes.report({
-      kind: 'ok',
-      stage: 'ready',
-      attempt: this.readyAttempt ?? this.attempt,
-    });
-    this.readyAttempt = null;
+    this.outcomes.report({ kind: 'ok', stage: 'ready', attempt: this.attempt });
     this.ui.setGlobalLoading(false);
     this.ui.setShowLoading(false);
     this.clearLoadingDelay();
@@ -191,7 +186,7 @@ export class ArtworkRecovery {
   /** A new attempt cancels a parked retry without resetting the per-item budget. */
   beginMount() {
     this.cancelRetry();
-    this.readyAttempt = null;
+    this.mountAttempt = this.artworkFailureCountRef.current + 1;
     this.outcomes.beginAttempt(this.previewURLRef.current);
     this.markArtworkPending();
     this.armLoadingDelay();
@@ -216,9 +211,6 @@ export class ArtworkRecovery {
   }
   acceptSuccess() {
     this.cancelRetry();
-    // First acceptance wins: a repeated load event after the reset would
-    // otherwise relabel a recovered mount as a first-try success.
-    this.readyAttempt ??= this.attempt;
     this.artworkFailureCountRef.current = 0;
     this.artworkFailureStuckByWebGLRef.current = null;
   }
