@@ -11,6 +11,7 @@ stable interfaces; `CanvasService` remains the command/status interface.
 | `useArtworkSource` | MIME detection and software-URL selection for the current request. |
 | `SlotMediaResources` / `useSlotMedia` | Elements, blob loaders, abort controllers, per-slot watchdogs, HLS instances, and media setup/cleanup. |
 | `ArtworkRecovery` / `useArtworkRecovery` | Render lifecycle, overlay delay, retry budget, and degraded reporting. |
+| `ArtworkOutcomes` | The play-outcome ring's wire shape for one mount attempt; reports only, never decides. |
 | `useWebGLRecovery` | GPU probe, context events, and recovery interval. |
 | `useCommittedComposition` | Selected versus committed visual settings and the layout-phase composition reporter. |
 | `useWorkOriginFrame` | Authenticated shell handshake and private-channel completion. |

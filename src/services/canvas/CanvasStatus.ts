@@ -10,8 +10,9 @@ import { coerceLoopMode } from '@/utils/loopMode';
 import { coerceTombstoneMode } from '@/utils/tombstoneMode';
 import { contentPolicyStore } from '../ContentPolicyStore';
 import { DisplaySettingsService } from './DisplaySettingsService';
+import type { PlaybackOutcomeRing } from './PlaybackOutcomes';
 import { PlaybackSession } from './PlaybackSession';
-/** Projects current device status after the existing synchronous cached-cast recovery step. Render status and composition are never restored from storage. */
+/** Projects current device status after the existing synchronous cached-cast recovery step. Render status, outcomes, and composition are never restored from storage. */
 export class CanvasStatus {
   // DeviceManager parses persisted JSON on every read, so object identity is
   // unstable. Keep the serialized value to avoid retrying the same rejected
@@ -128,6 +129,11 @@ export class CanvasStatus {
 
         loopMode: coerceLoopMode(activeCastInfo?.loopMode),
         shuffle: activeCastInfo?.shuffle ?? false,
+
+        // mediaHealth contract v1: always present from this player, like
+        // `stamp`, so controld can tell "nothing reported yet" ({castSeq:0,
+        // entries:[]}) from an older build that omits the key.
+        outcomes: this.outcomes.snapshot(),
       };
     } catch (error) {
       console.error('[CanvasService] Error getting status:', error);
@@ -136,6 +142,7 @@ export class CanvasStatus {
   }
   constructor(
     private readonly session: PlaybackSession,
-    private readonly settings: DisplaySettingsService
+    private readonly settings: DisplaySettingsService,
+    private readonly outcomes: PlaybackOutcomeRing
   ) {}
 }

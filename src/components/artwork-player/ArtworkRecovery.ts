@@ -1,6 +1,8 @@
-import { RenderStatus } from '@/models';
+import { PreviewHTMLTag, RenderStatus } from '@/models';
+import type { PlaybackFailure } from '@/models/media_health.model';
 import { canvasService } from '@/services/CanvasService';
 import type { Dispatch, SetStateAction } from 'react';
+import { ArtworkOutcomeReporter } from './ArtworkOutcomes';
 type Setter<T> = Dispatch<SetStateAction<T>>;
 export interface RecoveryUI {
   setGlobalLoading: Setter<boolean>;
@@ -31,6 +33,14 @@ export class ArtworkRecovery {
   private previewURLRef = { current: '' };
   private itemIdentityRef = { current: '' };
   private onArtworkExhausted?: (identity: string) => void;
+  // mediaHealth contract v1: every attempt decision below reports here. The
+  // attempt number is the failure budget's own counter, so the ring and the
+  // retry/skip rule can never disagree about which try a verdict belongs to.
+  private readonly outcomes = new ArtworkOutcomeReporter();
+  // The attempt a success belongs to, captured when the transition accepts
+  // the load (acceptSuccess zeroes the budget) and consumed when `ready`
+  // publishes, which on a crossfade is up to 650 ms later.
+  private readyAttempt: number | null = null;
   constructor(
     private readonly ui: RecoveryUI,
     private readonly performArtworkReload: () => void
@@ -49,6 +59,28 @@ export class ArtworkRecovery {
   }
   get recoveringWebGL() {
     return this.isWebGLContextLost.current;
+  }
+  /** The 1-based attempt the next verdict belongs to. */
+  private get attempt() {
+    return this.artworkFailureCountRef.current + 1;
+  }
+  /** MIME detection settled: the ring labels this mount's entries with the renderer. */
+  noteMediaType(previewType: PreviewHTMLTag | null) {
+    this.outcomes.noteMediaType(previewType);
+  }
+  /**
+   * The content-type probe answered without a usable type. Recorded even when
+   * playback carries on through the iframe fallback, because that fallback
+   * reports `ready` for a gateway's error page; controld needs the status to
+   * see past it. `network` is reported only once offline is corroborated.
+   */
+  noteDetectFailure(code: string) {
+    this.outcomes.report({
+      kind: 'fail',
+      stage: 'detect',
+      code,
+      attempt: this.attempt,
+    });
   }
   clearLoadingDelay() {
     if (!this.loadingDelayRef.current) {
@@ -90,6 +122,14 @@ export class ArtworkRecovery {
     }
     this.renderStatusRef.current = RenderStatus.ready;
     canvasService.setRenderStatus(RenderStatus.ready);
+    // Names the attempt that actually succeeded: the budget was already
+    // reset by acceptSuccess, which captured it.
+    this.outcomes.report({
+      kind: 'ok',
+      stage: 'ready',
+      attempt: this.readyAttempt ?? this.attempt,
+    });
+    this.readyAttempt = null;
     this.ui.setGlobalLoading(false);
     this.ui.setShowLoading(false);
     this.clearLoadingDelay();
@@ -137,6 +177,12 @@ export class ArtworkRecovery {
     if (this.artworkFailureCountRef.current < ARTWORK_FAILURE_RETRY_LIMIT) {
       this.armScheduledRetry();
     } else {
+      this.outcomes.report({
+        kind: 'fail',
+        stage: 'exhausted',
+        code: String(ARTWORK_FAILURE_RETRY_LIMIT),
+        attempt: this.artworkFailureCountRef.current,
+      });
       this.artworkFailureCountRef.current = 0;
       this.artworkFailureStuckByWebGLRef.current = null;
       this.onArtworkExhausted?.(this.itemIdentityRef.current);
@@ -145,6 +191,8 @@ export class ArtworkRecovery {
   /** A new attempt cancels a parked retry without resetting the per-item budget. */
   beginMount() {
     this.cancelRetry();
+    this.readyAttempt = null;
+    this.outcomes.beginAttempt(this.previewURLRef.current);
     this.markArtworkPending();
     this.armLoadingDelay();
   }
@@ -168,6 +216,9 @@ export class ArtworkRecovery {
   }
   acceptSuccess() {
     this.cancelRetry();
+    // First acceptance wins: a repeated load event after the reset would
+    // otherwise relabel a recovered mount as a first-try success.
+    this.readyAttempt ??= this.attempt;
     this.artworkFailureCountRef.current = 0;
     this.artworkFailureStuckByWebGLRef.current = null;
   }
@@ -183,10 +234,17 @@ export class ArtworkRecovery {
   hideMessage() {
     this.ui.setShowMessageModal(false);
   }
-  fail() {
+  /**
+   * A terminal load failure for the current attempt. The caller names the
+   * stage it saw (watchdog, element error, decode code, ...); the entry is
+   * recorded only on the transition into `failed`, so competing failure
+   * signals for one attempt produce one ring entry, charged to one retry.
+   */
+  fail(outcome: PlaybackFailure) {
     if (this.status === RenderStatus.failed) {
       return;
     }
+    this.outcomes.report({ kind: 'fail', ...outcome, attempt: this.attempt });
     this.markArtworkFailed();
     this.scheduleArtworkFailureRetryOrSkip();
     this.ui.setMessageModalText(null);
@@ -200,6 +258,13 @@ export class ArtworkRecovery {
       return false;
     }
     this.isWebGLContextLost.current = true;
+    // Device-local by contract: controld records it, never as a source verdict.
+    this.outcomes.report({
+      kind: 'fail',
+      stage: 'webgl',
+      code: 'context_lost',
+      attempt: this.attempt,
+    });
     this.markArtworkFailed();
     this.ui.setMessageModalText(
       'Please wait while your Art Computer restores the artwork.'

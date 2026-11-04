@@ -27,16 +27,23 @@ import {
   UpdateDefaultDurationRequest,
 } from '@/models/cast_request_reply.model';
 import {
+  DP1Action,
   DP1Call,
   DP1Defaults,
   DP1DisplayPreference,
   DP1Item,
 } from '@/models/dp1.model';
+import type {
+  MediaHealthHint,
+  PlaybackOutcomeInput,
+} from '@/models/media_health.model';
 import DeviceManager from '@/utils/DeviceManager';
 import { BootPlaylistStore } from './canvas/BootPlaylistStore';
 import { CanvasStatus } from './canvas/CanvasStatus';
 import { CursorService } from './canvas/CursorService';
 import { DisplaySettingsService } from './canvas/DisplaySettingsService';
+import { MediaHealthHintStore } from './canvas/MediaHealthHints';
+import { PlaybackOutcomeRing } from './canvas/PlaybackOutcomes';
 import { PlaybackRecovery } from './canvas/PlaybackRecovery';
 import { PlaybackSession } from './canvas/PlaybackSession';
 import { PlaylistCommands } from './canvas/PlaylistCommands';
@@ -239,7 +246,29 @@ class CanvasService {
     dp1CallData: DP1Call,
     contentContext?: ContentContext
   ): void {
+    // A player-local scheduled task is a cast without a push, so it carries
+    // no hints: the previous push's map must not judge a different list.
+    this.hints.clear();
     this.playlists.executeScheduledDP1Task(dp1CallData, contentContext);
+  }
+
+  /**
+   * MediaHealth contract v1: controld's hint for a source on the latest push,
+   * or undefined when the source is not marked broken. The playlist timeline
+   * consults this before mounting a slot; nothing else reads it.
+   */
+  public getMediaHealthHint(source: string): MediaHealthHint | undefined {
+    return this.hints.hint(source);
+  }
+
+  /**
+   * MediaHealth contract v1: append one per-play outcome to the status ring.
+   * Called by the renderer's recovery owner for every mount decision and by
+   * the timeline when it honours a hint. Never throws and never blocks
+   * playback; the ring is observability only.
+   */
+  public recordPlaybackOutcome(input: PlaybackOutcomeInput): void {
+    this.outcomes.record(input);
   }
 
   public castPlaylistByURL(
@@ -267,6 +296,8 @@ class CanvasService {
   }
 
   public disconnect(): DisconnectReplyV2 {
+    // A cleared wall has nothing the hints could describe.
+    this.hints.clear();
     return this.recovery.disconnect();
   }
 
@@ -326,7 +357,21 @@ class CanvasService {
   private displayPlaylist(
     request: DisplayPlaylistRequest
   ): DisplayPlaylistReply {
-    return this.playlists.displayPlaylist(request);
+    const reply = this.playlists.displayPlaylist(request);
+    // Hints ride every accepted push that changes what is on the wall: a
+    // cast, a boot cast, and a refresh. A status query and a scheduled cast
+    // describe a list that is not playing, so they leave the live map alone.
+    // Installed AFTER the command so a rejected push cannot leave the hints
+    // of a cast that never landed judging the one still playing.
+    const action = request.intent?.action;
+    if (
+      reply.ok &&
+      action !== DP1Action.GetCurrentPlaylist &&
+      action !== DP1Action.SchedulePlay
+    ) {
+      this.hints.replace(request.mediaHealth);
+    }
+    return reply;
   }
 
   private setShuffle(request: SetShuffleRequest): Reply {
@@ -371,12 +416,24 @@ class CanvasService {
   private readonly settings = new DisplaySettingsService();
   private readonly cursors = new CursorService();
   private readonly recovery = new PlaybackRecovery(this.session, this.history);
-  private readonly status = new CanvasStatus(this.session, this.settings);
+  private readonly hints = new MediaHealthHintStore();
+  private readonly outcomes = new PlaybackOutcomeRing();
+  private readonly status = new CanvasStatus(
+    this.session,
+    this.settings,
+    this.outcomes
+  );
   private readonly playlists = new PlaylistCommands(
     this.session,
     this.history,
     this.boot,
-    this
+    {
+      processMessage: message => this.processMessage(message),
+      getStatus: () => this.getStatus(),
+      beginCast: () => {
+        this.outcomes.beginCast();
+      },
+    }
   );
   get onCastInfoChange() {
     return this.session.onCastInfoChange;

@@ -84,7 +84,15 @@ export class ContentTypeDetectionError extends Error {
  * `{}` in the device log.
  */
 export async function getContentTypeFromURL(
-  previewURL: string
+  previewURL: string,
+  /**
+   * Observes a HEAD that reached the server but answered non-2xx, with the
+   * status, before extension inference runs. The mediaHealth outcome ring
+   * records it: inference or the iframe fallback can still play the work,
+   * and controld needs the status to see a gateway's error page behind a
+   * later `ready`. A 2xx without a usable Content-Type is not reported.
+   */
+  onHeadStatus?: (status: number) => void
 ): Promise<string> {
   const url = resolveArtworkSourceURL(previewURL);
   if (url.protocol === 'data:') {
@@ -119,6 +127,7 @@ export async function getContentTypeFromURL(
 
     // Treat non-2xx as failure, even if Content-Type is present (e.g., 504 text/plain pages)
     if (!response.ok) {
+      onHeadStatus?.(response.status);
       throw new Error(
         `HEAD request failed with status ${String(
           response.status

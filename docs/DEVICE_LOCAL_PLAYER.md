@@ -110,6 +110,62 @@ Current limitations that callers must preserve:
   nominal 3 s retry pacing. Watchdog and fatal-HLS failures do not raise that
   degraded signal. The failure budget still bounds attempts.
 
+## Media health: hints and play outcomes
+
+`contracts.mediaHealth` (v1) pairs the player with feral-controld's
+device-side media store (feral-file/ffos-user#392). Both halves are unsigned
+projections beside the DP-1 body, like `contentContext`, and neither is
+persisted: boot and hydrate never see a hint or an outcome.
+
+**Hints.** `displayPlaylist.request.mediaHealth` is a sparse map keyed by
+`item.source` as pushed, broken entries only, each `{category, reason}`. It
+rides every push (cast, boot cast, refresh) and is replaced whole on each
+accepted one; absent means no hints, on a refresh too. A status query and a
+scheduled cast leave the live map alone; a rejected push cannot install one; a
+disconnect, the fallback playlist, and a player-local scheduled task clear it.
+`canvas/MediaHealthHints` owns the map and parses it tolerantly: a malformed
+field is skipped, a malformed map ignored, and nothing here rejects a cast.
+
+`PlaylistTimeline` resolves every selection (cast start, advance, queued
+promotion, source replacement, explicit move) through the hints BEFORE
+publishing it, so a hinted work is never mounted. The walk is forward in play
+order: `playlist` wraps, `none` does not, `one` ignores hints. Hinted items
+stay in `checkStatus.items`; the published index is where playback landed.
+When nothing else is playable the requested slot plays and the ordinary
+retry/skip budget judges it, so a hint can never blank the wall. Each slot
+passed over is reported as a `skip/hint` outcome.
+
+**Outcomes.** `checkStatus.outcomes` is `{castSeq, entries}`, always present
+on a supporting player and empty until the first mount reports. Entries are
+oldest first, at most 64, each `{seq, source, kind, stage, code?, mediaType?,
+attempt, elapsedMs, at}`. `castSeq` increments on every accepted Now Display;
+`seq` is monotonic for the page and never reset, so a `seq` that goes
+backwards means the player restarted. Nothing is removed on read; controld
+dedupes by `(castSeq, seq)` and reads a jump as a gap. `canvas/PlaybackOutcomes`
+owns the ring; `ArtworkRecovery` reports through `ArtworkOutcomeReporter`.
+
+| Stage | Kind | Source in the player | `code` |
+|---|---|---|---|
+| `detect` | fail | Content-type HEAD answered non-2xx, or failed with corroborated offline | HTTP status, or `network` |
+| `load` | fail | Image/video/audio/iframe/object/model element error, fatal HLS error | element kind, or `hls_<ErrorType>` |
+| `decode` | fail | A video/audio `MediaError` | `aborted`, `network`, `decode`, `src_not_supported` |
+| `watchdog` | fail | Per-slot load deadline | `15s`, `45s` |
+| `webgl` | fail | GPU context lost on the probe canvas | `context_lost`; device-local, never a source verdict |
+| `exhausted` | fail | Retry budget spent; the playlist advances | the attempt limit |
+| `hint` | skip | The timeline honoured a hint; nothing mounted | none; `attempt` and `elapsedMs` are 0 |
+| `ready` | ok | The mount reached `ready` | none; `elapsedMs` is mount to ready |
+
+One `fail` entry per attempt: competing signals for the same attempt collapse
+at the transition into `failed`, so the ring and the retry budget agree on
+which try a verdict belongs to. `attempt` is 1-based within the per-item budget
+and resets on a new work or a genuine success; an `ok` names the attempt that
+recovered, so a retry success reports `attempt: 2`. `detect` and `webgl`
+entries are recorded out of band and may precede the same attempt's
+`load`/`decode`/`watchdog` entry (a `.jpg` answering 404 yields `detect/404`
+then `load/image`), and a `detect` failure can precede an `ok` in the same
+play because the iframe fallback still plays the work and reports `ready` for
+a gateway's error page; entries must be applied in `seq` order. Source URLs appear in the ring only over loopback CDP.
+
 ## Recently played
 
 `getRecentlyPlayed` returns a bounded reverse-chronological timeline of successful

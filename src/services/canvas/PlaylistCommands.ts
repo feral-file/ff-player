@@ -441,6 +441,11 @@ export class PlaylistCommands {
       loopMode: LoopMode.playlist,
       shuffle: false,
     });
+    // Every accepted Now Display opens a new outcome-ring cast generation
+    // (mediaHealth contract v1), including the boot replay, a scheduled
+    // task, and the fallback: each one puts a new list on the wall, which is
+    // what `castSeq` labels for controld's drain.
+    this.commands.beginCast();
     // Explicit content is now on screen — tell AppContext so an active
     // boot-fallback retry (failed or still fetching) cannot fire later and
     // replace it with the default playlist. The fallback's own cast is
@@ -541,6 +546,7 @@ export class PlaylistCommands {
     private readonly commands: {
       processMessage: (message: Record<string, unknown>) => Reply | undefined;
       getStatus: () => CheckDeviceStatusReply;
+      beginCast: () => void;
     }
   ) {}
   private processMessage(message: Record<string, unknown>) {

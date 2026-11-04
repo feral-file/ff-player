@@ -133,6 +133,32 @@
     "playerStatus": {
       "version": 1,
       "notes": "window.__ffosPlayerStatus() (no request payload \u2014 a plain global function, not a checkStatus-style command) returns JSON.stringify({protocol, route, handlerRegistered, hasArtwork, bootHydration}), where bootHydration is one of pending|ok|halted_cleared|halted_preserving|failed. Installed by CDPRequestHandler.initialize() and set back to null by cleanup(). Absent on player builds that predate this contract entry \u2014 controld's capability fuse treats a manifest without this entry as unsupported and falls back to conservative (log-only) boot recovery."
+    },
+    "mediaHealth": {
+      "version": 1,
+      "requestFields": [
+        "mediaHealth"
+      ],
+      "statusFields": [
+        "outcomes"
+      ],
+      "outcomeKinds": [
+        "ok",
+        "fail",
+        "skip"
+      ],
+      "outcomeStages": [
+        "detect",
+        "load",
+        "decode",
+        "watchdog",
+        "webgl",
+        "exhausted",
+        "hint",
+        "ready"
+      ],
+      "ringSize": 64,
+      "notes": "Paired with feral-controld's mediahealth store (ffos-user#392). HINTS: displayPlaylist.request.mediaHealth is a sparse object keyed by item.source as pushed, broken entries only, each {category, reason}; it rides beside dp1_call on every push (cast, boot cast, refresh) and the signed DP-1 body is untouched. Absent means NO hints, on a refresh too (unlike contentContext, which inherits): a controld that declares this entry sends the map on every push. The timeline resolves every selection past hinted sources BEFORE mounting, in play order; `playlist` wraps, `none` does not, and `one` ignores hints because the viewer asked for that work. Hinted items stay in checkStatus.items; the published index is where playback actually landed. When nothing else is playable (an all-broken map, or only hinted works remain under repeat-off) the requested slot plays anyway and the ordinary 3-attempt retry/skip budget judges it, so a hint can never blank the wall. Hints are never persisted: after a reboot the next push restores them. Malformed maps are ignored, never rejected. OUTCOMES: checkStatus.outcomes is {castSeq, entries[]}, ALWAYS present from this player ({castSeq:0, entries:[]} before anything reports; an older build omits the key). entries are oldest-first, at most 64, each {seq, source, kind, stage, code?, mediaType?, attempt, elapsedMs, at}. castSeq increments on every accepted Now Display (explicit, boot replay, scheduled, fallback); seq is monotonic for the PAGE lifetime and is never reset per cast. Both restart with the page: a drained seq lower than the last one seen means the player restarted, so controld must restart its (castSeq, seq) dedupe rather than drop the entries. Nothing is removed on read; controld dedupes and reads a seq jump as a gap. Stages: detect = the content-type HEAD probe answered non-2xx (code = HTTP status) or failed with corroborated offline (code = network); the iframe fallback still plays the work, so a detect fail can be followed by an ok in the SAME play and entries must be applied in seq order. load = an element error (code = image|video|audio|iframe|object|model, or hls_<hls.js ErrorType> for a fatal HLS error). decode = a video/audio MediaError (code = aborted|network|decode|src_not_supported). watchdog = the per-slot load deadline (code = 15s|45s). webgl = GPU context lost on the probe canvas (code = context_lost): device-local, never a source verdict. exhausted = the retry budget is spent (code = attempt limit); the playlist then advances. hint = kind skip, the timeline honoured a hint and never mounted the source (attempt 0, elapsedMs 0). ready = kind ok, the mount reached ready; elapsedMs is mount to ready. One fail entry per attempt: competing failure signals for the same attempt are collapsed at the transition into failed. attempt is 1-based within the per-item budget and resets on a new work or a genuine success. mediaType is the resolved renderer (image|video|audio|iframe|pdf|object|model) once MIME detection settled, absent before. Source URLs appear here only over loopback CDP; the player never sends them anywhere else."
     }
   }
 }

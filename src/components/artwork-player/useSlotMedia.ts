@@ -17,8 +17,8 @@ export function useMediaEvents(
         transition.isCurrentArtworkSlot(index, layer),
       loaded: (index, layer, success) =>
         transition.loadedSource(index, layer, success),
-      failed: (index, layer) => {
-        transition.fail(index, layer);
+      failed: (index, layer, outcome) => {
+        transition.fail(outcome, index, layer);
       },
       note,
       targetSlot: () => transition.targetSlot,

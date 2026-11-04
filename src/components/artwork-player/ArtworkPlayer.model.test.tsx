@@ -99,7 +99,8 @@ describe('ArtworkPlayer — GLB / model mime routing', () => {
 
     await waitFor(() => {
       expect(helperMocks.getContentTypeFromURL).toHaveBeenCalledWith(
-        MODEL_URL
+        MODEL_URL,
+        expect.any(Function)
       );
     });
 
@@ -128,7 +129,8 @@ describe('ArtworkPlayer — GLB / model mime routing', () => {
 
     await waitFor(() => {
       expect(helperMocks.getContentTypeFromURL).toHaveBeenCalledWith(
-        MODEL_URL
+        MODEL_URL,
+        expect.any(Function)
       );
     });
 

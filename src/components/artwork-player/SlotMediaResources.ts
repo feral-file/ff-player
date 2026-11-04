@@ -1,13 +1,16 @@
 import { CLIENT_BANDWIDTH_HINT } from '@/constants';
 import { PreviewHTMLTag, RenderStatus } from '@/models';
+import type { PlaybackFailure } from '@/models/media_health.model';
 import { BlobLoadedMediaType, createMediaLoader } from '@/utils/mediaLoader';
 import Hls from 'hls.js';
 import { createRef } from 'react';
+import { mediaElementFailure } from './ArtworkOutcomes';
 import { SlotIndex, SlotLayer, isEmbeddedHeavy } from './artworkTypes';
 export interface MediaEvents {
   isCurrent: (index: SlotIndex, layer?: SlotLayer) => boolean;
   loaded: (index: SlotIndex, layer?: SlotLayer, success?: boolean) => boolean;
-  failed: (index?: SlotIndex, layer?: SlotLayer) => void;
+  /** A terminal failure for this slot; `outcome` is what the status ring records. */
+  failed: (index: SlotIndex, layer: SlotLayer, outcome: PlaybackFailure) => void;
   note: (url: string, failed: boolean) => void;
   targetSlot: () => SlotIndex;
   incomingSlot: () => SlotIndex | null;
@@ -159,8 +162,11 @@ export class SlotMediaResources {
         }
         this.playVideoForSlot(events, slotIndex, layer, videoElement);
       });
-      const failSlotAndTeardownHls = () => {
-        events.failed(slotIndex, layer);
+      const failSlotAndTeardownHls = (errorType: string) => {
+        events.failed(slotIndex, layer, {
+          stage: 'load',
+          code: `hls_${errorType}`,
+        });
         hlsInstance?.destroy();
         if (this.hlsInstancesRef.current[slotIndex] === hlsInstance) {
           this.hlsInstancesRef.current[slotIndex] = null;
@@ -177,7 +183,7 @@ export class SlotMediaResources {
           return;
         }
         if (data.fatal) {
-          failSlotAndTeardownHls();
+          failSlotAndTeardownHls(data.type);
         }
       });
     }
@@ -241,7 +247,10 @@ export class SlotMediaResources {
       ) {
         return;
       }
-      events.failed(slotIndex, layer);
+      events.failed(slotIndex, layer, {
+        stage: 'watchdog',
+        code: `${String(duration / 1000)}s`,
+      });
     }, duration);
     return () => {
       clearTimeout(timer);
@@ -258,13 +267,26 @@ export class SlotMediaResources {
       }
       console.error(`[ArtworkPlayer] ${mediaType} load failed:`, error);
       if (events.loaded(slotIndex, layer, false)) {
-        events.failed(slotIndex, layer);
+        events.failed(slotIndex, layer, this.failureOutcome(slotIndex, mediaType));
         if (mediaType === 'video' || mediaType === 'audio') {
           this.mountFailedRef.current[slotIndex] = true;
         }
         events.note(layer.previewURL, true);
       }
     };
+  }
+  /** Media elements expose a `MediaError` code; an image only says it failed. */
+  private failureOutcome(
+    slotIndex: SlotIndex,
+    mediaType: BlobLoadedMediaType
+  ): PlaybackFailure {
+    if (mediaType === 'video') {
+      return mediaElementFailure(this.videoRefs[slotIndex].current, 'video');
+    }
+    if (mediaType === 'audio') {
+      return mediaElementFailure(this.audioRefs[slotIndex].current, 'audio');
+    }
+    return { stage: 'load', code: mediaType };
   }
   private async loadMedia(attempt: MediaAttempt) {
     if (attempt.cancelled) {
