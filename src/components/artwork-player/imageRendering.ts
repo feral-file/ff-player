@@ -3,8 +3,8 @@ import type { RefObject } from 'react';
 import { useEffect, useState } from 'react';
 
 /**
- * The enlargement, in device pixels per image pixel, from which the player
- * draws an image with hard pixel edges when the work does not say.
+ * The enlargement, in device pixels per source pixel, from which the player
+ * draws a still or a video with hard pixel edges when the work does not say.
  *
  * Why a threshold and not "any enlargement": nearest-neighbor resampling at a
  * small factor duplicates a row or column every few pixels. A 2048 px square
@@ -51,8 +51,8 @@ export function imageEnlargement(
 }
 
 /**
- * The CSS `image-rendering` for one image. The work's own `pixelated` always
- * wins; otherwise (absent or `auto`) hard edges start at
+ * The CSS `image-rendering` for one still or video. The work's own
+ * `pixelated` always wins; otherwise (absent or `auto`) hard edges start at
  * HARD_EDGE_MIN_ENLARGEMENT.
  */
 export function resolveImageRendering(
@@ -110,24 +110,44 @@ function watchPixelDensity(onChange: () => void): () => void {
   };
 }
 
+/** A still or a video: the two slot elements whose resampling the player sets. */
+type RasterElement = HTMLImageElement | HTMLVideoElement;
+
+/** The source's own pixel size: an image's natural size, a video's frame size. */
+function sourceSize(el: RasterElement): PixelSize {
+  return el instanceof HTMLVideoElement
+    ? { width: el.videoWidth, height: el.videoHeight }
+    : { width: el.naturalWidth, height: el.naturalHeight };
+}
+
 /**
- * Measures an `<img>` against its own box and returns the rendering to apply.
+ * The events after which a source's pixel size may have changed: `load` for
+ * an image (the slot's media loader sets `src` after mount); for a video,
+ * `loadedmetadata` and `resize`, which fires when the frame size changes
+ * mid-play, as an HLS stream does when it switches renditions.
+ */
+const SOURCE_SIZE_EVENTS = ['load', 'loadedmetadata', 'resize'] as const;
+
+/**
+ * Measures an `<img>` or `<video>` against its own box and returns the
+ * rendering to apply.
  *
- * Re-measures on every `load` (the slot's media loader sets `src` after
- * mount), on every resize of its box (a rotation is display-level on the
- * FF1, so it arrives as a viewport change; a margin change shrinks the box),
- * and on every pixel-density change. `clientWidth`/`clientHeight` are layout sizes, so
- * CSS transforms never skew them; multiplying by `devicePixelRatio` puts the
- * box in device pixels, which is where resampling happens.
+ * Re-measures whenever the source's size may have changed (see
+ * SOURCE_SIZE_EVENTS), on every resize of its box (a rotation is display-level
+ * on the FF1, so it arrives as a viewport change; a margin change shrinks the
+ * box), and on every pixel-density change. `clientWidth`/`clientHeight` are
+ * layout sizes, so CSS transforms never skew them; multiplying by
+ * `devicePixelRatio` puts the box in device pixels, which is where resampling
+ * happens.
  */
 export function useImageRendering(
-  imageRef: RefObject<HTMLImageElement | null>,
+  elementRef: RefObject<RasterElement | null>,
   authored: DP1ImageRendering | undefined,
   objectFit: 'contain' | 'cover' | 'fill'
 ): 'auto' | 'pixelated' {
   const [enlargement, setEnlargement] = useState(0);
   useEffect(() => {
-    const el = imageRef.current;
+    const el = elementRef.current;
     if (!el) {
       return;
     }
@@ -135,21 +155,25 @@ export function useImageRendering(
       const dpr = window.devicePixelRatio || 1;
       setEnlargement(
         imageEnlargement(
-          { width: el.naturalWidth, height: el.naturalHeight },
+          sourceSize(el),
           { width: el.clientWidth * dpr, height: el.clientHeight * dpr },
           objectFit
         )
       );
     };
     measure();
-    el.addEventListener('load', measure);
+    for (const type of SOURCE_SIZE_EVENTS) {
+      el.addEventListener(type, measure);
+    }
     const unobserve = observeBox(el, measure);
     const unwatch = watchPixelDensity(measure);
     return () => {
-      el.removeEventListener('load', measure);
+      for (const type of SOURCE_SIZE_EVENTS) {
+        el.removeEventListener(type, measure);
+      }
       unobserve();
       unwatch();
     };
-  }, [imageRef, objectFit]);
+  }, [elementRef, objectFit]);
   return resolveImageRendering(authored, enlargement);
 }

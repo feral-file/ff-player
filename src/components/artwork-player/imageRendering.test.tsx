@@ -89,6 +89,46 @@ function sizedImage(natural: number, box: number) {
   return { img, size };
 }
 
+/** A <video> whose frame and laid-out sizes the test controls. */
+function sizedVideo(frame: { width: number; height: number }, box: number) {
+  const video = document.createElement('video');
+  const size = { frame, box };
+  for (const [key, read] of [
+    ['videoWidth', () => size.frame.width],
+    ['videoHeight', () => size.frame.height],
+    ['clientWidth', () => size.box],
+    ['clientHeight', () => size.box],
+  ] as const) {
+    Object.defineProperty(video, key, { configurable: true, get: read });
+  }
+  return { video, size };
+}
+
+describe('useImageRendering on a video', () => {
+  it('measures a video by its frame and follows a mid-play rendition switch', () => {
+    // A 64 px pixel-art loop in a 720 px box: 11.25x.
+    const { video, size } = sizedVideo({ width: 64, height: 64 }, 720);
+    const ref = { current: video };
+    const { result } = renderHook(() =>
+      useImageRendering(ref, undefined, 'contain')
+    );
+    expect(result.current).toBe('pixelated');
+
+    // An HLS stream switching to a 1080p rendition fires `resize`.
+    size.frame = { width: 1920, height: 1080 };
+    act(() => {
+      video.dispatchEvent(new Event('resize'));
+    });
+    expect(result.current).toBe('auto');
+
+    size.frame = { width: 32, height: 32 };
+    act(() => {
+      video.dispatchEvent(new Event('loadedmetadata'));
+    });
+    expect(result.current).toBe('pixelated');
+  });
+});
+
 describe('useImageRendering', () => {
   it('re-measures when a new source loads into the same element', () => {
     const { img, size } = sizedImage(8, 2160);

@@ -122,7 +122,8 @@ Use the real player in Chromium or on an FF1; jsdom cannot verify layout.
    hard-edged pixels; the large one must show no moire or shimmering fine
    lines. A 2048 px square still on a 4K panel (1.05x) must look smooth, with
    no doubled rows. A work with `imageRendering: "pixelated"` keeps hard edges
-   at every size.
+   at every size. Repeat with a small pixel-art video (64 px or less) and a 4K
+   video: hard edges on the first, none of the above artifacts on the second.
 
 ## Manual smoke: saved device framing
 

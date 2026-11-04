@@ -51,6 +51,7 @@ function ImageSlot({ index, resources, committedSettings }: ArtworkSlotProps) {
   );
 }
 
+/** Draws a video; its resampling follows the same rule as a still's. */
 function VideoSlot({
   index,
   slot,
@@ -60,14 +61,22 @@ function VideoSlot({
   settings,
   onSourceEnded,
 }: ArtworkSlotProps) {
+  const videoRef = resources.refs(index).video;
+  const objectFit = convertScalingToObjectFit(committedSettings?.scaling);
+  const imageRendering = useImageRendering(
+    videoRef,
+    committedSettings?.imageRendering,
+    objectFit
+  );
   return (
     <video
       key={`v-${String(slot.iframeKey)}`}
-      ref={resources.refs(index).video}
+      ref={videoRef}
       style={{
         width: '100%',
         height: '100%',
-        objectFit: convertScalingToObjectFit(committedSettings?.scaling),
+        objectFit,
+        imageRendering,
       }}
       autoPlay={false}
       loop={settings?.loop ?? true}
@@ -88,11 +97,12 @@ function AudioSlot({
   settings,
   onSourceEnded,
 }: ArtworkSlotProps) {
+  // Always: the FF1 has no play control (see DP1DisplayPreference.autoplay).
   return (
     <audio
       key={`a-${String(slot.iframeKey)}`}
       ref={resources.refs(index).audio}
-      autoPlay={settings?.autoPlay ?? true}
+      autoPlay
       loop={settings?.loop ?? true}
       onEnded={() => {
         transition.sourceEnded(index, onSourceEnded);
