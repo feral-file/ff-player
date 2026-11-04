@@ -42,7 +42,6 @@ export default function ArtworkPlayer(props: ArtworkPlayerProps) {
               events={events}
               settings={displaySettings}
               committedSettings={composition.committedVisualSettings}
-              isCustomView={props.isCustomView}
               showModelLoading={showRenderLoadingOverlay && loading.showLoading}
               onSourceEnded={props.onSourceEnded}
             />

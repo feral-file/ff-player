@@ -7,6 +7,7 @@ import ModelViewerScreen from '../model-viewer/ModelViewerScreen';
 import type { ArtworkLoadEvents } from './ArtworkLoadEvents';
 import type { ArtworkTransition } from './ArtworkTransition';
 import { FADE_IN_OUT_DURATION_MS, SlotIndex, SlotLayer } from './artworkTypes';
+import { useImageRendering } from './imageRendering';
 import type { SlotMediaResources } from './SlotMediaResources';
 import styles from './styles.module.scss';
 
@@ -20,27 +21,28 @@ export interface ArtworkSlotProps {
   events: ArtworkLoadEvents;
   settings: DP1DisplayPreference | undefined;
   committedSettings: DP1DisplayPreference | undefined;
-  isCustomView?: boolean;
   showModelLoading: boolean;
   onSourceEnded?: (identity: string) => void;
 }
 
-function ImageSlot({
-  index,
-  resources,
-  committedSettings,
-  isCustomView,
-}: ArtworkSlotProps) {
+/** Draws a still; its resampling follows the work's `imageRendering` or, absent that, how far it is enlarged. */
+function ImageSlot({ index, resources, committedSettings }: ArtworkSlotProps) {
+  const imageRef = resources.refs(index).image;
+  const objectFit = convertScalingToObjectFit(committedSettings?.scaling);
+  const imageRendering = useImageRendering(
+    imageRef,
+    committedSettings?.imageRendering,
+    objectFit
+  );
   return (
-    <div
-      style={{ width: '100%', height: '100%' }}
-      className={isCustomView ? styles.customRendering : ''}>
+    <div style={{ width: '100%', height: '100%' }}>
       <img
-        ref={resources.refs(index).image}
+        ref={imageRef}
         style={{
           width: '100%',
           height: '100%',
-          objectFit: convertScalingToObjectFit(committedSettings?.scaling),
+          objectFit,
+          imageRendering,
         }}
         className={styles.image}
         alt="Preview"

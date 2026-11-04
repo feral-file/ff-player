@@ -18,7 +18,6 @@ import { DP1DisplayPreference } from '@/models/dp1.model';
 
 export interface ArtworkPlayerProps {
   previewURL: string;
-  isCustomView?: boolean;
   keyboardCode?: number;
   artworkPreviewMIMEType?: string;
   displayPreferences: DP1DisplayPreference;
