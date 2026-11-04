@@ -1,13 +1,26 @@
-// Handles all the complex CORS logic
-// - Checks trusted origins
-// - Attempts blob conversion
-// - Falls back to direct loading
-// - Manages object URLs
-// - Logs errors through the player-wide console stream
+// Loads native artwork media into its element and reports load progress.
+//
+// Images are read as a CORS stream and handed to the <img> as a blob:
+// - The CORS-mode request is what feral-file/ff-player#204 needs: some
+//   CDNs/WAFs answer the no-cors request a plain <img src> makes with 403 but
+//   serve CORS requests.
+// - Reading the body as a stream is the only way script can see an image's
+//   transfer progress; <img> exposes none. The stuck-load watchdog
+//   (LoadWatchdog) needs that signal to tell a slow transfer from a dead one.
+// - The element only receives complete bytes, so a still never paints in
+//   partially.
+// Every artwork origin was verified to answer CORS; one that does not falls
+// back to the plain element load below, at the cost of one failed request.
+//
+// Video and audio always load directly. Their elements already send CORS
+// requests (crossOrigin="anonymous"), stream with Range, and fire `progress`
+// events; reading them into a blob would hold a whole video in memory and
+// delay the first frame until the last byte.
+//
+// Log lines keep the "[MediaLoader]" prefix: feral-controld forwards player
+// logs by an allowlist of component prefixes (hub/player_logs.go).
 
-import { KNOWN_ORIGINS } from '@/constants';
-
-export type BlobLoadedMediaType = 'image' | 'video' | 'audio' | 'object';
+export type BlobLoadedMediaType = 'image' | 'video' | 'audio';
 
 export type MediaElement =
   | HTMLImageElement
@@ -21,6 +34,14 @@ export interface MediaLoadOptions {
   onLoad?: () => void;
   onError?: (error: Error) => void;
   signal?: AbortSignal;
+  /** Called for every chunk of an image body the loader receives. */
+  onProgress?: () => void;
+  /**
+   * Called when an image's bytes are complete and handed to the element
+   * (`decode`), or when the loader fell back to a plain element load whose
+   * progress it cannot see (`opaque`).
+   */
+  onPhase?: (phase: 'decode' | 'opaque') => void;
 }
 
 export interface MediaLoadResult {
@@ -35,14 +56,19 @@ const abortResult = (): MediaLoadResult => ({
   error: new DOMException('Media load aborted', 'AbortError'),
 });
 
+/** True for a fetch or loader cancelled through its AbortSignal. */
+function isAbort(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 /** Assigns the original media URL and converts thrown values into a result. */
 function loadDirect(options: MediaLoadOptions): MediaLoadResult {
-  const { element, mediaType, onError, signal, url } = options;
+  const { element, onError, signal, url } = options;
   if (signal?.aborted) {
     return abortResult();
   }
   try {
-    setMediaSource(element, mediaType, url);
+    element.src = url;
     return { success: true, usedBlob: false };
   } catch (error) {
     const failure = error instanceof Error ? error : new Error(String(error));
@@ -51,116 +77,110 @@ function loadDirect(options: MediaLoadOptions): MediaLoadResult {
   }
 }
 
-/** Tries a CORS blob conversion and falls back to the original URL. */
-async function loadViaBlob(
+/** An HTTP error status, as opposed to a request the browser refused or lost. */
+class HTTPStatusError extends Error {}
+
+/**
+ * Fetches `url` and collects its body into a Blob, reporting each chunk.
+ * Piping through a counting stream lets the browser assemble the Blob itself
+ * rather than this code buffering every chunk a second time.
+ */
+async function fetchBlob(
+  options: MediaLoadOptions,
+  cache: RequestCache
+): Promise<Blob> {
+  const { url, signal, onProgress } = options;
+  const response = await fetch(url, {
+    mode: 'cors',
+    cache,
+    referrerPolicy: 'no-referrer',
+    signal,
+  });
+  if (!response.ok) {
+    throw new HTTPStatusError(
+      `HTTP ${String(response.status)}: ${response.statusText}`
+    );
+  }
+  onProgress?.();
+  if (!response.body) {
+    return response.blob();
+  }
+  const counted = response.body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        onProgress?.();
+        controller.enqueue(chunk);
+      },
+    })
+  );
+  const type = response.headers.get('Content-Type') ?? '';
+  return new Response(counted, { headers: { 'Content-Type': type } }).blob();
+}
+
+/**
+ * Reads an image through the HTTP cache, so a retry or the next loop of a
+ * playlist reuses bytes it already has. A cached response stored by a
+ * request without CORS headers can make Chromium reject the CORS read (see
+ * helper.ts's getContentTypeFromURL note); that surfaces as a TypeError, so
+ * one `reload` attempt bypasses and replaces that entry before giving up.
+ */
+async function fetchImageBlob(options: MediaLoadOptions): Promise<Blob> {
+  try {
+    return await fetchBlob(options, 'default');
+  } catch (error) {
+    if (isAbort(error) || error instanceof HTTPStatusError) {
+      throw error;
+    }
+    console.log('[MediaLoader] Retrying image without the HTTP cache');
+    return fetchBlob(options, 'reload');
+  }
+}
+
+/** Streams an image into a blob URL and falls back to the original URL. */
+async function loadImageViaStream(
   options: MediaLoadOptions
 ): Promise<MediaLoadResult> {
-  const { element, mediaType, signal, url } = options;
+  const { element, signal, url, onPhase } = options;
   try {
-    console.log(
-      `[MediaLoader] Fetching ${mediaType} for blob conversion:`,
-      url
-    );
-    const response = await fetch(url, {
-      mode: 'cors',
-      cache: 'no-store',
-      referrerPolicy: 'no-referrer',
-      signal,
-    });
-    if (!response.ok) {
-      throw new Error(
-        `HTTP ${String(response.status)}: ${response.statusText}`
-      );
-    }
-    if (signal?.aborted) {
-      return abortResult();
-    }
-
-    const objectURL = URL.createObjectURL(await response.blob());
+    console.log('[MediaLoader] Streaming image:', url);
+    const objectURL = URL.createObjectURL(await fetchImageBlob(options));
     if (signal?.aborted) {
       URL.revokeObjectURL(objectURL);
       return abortResult();
     }
-    setMediaSource(element, mediaType, objectURL);
-    console.log(
-      `[MediaLoader] Successfully converted ${mediaType} to blob URL`
-    );
+    element.src = objectURL;
+    onPhase?.('decode');
+    console.log('[MediaLoader] Image bytes complete');
     return { success: true, usedBlob: true };
   } catch (error) {
-    console.error(
-      `[MediaLoader] Error fetching ${mediaType} for blob conversion:`,
-      error
-    );
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if (isAbort(error) || signal?.aborted) {
       return abortResult();
     }
-    console.log(
-      `[MediaLoader] Falling back to direct loading for ${mediaType}`
-    );
-    return loadDirect(options);
+    console.error('[MediaLoader] Error streaming image:', error);
+    console.log('[MediaLoader] Falling back to direct loading for image');
+    const result = loadDirect(options);
+    if (result.success) {
+      onPhase?.('opaque');
+    }
+    return result;
   }
 }
 
-/**
- * Universal CORS handling for all media types
- * Handles trusted origins with direct loading and unknown origins with blob conversion.
- */
+/** Loads one artwork element; see the module comment for the per-type paths. */
 export const loadMediaWithCORS = async (
   options: MediaLoadOptions
 ): Promise<MediaLoadResult> => {
-  const { url, mediaType, signal } = options;
-  if (signal?.aborted) {
+  if (options.signal?.aborted) {
     return abortResult();
   }
-
-  const origin = (() => {
-    try {
-      return new URL(url, window.location.href).origin;
-    } catch {
-      return null;
-    }
-  })();
-
-  // For trusted origins, load directly
-  const isTrustedOrigin = origin && KNOWN_ORIGINS.has(origin);
-  if (isTrustedOrigin) {
-    console.log(
-      `[MediaLoader] Loading ${mediaType} from trusted origin:`,
-      origin
-    );
-
-    return loadDirect(options);
+  if (options.mediaType === 'image') {
+    return loadImageViaStream(options);
   }
-
-  const supportsBlobConversion =
-    mediaType === 'image' || mediaType === 'object' || mediaType === 'video';
-
-  if (!supportsBlobConversion) {
-    return loadDirect(options);
-  }
-
-  return loadViaBlob(options);
+  return loadDirect(options);
 };
 
 /**
- * Sets the appropriate source attribute based on media type.
- */
-const setMediaSource = (
-  element: MediaElement,
-  mediaType: BlobLoadedMediaType,
-  source: string
-): void => {
-  if (mediaType === 'image') {
-    (element as HTMLImageElement).src = source;
-  } else if (mediaType === 'video') {
-    (element as HTMLVideoElement).src = source;
-  } else if (mediaType === 'audio') {
-    (element as HTMLAudioElement).src = source;
-  }
-};
-
-/**
- * Creates a media loader hook for React components.
+ * Creates a per-slot loader that owns the blob URL of its latest image.
  */
 export const createMediaLoader = () => {
   let currentObjectURL: string | null = null;
@@ -176,16 +196,8 @@ export const createMediaLoader = () => {
 
     const result = await loadMediaWithCORS(options);
     console.log('[MediaLoader] result', result);
-    // Track object URL for cleanup
     if (result.success && result.usedBlob) {
-      const element = options.element;
-      if (options.mediaType === 'image') {
-        currentObjectURL = (element as HTMLImageElement).src;
-      } else if (options.mediaType === 'video') {
-        currentObjectURL = (element as HTMLVideoElement).src;
-      } else if (options.mediaType === 'audio') {
-        currentObjectURL = (element as HTMLAudioElement).src;
-      }
+      currentObjectURL = options.element.src;
     }
 
     return result;

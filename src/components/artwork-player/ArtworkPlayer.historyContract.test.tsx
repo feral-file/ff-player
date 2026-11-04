@@ -62,6 +62,13 @@ function select(index: number) {
 
 beforeEach(async () => {
   vi.useFakeTimers();
+  // Stills are read through fetch; refuse it (as an origin without CORS
+  // would) so the loader falls back to a plain src and no test reaches the
+  // network. The load events these tests need are dispatched by hand.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.reject(new TypeError('no network in tests')))
+  );
   vi.spyOn(DeviceManager, 'getContentPolicyRecord').mockResolvedValue(null);
   vi.spyOn(DeviceManager, 'getRecentlyPlayed').mockResolvedValue([]);
   vi.spyOn(DeviceManager, 'getRecentlyPlayedIncomplete').mockResolvedValue(
@@ -80,6 +87,7 @@ afterEach(() => {
   canvasService.setCastInfo(null, false);
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 it('preserves fade-start history, fade-end composition, and restores history after in-place recovery', async () => {

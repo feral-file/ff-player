@@ -69,7 +69,11 @@ vi.mock('hls.js', () => {
   return { __esModule: true, default: MockHls };
 });
 
-/** Trusted origin (KNOWN_ORIGINS) + explicit MIME: src is set directly, no fetch. */
+/**
+ * Explicit MIME skips the HEAD probe; the stream read is refused (see the
+ * fetch stub below), so the loader falls back to setting src directly and
+ * no test reaches the network.
+ */
 const IMAGE_URL_A = 'https://feralfile.com/test/visual-settings-a.png';
 const IMAGE_URL_B = 'https://feralfile.com/test/visual-settings-b.png';
 const HLS_URL = 'https://ipfs.io/ipfs/QmTest/visual-settings.m3u8';
@@ -83,6 +87,16 @@ const TRANSITION_WAIT_MS = 3000;
  * loadedSource. Kept module-scoped so tests can assert on it directly.
  */
 const decodeMock = vi.fn(() => Promise.resolve());
+
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.reject(new TypeError('no network in tests')))
+  );
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 const appContextValue = {
   context: {

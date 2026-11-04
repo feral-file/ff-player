@@ -9,7 +9,7 @@ stable interfaces; `CanvasService` remains the command/status interface.
 |---|---|
 | `ArtworkTransition` / `useArtworkTransition` | Two slot layers, selected target, active/incoming slot, opacity, transition tokens, showing latches, and accepted load/commit events. |
 | `useArtworkSource` | MIME detection and software-URL selection for the current request. |
-| `SlotMediaResources` / `useSlotMedia` | Elements, blob loaders, abort controllers, per-slot watchdogs, HLS instances, and media setup/cleanup. |
+| `SlotMediaResources` / `useSlotMedia` | Elements, media loaders, abort controllers, per-slot progress watchdogs, HLS instances, and media setup/cleanup. |
 | `ArtworkRecovery` / `useArtworkRecovery` | Render lifecycle, overlay delay, retry budget, and degraded reporting. |
 | `useWebGLRecovery` | GPU probe, context events, and recovery interval. |
 | `useCommittedComposition` | Selected versus committed visual settings and the layout-phase composition reporter. |
@@ -97,6 +97,10 @@ streaming flag. A WebGL iframe-key-only reload does not rerun those effects.
 The watchdog has a separate lifetime keyed by the ordinary-media keys plus the
 element's iframe key. It gets a fresh deadline on recovery reload and cancels on
 replacement or unmount. Only a still-current pending/loading slot can fail.
+Native media deadlines follow transfer progress (`LoadWatchdog`): a setup
+attempt reports progress and phase changes to its slot's current watchdog, and
+a cancelled attempt's reports are ignored so they cannot keep a later mount
+alive.
 
 Video plays only when visible (opacity above 0.05) and the current target.
 Offline connectivity pauses streaming video only; buffered/local video remains

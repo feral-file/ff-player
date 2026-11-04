@@ -15,9 +15,9 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
 
-// Trusted origin (KNOWN_ORIGINS): the loader assigns el.src directly with no
-// blob fetch, so the only load/error/loadeddata events are the ones these
-// tests dispatch — matches ArtworkPlayer.sourceEnd.test.tsx's setup.
+// Video and audio always load directly: the loader assigns el.src with no
+// fetch, so the only load/error/loadeddata events are the ones these tests
+// dispatch — matches ArtworkPlayer.sourceEnd.test.tsx's setup.
 const VIDEO_URL = 'https://feralfile.com/test/m7-video.mp4';
 const AUDIO_URL = 'https://feralfile.com/test/m7-audio.mp3';
 

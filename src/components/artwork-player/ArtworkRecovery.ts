@@ -145,8 +145,15 @@ export class ArtworkRecovery {
   /** A new attempt cancels a parked retry without resetting the per-item budget. */
   beginMount() {
     this.cancelRetry();
+    // Unbounded until the new element's watchdog says otherwise: the
+    // conservative default lets an expired slot advance as it always did.
+    canvasService.setRenderLoadBounded(false);
     this.markArtworkPending();
     this.armLoadingDelay();
+  }
+  /** Records whether the current mount's load is ended by a watchdog. */
+  markLoadBounded(bounded: boolean) {
+    canvasService.setRenderLoadBounded(bounded);
   }
   armLoadingDelay() {
     this.clearLoadingDelay();
@@ -232,6 +239,7 @@ export class ArtworkRecovery {
   dispose() {
     this.clearLoadingDelay();
     canvasService.setRenderStatus(undefined);
+    canvasService.setRenderLoadBounded(false);
     this.renderStatusRef.current = undefined;
   }
 }
