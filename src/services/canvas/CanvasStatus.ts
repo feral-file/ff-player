@@ -147,8 +147,14 @@ export class CanvasStatus {
       return { ok: false, error: ErrorType.StatusCheckFailed };
     }
   }
-  /** The `items` indices the player passes over for a held hint (contract v1). */
-  private skippedIndices(cast: CastInfo | null): number[] {
+  /**
+   * The `items` indices the player passes over for a held hint (contract
+   * v1), for the reported cast. Shared by `checkStatus` and the
+   * `setMediaHealth` reply so the two can never disagree.
+   */
+  public skippedIndices(
+    cast: CastInfo | null = this.session.renderableCastInfo()
+  ): number[] {
     return hintSkippedIndices({
       items: cast?.playlist?.items ?? [],
       index: cast?.index,

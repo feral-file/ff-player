@@ -26,11 +26,16 @@ import {
 export class PlaybackOutcomeRing {
   private entries: PlaybackOutcomeEntry[] = [];
   private seq = 0;
-  private castSeq = 0;
+  private generation = 0;
 
   /** Label every later entry with a new cast. Called per accepted Now Display. */
   beginCast(): void {
-    this.castSeq += 1;
+    this.generation += 1;
+  }
+
+  /** The current cast generation, the fence `setMediaHealth` is checked against. */
+  get castSeq(): number {
+    return this.generation;
   }
 
   /** Append an entry, evicting the oldest past the ring size. */
@@ -39,7 +44,7 @@ export class PlaybackOutcomeRing {
     const entry: PlaybackOutcomeEntry = {
       ...input,
       seq: this.seq,
-      castSeq: this.castSeq,
+      castSeq: this.generation,
       at: new Date().toISOString(),
     };
     this.entries.push(entry);
@@ -51,6 +56,6 @@ export class PlaybackOutcomeRing {
 
   /** A copy for the status reply; callers cannot mutate the ring through it. */
   snapshot(): PlaybackOutcomes {
-    return { castSeq: this.castSeq, entries: [...this.entries] };
+    return { castSeq: this.generation, entries: [...this.entries] };
   }
 }

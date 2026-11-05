@@ -18,6 +18,7 @@ describe('ffos-player-contract.json mediaHealth manifest', () => {
   it('declares the request and status fields the player reads and writes', () => {
     expect(entry.version).toBe(1);
     expect(entry.requestFields).toEqual(['mediaHealth']);
+    expect(entry.commands).toEqual(['setMediaHealth']);
     expect(entry.statusFields).toEqual(['outcomes', 'skippedIndices']);
   });
 

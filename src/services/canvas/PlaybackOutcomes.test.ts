@@ -35,6 +35,13 @@ describe('PlaybackOutcomeRing', () => {
     expect(entries[0].at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
+  it('exposes the current generation for the setMediaHealth fence', () => {
+    const ring = new PlaybackOutcomeRing();
+    expect(ring.castSeq).toBe(0);
+    ring.beginCast();
+    expect(ring.castSeq).toBe(ring.snapshot().castSeq);
+  });
+
   it('keeps the newest ring-size entries and never resets seq when evicting', () => {
     const ring = new PlaybackOutcomeRing();
     for (let i = 0; i < PLAYBACK_OUTCOME_RING_SIZE + 5; i += 1) {

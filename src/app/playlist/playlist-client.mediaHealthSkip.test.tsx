@@ -279,3 +279,80 @@ describe('PlaylistClient tolerates hints it cannot honour', () => {
     expect(mountedURL()).toBe(items[0].source);
   });
 });
+
+/** controld's hint-only push for the cast on the wall, fenced to its generation. */
+function pushHints(mediaHealth: unknown) {
+  send(CastCommand.setMediaHealth, {
+    castSeq: canvasService.getStatus().outcomes?.castSeq,
+    mediaHealth,
+  });
+}
+
+describe('PlaylistClient applies a hint-only push at the next selection', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mark = canvasService.getStatus().outcomes?.entries.at(-1)?.seq ?? 0;
+  });
+
+  it('skips a work hinted mid-play without a re-cast', async () => {
+    const items = [item('a', 1), item('b', 1), item('c', 1)];
+    render(<LiveHarness />);
+    cast(items, undefined);
+    await advanceMs(0);
+    pushHints(hints(items[1]));
+    await advanceMs(0);
+    expect(mountedURL()).toBe(items[0].source);
+
+    await advanceMs(1000);
+    expect(mountedURL()).toBe(items[2].source);
+    expect(skipEntries().map(entry => entry.source)).toEqual([items[1].source]);
+  });
+
+  it('never unmounts the work on screen; it is skipped once playback leaves it', async () => {
+    const items = [item('a', 1), item('b', 1), item('c', 1)];
+    render(<LiveHarness />);
+    cast(items, undefined);
+    await advanceMs(0);
+    pushHints(hints(items[0]));
+    await advanceMs(500);
+    expect(mountedURL()).toBe(items[0].source);
+    expect(canvasService.getStatus().skippedIndices).toEqual([]);
+
+    await advanceMs(500);
+    expect(mountedURL()).toBe(items[1].source);
+    expect(canvasService.getStatus().skippedIndices).toEqual([0]);
+    await advanceMs(1000);
+    expect(mountedURL()).toBe(items[2].source);
+    // The loop comes round past the hinted work.
+    await advanceMs(1000);
+    expect(mountedURL()).toBe(items[1].source);
+    expect(skipEntries().map(entry => entry.source)).toEqual([items[0].source]);
+  });
+
+  it('plays a healed source again once a push drops its hint', async () => {
+    const items = [item('a', 1), item('b', 1)];
+    render(<LiveHarness />);
+    cast(items, hints(items[1]));
+    await advanceMs(0);
+    pushHints({});
+    await advanceMs(1000);
+    expect(mountedURL()).toBe(items[1].source);
+    expect(skipEntries()).toEqual([]);
+  });
+
+  it('still tolerates an all-broken map and repeat-one', async () => {
+    const items = [item('a', 1), item('b', 1)];
+    render(<LiveHarness />);
+    cast(items, undefined);
+    await advanceMs(0);
+    pushHints(hints(...items));
+    await advanceMs(1000);
+    expect(mountedURL()).toBe(items[1].source);
+
+    send(CastCommand.setLoop, { mode: LoopMode.one });
+    pushHints(hints(items[1]));
+    await advanceMs(1000);
+    expect(mountedURL()).toBe(items[1].source);
+    expect(skipEntries()).toEqual([]);
+  });
+});

@@ -30,6 +30,10 @@ export enum CastCommand {
   // before it enters the ordinary displayPlaylist path.
   getRecentlyPlayed = 'getRecentlyPlayed',
   resolveRecentlyPlayed = 'resolveRecentlyPlayed',
+  // mediaHealth contract v1: controld's hint-only push. INTERNAL to the
+  // loopback CDP seam like resolveRecentlyPlayed; controld's cast-session
+  // router must never forward it from a controller.
+  setMediaHealth = 'setMediaHealth',
 }
 
 export interface CastInfo {

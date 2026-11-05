@@ -36,6 +36,8 @@ import {
 import type {
   MediaHealthHint,
   PlaybackOutcomeInput,
+  SetMediaHealthReply,
+  SetMediaHealthRequest,
 } from '@/models/media_health.model';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
@@ -142,6 +144,8 @@ class CanvasService {
           return this.getRecentlyPlayed();
         case CastCommand.resolveRecentlyPlayed:
           return this.resolveRecentlyPlayed(requestJson);
+        case CastCommand.setMediaHealth:
+          return this.setMediaHealth(requestJson);
         default:
           console.error(`[CAST] Unknown command: ${command}`);
           return { ok: false };
@@ -280,6 +284,33 @@ class CanvasService {
    */
   public getMediaHealthHint(source: string): MediaHealthHint | undefined {
     return this.hints.hint(source);
+  }
+
+  /**
+   * MediaHealth contract v1, `setMediaHealth`: controld's hint-only push for
+   * a verdict reached between casts (ffos-user#392, follow-up of
+   * 2026-11-05). Replaces the held map and nothing else: no castInfo write,
+   * no timeline rebuild, no outcome entry, and the work on screen keeps
+   * playing, because the timeline consults the map only at its next
+   * selection. Fenced by `castSeq`, the ring generation the map was computed
+   * for, so a push racing a new cast cannot judge the wrong list; with no
+   * cast held there is nothing to describe (a disconnect cleared the map
+   * without opening a generation), so that is stale too. A refusal leaves the
+   * map untouched. Same tolerant parse as the push: an absent or malformed
+   * map means no hints.
+   */
+  private setMediaHealth(request: unknown): SetMediaHealthReply {
+    const { castSeq, mediaHealth } = (
+      request && typeof request === 'object' ? request : {}
+    ) as SetMediaHealthRequest;
+    if (typeof castSeq !== 'number' || !Number.isInteger(castSeq)) {
+      return { ok: false, error: 'invalidCastSeq' };
+    }
+    if (castSeq !== this.outcomes.castSeq || !this.session.castInfo) {
+      return { ok: false, error: 'staleCast' };
+    }
+    this.hints.replace(mediaHealth);
+    return { ok: true, skippedIndices: this.status.skippedIndices() };
   }
 
   /**

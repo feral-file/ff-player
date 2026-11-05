@@ -67,7 +67,9 @@ and `one` ignores hints because the viewer asked for that work. When nothing
 else is playable the requested slot plays and the retry budget judges it. The
 hinted items stay in the list; only the selection moves, and each slot passed
 over is reported as a `skip/hint` outcome. `checkStatus.skippedIndices` reports
-the slots these rules pass over, excluding the published one.
+the slots these rules pass over, excluding the published one. A hint-only
+`setMediaHealth` push replaces the map between casts; the work on screen keeps
+playing and the next selection applies the new map.
 
 ## Route ownership
 

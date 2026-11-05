@@ -152,6 +152,23 @@ retry/skip budget judges it, so a hint can never blank the wall. Each slot
 passed over is reported as a `skip/hint` outcome by whichever owner passed
 it.
 
+**Hint-only push.** `setMediaHealth {castSeq, mediaHealth}` lets controld
+deliver a verdict reached between casts (a lookahead probe, an outcome
+drain) without a re-cast (ffos-user#392, follow-up of 2026-11-05). It is
+internal to the loopback CDP seam, like `resolveRecentlyPlayed`, and a
+controller must never be able to send it; controld's cast-session router does
+not forward it. It replaces the held map, with the same parse and the same
+"absent means no hints" rule as a push, and touches nothing else: castInfo,
+the timeline and the outcome ring are left alone, and the work on screen
+keeps playing until its slot ends, because the timeline only consults the
+map at its next selection. `castSeq` must equal the current
+`outcomes.castSeq` while a cast is held, so a push that races a new cast or a
+disconnect is refused with `staleCast` (`invalidCastSeq` when it is not an
+integer), and the held map stays as it was. Success replies `{ok:true,
+skippedIndices}`, the value the next status read reports. The manifest
+lists it under `contracts.mediaHealth.commands`; the version stays 1, so
+controld feature-detects the command by name.
+
 **Hint skips.** `checkStatus.skippedIndices` lists, ascending, the indices of
 `checkStatus.items` the player is passing over because of a hint it holds;
 it is always present on a supporting player (`[]` when nothing is hinted or

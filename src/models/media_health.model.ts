@@ -93,3 +93,22 @@ export interface PlaybackFailure {
 }
 
 export const PLAYBACK_OUTCOME_RING_SIZE = 64;
+
+/**
+ * `setMediaHealth`: replace the held hint map for the cast on the wall
+ * without a re-cast. `castSeq` fences it to the outcome-ring generation the
+ * map was computed for; `mediaHealth` is the same sparse map a push carries,
+ * replace semantics (absent or malformed means no hints).
+ */
+export interface SetMediaHealthRequest {
+  castSeq?: unknown;
+  mediaHealth?: unknown;
+}
+
+/** Refusals: the map is left untouched in both cases. */
+export type SetMediaHealthError = 'staleCast' | 'invalidCastSeq';
+
+/** `{ok:true, skippedIndices}` (as `checkStatus` would report next) or a refusal. */
+export type SetMediaHealthReply =
+  | { ok: true; skippedIndices: number[] }
+  | { ok: false; error: SetMediaHealthError };

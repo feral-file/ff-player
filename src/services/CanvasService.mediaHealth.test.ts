@@ -134,6 +134,102 @@ describe('CanvasService mediaHealth hint skips in status', () => {
   });
 });
 
+/** A setMediaHealth hint-only push, as controld sends it over loopback CDP. */
+function setHints(request: unknown) {
+  return canvasService.processMessage({
+    command: CastCommand.setMediaHealth,
+    request,
+  });
+}
+
+const generation = () => canvasService.getStatus().outcomes?.castSeq ?? 0;
+
+describe('CanvasService mediaHealth setMediaHealth', () => {
+  beforeEach(prepareContentPolicy);
+
+  afterEach(() => {
+    canvasService.setCastInfo(null, false);
+    canvasService.disconnect();
+  });
+
+  it('replaces the held map for the current cast and reports what is now skipped', () => {
+    cast([item('a'), item('b'), item('c')], hintFor('c'));
+    expect(
+      setHints({ castSeq: generation(), mediaHealth: hintFor('b') })
+    ).toEqual({ ok: true, skippedIndices: [1] });
+    // Replace, not merge: the source healed since the cast is forgotten.
+    expect(canvasService.getMediaHealthHint(item('c').source)).toBeUndefined();
+    expect(canvasService.getMediaHealthHint(item('b').source)).toBeDefined();
+    expect(canvasService.getStatus().skippedIndices).toEqual([1]);
+  });
+
+  it('touches nothing but the map: no castInfo write, no outcome entry', () => {
+    cast([item('a'), item('b')]);
+    canvasService.setRenderStatus(RenderStatus.ready);
+    const before = canvasService.getStatus();
+    let notified = false;
+    canvasService.onCastInfoChange = () => {
+      notified = true;
+    };
+    try {
+      setHints({ castSeq: generation(), mediaHealth: hintFor('a') });
+    } finally {
+      canvasService.onCastInfoChange = null;
+    }
+    const after = canvasService.getStatus();
+    expect(notified).toBe(false);
+    expect(after.index).toBe(0);
+    expect(after.renderStatus).toBe(RenderStatus.ready);
+    expect(after.outcomes).toEqual(before.outcomes);
+    // The work on the wall is hinted but not skipped until playback leaves it.
+    expect(after.skippedIndices).toEqual([]);
+  });
+
+  it('refuses a push fenced to another cast and leaves the map untouched', () => {
+    cast([item('a'), item('b')], hintFor('b'));
+    const stale = generation() - 1;
+    expect(setHints({ castSeq: stale, mediaHealth: hintFor('a') })).toEqual({
+      ok: false,
+      error: 'staleCast',
+    });
+    expect(canvasService.getMediaHealthHint(item('b').source)).toBeDefined();
+    expect(canvasService.getMediaHealthHint(item('a').source)).toBeUndefined();
+  });
+
+  it('refuses without a cast held, so a disconnect stays cleared', () => {
+    cast([item('a'), item('b')], hintFor('b'));
+    const seq = generation();
+    canvasService.disconnect();
+    expect(setHints({ castSeq: seq, mediaHealth: hintFor('b') })).toEqual({
+      ok: false,
+      error: 'staleCast',
+    });
+    expect(canvasService.getMediaHealthHint(item('b').source)).toBeUndefined();
+  });
+
+  it('rejects a missing or non-integer castSeq before reading the map', () => {
+    cast([item('a'), item('b')], hintFor('b'));
+    for (const request of [undefined, {}, { castSeq: '1' }, { castSeq: 1.5 }]) {
+      expect(setHints(request)).toEqual({ ok: false, error: 'invalidCastSeq' });
+    }
+    expect(canvasService.getMediaHealthHint(item('b').source)).toBeDefined();
+  });
+
+  it('reads an absent or malformed map as no hints, never as a refusal', () => {
+    cast([item('a'), item('b')], hintFor('b'));
+    expect(setHints({ castSeq: generation() })).toEqual({
+      ok: true,
+      skippedIndices: [],
+    });
+    cast([item('a'), item('b')], hintFor('b'));
+    expect(setHints({ castSeq: generation(), mediaHealth: [1] })).toEqual({
+      ok: true,
+      skippedIndices: [],
+    });
+    expect(canvasService.getMediaHealthHint(item('b').source)).toBeUndefined();
+  });
+});
+
 describe('CanvasService mediaHealth render-status continuity', () => {
   beforeEach(prepareContentPolicy);
 
