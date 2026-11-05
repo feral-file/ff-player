@@ -477,7 +477,8 @@ class CanvasService {
   private readonly status = new CanvasStatus(
     this.session,
     this.settings,
-    this.outcomes
+    this.outcomes,
+    this.hints
   );
   private readonly playlists = new PlaylistCommands(
     this.session,

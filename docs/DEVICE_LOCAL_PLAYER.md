@@ -152,6 +152,23 @@ retry/skip budget judges it, so a hint can never blank the wall. Each slot
 passed over is reported as a `skip/hint` outcome by whichever owner passed
 it.
 
+**Hint skips.** `checkStatus.hintSkipped` lists, ascending, the indices of
+`checkStatus.items` the player is passing over because of a hint it holds;
+it is always present on a supporting player (`[]` when nothing is hinted or
+nothing is cast). It reports the player's state, not controld's observation:
+controld copies it per item into `player_status.mediaHealth[i].skipped`, so a
+source controld observed broken but did not hint (an expired verdict, one the
+offline cache can replay, a push still in flight) never reads as skipped, and
+a hint the player still holds reads as skipped until a push replaces it
+(ffos-user#392, follow-up of 2026-11-05). It applies the selection rules
+above to every slot at once (`hintSkippedIndices`, cross-checked against the
+resolver): `[]` under `one` or when every slot is hinted, every hinted slot
+under `playlist`, and under `none` only a hinted slot with an unhinted one
+after it. The published index is never listed: the work on the wall is not
+being skipped, including one whose hint arrived on a refresh mid-play, which
+is listed once playback leaves it. `canvas/CanvasStatus` recomputes it on
+every status read.
+
 **Outcomes.** `checkStatus.outcomes` is `{castSeq, entries}`, always present
 on a supporting player and empty until the first mount reports. Entries are
 oldest first, at most 64, each `{seq, castSeq, source, kind, stage, code?,

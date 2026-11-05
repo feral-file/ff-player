@@ -119,6 +119,12 @@ export interface CheckDeviceStatusReply extends Reply {
   // first mount reports; a manifest without `contracts.mediaHealth` is an
   // older build that omits the key entirely. Live-only like renderStatus.
   outcomes?: PlaybackOutcomes;
+
+  // mediaHealth contract v1: indices into `items` the player is passing over
+  // because of a held hint (see hintSkippedIndices). ALWAYS present from this
+  // player, [] when nothing is hinted; controld copies it per item into
+  // player_status.mediaHealth[i].skipped. Never includes `index`.
+  hintSkipped?: number[];
 }
 
 export interface DisplayPlaylistRequest {

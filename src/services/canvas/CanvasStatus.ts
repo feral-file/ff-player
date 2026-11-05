@@ -1,5 +1,6 @@
 import { LocalStorageItem } from '@/constants';
 import { DisplaySettings, ViewMode } from '@/models';
+import type { CastInfo } from '@/models/cast_info.model';
 import { CheckDeviceStatusReply } from '@/models/cast_request_reply.model';
 import { Scaling } from '@/models/dp1.model';
 import { ErrorType } from '@/models/error.model';
@@ -7,12 +8,14 @@ import DeviceManager from '@/utils/DeviceManager';
 import { stripEphemeralCastInfoFields } from '@/utils/castInfo';
 import { deviceFraming } from '@/utils/deviceFraming';
 import { coerceLoopMode } from '@/utils/loopMode';
+import { hintSkippedIndices } from '@/utils/mediaHealthSkip';
 import { coerceTombstoneMode } from '@/utils/tombstoneMode';
 import { contentPolicyStore } from '../ContentPolicyStore';
 import { DisplaySettingsService } from './DisplaySettingsService';
+import type { MediaHealthHintStore } from './MediaHealthHints';
 import type { PlaybackOutcomeRing } from './PlaybackOutcomes';
 import { PlaybackSession } from './PlaybackSession';
-/** Projects current device status after the existing synchronous cached-cast recovery step. Render status, outcomes, and composition are never restored from storage. */
+/** Projects current device status after the existing synchronous cached-cast recovery step. Render status, outcomes, hint skips, and composition are never restored from storage. */
 export class CanvasStatus {
   // DeviceManager parses persisted JSON on every read, so object identity is
   // unstable. Keep the serialized value to avoid retrying the same rejected
@@ -134,15 +137,30 @@ export class CanvasStatus {
         // `stamp`, so controld can tell "nothing reported yet" ({castSeq:0,
         // entries:[]}) from an older build that omits the key.
         outcomes: this.outcomes.snapshot(),
+        // What the player is skipping, not what controld observed: computed
+        // from the hints this page holds against the reported items, so the
+        // two can never disagree about which list the indices address.
+        hintSkipped: this.hintSkipped(activeCastInfo),
       };
     } catch (error) {
       console.error('[CanvasService] Error getting status:', error);
       return { ok: false, error: ErrorType.StatusCheckFailed };
     }
   }
+  /** The `items` indices the player passes over for a held hint (contract v1). */
+  private hintSkipped(cast: CastInfo | null): number[] {
+    return hintSkippedIndices({
+      items: cast?.playlist?.items ?? [],
+      index: cast?.index,
+      loopMode: coerceLoopMode(cast?.loopMode),
+      isBroken: source => this.hints.hint(source) !== undefined,
+    });
+  }
+
   constructor(
     private readonly session: PlaybackSession,
     private readonly settings: DisplaySettingsService,
-    private readonly outcomes: PlaybackOutcomeRing
+    private readonly outcomes: PlaybackOutcomeRing,
+    private readonly hints: MediaHealthHintStore
   ) {}
 }

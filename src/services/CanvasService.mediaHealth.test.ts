@@ -95,6 +95,45 @@ describe('CanvasService mediaHealth contract v1', () => {
 
 });
 
+describe('CanvasService mediaHealth hint skips in status', () => {
+  beforeEach(prepareContentPolicy);
+
+  afterEach(() => {
+    canvasService.setCastInfo(null, false);
+    canvasService.disconnect();
+  });
+
+  it('always reports hintSkipped, empty when nothing is hinted', () => {
+    expect(canvasService.getStatus().hintSkipped).toEqual([]);
+    cast([item('a'), item('b')]);
+    expect(canvasService.getStatus().hintSkipped).toEqual([]);
+  });
+
+  it('reports the hinted slots the player passes over, aligned with items', () => {
+    cast([item('a'), item('b'), item('c')], { ...hintFor('a'), ...hintFor('c') });
+    const status = canvasService.getStatus();
+    expect(status.index).toBe(1);
+    expect(status.hintSkipped).toEqual([0, 2]);
+  });
+
+  it('follows the hints the player holds, not the last observation', () => {
+    cast([item('a'), item('b'), item('c')], hintFor('c'));
+    expect(canvasService.getStatus().hintSkipped).toEqual([2]);
+    // A refresh that drops the hint heals the slot on the next poll.
+    refresh([item('a'), item('b'), item('c')]);
+    expect(canvasService.getStatus().hintSkipped).toEqual([]);
+    // A hint on the playing work is not reported until playback leaves it.
+    refresh([item('a'), item('b'), item('c')], hintFor('a'));
+    expect(canvasService.getStatus().index).toBe(0);
+    expect(canvasService.getStatus().hintSkipped).toEqual([]);
+  });
+
+  it('reports nothing when every work is hinted, since the player tolerates them', () => {
+    cast([item('a'), item('b')], { ...hintFor('a'), ...hintFor('b') });
+    expect(canvasService.getStatus().hintSkipped).toEqual([]);
+  });
+});
+
 describe('CanvasService mediaHealth render-status continuity', () => {
   beforeEach(prepareContentPolicy);
 

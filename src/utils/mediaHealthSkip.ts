@@ -54,3 +54,56 @@ export function resolveHintedSkip(options: HintedSkipOptions): {
   }
   return unchanged;
 }
+
+interface HintSkippedOptions {
+  items: DP1Item[];
+  /** The published index: the slot on the wall, or about to be. */
+  index: number | undefined;
+  loopMode: LoopMode;
+  isBroken: (source: string) => boolean;
+}
+
+/**
+ * The indices of `items` the player is passing over because of a hint,
+ * reported on `checkStatus.hintSkipped` (mediaHealth contract v1).
+ *
+ * Controld copies this per item into `player_status.mediaHealth[i].skipped`,
+ * so the app's "Skip" badge reflects what the player actually does rather than
+ * what controld last observed: a source controld did not hint (an expired
+ * verdict, a replayable one, a push still in flight) is never reported here,
+ * and a hint the player still holds is reported until the next push replaces
+ * it.
+ *
+ * Same rules as `resolveHintedSkip`, evaluated for every slot at once instead
+ * of walking from each: a hinted slot is skipped exactly when the resolver
+ * would move off it. `one` ignores hints; `playlist` skips every hinted slot
+ * while any unhinted one exists; `none` skips a hinted slot only when an
+ * unhinted one follows it, because the tolerated tail still plays. The
+ * published slot is never listed: the resolver only ever lands there, so it is
+ * on the wall (a tolerated hint, or one that arrived on a refresh mid-play),
+ * and calling the visible work skipped would be the very mismatch this field
+ * exists to remove.
+ */
+export function hintSkippedIndices(options: HintSkippedOptions): number[] {
+  const { items, loopMode, isBroken } = options;
+  if (!items.length || loopMode === LoopMode.one) {
+    return [];
+  }
+  const broken = items.map(item => isBroken(item.source));
+  const lastPlayable = broken.lastIndexOf(false);
+  if (lastPlayable < 0) {
+    return [];
+  }
+  const current =
+    options.index === undefined
+      ? -1
+      : normalizePlaylistIndex(options.index, items.length);
+  const skipped: number[] = [];
+  broken.forEach((hinted, index) => {
+    const leavable = loopMode !== LoopMode.none || index < lastPlayable;
+    if (hinted && leavable && index !== current) {
+      skipped.push(index);
+    }
+  });
+  return skipped;
+}

@@ -72,7 +72,7 @@ human release operation.
   advance to, the next unhinted work without ever mounting the hinted one;
   `checkStatus.items` still lists it, `index` is where playback landed, and
   `outcomes.entries` carries one `{kind:"skip", stage:"hint"}` per slot passed
-  over. Cast a dead source without a hint: expect three `fail` entries with
+  over; `hintSkipped` lists the hinted index and never the published one. Cast a dead source without a hint: expect three `fail` entries with
   increasing `attempt`, then `exhausted`, then the advance. A working item must
   report one `{kind:"ok", stage:"ready"}` per mount with its `mediaType`.
 - **Playlist route / repeat-off hold:** With loop `none`, advance to the last timed slot so playback holds on the final artwork; confirm a queued shuffle or refresh **promotes the new playlist on cast** only in that hold (not when the final item has no finite slot timer); leaving `none` via `setLoop` should resume the slot timer from the held frame. Expect the current artwork to stay selected after shuffle (anchor at index `0`) until its slot timer completes before advancing.

@@ -66,7 +66,8 @@ order. `playlist` wraps, `none` does not,
 and `one` ignores hints because the viewer asked for that work. When nothing
 else is playable the requested slot plays and the retry budget judges it. The
 hinted items stay in the list; only the selection moves, and each slot passed
-over is reported as a `skip/hint` outcome.
+over is reported as a `skip/hint` outcome. `checkStatus.hintSkipped` reports
+the slots these rules pass over, excluding the published one.
 
 ## Route ownership
 
