@@ -93,6 +93,16 @@ describe('CanvasService mediaHealth contract v1', () => {
     expect(skips?.[0].castSeq).toBe(canvasService.getStatus().outcomes?.castSeq);
   });
 
+});
+
+describe('CanvasService mediaHealth render-status continuity', () => {
+  beforeEach(prepareContentPolicy);
+
+  afterEach(() => {
+    canvasService.setCastInfo(null, false);
+    canvasService.disconnect();
+  });
+
   it('keeps ready when an identical hinted recast lands on the work already playing', () => {
     cast([item('a'), item('b')], hintFor('a'));
     canvasService.setRenderStatus(RenderStatus.ready);
@@ -100,6 +110,27 @@ describe('CanvasService mediaHealth contract v1', () => {
     expect(cast([item('a'), item('b')], hintFor('a'))?.ok).toBe(true);
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
     expect(canvasService.getStatus().index).toBe(1);
+  });
+
+  it('keeps ready when an explicit move onto a hinted slot lands back on the playing work', () => {
+    cast([item('a'), item('b')], hintFor('a'));
+    canvasService.setRenderStatus(RenderStatus.ready);
+    const before =
+      canvasService.getStatus().outcomes?.entries.at(-1)?.seq ?? 0;
+
+    const reply = canvasService.processMessage({
+      command: CastCommand.moveToArtwork,
+      request: { index: 0 },
+    });
+    expect(reply?.ok).toBe(true);
+    expect(canvasService.getStatus().index).toBe(1);
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    const skips = canvasService
+      .getStatus()
+      .outcomes?.entries.filter(entry => entry.seq > before);
+    expect(skips?.map(entry => [entry.stage, entry.source])).toEqual([
+      ['hint', item('a').source],
+    ]);
   });
 
   it('still resets to pending when the hint-resolved start is a different work', () => {

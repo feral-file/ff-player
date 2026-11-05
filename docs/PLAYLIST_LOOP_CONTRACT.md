@@ -58,10 +58,11 @@ natural-length media must not lose to an unresolved manifest's default timer.
 controld may mark sources broken on the cast (`mediaHealth` contract v1; see
 [Device-local player](DEVICE_LOCAL_PLAYER.md#media-health-hints-and-play-outcomes)).
 Every selection is resolved through those hints BEFORE it is published: the
-cast command resolves the start slot it publishes, and the timeline resolves a
-timer or source-end advance, a queued shuffle/refresh promotion, a same-id
-source replacement, and an explicit move. Each lands on the first unhinted
-slot forward in play order. `playlist` wraps, `none` does not,
+cast command resolves the start slot it publishes, the command facade resolves
+an explicit move before the session publishes it, and the timeline resolves a
+timer or source-end advance, a queued shuffle/refresh promotion, and a same-id
+source replacement. Each lands on the first unhinted slot forward in play
+order. `playlist` wraps, `none` does not,
 and `one` ignores hints because the viewer asked for that work. When nothing
 else is playable the requested slot plays and the retry budget judges it. The
 hinted items stay in the list; only the selection moves, and each slot passed

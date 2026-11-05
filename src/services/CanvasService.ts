@@ -38,6 +38,8 @@ import type {
   PlaybackOutcomeInput,
 } from '@/models/media_health.model';
 import DeviceManager from '@/utils/DeviceManager';
+import { coerceLoopMode } from '@/utils/loopMode';
+import { resolveHintedSkip } from '@/utils/mediaHealthSkip';
 import { BootPlaylistStore } from './canvas/BootPlaylistStore';
 import { CanvasStatus } from './canvas/CanvasStatus';
 import { CursorService } from './canvas/CursorService';
@@ -345,8 +347,37 @@ class CanvasService {
     return this.recovery.setSleepMode(request);
   }
 
+  /**
+   * An explicit move is resolved through controld's broken-source hints
+   * BEFORE the session publishes it, for the same reason a cast resolves its
+   * start slot: the session's render-status continuity compares the work on
+   * screen with the published slot, so publishing the hinted slot first and
+   * letting the timeline skip back would reset a still-playing work to
+   * pending with nothing left to answer it. The slots passed over are
+   * reported here; the timeline then finds nothing left to skip.
+   */
   private moveToArtwork(request: MoveToItemRequest): MoveToItemReply {
-    return this.session.moveToArtwork(request);
+    const cast = this.session.castInfo;
+    const items = cast?.playlist?.items ?? [];
+    if (request.index < 0 || !items.length) {
+      return this.session.moveToArtwork(request);
+    }
+    const landing = resolveHintedSkip({
+      index: request.index,
+      items,
+      loopMode: coerceLoopMode(cast?.loopMode),
+      isBroken: source => this.hints.hint(source) !== undefined,
+    });
+    for (const item of landing.skipped) {
+      this.outcomes.record({
+        kind: 'skip',
+        stage: 'hint',
+        source: item.source,
+        attempt: 0,
+        elapsedMs: 0,
+      });
+    }
+    return this.session.moveToArtwork({ ...request, index: landing.index });
   }
 
   public requestArtworkRefresh(): boolean {

@@ -141,9 +141,10 @@ Every selection is resolved through the hints BEFORE it is published, so a
 hinted work is never mounted: `canvas/PlaylistCommands` resolves a cast's
 start slot (so the cast publishes the slot playback lands on and judges
 render-status continuity against it, keeping `ready` when an identical
-hinted recast lands on the work already playing), and `PlaylistTimeline`
-resolves every later selection (advance, queued promotion, source
-replacement, explicit move). The walk is forward in play order: `playlist`
+hinted recast lands on the work already playing), `CanvasService` resolves
+an explicit move the same way before the session publishes it, and
+`PlaylistTimeline` resolves every selection it makes itself (advance, queued
+promotion, source replacement). The walk is forward in play order: `playlist`
 wraps, `none` does not, `one` ignores hints. Hinted items stay in
 `checkStatus.items`; the published index is where playback landed. When
 nothing else is playable the requested slot plays and the ordinary
