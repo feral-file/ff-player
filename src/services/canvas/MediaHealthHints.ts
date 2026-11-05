@@ -27,11 +27,22 @@ export class MediaHealthHintStore {
 
   /** Install the hints from a push; anything but a plain object clears them. */
   replace(raw: unknown): void {
+    // A fresh object each time; a snapshot taken earlier stays intact.
     this.hints = parseMediaHealthHints(raw);
   }
 
   clear(): void {
     this.hints = {};
+  }
+
+  /** The current map, for restoring after a refused push. */
+  snapshot(): MediaHealthHints {
+    return this.hints;
+  }
+
+  /** Reinstate a map taken with `snapshot`. */
+  restore(hints: MediaHealthHints): void {
+    this.hints = hints;
   }
 
   /** The hint for a source, or undefined when controld did not mark it broken. */

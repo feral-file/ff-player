@@ -1,6 +1,6 @@
 import { LoopMode } from '@/models/cast_info.model';
 import type { DP1Item } from '@/models/dp1.model';
-import { normalizePlaylistIndex } from '@/utils/playlist';
+import { normalizePlaylistIndex } from './playlist';
 
 interface HintedSkipOptions {
   index: number;
@@ -14,7 +14,9 @@ interface HintedSkipOptions {
  * (mediaHealth contract v1).
  *
  * The timeline calls this at every selection site, BEFORE the index is
- * published, so a hinted slot is passed over without ever mounting. The
+ * published, so a hinted slot is passed over without ever mounting; the cast
+ * command calls it too, so render-status continuity is judged against the
+ * slot that will actually play rather than the requested one. The
  * search walks forward in play order from the requested slot and stops at the
  * first source without a hint; `playlist` wraps, `none` does not, and `one`
  * never moves because the viewer asked for exactly that work.

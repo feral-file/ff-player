@@ -6,6 +6,7 @@ import { DP1Defaults, DP1Item } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
+import { resolveHintedSkip } from '@/utils/mediaHealthSkip';
 import type { SlotMergedDisplay } from '@/utils/playlist';
 import {
   isNoDurationItem,
@@ -19,7 +20,6 @@ import {
   shouldHoldForPendingMerge,
   shouldResumeSlotTimerAfterSetLoop,
 } from '@/utils/playlist';
-import { resolveHintedSkip } from './mediaHealthSkip';
 import { isSourceReplacement } from './sourceReplacement';
 import { decideSlotExpiry, SLOT_EXPIRY_RECHECK_MS } from './slotExpiry';
 export interface TimelineEffects {

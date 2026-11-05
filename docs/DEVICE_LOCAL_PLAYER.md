@@ -137,14 +137,19 @@ disconnect, the fallback playlist, and a player-local scheduled task clear it.
 `canvas/MediaHealthHints` owns the map and parses it tolerantly: a malformed
 field is skipped, a malformed map ignored, and nothing here rejects a cast.
 
-`PlaylistTimeline` resolves every selection (cast start, advance, queued
-promotion, source replacement, explicit move) through the hints BEFORE
-publishing it, so a hinted work is never mounted. The walk is forward in play
-order: `playlist` wraps, `none` does not, `one` ignores hints. Hinted items
-stay in `checkStatus.items`; the published index is where playback landed.
-When nothing else is playable the requested slot plays and the ordinary
+Every selection is resolved through the hints BEFORE it is published, so a
+hinted work is never mounted: `canvas/PlaylistCommands` resolves a cast's
+start slot (so the cast publishes the slot playback lands on and judges
+render-status continuity against it, keeping `ready` when an identical
+hinted recast lands on the work already playing), and `PlaylistTimeline`
+resolves every later selection (advance, queued promotion, source
+replacement, explicit move). The walk is forward in play order: `playlist`
+wraps, `none` does not, `one` ignores hints. Hinted items stay in
+`checkStatus.items`; the published index is where playback landed. When
+nothing else is playable the requested slot plays and the ordinary
 retry/skip budget judges it, so a hint can never blank the wall. Each slot
-passed over is reported as a `skip/hint` outcome.
+passed over is reported as a `skip/hint` outcome by whichever owner passed
+it.
 
 **Outcomes.** `checkStatus.outcomes` is `{castSeq, entries}`, always present
 on a supporting player and empty until the first mount reports. Entries are

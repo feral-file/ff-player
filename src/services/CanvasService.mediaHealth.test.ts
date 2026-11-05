@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // jsdom: getStatus() reads `window` (location.pathname, __ffosDocStamp).
-import { CastCommand } from '@/models';
+import { CastCommand, RenderStatus } from '@/models';
 import { DP1Action, type DP1Call, type DP1Item } from '@/models/dp1.model';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { canvasService } from './CanvasService';
@@ -83,6 +83,33 @@ describe('CanvasService mediaHealth contract v1', () => {
     expect(canvasService.getMediaHealthHint(item('c').source)).toBeUndefined();
   });
 
+  it('publishes the hint-resolved start slot and reports the slots passed over', () => {
+    cast([item('a'), item('b')], hintFor('a'));
+    expect(canvasService.getStatus().index).toBe(1);
+    const skips = canvasService
+      .getStatus()
+      .outcomes?.entries.filter(entry => entry.stage === 'hint');
+    expect(skips?.map(entry => entry.source)).toEqual([item('a').source]);
+    expect(skips?.[0].castSeq).toBe(canvasService.getStatus().outcomes?.castSeq);
+  });
+
+  it('keeps ready when an identical hinted recast lands on the work already playing', () => {
+    cast([item('a'), item('b')], hintFor('a'));
+    canvasService.setRenderStatus(RenderStatus.ready);
+
+    expect(cast([item('a'), item('b')], hintFor('a'))?.ok).toBe(true);
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.ready);
+    expect(canvasService.getStatus().index).toBe(1);
+  });
+
+  it('still resets to pending when the hint-resolved start is a different work', () => {
+    cast([item('a'), item('b'), item('c')], hintFor('a'));
+    canvasService.setRenderStatus(RenderStatus.ready);
+
+    cast([item('a'), item('b'), item('c')], { ...hintFor('a'), ...hintFor('b') });
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+  });
+
   it('leaves the live hints alone when the push is rejected', () => {
     cast([item('a'), item('b')], hintFor('b'));
     const rejected = canvasService.processMessage({
@@ -124,9 +151,11 @@ describe('CanvasService mediaHealth outcome ring', () => {
   });
 
   it('always reports the outcome ring and opens a cast generation per Now Display', () => {
+    // The ring lives on the singleton for the whole file, so earlier tests
+    // may have written to it; shape and generation are what is asserted.
     const before = canvasService.getStatus().outcomes;
     expect(before).toBeDefined();
-    expect(before?.entries).toEqual([]);
+    expect(Array.isArray(before?.entries)).toBe(true);
     const castSeq = before?.castSeq ?? 0;
 
     cast([item('a')]);

@@ -376,19 +376,25 @@ class CanvasService {
   private displayPlaylist(
     request: DisplayPlaylistRequest
   ): DisplayPlaylistReply {
-    const reply = this.playlists.displayPlaylist(request);
     // Hints ride every accepted push that changes what is on the wall: a
     // cast, a boot cast, and a refresh. A status query and a scheduled cast
     // describe a list that is not playing, so they leave the live map alone.
-    // Installed AFTER the command so a rejected push cannot leave the hints
-    // of a cast that never landed judging the one still playing.
+    // Installed BEFORE the command, because nowDisplayPlaylist judges
+    // render-status continuity against the hint-resolved start slot, and
+    // restored if the push is refused so the hints of a cast that never
+    // landed cannot judge the one still playing. Nothing between the two
+    // reads the map: the timeline consults it only from a later React effect.
     const action = request.intent?.action;
-    if (
-      reply.ok &&
+    const carriesHints =
       action !== DP1Action.GetCurrentPlaylist &&
-      action !== DP1Action.SchedulePlay
-    ) {
+      action !== DP1Action.SchedulePlay;
+    const previous = carriesHints ? this.hints.snapshot() : null;
+    if (carriesHints) {
       this.hints.replace(request.mediaHealth);
+    }
+    const reply = this.playlists.displayPlaylist(request);
+    if (previous && !reply.ok) {
+      this.hints.restore(previous);
     }
     return reply;
   }
@@ -451,6 +457,10 @@ class CanvasService {
       getStatus: () => this.getStatus(),
       beginCast: () => {
         this.outcomes.beginCast();
+      },
+      isHintedBroken: source => this.hints.hint(source) !== undefined,
+      recordPlaybackOutcome: input => {
+        this.outcomes.record(input);
       },
     }
   );
