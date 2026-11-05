@@ -29,6 +29,19 @@ whether to advance, replay, or hold.
 | Queued shuffle/refresh at an advance boundary | Promote before advancing. | Promote while retaining the current item when possible, otherwise select index 0. | Promote before a final-slot hold can prevent further advances. |
 | Queued shuffle/refresh while already holding the final slot | Not a repeat-off hold. | Not a repeat-off hold. | Promote immediately on cast, retaining the current artwork where the queued order permits. |
 
+A finite timer that expires while the renderer reports `loading` (its load
+has outlasted the 2 s overlay delay) does not take any of the rows above yet.
+The slot timer starts at selection, not at first paint, so without this a work
+that loads for longer than its duration was advanced past before it ever
+appeared. The expiry re-checks every second: once the work is ready it gets a
+full fresh interval; once it fails, or after 10 minutes of waiting, the
+ordinary expiry row applies. `pending` never holds, because Canvas also
+publishes it for selections no renderer may answer. Only a load with a
+stuck-load watchdog holds: an HLS stream has none (a stalled live stream may
+never report a fatal error), so a stream keeps its old pacing and the slot
+timer still ends it. A load that completes
+before expiry keeps the ordinary pacing. See `src/app/playlist/slotExpiry.ts`.
+
 An item with no finite duration has no slot timer. Natural media end or an
 explicit command can still advance it; absence of a timer does not itself mean
 the route is holding the final slot. A failure at a held final slot still checks

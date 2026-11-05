@@ -251,6 +251,9 @@ describe('ArtworkPlayer — generic load watchdog exemption for streaming', () =
         'The artwork cannot be displayed correctly on this device.'
       )
     ).toBeNull();
+    // No watchdog ends a stalled stream, so the playlist must not hold an
+    // expired slot for it (slotExpiry.ts).
+    expect(canvasService.isRenderLoadBounded()).toBe(false);
   });
 });
 

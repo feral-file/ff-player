@@ -13,6 +13,7 @@ import { act, cleanup, render } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
+import { EMBEDDED_LOAD_TIMEOUT_MS, LOAD_IDLE_TIMEOUT_MS } from './LoadWatchdog';
 import { WebGLRecovery } from './useWebGLRecovery';
 
 const loaderState = vi.hoisted(() => ({
@@ -179,15 +180,16 @@ describe('ArtworkPlayer play-outcome ring: success and the retry budget', () => 
     expect(fails.every(entry => entry.mediaType === 'image')).toBe(true);
   });
 
-  it('reports a stalled load through the watchdog with its deadline', async () => {
+  it('reports a stalled load through the watchdog with the phase that ran out', async () => {
     loaderState.mode = 'hang';
     render(node({}));
     await advance(0);
-    await advance(15000);
+    // No bytes ever arrive: the transfer phase's idle bound (LoadWatchdog).
+    await advance(LOAD_IDLE_TIMEOUT_MS);
     expect(sinceSeq(mark)[0]).toMatchObject({
       kind: 'fail',
       stage: 'watchdog',
-      code: '15s',
+      code: 'transfer',
       attempt: 1,
     });
   });
@@ -201,9 +203,9 @@ describe('ArtworkPlayer play-outcome ring: decode, detect, and GPU stages', () =
     vi.spyOn(WebGLRecovery.prototype, 'available').mockReturnValue(true);
     render(node({ mimeType: 'text/html', previewURL: 'https://art.test/slow' }));
     await advance(0);
-    await advance(45000);
-    expect(sinceSeq(mark).map(entry => [entry.stage, entry.attempt])).toEqual([
-      ['watchdog', 1],
+    await advance(EMBEDDED_LOAD_TIMEOUT_MS);
+    expect(sinceSeq(mark).map(entry => [entry.stage, entry.code, entry.attempt])).toEqual([
+      ['watchdog', 'fixed', 1],
     ]);
     const frame = document.querySelector('iframe');
     if (!frame) {

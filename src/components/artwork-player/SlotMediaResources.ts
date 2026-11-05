@@ -6,6 +6,7 @@ import Hls from 'hls.js';
 import { createRef } from 'react';
 import { mediaElementFailure } from './ArtworkOutcomes';
 import { SlotIndex, SlotLayer, isEmbeddedHeavy } from './artworkTypes';
+import { LoadWatchdog } from './LoadWatchdog';
 export interface MediaEvents {
   isCurrent: (index: SlotIndex, layer?: SlotLayer) => boolean;
   loaded: (index: SlotIndex, layer?: SlotLayer, success?: boolean) => boolean;
@@ -16,6 +17,8 @@ export interface MediaEvents {
   incomingSlot: () => SlotIndex | null;
   status: () => RenderStatus | undefined;
   matchesTarget: (url: string, identity: string) => boolean;
+  /** Publishes whether this current mount has a stuck-load bound. */
+  loadBounded: (index: SlotIndex, layer: SlotLayer, bounded: boolean) => void;
 }
 interface MediaAttempt {
   slotIndex: SlotIndex;
@@ -55,6 +58,13 @@ export class SlotMediaResources {
   private mediaAbortControllerRef: {
     current: (AbortController | undefined)[];
   } = { current: [] };
+  // The watchdog of each slot's current element mount. Media setup and the
+  // watchdog have separate effect lifetimes (see useSlotMedia), so loaders
+  // report progress here by slot rather than holding a watchdog themselves.
+  private watchdogs: [LoadWatchdog | null, LoadWatchdog | null] = [
+    null,
+    null,
+  ];
   refs(index: SlotIndex) {
     return {
       image: this.imageRefs[index],
@@ -224,21 +234,28 @@ export class SlotMediaResources {
       this.cleanupAttempt(attempt);
     };
   }
-  /** Each mounted element gets a deadline, including a key-only GPU reload. */
+  /**
+   * Each mounted element gets a stuck-load watchdog, including a key-only GPU
+   * reload. Native media is judged by transfer progress (see LoadWatchdog);
+   * iframe/object/model/PDF expose none and keep a fixed window.
+   */
   watchSlot(
     slotIndex: SlotIndex,
     layer: SlotLayer | null,
     events: MediaEvents
   ) {
-    if (!layer?.displayPreviewURL || layer.isStreaming) {
+    if (!layer?.displayPreviewURL) {
       return undefined;
     }
-    const duration =
+    if (layer.isStreaming) {
+      // hls.js owns stream errors; no watchdog ends a stalled stream.
+      events.loadBounded(slotIndex, layer, false);
+      return undefined;
+    }
+    const fixed =
       isEmbeddedHeavy(layer.previewType) ||
-      layer.previewType === PreviewHTMLTag.iframePDF
-        ? 45000
-        : 15000;
-    const timer = setTimeout(() => {
+      layer.previewType === PreviewHTMLTag.iframePDF;
+    const watchdog = new LoadWatchdog(fixed ? 'fixed' : 'transfer', () => {
       if (
         !events.isCurrent(slotIndex, layer) ||
         !events.matchesTarget(layer.previewURL, layer.itemIdentity) ||
@@ -247,13 +264,37 @@ export class SlotMediaResources {
       ) {
         return;
       }
+      console.log('[ArtworkPlayer] Load watchdog expired; treating as failed');
+      // The code is the load phase that ran out (transfer, decode, opaque,
+      // fixed): the deadline follows progress now, so a wall-clock figure
+      // would not say what was judged.
       events.failed(slotIndex, layer, {
         stage: 'watchdog',
-        code: `${String(duration / 1000)}s`,
+        code: watchdog.phase,
       });
-    }, duration);
+    });
+    this.watchdogs[slotIndex] = watchdog;
+    events.loadBounded(slotIndex, layer, true);
     return () => {
-      clearTimeout(timer);
+      watchdog.dispose();
+      if (this.watchdogs[slotIndex] === watchdog) {
+        this.watchdogs[slotIndex] = null;
+      }
+    };
+  }
+  /** Progress from a superseded attempt must not keep the next mount alive. */
+  private progressFor(attempt: MediaAttempt) {
+    return () => {
+      if (!attempt.cancelled) {
+        this.watchdogs[attempt.slotIndex]?.progress();
+      }
+    };
+  }
+  private phaseFor(attempt: MediaAttempt) {
+    return (phase: 'decode' | 'opaque') => {
+      if (!attempt.cancelled) {
+        this.watchdogs[attempt.slotIndex]?.enterPhase(phase);
+      }
     };
   }
   private handleMediaError(
@@ -349,6 +390,8 @@ export class SlotMediaResources {
       onLoad: markImageReady,
       onError: this.handleMediaError(attempt, 'image'),
       signal: abortController.signal,
+      onProgress: this.progressFor(attempt),
+      onPhase: this.phaseFor(attempt),
     });
     if (el.complete && el.naturalWidth > 0) {
       markImageReady();
@@ -371,12 +414,17 @@ export class SlotMediaResources {
       }
       this.playVideoForSlot(events, slotIndex, layer, el);
     };
+    // The element fetches its own bytes (with Range), so its `progress`
+    // events are the watchdog's evidence that the transfer is alive.
+    const noteProgress = this.progressFor(attempt);
     el.addEventListener('loadeddata', handleNonStreamingVideoReady);
+    el.addEventListener('progress', noteProgress);
     el.onerror = () => {
       this.handleMediaError(attempt, 'video')(new Error('Video load failed'));
     };
     mediaCleanupFns.push(() => {
       el.removeEventListener('loadeddata', handleNonStreamingVideoReady);
+      el.removeEventListener('progress', noteProgress);
       el.onerror = null;
     });
     await this.mediaLoaders.current[slotIndex].loadMedia({
@@ -403,12 +451,15 @@ export class SlotMediaResources {
         events.note(layer.previewURL, false);
       }
     };
+    const noteProgress = this.progressFor(attempt);
     el.addEventListener('loadeddata', handleAudioReady);
+    el.addEventListener('progress', noteProgress);
     el.onerror = () => {
       this.handleMediaError(attempt, 'audio')(new Error('Audio load failed'));
     };
     mediaCleanupFns.push(() => {
       el.removeEventListener('loadeddata', handleAudioReady);
+      el.removeEventListener('progress', noteProgress);
       el.onerror = null;
     });
     await this.mediaLoaders.current[slotIndex].loadMedia({

@@ -218,6 +218,25 @@ class CanvasService {
     this.session.setRenderStatus(renderStatus);
   }
 
+  /** The live renderer lifecycle of the current selection (never persisted). */
+  public getRenderStatus(): RenderStatus | undefined {
+    return this.session.renderStatus;
+  }
+
+  // Whether the renderer's current load has a stuck-load bound (a per-slot
+  // watchdog). HLS has none: a stalled live stream can stay `loading` with no
+  // fatal error. The playlist only holds an expired slot for a bounded load
+  // (see slotExpiry.ts). Live-only and never part of status replies.
+  private renderLoadBounded = false;
+
+  public setRenderLoadBounded(bounded: boolean) {
+    this.renderLoadBounded = bounded;
+  }
+
+  public isRenderLoadBounded(): boolean {
+    return this.renderLoadBounded;
+  }
+
   public hasQueuedPlaylistPending(): boolean {
     return this.session.hasQueuedPlaylistPending();
   }

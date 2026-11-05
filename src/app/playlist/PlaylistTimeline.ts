@@ -21,6 +21,7 @@ import {
 } from '@/utils/playlist';
 import { resolveHintedSkip } from './mediaHealthSkip';
 import { isSourceReplacement } from './sourceReplacement';
+import { decideSlotExpiry, SLOT_EXPIRY_RECHECK_MS } from './slotExpiry';
 export interface TimelineEffects {
   readMergedDisplay: () => SlotMergedDisplay | null;
   clearMergedDisplay: () => void;
@@ -347,12 +348,36 @@ export class PlaylistTimeline {
     this.armed = { duration, deadline: Date.now() + delayMs };
 
     this.timer = setTimeout(() => {
-      // The timeout is firing now, so the previous handle is no longer active.
-      // Clearing it lets later loop-mode changes detect a true "held on final
-      // artwork" state after repeat-off stops progression.
-      this.timer = undefined;
-      this.advance(normalizedIndex, snapshot);
+      this.expire(normalizedIndex, snapshot, null);
     }, delayMs);
+  }
+  /**
+   * A slot timer fired. See decideSlotExpiry: a work still loading holds its
+   * slot (re-checked on the same timer handle, so clearTimer and every
+   * advance path cancel the wait), then gets a full slot once it is ready.
+   */
+  private expire(index: number, snapshot: DP1Item[], deferredSince: number | null) {
+    // The timeout is firing now, so the previous handle is no longer active.
+    // Clearing it lets later loop-mode changes detect a true "held on final
+    // artwork" state after repeat-off stops progression.
+    this.timer = undefined;
+    const decision = decideSlotExpiry({
+      renderStatus: canvasService.getRenderStatus(),
+      loadBounded: canvasService.isRenderLoadBounded(),
+      deferredFor: deferredSince === null ? null : Date.now() - deferredSince,
+    });
+    if (decision === 'defer') {
+      const since = deferredSince ?? Date.now();
+      this.timer = setTimeout(() => {
+        this.expire(index, snapshot, since);
+      }, SLOT_EXPIRY_RECHECK_MS);
+      return;
+    }
+    if (decision === 'restart' && this.index === index) {
+      this.schedule(index, snapshot);
+      return;
+    }
+    this.advance(index, snapshot);
   }
   sourceEnded = (endedIdentity: string) => {
     const idx = this.index;
