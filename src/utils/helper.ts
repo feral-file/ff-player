@@ -84,7 +84,22 @@ export class ContentTypeDetectionError extends Error {
  * `{}` in the device log.
  */
 export async function getContentTypeFromURL(
-  previewURL: string
+  previewURL: string,
+  /**
+   * Observes a HEAD that did not answer usefully, before extension inference
+   * runs: the HTTP status as a string when it reached the server and
+   * answered non-2xx, or `network` when no response arrived at all (DNS
+   * failure, refused connection, the probe timeout, or a CORS/CSP block,
+   * which the browser cannot tell apart). Reported whether or not the device
+   * is online. The mediaHealth outcome ring records it: inference or the
+   * iframe fallback can still play the work, and that fallback reports
+   * `ready` for Chromium's own error page, so the entry is the only trace of
+   * an unresolvable host behind a later `ready` (ffos-user#392, follow-up
+   * of 2026-11-05). `network` is never a verdict; controld only uses it to
+   * re-probe the source sooner. A 2xx without a usable Content-Type is not
+   * reported.
+   */
+  onHeadFailure?: (code: string) => void
 ): Promise<string> {
   const url = resolveArtworkSourceURL(previewURL);
   if (url.protocol === 'data:') {
@@ -119,6 +134,7 @@ export async function getContentTypeFromURL(
 
     // Treat non-2xx as failure, even if Content-Type is present (e.g., 504 text/plain pages)
     if (!response.ok) {
+      onHeadFailure?.(String(response.status));
       throw new Error(
         `HEAD request failed with status ${String(
           response.status
@@ -136,6 +152,9 @@ export async function getContentTypeFromURL(
       '[ContentType] Failed to get content-type from HEAD request',
       serializeErrorForLog(error)
     );
+    if (!reachedServer) {
+      onHeadFailure?.('network');
+    }
 
     const inferredType = inferContentTypeFromURL(url);
     if (inferredType) {

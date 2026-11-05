@@ -80,6 +80,10 @@ export class LoadWatchdog {
     };
     this.arm();
   }
+  /** The phase currently being judged; reported as the watchdog outcome's code when it expires. */
+  get phase(): LoadPhase {
+    return this.state.phase;
+  }
   /** Records new bytes; only meaningful while transferring. */
   progress() {
     if (!this.done) {

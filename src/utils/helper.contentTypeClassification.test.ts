@@ -131,3 +131,38 @@ describe('getContentTypeFromURL — daemon-verdict corroboration', () => {
     expectNetworkFailure(await pending, false);
   });
 });
+
+describe('getContentTypeFromURL — probe failure observer', () => {
+  /** Detect an extensionless URL, collecting what the observer saw. */
+  async function observe(): Promise<string[]> {
+    const codes: string[] = [];
+    await getContentTypeFromURL(
+      'https://example.com/ipfs/bafy-test-cid',
+      code => codes.push(code)
+    ).catch(() => undefined);
+    return codes;
+  }
+
+  it('reports an unanswered HEAD as network on an online device', async () => {
+    armRejectedHead(true);
+    noteDaemonConnectivity(true);
+    expect(await observe()).toEqual(['network']);
+  });
+
+  it('reports an unanswered HEAD as network once when offline', async () => {
+    armRejectedHead(false);
+    expect(await observe()).toEqual(['network']);
+  });
+
+  it('reports the status of a non-2xx answer, and nothing for a typed 2xx', async () => {
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 503 }));
+    expect(await observe()).toEqual(['503']);
+    fetchSpy.mockResolvedValue(
+      new Response(null, { status: 200, headers: { 'Content-Type': 'image/png' } })
+    );
+    expect(await observe()).toEqual([]);
+  });
+});

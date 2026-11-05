@@ -29,14 +29,29 @@ interface SourceOwners {
   note: (url: string, failed: boolean) => void;
 }
 
-/** An absent or empty authored MIME type uses the existing network detector. */
-async function detectPreview(url: string, suppliedType: string | undefined) {
+/** An absent or empty authored MIME type uses the existing network detector; a probe that answered non-2xx or not at all is reported to the recovery owner even when inference carries on. */
+async function detectPreview(
+  url: string,
+  suppliedType: string | undefined,
+  onHeadFailure: (code: string) => void
+) {
   const resolvedType =
     suppliedType !== undefined && suppliedType !== ''
       ? suppliedType
-      : await getContentTypeFromURL(url);
+      : await getContentTypeFromURL(url, onHeadFailure);
   const mimeType = resolvedType.toLowerCase();
   return { mimeType, ...getPreviewTypeConfig(mimeType) };
+}
+
+/** The untyped fallback: an iframe, or the work-origin shell when the source uses one. */
+function fallbackIframeSource(url: string): Partial<SlotLayer> {
+  return {
+    previewType: PreviewHTMLTag.iframe,
+    isStreaming: false,
+    displayPreviewURL: url,
+    displaySoftwareURL: usesWorkOrigin(url) ? '' : url,
+    mimeType: null,
+  };
 }
 
 /** MIME detection owns only this request; a superseded result cannot patch the next slot. */
@@ -64,11 +79,17 @@ export function useArtworkSource(
     transition.prepareMount();
     recovery.beginMount();
     transition.mountIncoming(url, showingKey);
-    void detectPreview(url, suppliedType)
+    const onHeadFailure = (code: string) => {
+      if (!cancelled && transition.matchesTarget(url, itemIdentity ?? '')) {
+        recovery.noteDetectFailure(code);
+      }
+    };
+    void detectPreview(url, suppliedType, onHeadFailure)
       .then(config => {
         if (cancelled || !transition.matchesTarget(url, itemIdentity ?? '')) {
           return;
         }
+        recovery.noteMediaType(config.previewType);
         transition.resolveSource(url, {
           ...config,
           displayPreviewURL: url,
@@ -89,17 +110,15 @@ export function useArtworkSource(
           error instanceof ContentTypeDetectionError &&
           error.isNetworkFailure
         ) {
+          // Corroborated offline. The `detect/network` entry was already
+          // recorded by the probe observer when no response arrived, so
+          // this path only raises the offline signal and fails the mount.
           noteRef.current(url, true);
           recovery.markArtworkFailed();
           return;
         }
-        transition.resolveSource(url, {
-          previewType: PreviewHTMLTag.iframe,
-          isStreaming: false,
-          displayPreviewURL: url,
-          displaySoftwareURL: usesWorkOrigin(url) ? '' : url,
-          mimeType: null,
-        });
+        recovery.noteMediaType(PreviewHTMLTag.iframe);
+        transition.resolveSource(url, fallbackIframeSource(url));
       });
     return () => {
       cancelled = true;
