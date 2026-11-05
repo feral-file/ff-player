@@ -9,6 +9,10 @@ import { AppContext } from '@/context/AppContext';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
 import type { PlaybackOutcomeEntry } from '@/models/media_health.model';
 import { canvasService } from '@/services/CanvasService';
+import {
+  noteDaemonConnectivity,
+  resetDaemonConnectivityForTests,
+} from '@/services/DaemonConnectivity';
 import { act, cleanup, render } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -276,5 +280,48 @@ describe('ArtworkPlayer play-outcome ring: decode, detect, and GPU stages', () =
       source: 'https://art.test/gl',
     });
     available.mockRestore();
+  });
+});
+
+describe('ArtworkPlayer play-outcome ring: an unanswered content-type probe', () => {
+  useRingHarness();
+
+  it('records an unanswered probe on an online device as device-local detect/network, then the fallback ready', async () => {
+    // The fxhash onchfs case: an unresolvable host behind an extensionless
+    // URL. The browser cannot tell DNS from CORS, so the work still plays in
+    // the fallback iframe; the entry is the only trace controld gets.
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    noteDaemonConnectivity(true);
+    vi.spyOn(WebGLRecovery.prototype, 'available').mockReturnValue(true);
+    try {
+      render(node({ mimeType: '', previewURL: 'https://art.test/onchfs/abc' }));
+      await until(() => document.querySelector('iframe') !== null);
+      const frame = document.querySelector('iframe');
+      await act(async () => {
+        frame?.dispatchEvent(new Event('load'));
+        await Promise.resolve();
+      });
+      await until(() => sinceSeq(mark).some(entry => entry.stage === 'ready'));
+      expect(
+        sinceSeq(mark).map(entry => [entry.kind, entry.stage, entry.code, entry.mediaType])
+      ).toEqual([
+        ['fail', 'detect', 'network', undefined],
+        ['ok', 'ready', undefined, 'iframe'],
+      ]);
+    } finally {
+      resetDaemonConnectivityForTests();
+    }
+  });
+
+  it('records one detect/network entry when offline is corroborated', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    render(node({ mimeType: '', previewURL: 'https://art.test/onchfs/abc' }));
+    await until(() => sinceSeq(mark).length > 0);
+    await advance(0);
+    expect(
+      sinceSeq(mark).filter(entry => entry.stage === 'detect').map(entry => entry.code)
+    ).toEqual(['network']);
   });
 });

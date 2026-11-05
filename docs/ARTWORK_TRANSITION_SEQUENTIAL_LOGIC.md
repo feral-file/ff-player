@@ -42,7 +42,9 @@ A request invalidates the previous fade, removes the stale non-active layer,
 publishes pending, arms the loading delay, and creates an incoming layer. It
 resets that mount's failure and played latches. MIME results apply only while
 that request remains current. Unknown/unconfirmed types use iframe fallback;
-corroborated-offline detection follows the separate recovery contract.
+corroborated-offline detection follows the separate recovery contract. A probe
+that gets no response is recorded as a device-local `detect/network` outcome on
+both paths, before the fallback or the offline failure.
 
 The active layer remains mounted while incoming media loads. The delayed global
 loading overlay can cover it; retaining the outgoing slot does not imply that

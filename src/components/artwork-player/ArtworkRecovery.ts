@@ -74,7 +74,9 @@ export class ArtworkRecovery {
    * The content-type probe answered without a usable type. Recorded even when
    * playback carries on through the iframe fallback, because that fallback
    * reports `ready` for a gateway's error page; controld needs the status to
-   * see past it. `network` is reported only once offline is corroborated.
+   * see past it. `network` (no response at all) is reported online or
+   * offline: it is device-local, never a verdict, and lets controld re-probe
+   * an unresolvable host behind an iframe `ready` within seconds.
    */
   noteDetectFailure(code: string) {
     this.outcomes.report({

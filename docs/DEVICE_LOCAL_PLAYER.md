@@ -201,7 +201,7 @@ owns the ring; `ArtworkRecovery` reports through `ArtworkOutcomeReporter`.
 
 | Stage | Kind | Source in the player | `code` |
 |---|---|---|---|
-| `detect` | fail | Content-type HEAD answered non-2xx, or failed with corroborated offline | HTTP status, or `network` |
+| `detect` | fail | Content-type HEAD answered non-2xx, or got no response at all, online or offline | HTTP status, or `network` (device-local: DNS, refused, timeout and CORS look the same to a browser) |
 | `load` | fail | Image/video/audio/iframe/object/model element error, fatal HLS error | element kind, or `hls_<ErrorType>` |
 | `decode` | fail | A video/audio `MediaError` | `aborted`, `network`, `decode`, `src_not_supported` |
 | `watchdog` | fail | Per-slot stuck-load watchdog expired | the load phase that ran out: `transfer`, `decode`, `opaque`, `fixed` |
@@ -220,7 +220,7 @@ entries are recorded out of band and may precede the same attempt's
 `load`/`decode`/`watchdog` entry (a `.jpg` answering 404 yields `detect/404`
 then `load/image`), and a `detect` failure can precede an `ok` in the same
 play because the iframe fallback still plays the work and reports `ready` for
-a gateway's error page; entries must be applied in `seq` order. Source URLs appear in the ring only over loopback CDP.
+a gateway's error page; entries must be applied in `seq` order. A `detect/network` followed by an iframe `ready` is how an unresolvable host shows up (Chromium's error page loads as the fallback iframe); it is never a verdict, only a reason for controld to re-probe the source at once (ffos-user#392, follow-up of 2026-11-05). Source URLs appear in the ring only over loopback CDP.
 
 ## Recently played
 
