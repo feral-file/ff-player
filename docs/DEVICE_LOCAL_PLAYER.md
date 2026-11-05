@@ -152,7 +152,7 @@ retry/skip budget judges it, so a hint can never blank the wall. Each slot
 passed over is reported as a `skip/hint` outcome by whichever owner passed
 it.
 
-**Hint skips.** `checkStatus.hintSkipped` lists, ascending, the indices of
+**Hint skips.** `checkStatus.skippedIndices` lists, ascending, the indices of
 `checkStatus.items` the player is passing over because of a hint it holds;
 it is always present on a supporting player (`[]` when nothing is hinted or
 nothing is cast). It reports the player's state, not controld's observation:

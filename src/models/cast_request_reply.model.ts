@@ -124,7 +124,7 @@ export interface CheckDeviceStatusReply extends Reply {
   // because of a held hint (see hintSkippedIndices). ALWAYS present from this
   // player, [] when nothing is hinted; controld copies it per item into
   // player_status.mediaHealth[i].skipped. Never includes `index`.
-  hintSkipped?: number[];
+  skippedIndices?: number[];
 }
 
 export interface DisplayPlaylistRequest {

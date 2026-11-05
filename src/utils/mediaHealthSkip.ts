@@ -65,7 +65,7 @@ interface HintSkippedOptions {
 
 /**
  * The indices of `items` the player is passing over because of a hint,
- * reported on `checkStatus.hintSkipped` (mediaHealth contract v1).
+ * reported on `checkStatus.skippedIndices` (mediaHealth contract v1).
  *
  * Controld copies this per item into `player_status.mediaHealth[i].skipped`,
  * so the app's "Skip" badge reflects what the player actually does rather than

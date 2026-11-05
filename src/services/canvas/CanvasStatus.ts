@@ -140,7 +140,7 @@ export class CanvasStatus {
         // What the player is skipping, not what controld observed: computed
         // from the hints this page holds against the reported items, so the
         // two can never disagree about which list the indices address.
-        hintSkipped: this.hintSkipped(activeCastInfo),
+        skippedIndices: this.skippedIndices(activeCastInfo),
       };
     } catch (error) {
       console.error('[CanvasService] Error getting status:', error);
@@ -148,7 +148,7 @@ export class CanvasStatus {
     }
   }
   /** The `items` indices the player passes over for a held hint (contract v1). */
-  private hintSkipped(cast: CastInfo | null): number[] {
+  private skippedIndices(cast: CastInfo | null): number[] {
     return hintSkippedIndices({
       items: cast?.playlist?.items ?? [],
       index: cast?.index,
