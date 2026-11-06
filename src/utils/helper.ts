@@ -195,10 +195,19 @@ async function probeCandidateContentType(candidateURL: URL): Promise<string> {
   // The second request could be failed, Chrome uses the cached response from the first request, which has no "Access-Control-Allow-Origin" response header.
   // Workaround: Use a dummy "?x-some-key=some-value" query string parameter will convince the browser that the request is different.
   // Ref: https://serverfault.com/questions/856904/chrome-s3-cloudfront-no-access-control-allow-origin-header-on-initial-xhr-req/856948#856948
-  const resolvedCandidateURL = candidateURL.toString();
-  const extendCandidateURL = candidateURL.search
-    ? `${resolvedCandidateURL}&v=${Date.now().toString()}&x-request=xhr`
-    : `${resolvedCandidateURL}?v=${Date.now().toString()}&x-request=xhr`;
+  //
+  // Built via `URLSearchParams` rather than string concatenation onto
+  // `candidateURL.toString()`: a fragment (an HTML artwork's seed/viewing
+  // state, see `ipfsGatewayCandidates`) always serializes LAST, so
+  // appending text after that string lands inside the fragment — which a
+  // browser strips before the request ever reaches the network — and the
+  // cache-busting params this workaround depends on would never actually
+  // vary the request (run-reviewer, PR #328 inner loop: this round's own
+  // fragment fix newly carries a fragment onto fallback candidates too).
+  const extendedCandidateURL = new URL(candidateURL.href);
+  extendedCandidateURL.searchParams.set('v', Date.now().toString());
+  extendedCandidateURL.searchParams.set('x-request', 'xhr');
+  const extendCandidateURL = extendedCandidateURL.toString();
 
   // Flips true the moment `fetch` resolves with ANY response — even a
   // non-ok one. `fetch` only REJECTS for a network-level failure (offline,
