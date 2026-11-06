@@ -24,7 +24,13 @@ import { AppContext } from '@/context/AppContext';
 import { RenderStatus } from '@/models';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ContentTypeDetectionError } from '@/utils/helper';
@@ -271,5 +277,41 @@ describe('ArtworkPlayer — network-classified detection failure render status',
       await vi.advanceTimersByTimeAsync(0);
     });
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+  });
+});
+
+describe('ArtworkPlayer — unresponsive-source detection failure declares failed (feral-file#3583)', () => {
+  it('shows the "cannot be displayed" message and renders no iframe for a timed-out, online-device probe', async () => {
+    // feral-file#3583: a dead IPFS gateway accepts the connection but never
+    // answers. The device is online (isNetworkFailure: false, the degraded/
+    // offline backdrop is the wrong signal here), but this one source is
+    // proven unreachable (timedOut: true) — pointing an iframe at it would
+    // just render Chromium's own in-frame net-error page with nothing ever
+    // telling the viewer playback failed.
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValue(
+      new ContentTypeDetectionError(
+        'Failed to determine content type: AbortError: signal is aborted without reason',
+        false,
+        true
+      )
+    );
+
+    const setPlaybackDegraded = vi.fn();
+    const { container } = render(playerNode(setPlaybackDegraded));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText(
+          'The artwork cannot be displayed correctly on this device.'
+        )
+      ).toBeTruthy();
+    });
+    expect(container.querySelector('iframe')).toBeNull();
+    // Not the device-wide offline backdrop: this device is online, only the
+    // one source is dead.
+    expect(setPlaybackDegraded).not.toHaveBeenCalled();
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
   });
 });

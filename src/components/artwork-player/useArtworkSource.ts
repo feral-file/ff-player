@@ -85,13 +85,24 @@ export function useArtworkSource(
           return;
         }
         console.error('[ArtworkPlayer] Failed to detect preview type:', error);
-        if (
-          error instanceof ContentTypeDetectionError &&
-          error.isNetworkFailure
-        ) {
-          noteRef.current(url, true);
-          recovery.markArtworkFailed();
-          return;
+        if (error instanceof ContentTypeDetectionError) {
+          if (error.isNetworkFailure) {
+            noteRef.current(url, true);
+            recovery.markArtworkFailed();
+            return;
+          }
+          // The device is online (otherwise isNetworkFailure would have
+          // caught it above), but this exact source never answered within
+          // budget — feral-file#3583. Pointing an iframe at it would just
+          // render Chromium's own in-frame net-error page indefinitely, with
+          // nothing telling the viewer playback failed. Declare it failed
+          // through the normal per-item path instead: shows the "cannot be
+          // displayed" message and engages the existing retry/skip budget,
+          // same as any other declared playback failure.
+          if (error.timedOut) {
+            recovery.fail();
+            return;
+          }
         }
         transition.resolveSource(url, {
           previewType: PreviewHTMLTag.iframe,

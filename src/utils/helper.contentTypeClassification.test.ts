@@ -10,6 +10,7 @@
 // relative URLs against jsdom's `http://localhost:3000` instead.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  CONTENT_TYPE_HEAD_TIMEOUT_MS,
   ContentTypeDetectionError,
   DAEMON_VERDICT_WAIT_MS,
   getContentTypeFromURL,
@@ -129,5 +130,68 @@ describe('getContentTypeFromURL — daemon-verdict corroboration', () => {
     const pending = classify();
     await vi.advanceTimersByTimeAsync(DAEMON_VERDICT_WAIT_MS);
     expectNetworkFailure(await pending, false);
+  });
+});
+
+describe('getContentTypeFromURL — unresponsive-source classification (feral-file#3583)', () => {
+  it('marks timedOut when the probe survives its own AbortError on an online device', async () => {
+    // A black-holed gateway (connection accepted, never answers) is the only
+    // shape that survives the full CONTENT_TYPE_HEAD_TIMEOUT_MS budget — see
+    // helper.test.ts's "aborts the HEAD probe" case for the same fetch mock.
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted', 'AbortError'));
+        });
+      });
+    });
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    noteDaemonConnectivity(true);
+
+    const pending = classify();
+    await vi.advanceTimersByTimeAsync(CONTENT_TYPE_HEAD_TIMEOUT_MS);
+
+    const rejection = await pending;
+    expectNetworkFailure(rejection, false);
+    expect((rejection as ContentTypeDetectionError).timedOut).toBe(true);
+  });
+
+  it('does NOT mark timedOut for a fast CORS-style rejection — the probe never actually waited out its budget', async () => {
+    // Same bare-rejection shape `armRejectedHead` uses elsewhere in this
+    // file: a reachable host's CORS block rejects `fetch` natively, almost
+    // instantly, well before this probe's own abort would ever fire.
+    armRejectedHead(true);
+    noteDaemonConnectivity(true);
+
+    const rejection = await classify();
+    expectNetworkFailure(rejection, false);
+    expect((rejection as ContentTypeDetectionError).timedOut).toBe(false);
+  });
+
+  it('can report both flags together when an aborted probe is also corroborated offline — the consumer picks isNetworkFailure first', async () => {
+    // The two flags are computed independently and are not mutually
+    // exclusive: an offline device whose probe also survives to its own
+    // abort reports both. useArtworkSource.ts checks isNetworkFailure first
+    // and returns before ever reading timedOut, so this combination is
+    // harmless — asserted directly in useArtworkSource's own tests.
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted', 'AbortError'));
+        });
+      });
+    });
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+
+    const pending = classify();
+    await vi.advanceTimersByTimeAsync(CONTENT_TYPE_HEAD_TIMEOUT_MS);
+
+    const rejection = await pending;
+    expectNetworkFailure(rejection, true);
+    expect((rejection as ContentTypeDetectionError).timedOut).toBe(true);
   });
 });
