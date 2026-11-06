@@ -67,9 +67,10 @@ function handleDetectionFailure(
   failureOwners: {
     noteRef: { current: (url: string, failed: boolean) => void };
     recovery: ArtworkRecovery;
+    transition: ArtworkTransition;
   }
 ): boolean {
-  const { noteRef, recovery } = failureOwners;
+  const { noteRef, recovery, transition } = failureOwners;
   if (!(error instanceof ContentTypeDetectionError)) {
     return false;
   }
@@ -90,7 +91,15 @@ function handleDetectionFailure(
     return true;
   }
   if (confirmedUnreachable.has(url)) {
-    recovery.fail();
+    // Unlike the isNetworkFailure branch above (pre-existing, unchanged),
+    // this declared failure must settle the incoming slot through the
+    // transition owner itself: `transition.fail()` commits the failed slot
+    // (releasing the settings latch so a later item can still commit) before
+    // calling `recovery.fail()`, instead of leaving the slot wedged at
+    // `loading: true` forever (feral-file#3583 review F1). Its source URLs
+    // stay empty — `resolveSource` was never reached on this path — so no
+    // fallback iframe mounts for the failed slot either.
+    transition.fail(transition.incomingSlot ?? undefined);
     return true;
   }
   return false;
@@ -149,6 +158,7 @@ export function useArtworkSource(
           handleDetectionFailure(error, url, confirmedUnreachableRef.current, {
             noteRef,
             recovery,
+            transition,
           })
         ) {
           return;

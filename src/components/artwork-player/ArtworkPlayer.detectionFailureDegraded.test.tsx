@@ -49,7 +49,8 @@ const EXTENSIONLESS = 'https://feralfile.com/test/generative-piece';
 
 function playerNode(
   setPlaybackDegraded: (degraded: boolean, url?: string) => void,
-  onRegisterArtworkReload?: (reload: (() => void) | null) => void
+  onRegisterArtworkReload?: (reload: (() => void) | null) => void,
+  onItemCommitted?: (identity: string) => void
 ): React.ReactElement {
   return (
     <AppContext.Provider
@@ -72,6 +73,7 @@ function playerNode(
         displayPreferences={defaultDP1DisplayPreference}
         itemIdentity={EXTENSIONLESS}
         onRegisterArtworkReload={onRegisterArtworkReload}
+        onItemCommitted={onItemCommitted}
       />
     </AppContext.Provider>
   );
@@ -337,6 +339,32 @@ describe('ArtworkPlayer — unresponsive-source detection failure declares faile
     // one source is dead.
     expect(setPlaybackDegraded).not.toHaveBeenCalled();
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+  });
+});
+
+describe('ArtworkPlayer — unresponsive-source detection failure settles the transition (run-reviewer F1)', () => {
+  it('commits the failed incoming slot through the transition owner instead of leaving it wedged', async () => {
+    // Before this fix, the confirmedUnreachable branch called only
+    // recovery.fail() and never touched `transition`: the incoming slot
+    // stayed at `loading: true` forever, `commitReadySlot` never saw it
+    // ready, and `onItemCommitted` never fired for the failed item — the
+    // settings latch stayed pinned to whatever was previously on screen
+    // (surfaced live as `DisplaySettingsService`'s "The showing changed or
+    // is still loading." on an advertised showingKey that could never
+    // settle). `transition.fail()` must be what declares it, so the failed
+    // slot still commits and later work can proceed.
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValue(timedOutAbortError());
+
+    const setPlaybackDegraded = vi.fn();
+    const onItemCommitted = vi.fn();
+    render(playerNode(setPlaybackDegraded, undefined, onItemCommitted));
+
+    await waitForCannotBeDisplayed();
+    await waitFor(() => {
+      expect(onItemCommitted).toHaveBeenCalledWith(EXTENSIONLESS);
+    });
   });
 });
 
