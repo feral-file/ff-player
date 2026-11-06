@@ -122,6 +122,16 @@ function timedOutAndNetworkFailureError(): ContentTypeDetectionError {
   );
 }
 
+/** A reached-but-unhelpful HTTP response (e.g. a 405) — the server answered this attempt. */
+function reachedServerUnhelpfulError(): ContentTypeDetectionError {
+  return new ContentTypeDetectionError(
+    'Failed to determine content type: Error: HEAD request failed with status 405 Method Not Allowed',
+    false,
+    false,
+    true
+  );
+}
+
 const CANNOT_BE_DISPLAYED_TEXT =
   'The artwork cannot be displayed correctly on this device.';
 
@@ -466,6 +476,38 @@ describe('ArtworkPlayer — unresponsive-source memory survives a later fast rej
     // A later re-failure of the same now-recovered URL is judged fresh, not
     // short-circuited by stale memory of the earlier timeout.
     contentTypeMock.mockRejectedValueOnce(fastRejectionError());
+    await act(async () => {
+      reload?.();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('iframe')).toBeTruthy();
+    });
+  });
+});
+
+describe('ArtworkPlayer — unresponsive-source memory clears on a reached response (feral-file#3583 review F2)', () => {
+  it('forgets a timeout once a later retry reaches the server, even with an unhelpful response', async () => {
+    // The live finding this guards: a gateway that timed out once can start
+    // answering on a later attempt, just not usefully (e.g. a 405). That
+    // attempt reached the server — the reached-but-unhelpful-HTTP
+    // classification must stay unchanged (iframe fallback), not get
+    // overridden by the earlier timeout's stale memory.
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValueOnce(timedOutAbortError());
+
+    const setPlaybackDegraded = vi.fn();
+    let reload: (() => void) | null = null;
+    const { container } = render(
+      playerNode(setPlaybackDegraded, cb => {
+        reload = cb;
+      })
+    );
+    await waitForCannotBeDisplayed();
+
+    contentTypeMock.mockRejectedValueOnce(reachedServerUnhelpfulError());
     await act(async () => {
       reload?.();
       await Promise.resolve();

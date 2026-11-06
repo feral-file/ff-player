@@ -81,7 +81,16 @@ describe('getContentTypeFromURL — network vs. reachable-server classification'
     );
     vi.spyOn(console, 'log').mockImplementation(vi.fn());
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
-    expectNetworkFailure(await classify(), false);
+    const rejection = await classify();
+    expectNetworkFailure(rejection, false);
+    expect((rejection as ContentTypeDetectionError).reachedServer).toBe(true);
+  });
+
+  it('marks reachedServer false for a fetch rejection that never got a response at all', async () => {
+    armRejectedHead(true);
+    noteDaemonConnectivity(true);
+    const rejection = await classify();
+    expect((rejection as ContentTypeDetectionError).reachedServer).toBe(false);
   });
 });
 
@@ -156,6 +165,7 @@ describe('getContentTypeFromURL — unresponsive-source classification (feral-fi
     const rejection = await pending;
     expectNetworkFailure(rejection, false);
     expect((rejection as ContentTypeDetectionError).timedOut).toBe(true);
+    expect((rejection as ContentTypeDetectionError).reachedServer).toBe(false);
   });
 
   it('does NOT mark timedOut for a fast CORS-style rejection — the probe never actually waited out its budget', async () => {

@@ -79,12 +79,22 @@ function contentTypeFromDataURL(url: URL): string {
  * iframe path reads it to avoid pointing an iframe at a source proven dead,
  * which would otherwise just render Chromium's own in-frame net-error page
  * indefinitely with nothing telling the viewer playback failed.
+ *
+ * Carries `reachedServer` separately from `timedOut`: true whenever `fetch`
+ * resolved with ANY response, even an unhelpful one (4xx/5xx, or 2xx with no
+ * `Content-Type`) — mutually exclusive with `timedOut` and `isNetworkFailure`,
+ * both of which require no response at all. A caller that remembers a prior
+ * `timedOut` verdict per-URL (feral-file#3583 review F2: a gateway that timed
+ * out once can start answering, e.g. With a `405`, on a later attempt) reads
+ * this to tell "the source is still silent" apart from "the source answered,
+ * just not usefully" and clear that memory in the latter case.
  */
 export class ContentTypeDetectionError extends Error {
   constructor(
     message: string,
     public readonly isNetworkFailure: boolean,
-    public readonly timedOut = false
+    public readonly timedOut = false,
+    public readonly reachedServer = false
   ) {
     super(message);
     this.name = 'ContentTypeDetectionError';
@@ -219,7 +229,8 @@ export async function getContentTypeFromURL(
     throw new ContentTypeDetectionError(
       `Failed to determine content type: ${String(error)}`,
       !reachedServer && offlineCorroborated,
-      abortedByOwnTimeout
+      abortedByOwnTimeout,
+      reachedServer
     );
   } finally {
     clearTimeout(timeoutId);

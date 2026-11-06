@@ -84,6 +84,14 @@ function handleDetectionFailure(
   // would wrongly fall through to the iframe render again.
   if (error.timedOut) {
     confirmedUnreachable.add(url);
+  } else if (error.reachedServer) {
+    // The source answered this attempt — even unhelpfully (feral-file#3583
+    // review F2: a gateway that timed out once can start answering, e.g.
+    // with a 405, on a later attempt). That disproves any earlier `timedOut`
+    // verdict remembered for this URL, so the reached-but-unhelpful-HTTP
+    // classification below stays genuinely unchanged instead of being
+    // overridden by stale memory.
+    confirmedUnreachable.delete(url);
   }
   if (error.isNetworkFailure) {
     noteRef.current(url, true);
