@@ -7,6 +7,7 @@ import {
 } from '@/models';
 import { Scaling } from '@/models/dp1.model';
 import { waitForDaemonConnectivity } from '@/services/DaemonConnectivity';
+import { isCid } from '@/utils/cid';
 
 /**
  * Upper bound on waiting for the daemon's FIRST connectivity verdict before
@@ -47,20 +48,64 @@ const IPFS_FALLBACK_GATEWAY_HOSTS = [
 ];
 
 /**
+ * Query parameters that may legitimately affect WHAT a generative artwork
+ * renders (iteration/seed inputs), as opposed to host-scoped credentials
+ * (a gateway auth token, a signed-URL parameter) that the original host
+ * issued and a fallback host never did. Matches ff-app's
+ * `_artworkQueryKeys` exactly (feral-file/feral-file#3583) — a gateway token
+ * copied onto `ipfs.feralfile.com`/`ipfs.filebase.io` would both leak the
+ * credential to an unrelated operator and fail there anyway, since neither
+ * fallback host recognizes it.
+ */
+const IPFS_FALLBACK_QUERY_KEYS = new Set([
+  'fxhash',
+  'fxiteration',
+  'fxminter',
+  'seed',
+]);
+
+/**
+ * Keep only the artwork-identity query parameters from a source's query
+ * string, dropping everything else (gateway tokens, signed-URL parameters)
+ * before it is replayed against a fallback host. Returns `''` (no `?`) when
+ * nothing survives the filter.
+ */
+function filterFallbackQuery(search: string): string {
+  if (!search) {
+    return '';
+  }
+  const kept = search
+    .slice(1)
+    .split('&')
+    .filter(pair => {
+      const key = pair.split('=')[0] ?? '';
+      try {
+        return IPFS_FALLBACK_QUERY_KEYS.has(decodeURIComponent(key));
+      } catch {
+        // A malformed escape in the key is never one of the allowed names.
+        return false;
+      }
+    });
+  return kept.length > 0 ? `?${kept.join('&')}` : '';
+}
+
+/**
  * Build the ordered list of URLs to probe for a media source: the original
  * URL first (so a healthy host never pays for a fallback), then — only when
  * `isContentAddressed` recognizes an `/ipfs/<cid>` path — the same fallback
- * gateways every Feral File client tries, carrying over everything from
- * `/ipfs/` onward (CID, any sub-path, and the query string) onto each
- * fallback host. A source with no such path has no substitute host, so it
- * keeps the single-candidate behavior this function always had.
+ * gateways every Feral File client tries, carrying over the path (CID, any
+ * sub-path), the artwork-identity query parameters (`filterFallbackQuery`),
+ * and the fragment onto each fallback host. Host-scoped query parameters
+ * (gateway tokens, signed-URL parameters) are dropped rather than leaked to
+ * an unrelated operator. A source with no such path has no substitute host,
+ * so it keeps the single-candidate behavior this function always had.
  */
 function ipfsGatewayCandidates(previewURL: string, url: URL): string[] {
   const ipfsPathMatch = /\/ipfs\/.+/.exec(url.pathname);
   if (!ipfsPathMatch || !isContentAddressed(previewURL)) {
     return [previewURL];
   }
-  const suffix = `${ipfsPathMatch[0]}${url.search}`;
+  const suffix = `${ipfsPathMatch[0]}${filterFallbackQuery(url.search)}${url.hash}`;
   const candidates = [
     previewURL,
     ...IPFS_FALLBACK_GATEWAY_HOSTS.map(host => `${host}${suffix}`),
@@ -624,14 +669,11 @@ export function isContentAddressed(u: string): boolean {
   try {
     const url = new URL(u);
 
-    // Match /ipfs/<CID> (CID is case-insensitive, usually base58 or base32)
-    // CIDv0: Qm... (base58), CIDv1: base32 lowercase, 46+ chars
-    // Accepts /ipfs/<cid>(/...)
-    const ipfsMatch = /\/ipfs\/([a-zA-Z0-9]+)/.exec(url.pathname);
-    if (ipfsMatch && ipfsMatch[1].length >= 46) {
-      return true;
-    }
-    return false;
+    // Match /ipfs/<CID> (CID is case-insensitive, usually base58 or base32),
+    // followed by nothing or a subpath. Validated structurally (`isCid`)
+    // rather than by length, since valid CIDs vary in length by digest size.
+    const ipfsMatch = /\/ipfs\/([^/]+)(\/|$)/.exec(url.pathname);
+    return !!ipfsMatch && isCid(ipfsMatch[1]);
   } catch {
     return false;
   }

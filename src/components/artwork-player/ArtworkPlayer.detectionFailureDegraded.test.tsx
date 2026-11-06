@@ -45,7 +45,8 @@ const EXTENSIONLESS = 'https://feralfile.com/test/generative-piece';
 
 function playerNode(
   setPlaybackDegraded: (degraded: boolean, url?: string) => void,
-  onRegisterArtworkReload?: (reload: (() => void) | null) => void
+  onRegisterArtworkReload?: (reload: (() => void) | null) => void,
+  onArtworkExhausted?: (itemIdentity: string) => void
 ): React.ReactElement {
   return (
     <AppContext.Provider
@@ -68,6 +69,7 @@ function playerNode(
         displayPreferences={defaultDP1DisplayPreference}
         itemIdentity={EXTENSIONLESS}
         onRegisterArtworkReload={onRegisterArtworkReload}
+        onArtworkExhausted={onArtworkExhausted}
       />
     </AppContext.Provider>
   );
@@ -159,6 +161,102 @@ describe('ArtworkPlayer — exhausted IPFS gateway candidates raises degraded', 
       expect(setPlaybackDegraded).toHaveBeenCalledWith(true, EXTENSIONLESS);
     });
     expect(container.querySelector('iframe')).toBeNull();
+  });
+});
+
+describe('ArtworkPlayer — exhausted gateway candidates feed the bounded retry/skip budget', () => {
+  // feralfile-bot review of PR #328, F2: markArtworkFailed() alone only
+  // updates status — it never schedules ArtworkRecovery's finite
+  // retry/skip budget, so an online item whose every gateway candidate
+  // 404'd would strand the playlist forever (no media completion, no slot
+  // timer, and no onArtworkExhausted to advance past it). This must go
+  // through recovery.fail() instead, same as any other real failure.
+  it('schedules an automatic retry after the fixed delay, unlike the offline (isNetworkFailure) path', async () => {
+    vi.useFakeTimers();
+    stubWebGL();
+    contentTypeMock.mockRejectedValue(
+      new ContentTypeDetectionError(
+        'Failed to determine content type: Error: HEAD request failed with status 404 Not Found',
+        false,
+        true
+      )
+    );
+
+    render(playerNode(vi.fn()));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+    expect(contentTypeMock).toHaveBeenCalledTimes(1);
+
+    // ArtworkRecovery.ARTWORK_FAILURE_RETRY_DELAY_MS (3000ms) — fail()
+    // arms this via scheduleArtworkFailureRetryOrSkip(); markArtworkFailed()
+    // alone (the offline path, asserted not to retry below) never does.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(contentTypeMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('exhausts the budget and reports the item instead of retrying forever', async () => {
+    vi.useFakeTimers();
+    stubWebGL();
+    contentTypeMock.mockRejectedValue(
+      new ContentTypeDetectionError(
+        'Failed to determine content type: Error: HEAD request failed with status 404 Not Found',
+        false,
+        true
+      )
+    );
+
+    const onArtworkExhausted = vi.fn();
+    render(playerNode(vi.fn(), undefined, onArtworkExhausted));
+
+    // ARTWORK_FAILURE_RETRY_LIMIT (3): the 1st failure (t=0) and the 2nd
+    // (after one 3000ms retry) each still arm another retry; the 3rd
+    // failure (after a second 3000ms retry) hits the limit and calls
+    // onArtworkExhausted immediately, with no further delay.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(onArtworkExhausted).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(onArtworkExhausted).toHaveBeenCalledWith(EXTENSIONLESS);
+  });
+
+  it('does NOT schedule an automatic retry for the offline (isNetworkFailure) path, preserving existing offline recovery', async () => {
+    vi.useFakeTimers();
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    contentTypeMock.mockRejectedValue(
+      new ContentTypeDetectionError(
+        'Failed to determine content type: TypeError: Failed to fetch',
+        true
+      )
+    );
+
+    render(playerNode(vi.fn()));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+    expect(contentTypeMock).toHaveBeenCalledTimes(1);
+
+    // Past the 3000ms delay that would have fired an automatic retry on
+    // the exhausted-candidates path above — offline recovery instead
+    // waits for the reconnect handover to remount, not a timer.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(contentTypeMock).toHaveBeenCalledTimes(1);
   });
 });
 

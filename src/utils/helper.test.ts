@@ -232,6 +232,169 @@ describe('getContentTypeFromURL — IPFS gateway fallback candidate order', () =
   });
 });
 
+// feralfile-bot review of PR #328, F1: a gateway-scoped credential (e.g.
+// Pinata's `pinataGatewayToken`) in the original host's query string must
+// never be copied onto a fallback gateway that never issued it — doing so
+// both leaks the credential to an unrelated operator and fails there
+// anyway. Matches ff-app's `_artworkQueryKeys` allow-list exactly.
+describe('getContentTypeFromURL — IPFS gateway fallback query filtering', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('drops a gateway credential from the fallback request, keeping only artwork-identity parameters', async () => {
+    const urlWithToken = `${DEAD_GATEWAY_URL}?pinataGatewayToken=secret&seed=42`;
+    const feralfileFiltered = `${FERALFILE_URL}?seed=42`;
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((requestURL: string | URL | Request) => {
+        if (requestedURLString(requestURL).startsWith(feralfileFiltered)) {
+          return Promise.resolve(okContentTypeResponse('image/jpeg'));
+        }
+        return Promise.reject(new Error('blocked'));
+      });
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    await expect(getContentTypeFromURL(urlWithToken)).resolves.toEqual({
+      contentType: 'image/jpeg',
+      resolvedURL: feralfileFiltered,
+    });
+
+    const requestedURLs = fetchSpy.mock.calls.map(call =>
+      requestedURLString(call[0])
+    );
+    // The original host legitimately keeps its own credential; only the
+    // fallback candidate (not the one that issued it) must drop it.
+    expect(requestedURLs[0]).toContain('pinataGatewayToken');
+    expect(requestedURLs[1]).not.toContain('pinataGatewayToken');
+    expect(requestedURLs[1].startsWith(`${feralfileFiltered}&`)).toBe(true);
+  });
+
+  it('drops the whole query from a fallback candidate when nothing in it is an artwork-identity key', async () => {
+    const urlWithOnlyToken = `${DEAD_GATEWAY_URL}?pinataGatewayToken=secret`;
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((requestURL: string | URL | Request) => {
+        if (requestedURLString(requestURL).startsWith(FERALFILE_URL)) {
+          return Promise.resolve(okContentTypeResponse('image/jpeg'));
+        }
+        return Promise.reject(new Error('blocked'));
+      });
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    await expect(getContentTypeFromURL(urlWithOnlyToken)).resolves.toEqual({
+      contentType: 'image/jpeg',
+      resolvedURL: FERALFILE_URL,
+    });
+
+    const requestedURLs = fetchSpy.mock.calls.map(call =>
+      requestedURLString(call[0])
+    );
+    expect(requestedURLs[1]).toMatch(new RegExp(`^${FERALFILE_URL}\\?v=`));
+  });
+});
+
+// feralfile-bot review of PR #328, F4: an HTML artwork that reads its seed
+// or viewing state from `location.hash` must get the same fragment on a
+// fallback gateway as on the original host — dropping it silently changes
+// the artwork's input.
+describe('getContentTypeFromURL — IPFS gateway fallback fragment preservation', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('preserves the URL fragment in a fallback candidate', async () => {
+    const urlWithFragment = `${DEAD_GATEWAY_URL}/index.html#seed=42`;
+    const feralfileWithFragment = `${FERALFILE_URL}/index.html#seed=42`;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (requestURL: string | URL | Request) => {
+        if (requestedURLString(requestURL).startsWith(`${FERALFILE_URL}/index.html`)) {
+          return Promise.resolve(okContentTypeResponse('text/html'));
+        }
+        return Promise.reject(new Error('blocked'));
+      }
+    );
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    await expect(getContentTypeFromURL(urlWithFragment)).resolves.toEqual({
+      contentType: 'text/html',
+      resolvedURL: feralfileWithFragment,
+    });
+  });
+
+  it('preserves both the filtered query and the fragment together', async () => {
+    const urlWithBoth = `${DEAD_GATEWAY_URL}/index.html?pinataGatewayToken=secret&seed=42#seed=42`;
+    const feralfileFiltered = `${FERALFILE_URL}/index.html?seed=42#seed=42`;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (requestURL: string | URL | Request) => {
+        if (requestedURLString(requestURL).startsWith(`${FERALFILE_URL}/index.html?seed=42`)) {
+          return Promise.resolve(okContentTypeResponse('text/html'));
+        }
+        return Promise.reject(new Error('blocked'));
+      }
+    );
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    await expect(getContentTypeFromURL(urlWithBoth)).resolves.toEqual({
+      contentType: 'text/html',
+      resolvedURL: feralfileFiltered,
+    });
+  });
+});
+
+// feralfile-bot review of PR #328, F3: `isContentAddressed`'s old
+// `length >= 46` heuristic rejected structurally valid shorter CIDs (e.g. a
+// CIDv1 with a 20-byte SHA-1 digest, instead of the common 32-byte SHA-256
+// one), so those sources never got fallback candidates at all.
+describe('getContentTypeFromURL — shorter structurally-valid CIDs', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // A real CIDv1, base32, dag-pb codec, sha1 multihash (20-byte digest) —
+  // 40 characters, under the old 46-character floor.
+  const SHORT_CID = 'bafkrcfhxbysec5n6j6lken5hjblx6khttxj4psy';
+  const SHORT_CID_DEAD_URL = `https://dead.example/ipfs/${SHORT_CID}`;
+  const SHORT_CID_FERALFILE_URL = `https://ipfs.feralfile.com/ipfs/${SHORT_CID}`;
+  const SHORT_CID_FILEBASE_URL = `https://ipfs.filebase.io/ipfs/${SHORT_CID}`;
+
+  it('walks the fallback gateways for a short, structurally valid CIDv1', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((requestURL: string | URL | Request) => {
+        if (requestedURLString(requestURL).startsWith(SHORT_CID_FILEBASE_URL)) {
+          return Promise.resolve(okContentTypeResponse('image/jpeg'));
+        }
+        return Promise.reject(new Error('blocked'));
+      });
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    await expect(getContentTypeFromURL(SHORT_CID_DEAD_URL)).resolves.toEqual({
+      contentType: 'image/jpeg',
+      resolvedURL: SHORT_CID_FILEBASE_URL,
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    const requestedURLs = fetchSpy.mock.calls.map(call =>
+      requestedURLString(call[0])
+    );
+    expect(requestedURLs[1]).toMatch(new RegExp(`^${SHORT_CID_FERALFILE_URL}`));
+  });
+
+  it('does not treat an arbitrary short alphanumeric path segment as a CID', async () => {
+    // Not a valid multibase/multihash encoding at all — must stay a
+    // single-candidate source, same as any other non-content-addressed URL.
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('blocked'));
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    await expect(
+      getContentTypeFromURL('https://example.com/ipfs/not-a-real-cid')
+    ).rejects.toThrow('Failed to determine content type');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('getContentTypeFromURL — IPFS gateway fallback timeout budget', () => {
   afterEach(() => {
     vi.restoreAllMocks();

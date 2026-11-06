@@ -101,9 +101,22 @@ export function useArtworkSource(
           // was tried and failed too (see helper.ts), not just this one
           // host — an iframe pointed at any of those same dead URLs below
           // would only reproduce feral-file/feral-file#3583's broken image,
-          // so this is a real failure for the retry/skip budget to act on.
+          // so this is a real failure, never the iframe-fallback branch.
           noteRef.current(url, true);
-          recovery.markArtworkFailed();
+          if (error.isNetworkFailure) {
+            // Offline: unchanged from before this fix. The player's
+            // reconnect recovery brings a stranded item back once
+            // connectivity returns; the finite failure-retry/skip budget
+            // is for a failure that retrying THIS network will not fix.
+            recovery.markArtworkFailed();
+          } else {
+            // Online, every gateway candidate 404'd/errored and no
+            // extension inference could prove one live: retrying these
+            // same URLs will never succeed, so this must go through the
+            // bounded retry/skip budget — `markArtworkFailed()` alone
+            // only updates status and never advances a stuck playlist.
+            recovery.fail();
+          }
           return;
         }
         transition.resolveSource(url, {
