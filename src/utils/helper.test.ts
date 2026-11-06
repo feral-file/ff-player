@@ -393,6 +393,34 @@ describe('getContentTypeFromURL — shorter structurally-valid CIDs', () => {
     ).rejects.toThrow('Failed to determine content type');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('still walks the fallback gateways when a file extension is glued directly onto the CID (no subpath slash)', async () => {
+    // feralfile-bot review of PR #328, F1 (run-reviewer): isContentAddressed's
+    // path capture must stop at the CID's own end, not swallow a
+    // directly-appended extension into the string handed to isCid — that
+    // would un-detect a source this fallback mechanism exists to cover.
+    const deadURLWithGluedExt = `${DEAD_GATEWAY_URL}.png`;
+    const feralfileURLWithGluedExt = `${FERALFILE_URL}.png`;
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((requestURL: string | URL | Request) => {
+        if (
+          requestedURLString(requestURL).startsWith(feralfileURLWithGluedExt)
+        ) {
+          return Promise.resolve(okContentTypeResponse('image/png'));
+        }
+        return Promise.reject(new Error('blocked'));
+      });
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    await expect(getContentTypeFromURL(deadURLWithGluedExt)).resolves.toEqual(
+      {
+        contentType: 'image/png',
+        resolvedURL: feralfileURLWithGluedExt,
+      }
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('getContentTypeFromURL — IPFS gateway fallback timeout budget', () => {

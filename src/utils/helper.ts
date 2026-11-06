@@ -669,10 +669,13 @@ export function isContentAddressed(u: string): boolean {
   try {
     const url = new URL(u);
 
-    // Match /ipfs/<CID> (CID is case-insensitive, usually base58 or base32),
-    // followed by nothing or a subpath. Validated structurally (`isCid`)
-    // rather than by length, since valid CIDs vary in length by digest size.
-    const ipfsMatch = /\/ipfs\/([^/]+)(\/|$)/.exec(url.pathname);
+    // Match /ipfs/<CID>: every multibase alphabet `isCid` accepts (CIDv0's
+    // base58, CIDv1's base16/base32/base36) is alphanumeric, so this stops
+    // at the CID's own end exactly where the old length check did — a `/`
+    // subpath, a `.` extension glued directly on, a `?query`, or a
+    // `#fragment` are all left out of the capture rather than failing
+    // `isCid` outright (feralfile-bot review, PR #328 F1: run-reviewer).
+    const ipfsMatch = /\/ipfs\/([a-zA-Z0-9]+)/.exec(url.pathname);
     return !!ipfsMatch && isCid(ipfsMatch[1]);
   } catch {
     return false;
