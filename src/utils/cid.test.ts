@@ -130,6 +130,46 @@ describe('isCid — CIDv1 multibase prefixes', () => {
   });
 });
 
+// feralfile-bot review of PR #328, F6: `isCid` only recognized the
+// lowercase multibase prefixes; the uppercase variants (base32upper `B`,
+// base16upper `F`, base36upper `K`) decode to the identical bytes but were
+// rejected outright, which silently dropped the CID out of
+// `isContentAddressed`'s gateway-fallback walk for any source using one.
+describe('isCid — uppercase multibase prefixes', () => {
+  it('recognizes a base32upper (B-prefixed) CIDv1, decoding to the same bytes as its lowercase form', () => {
+    const bytes = cidV1Bytes(RAW_CODEC, SHA2_256, DIGEST_32);
+    const upper = `B${encodeBase32(bytes).toUpperCase()}`;
+    expect(isCid(upper)).toBe(true);
+  });
+
+  it('recognizes a base16upper (F-prefixed) CIDv1, decoding to the same bytes as its lowercase form', () => {
+    const bytes = cidV1Bytes(RAW_CODEC, SHA2_256, DIGEST_32);
+    const upper = `F${encodeBase16(bytes).toUpperCase()}`;
+    expect(isCid(upper)).toBe(true);
+  });
+
+  it('recognizes a base36upper (K-prefixed) CIDv1, decoding to the same bytes as its lowercase form', () => {
+    const bytes = cidV1Bytes(RAW_CODEC, SHA2_256, DIGEST_32);
+    const upper = `K${encodeBase(bytes, BASE36_ALPHABET).toUpperCase()}`;
+    expect(isCid(upper)).toBe(true);
+  });
+
+  it('still rejects base58btc (z-prefixed) with mixed case, since that alphabet has no uppercase variant', () => {
+    const bytes = cidV1Bytes(RAW_CODEC, SHA2_256, DIGEST_32);
+    const lower = encodeBase(bytes, BASE58_ALPHABET);
+    // Flipping the case of a base58btc body does not produce the same
+    // bytes back — unlike base16/32/36, it has no case-insensitive
+    // normalization, so a genuinely different-case string must not be
+    // treated as equivalent.
+    const flipped = lower
+      .split('')
+      .map(ch => (ch === ch.toUpperCase() ? ch.toLowerCase() : ch.toUpperCase()))
+      .join('');
+    expect(flipped).not.toBe(lower);
+    expect(isCid(`z${flipped}`)).toBe(false);
+  });
+});
+
 describe('isCid — malformed input rejection', () => {
   it('rejects a digest shorter than its declared length', () => {
     const bytes = cidV1Bytes(RAW_CODEC, SHA2_256, DIGEST_32).slice(0, -1);

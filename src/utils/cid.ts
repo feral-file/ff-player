@@ -102,6 +102,12 @@ function isCidMultihash(bytes: number[], offset: number): boolean {
  * 32-byte SHA-256 one). CIDv0 is a bare base58 multihash; CIDv1 is
  * `version=1`, codec varint, multihash, where the multihash is code varint,
  * length varint, then a digest of exactly that length.
+ *
+ * Accepts the uppercase multibase prefixes (`B`/`F`/`K`) alongside their
+ * lowercase counterparts (`b`/`f`/`k`) — a valid encoding either way,
+ * normalized by lowercasing the body before reusing the same decoder.
+ * `z` (base58btc) has no uppercase variant; its alphabet is case-sensitive,
+ * so it stays untouched.
  */
 export function isCid(value: string): boolean {
   if (value.length === 46 && value.startsWith('Qm')) {
@@ -117,13 +123,28 @@ export function isCid(value: string): boolean {
     case 'b':
       bytes = decodeCidBase32(body);
       break;
+    case 'B':
+      // base32upper: same alphabet as 'b', case-insensitive once normalized
+      // (feralfile-bot review of PR #328, F6).
+      bytes = decodeCidBase32(body.toLowerCase());
+      break;
     case 'f':
       bytes = decodeCidBase16(body);
+      break;
+    case 'F':
+      // base16upper: same hex alphabet as 'f', case-insensitive once normalized.
+      bytes = decodeCidBase16(body.toLowerCase());
       break;
     case 'k':
       bytes = decodeCidBase(body, CID_BASE36_ALPHABET);
       break;
+    case 'K':
+      // base36upper: same alphabet as 'k', case-insensitive once normalized.
+      bytes = decodeCidBase(body.toLowerCase(), CID_BASE36_ALPHABET);
+      break;
     case 'z':
+      // base58btc has no uppercase multibase variant — case is significant
+      // to the alphabet itself, so it stays untouched.
       bytes = decodeCidBase(body, CID_BASE58_ALPHABET);
       break;
     default:

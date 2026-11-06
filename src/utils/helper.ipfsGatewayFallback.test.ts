@@ -13,6 +13,17 @@ function requestedURLString(input: string | URL | Request): string {
   return input instanceof Request ? input.url : input.toString();
 }
 
+/** `fetch`'s HTTP method across every shape a mock may receive — `Request.method`, or `init.method`, defaulting to GET. */
+function requestedMethod(
+  input: string | URL | Request,
+  init?: RequestInit
+): string {
+  if (input instanceof Request) {
+    return input.method;
+  }
+  return init?.method ?? 'GET';
+}
+
 // feral-file/feral-file#3583: Raster hands back a dead Infura gateway
 // (`0prod.infura-ipfs.io`) for a CID that Feral File's own gateway does not
 // pin (404) but Filebase mirrors (200) — matching ff-app's
@@ -419,5 +430,89 @@ describe('getContentTypeFromURL — exhaustedGatewayCandidates classification', 
 
     expect(rejection).toBeInstanceOf(ContentTypeDetectionError);
     expect((rejection as ContentTypeDetectionError).exhaustedGatewayCandidates).toBe(true);
+  });
+});
+
+// feralfile-bot review of PR #328, F5: a gateway origin that rejects HEAD
+// outright (405 Method Not Allowed) while serving the identical path via
+// GET must not be treated as proof the resource is gone — that reproduces
+// the original dead-gateway bug under a different cause.
+describe('getContentTypeFromURL — HEAD-unsupported gateway falls back to a bounded GET', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('resolves from the original host via GET when it answers HEAD with 405, without probing any fallback gateway', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((requestURL: string | URL | Request, init?: RequestInit) => {
+        const method = requestedMethod(requestURL, init);
+        if (method === 'HEAD') {
+          return Promise.resolve(new Response(null, { status: 405, statusText: 'Method Not Allowed' }));
+        }
+        return Promise.resolve(okContentTypeResponse('image/png'));
+      });
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    await expect(getContentTypeFromURL(DEAD_GATEWAY_URL)).resolves.toEqual({
+      contentType: 'image/png',
+      resolvedURL: DEAD_GATEWAY_URL,
+    });
+
+    // Exactly one HEAD (405) and one GET fallback for the original host —
+    // the GET succeeding means no fallback gateway is ever probed.
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const methods = fetchSpy.mock.calls.map(call => requestedMethod(call[0], call[1]));
+    expect(methods).toEqual(['HEAD', 'GET']);
+  });
+
+  it('falls through to the next gateway candidate when both the HEAD and its GET fallback fail', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((requestURL: string | URL | Request, init?: RequestInit) => {
+        const requested = requestedURLString(requestURL);
+        const method = requestedMethod(requestURL, init);
+        if (requested.startsWith(FILEBASE_URL)) {
+          return Promise.resolve(okContentTypeResponse('image/png'));
+        }
+        if (method === 'HEAD') {
+          return Promise.resolve(new Response(null, { status: 405, statusText: 'Method Not Allowed' }));
+        }
+        // GET fallback for the dead original and the unpinned feralfile
+        // candidate both come back 404 — a real absence, not a method issue.
+        return Promise.resolve(new Response(null, { status: 404, statusText: 'Not Found' }));
+      });
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    await expect(getContentTypeFromURL(DEAD_GATEWAY_URL)).resolves.toEqual({
+      contentType: 'image/png',
+      resolvedURL: FILEBASE_URL,
+    });
+
+    // HEAD+GET for the original, HEAD+GET for feralfile, HEAD only for
+    // filebase (it answers directly) = 5 calls.
+    expect(fetchSpy).toHaveBeenCalledTimes(5);
+  });
+
+  it('still reports exhaustion when every candidate\'s HEAD is 405 and every GET fallback also fails', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((requestURL: string | URL | Request, init?: RequestInit) => {
+        const method = requestedMethod(requestURL, init);
+        if (method === 'HEAD') {
+          return Promise.resolve(new Response(null, { status: 405, statusText: 'Method Not Allowed' }));
+        }
+        return Promise.resolve(new Response(null, { status: 404, statusText: 'Not Found' }));
+      });
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    const rejection: unknown = await getContentTypeFromURL(DEAD_GATEWAY_URL).catch(
+      (error: unknown) => error
+    );
+
+    expect(rejection).toBeInstanceOf(ContentTypeDetectionError);
+    expect((rejection as ContentTypeDetectionError).exhaustedGatewayCandidates).toBe(true);
+    // 3 candidates, HEAD(405) + GET(404) each = 6 calls, none ever renderable.
+    expect(fetchSpy).toHaveBeenCalledTimes(6);
   });
 });

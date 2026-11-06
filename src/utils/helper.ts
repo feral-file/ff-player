@@ -190,6 +190,45 @@ class CandidateProbeError extends Error {
   }
 }
 
+/**
+ * HEAD statuses where the response proves the METHOD is rejected or
+ * unimplemented, not that the resource is absent — distinct from 404/410
+ * (resource confirmed gone) and from a 2xx/4xx/5xx that HEAD answered
+ * normally. Some IPFS-gateway origins fall in this set while serving the
+ * identical path via GET (feralfile-bot review of PR #328, F5), so a
+ * status here is not by itself proof of exhaustion.
+ */
+const HEAD_UNSUPPORTED_STATUSES = new Set([405, 501]);
+
+/**
+ * Bounded GET used only to confirm a candidate after `HEAD` answered with a
+ * `HEAD_UNSUPPORTED_STATUSES` status — never after a HEAD that reached the
+ * server and answered the content-type question some other way. Range-
+ * limited to the first byte so a server that honors `Range` never pays for
+ * downloading full media just to confirm liveness; a server that ignores
+ * `Range` and returns the whole body still resolves correctly, since the
+ * body is released unread by the caller either way.
+ */
+async function probeCandidateViaGet(candidateURL: URL): Promise<Response> {
+  const extendedCandidateURL = new URL(candidateURL.href);
+  extendedCandidateURL.searchParams.set('v', Date.now().toString());
+  extendedCandidateURL.searchParams.set('x-request', 'xhr-get');
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(
+    () => { abortController.abort(); },
+    CONTENT_TYPE_HEAD_TIMEOUT_MS
+  );
+  try {
+    return await fetch(extendedCandidateURL.toString(), {
+      method: 'GET',
+      headers: { Range: 'bytes=0-0' },
+      signal: abortController.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 /** One candidate URL's `HEAD` probe: its reported MIME type, or a `CandidateProbeError` on any failure. */
 async function probeCandidateContentType(candidateURL: URL): Promise<string> {
   // The second request could be failed, Chrome uses the cached response from the first request, which has no "Access-Control-Allow-Origin" response header.
@@ -228,6 +267,29 @@ async function probeCandidateContentType(candidateURL: URL): Promise<string> {
     });
     reachedServer = true;
 
+    // HEAD itself was rejected or unimplemented, not the resource — confirm
+    // with a bounded GET before treating this candidate as failed.
+    if (HEAD_UNSUPPORTED_STATUSES.has(response.status)) {
+      const getResponse = await probeCandidateViaGet(candidateURL);
+      try {
+        if (!getResponse.ok) {
+          throw new Error(
+            `GET fallback failed with status ${String(
+              getResponse.status
+            )} ${getResponse.statusText}`
+          );
+        }
+        const getContentType = getResponse.headers.get('Content-Type');
+        if (getContentType) {
+          return inferContentTypeFromURL(candidateURL, getContentType) ?? getContentType;
+        }
+        okButUntyped = true;
+        throw new Error('No content type found in headers (GET fallback)');
+      } finally {
+        void getResponse.body?.cancel().catch(() => undefined);
+      }
+    }
+
     // Treat non-2xx as failure, even if Content-Type is present (e.g., 504 text/plain pages)
     if (!response.ok) {
       throw new Error(
@@ -258,10 +320,13 @@ async function probeCandidateContentType(candidateURL: URL): Promise<string> {
  * sources use a cache-busting `HEAD` request against each candidate from
  * `ipfsGatewayCandidates` in turn (the original host first), each bounded by
  * its own `CONTENT_TYPE_HEAD_TIMEOUT_MS` so one dead gateway cannot eat the
- * budget later candidates need. When the browser network stack fails before
- * a response arrives, serialize the error into stable text because
- * Chromium's remote console turns raw `Error` objects into `{}` in the
- * device log.
+ * budget later candidates need. A candidate whose `HEAD` answers with
+ * `HEAD_UNSUPPORTED_STATUSES` (405/501 — the method itself rejected or
+ * unimplemented, not the resource) gets one bounded `GET` retry before being
+ * counted as failed, since some gateway origins serve GET fine while
+ * rejecting HEAD outright. When the browser network stack fails before a
+ * response arrives, serialize the error into stable text because Chromium's
+ * remote console turns raw `Error` objects into `{}` in the device log.
  */
 export async function getContentTypeFromURL(
   previewURL: string
