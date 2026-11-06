@@ -123,16 +123,23 @@ export class ContentTypeDetectionError extends Error {
 /**
  * Thrown by `probeCandidateContentType` for every failure, carrying the
  * original error (exactly what a single-candidate `catch` would have seen,
- * for identical logging and message text) plus whether `fetch` resolved a
- * response at all — including a non-ok one — before this candidate's probe
- * gave up. `probeCandidateContentType` runs in its own scope per candidate,
- * so the outer loop in `getContentTypeFromURL` has no other way to recover
- * either signal once control crosses the `catch`.
+ * for identical logging and message text) plus two signals the outer loop
+ * in `getContentTypeFromURL` has no other way to recover once control
+ * crosses the `catch` — `probeCandidateContentType` runs in its own scope
+ * per candidate:
+ * - `reachedServer`: `fetch` resolved a response at all, including a
+ * non-ok one.
+ * - `okButUntyped`: that response was itself 2xx, just missing a usable
+ * `Content-Type` header — the resource IS there, unlike a 4xx/5xx
+ * candidate that answered but doesn't have this CID. Only a candidate
+ * this is true for is safe to render from if extension inference later
+ * supplies the type a 404'd candidate never would have been.
  */
 class CandidateProbeError extends Error {
   constructor(
     public readonly originalError: unknown,
-    public readonly reachedServer: boolean
+    public readonly reachedServer: boolean,
+    public readonly okButUntyped: boolean
   ) {
     super(String(originalError));
   }
@@ -154,6 +161,7 @@ async function probeCandidateContentType(candidateURL: URL): Promise<string> {
   // response already in hand, so `reachedServer` is exactly the network-vs-
   // reachable distinction ContentTypeDetectionError exposes.
   let reachedServer = false;
+  let okButUntyped = false;
   const abortController = new AbortController();
   const timeoutId = setTimeout(
     () => { abortController.abort(); },
@@ -179,9 +187,10 @@ async function probeCandidateContentType(candidateURL: URL): Promise<string> {
     if (contentType) {
       return inferContentTypeFromURL(candidateURL, contentType) ?? contentType;
     }
+    okButUntyped = true;
     throw new Error('No content type found in headers');
   } catch (error) {
-    throw new CandidateProbeError(error, reachedServer);
+    throw new CandidateProbeError(error, reachedServer, okButUntyped);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -211,6 +220,11 @@ export async function getContentTypeFromURL(
   const candidates = ipfsGatewayCandidates(previewURL, url);
   let reachedServer = false;
   let lastError: unknown;
+  // The last candidate that answered 2xx without a usable `Content-Type`:
+  // the resource IS there, so extension inference below should render from
+  // THIS URL rather than `previewURL` — which may be the dead original host
+  // a 404'd fallback (not this) never actually proved reachable.
+  let lastRenderableCandidate: string | undefined;
 
   for (const candidate of candidates) {
     const candidateURL =
@@ -225,6 +239,9 @@ export async function getContentTypeFromURL(
       if (probeError?.reachedServer) {
         reachedServer = true;
       }
+      if (probeError?.okButUntyped) {
+        lastRenderableCandidate = candidate;
+      }
       console.log(
         '[ContentType] Failed to get content-type from HEAD request',
         serializeErrorForLog(lastError)
@@ -232,10 +249,22 @@ export async function getContentTypeFromURL(
     }
   }
 
+  // A single-candidate source (not content-addressed) keeps its original,
+  // optimistic behavior: guess from the extension and let the renderer try
+  // `previewURL` — the only URL that was ever in play. For a multi-candidate
+  // walk, every fallback gateway was tried too; guessing a type is harmless,
+  // but defaulting to `previewURL` would point the renderer at a host
+  // already proven dead or 404 — exactly this fix's bug — unless at least
+  // one candidate (`lastRenderableCandidate`) actually proved itself live.
+  // With no such candidate, fall through to the exhausted-candidates failure
+  // below instead of reporting a false success.
   const inferredType = inferContentTypeFromURL(url);
-  if (inferredType) {
+  if (inferredType && (candidates.length === 1 || lastRenderableCandidate)) {
     console.log('[ContentType] Inferred Content-Type:', inferredType);
-    return { contentType: inferredType, resolvedURL: previewURL };
+    return {
+      contentType: inferredType,
+      resolvedURL: lastRenderableCandidate ?? previewURL,
+    };
   }
 
   // `!reachedServer` alone is not enough: `fetch` rejects with the same

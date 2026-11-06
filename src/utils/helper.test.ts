@@ -202,6 +202,34 @@ describe('getContentTypeFromURL — IPFS gateway fallback candidate order', () =
     );
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('renders from a candidate that answered 2xx without a Content-Type, not the dead original host, when extension inference supplies the type', async () => {
+    // feralfile.com has the CID (2xx) but this HEAD happens to omit
+    // Content-Type; filebase.io does NOT have it (404, reached but
+    // unhelpful). Extension inference succeeds either way, but the only
+    // candidate actually proven to serve the resource is feralfile.com —
+    // resolving to the dead original or the 404'd filebase would reproduce
+    // the broken image this fallback exists to fix.
+    const deadURLWithExt = `${DEAD_GATEWAY_URL}/preview.jpg`;
+    const feralfileURLWithExt = `${FERALFILE_URL}/preview.jpg`;
+    const filebaseURLWithExt = `${FILEBASE_URL}/preview.jpg`;
+    vi.spyOn(globalThis, 'fetch').mockImplementation((requestURL: string | URL | Request) => {
+      const requested = requestedURLString(requestURL);
+      if (requested.startsWith(feralfileURLWithExt)) {
+        return Promise.resolve(new Response(null, { status: 200 }));
+      }
+      if (requested.startsWith(filebaseURLWithExt)) {
+        return Promise.resolve(new Response(null, { status: 404, statusText: 'Not Found' }));
+      }
+      return Promise.reject(new Error('blocked'));
+    });
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    await expect(getContentTypeFromURL(deadURLWithExt)).resolves.toEqual({
+      contentType: 'image/jpeg',
+      resolvedURL: feralfileURLWithExt,
+    });
+  });
 });
 
 describe('getContentTypeFromURL — IPFS gateway fallback timeout budget', () => {
@@ -265,6 +293,25 @@ describe('getContentTypeFromURL — exhaustedGatewayCandidates classification', 
 
     expect(rejection).toBeInstanceOf(ContentTypeDetectionError);
     expect((rejection as ContentTypeDetectionError).exhaustedGatewayCandidates).toBe(false);
+  });
+
+  it('throws exhaustedGatewayCandidates instead of resolving to the dead original host, even when the path has an inferable extension', async () => {
+    // Every gateway candidate — including the two fallbacks — rejects
+    // outright (no candidate is ever proven live), but the path still ends
+    // in a recognizable extension. Resolving "successfully" here would hand
+    // the renderer `previewURL` itself: the one host already proven dead,
+    // reproducing feral-file/feral-file#3583's broken image under a type
+    // guess instead of a network error.
+    const deadURLWithExt = `${DEAD_GATEWAY_URL}/preview.png`;
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('blocked'));
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    const rejection: unknown = await getContentTypeFromURL(deadURLWithExt).catch(
+      (error: unknown) => error
+    );
+
+    expect(rejection).toBeInstanceOf(ContentTypeDetectionError);
+    expect((rejection as ContentTypeDetectionError).exhaustedGatewayCandidates).toBe(true);
   });
 });
 
