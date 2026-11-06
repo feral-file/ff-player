@@ -88,7 +88,10 @@ afterEach(() => {
 
 describe('ArtworkPlayer — GLB / model mime routing', () => {
   it('renders model-viewer from the real playlist discovery path when HEAD reports a model MIME type', async () => {
-    helperMocks.getContentTypeFromURL.mockResolvedValue('model/gltf-binary');
+    helperMocks.getContentTypeFromURL.mockResolvedValue({
+      contentType: 'model/gltf-binary',
+      resolvedURL: MODEL_URL,
+    });
 
     const { container } = renderWithContext(
       <ArtworkPlayer
@@ -117,7 +120,10 @@ describe('ArtworkPlayer — GLB / model mime routing', () => {
   });
 
   it('falls back to iframe when discovery returns a generic content type', async () => {
-    helperMocks.getContentTypeFromURL.mockResolvedValue('application/octet-stream');
+    helperMocks.getContentTypeFromURL.mockResolvedValue({
+      contentType: 'application/octet-stream',
+      resolvedURL: MODEL_URL,
+    });
 
     const { container } = renderWithContext(
       <ArtworkPlayer
@@ -138,7 +144,9 @@ describe('ArtworkPlayer — GLB / model mime routing', () => {
 
     expect(container.querySelector('model-viewer')).toBeNull();
   });
+});
 
+describe('ArtworkPlayer — authored model MIME routing', () => {
   it('renders model-viewer directly for model/gltf-binary previews', async () => {
     const { container } = renderWithContext(
       <ArtworkPlayer
@@ -180,7 +188,10 @@ describe('ArtworkPlayer — GLB / model mime routing', () => {
 
 describe('ArtworkPlayer — relative iframe display settings', () => {
   it('resolves a relative iframe source before applying display mode', async () => {
-    helperMocks.getContentTypeFromURL.mockResolvedValue('application/octet-stream');
+    helperMocks.getContentTypeFromURL.mockResolvedValue({
+      contentType: 'application/octet-stream',
+      resolvedURL: 'artwork.html',
+    });
 
     const { container } = renderWithDisplaySettings(
       <ArtworkPlayer

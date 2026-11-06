@@ -34,6 +34,41 @@ export const DAEMON_VERDICT_WAIT_MS = 3_000;
 export const CONTENT_TYPE_HEAD_TIMEOUT_MS = 10_000;
 
 /**
+ * Fallback IPFS gateways probed, in this order, after a content-addressed
+ * source's own host fails. Matches ff-app's `ipfsMediaCandidates()` exactly
+ * (feral-file/feral-file#3583) — Feral File's own gateway only serves CIDs it
+ * pinned (fast 404 otherwise), Filebase mirrors the wider network — so the
+ * same CID resolves identically across every Feral File client instead of
+ * each one picking its own list.
+ */
+const IPFS_FALLBACK_GATEWAY_HOSTS = [
+  'https://ipfs.feralfile.com',
+  'https://ipfs.filebase.io',
+];
+
+/**
+ * Build the ordered list of URLs to probe for a media source: the original
+ * URL first (so a healthy host never pays for a fallback), then — only when
+ * `isContentAddressed` recognizes an `/ipfs/<cid>` path — the same fallback
+ * gateways every Feral File client tries, carrying over everything from
+ * `/ipfs/` onward (CID, any sub-path, and the query string) onto each
+ * fallback host. A source with no such path has no substitute host, so it
+ * keeps the single-candidate behavior this function always had.
+ */
+function ipfsGatewayCandidates(previewURL: string, url: URL): string[] {
+  const ipfsPathMatch = /\/ipfs\/.+/.exec(url.pathname);
+  if (!ipfsPathMatch || !isContentAddressed(previewURL)) {
+    return [previewURL];
+  }
+  const suffix = `${ipfsPathMatch[0]}${url.search}`;
+  const candidates = [
+    previewURL,
+    ...IPFS_FALLBACK_GATEWAY_HOSTS.map(host => `${host}${suffix}`),
+  ];
+  return Array.from(new Set(candidates));
+}
+
+/**
  * Read the declared media type from a `data:` URL without probing the network.
  * Cache-busting query suffixes are part of the payload for data URLs, so a
  * `HEAD` probe would corrupt the bytes and fail MIME detection.
@@ -68,7 +103,17 @@ function contentTypeFromDataURL(url: URL): string {
 export class ContentTypeDetectionError extends Error {
   constructor(
     message: string,
-    public readonly isNetworkFailure: boolean
+    public readonly isNetworkFailure: boolean,
+    /**
+     * True when the source was content-addressed and every fallback gateway
+     * candidate (see `ipfsGatewayCandidates`) was tried and failed — not just
+     * the original, possibly-dead host. A caller that would otherwise try the
+     * failed URL as a renderable iframe (the non-network-failure branch)
+     * should not do that here: every URL that could have served this CID
+     * already failed, so retrying one of them as an iframe only reproduces
+     * the same broken load.
+     */
+    public readonly exhaustedGatewayCandidates = false
   ) {
     super(message);
     this.name = 'ContentTypeDetectionError';
@@ -76,28 +121,32 @@ export class ContentTypeDetectionError extends Error {
 }
 
 /**
- * Resolve a media URL's `Content-Type` so playback can choose the correct
- * renderer for extensionless assets. Declared `data:` MIME types are returned
- * directly; other sources use a cache-busting `HEAD` request. When the browser
- * network stack fails before a response arrives, serialize the error into
- * stable text because Chromium's remote console turns raw `Error` objects into
- * `{}` in the device log.
+ * Thrown by `probeCandidateContentType` for every failure, carrying the
+ * original error (exactly what a single-candidate `catch` would have seen,
+ * for identical logging and message text) plus whether `fetch` resolved a
+ * response at all — including a non-ok one — before this candidate's probe
+ * gave up. `probeCandidateContentType` runs in its own scope per candidate,
+ * so the outer loop in `getContentTypeFromURL` has no other way to recover
+ * either signal once control crosses the `catch`.
  */
-export async function getContentTypeFromURL(
-  previewURL: string
-): Promise<string> {
-  const url = resolveArtworkSourceURL(previewURL);
-  if (url.protocol === 'data:') {
-    return contentTypeFromDataURL(url);
+class CandidateProbeError extends Error {
+  constructor(
+    public readonly originalError: unknown,
+    public readonly reachedServer: boolean
+  ) {
+    super(String(originalError));
   }
+}
 
+/** One candidate URL's `HEAD` probe: its reported MIME type, or a `CandidateProbeError` on any failure. */
+async function probeCandidateContentType(candidateURL: URL): Promise<string> {
   // The second request could be failed, Chrome uses the cached response from the first request, which has no "Access-Control-Allow-Origin" response header.
   // Workaround: Use a dummy "?x-some-key=some-value" query string parameter will convince the browser that the request is different.
   // Ref: https://serverfault.com/questions/856904/chrome-s3-cloudfront-no-access-control-allow-origin-header-on-initial-xhr-req/856948#856948
-  const resolvedPreviewURL = url.toString();
-  const extendPreviewURL = url.search
-    ? `${resolvedPreviewURL}&v=${Date.now().toString()}&x-request=xhr`
-    : `${resolvedPreviewURL}?v=${Date.now().toString()}&x-request=xhr`;
+  const resolvedCandidateURL = candidateURL.toString();
+  const extendCandidateURL = candidateURL.search
+    ? `${resolvedCandidateURL}&v=${Date.now().toString()}&x-request=xhr`
+    : `${resolvedCandidateURL}?v=${Date.now().toString()}&x-request=xhr`;
 
   // Flips true the moment `fetch` resolves with ANY response — even a
   // non-ok one. `fetch` only REJECTS for a network-level failure (offline,
@@ -111,7 +160,7 @@ export async function getContentTypeFromURL(
     CONTENT_TYPE_HEAD_TIMEOUT_MS
   );
   try {
-    const response = await fetch(extendPreviewURL, {
+    const response = await fetch(extendCandidateURL, {
       method: 'HEAD',
       signal: abortController.signal,
     });
@@ -128,70 +177,114 @@ export async function getContentTypeFromURL(
 
     const contentType = response.headers.get('Content-Type');
     if (contentType) {
-      return inferContentTypeFromURL(url, contentType) ?? contentType;
+      return inferContentTypeFromURL(candidateURL, contentType) ?? contentType;
     }
     throw new Error('No content type found in headers');
   } catch (error) {
-    console.log(
-      '[ContentType] Failed to get content-type from HEAD request',
-      serializeErrorForLog(error)
-    );
-
-    const inferredType = inferContentTypeFromURL(url);
-    if (inferredType) {
-      console.log('[ContentType] Inferred Content-Type:', inferredType);
-      return inferredType;
-    }
-
-    // `!reachedServer` alone is not enough: `fetch` rejects with the same
-    // bare TypeError for a genuine network failure AND for a CORS/CSP/
-    // extension block — a third-party host that is perfectly reachable but
-    // omits Access-Control-Allow-Origin on this exact cache-busted HEAD (see
-    // the comment above) rejects identically to an offline device. Without
-    // corroboration, an ONLINE device hitting that CORS wall would get
-    // `isNetworkFailure: true` and raise the degraded flag with nothing
-    // left to ever clear it — a healthy artwork stuck degraded forever.
-    //
-    // Two independent corroborating signals, either suffices:
-    //  - `navigator.onLine` false: the browser's own interface is down.
-    //    Necessary but NOT sufficient coverage on its own — the device's
-    //    setup AP keeps the interface up, so an offline frame in AP mode
-    //    reads `onLine: true` (the 2026-08-05 blank-wall incident: this
-    //    classification silently fell through to the fallback iframe, whose
-    //    cross-origin `load` masks failure, and the offline backdrop never
-    //    rose).
-    //  - The daemon's pushed connectivity verdict says offline. It is the
-    //    authoritative WAN probe and covers AP mode and link-without-internet.
-    //    Its first push races this very classification (it arrived 7ms too
-    //    late in the incident), so when no verdict is known yet we WAIT for
-    //    one, bounded by DAEMON_VERDICT_WAIT_MS. The wait only engages on
-    //    the already-failed no-response path with `onLine` still true: a
-    //    HEAD that reaches the server never pays it, and an online cold
-    //    boot's CORS-blocked HEAD pays at most the time to the first replay
-    //    (the full bound only when no daemon ever answers — see the
-    //    constant's doc). Timeout resolves to `null` = uncorroborated,
-    //    preserving the CORS-safe default.
-    //    Known limitation, accepted: the verdict proves "no WAN", not "this
-    //    host is unreachable" — a LAN-reachable, CORS-blocked host on a
-    //    LAN-without-WAN device now classifies as a network failure (no
-    //    fallback iframe; backdrop instead of a possibly-renderable LAN
-    //    artwork). Fielded artwork sources are WAN-hosted; the recorded
-    //    alternative in DEVICE_LOCAL_PLAYER.md removes this if it ever
-    //    bites.
-    const browserOffline =
-      typeof navigator !== 'undefined' && !navigator.onLine;
-    let offlineCorroborated = browserOffline;
-    if (!reachedServer && !offlineCorroborated) {
-      offlineCorroborated =
-        (await waitForDaemonConnectivity(DAEMON_VERDICT_WAIT_MS)) === false;
-    }
-    throw new ContentTypeDetectionError(
-      `Failed to determine content type: ${String(error)}`,
-      !reachedServer && offlineCorroborated
-    );
+    throw new CandidateProbeError(error, reachedServer);
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+/**
+ * Resolve a media URL's `Content-Type` so playback can choose the correct
+ * renderer for extensionless assets, and report which URL actually answered
+ * so the caller can render from that same URL instead of the one that may
+ * have failed. Declared `data:` MIME types are returned directly; other
+ * sources use a cache-busting `HEAD` request against each candidate from
+ * `ipfsGatewayCandidates` in turn (the original host first), each bounded by
+ * its own `CONTENT_TYPE_HEAD_TIMEOUT_MS` so one dead gateway cannot eat the
+ * budget later candidates need. When the browser network stack fails before
+ * a response arrives, serialize the error into stable text because
+ * Chromium's remote console turns raw `Error` objects into `{}` in the
+ * device log.
+ */
+export async function getContentTypeFromURL(
+  previewURL: string
+): Promise<{ contentType: string; resolvedURL: string }> {
+  const url = resolveArtworkSourceURL(previewURL);
+  if (url.protocol === 'data:') {
+    return { contentType: contentTypeFromDataURL(url), resolvedURL: previewURL };
+  }
+
+  const candidates = ipfsGatewayCandidates(previewURL, url);
+  let reachedServer = false;
+  let lastError: unknown;
+
+  for (const candidate of candidates) {
+    const candidateURL =
+      candidate === previewURL ? url : resolveArtworkSourceURL(candidate);
+    try {
+      const contentType = await probeCandidateContentType(candidateURL);
+      return { contentType, resolvedURL: candidate };
+    } catch (error) {
+      const probeError =
+        error instanceof CandidateProbeError ? error : undefined;
+      lastError = probeError ? probeError.originalError : error;
+      if (probeError?.reachedServer) {
+        reachedServer = true;
+      }
+      console.log(
+        '[ContentType] Failed to get content-type from HEAD request',
+        serializeErrorForLog(lastError)
+      );
+    }
+  }
+
+  const inferredType = inferContentTypeFromURL(url);
+  if (inferredType) {
+    console.log('[ContentType] Inferred Content-Type:', inferredType);
+    return { contentType: inferredType, resolvedURL: previewURL };
+  }
+
+  // `!reachedServer` alone is not enough: `fetch` rejects with the same
+  // bare TypeError for a genuine network failure AND for a CORS/CSP/
+  // extension block — a third-party host that is perfectly reachable but
+  // omits Access-Control-Allow-Origin on this exact cache-busted HEAD (see
+  // the comment above) rejects identically to an offline device. Without
+  // corroboration, an ONLINE device hitting that CORS wall would get
+  // `isNetworkFailure: true` and raise the degraded flag with nothing
+  // left to ever clear it — a healthy artwork stuck degraded forever.
+  //
+  // Two independent corroborating signals, either suffices:
+  //  - `navigator.onLine` false: the browser's own interface is down.
+  //    Necessary but NOT sufficient coverage on its own — the device's
+  //    setup AP keeps the interface up, so an offline frame in AP mode
+  //    reads `onLine: true` (the 2026-08-05 blank-wall incident: this
+  //    classification silently fell through to the fallback iframe, whose
+  //    cross-origin `load` masks failure, and the offline backdrop never
+  //    rose).
+  //  - The daemon's pushed connectivity verdict says offline. It is the
+  //    authoritative WAN probe and covers AP mode and link-without-internet.
+  //    Its first push races this very classification (it arrived 7ms too
+  //    late in the incident), so when no verdict is known yet we WAIT for
+  //    one, bounded by DAEMON_VERDICT_WAIT_MS. The wait only engages on
+  //    the already-failed no-response path with `onLine` still true: a
+  //    HEAD that reaches the server never pays it, and an online cold
+  //    boot's CORS-blocked HEAD pays at most the time to the first replay
+  //    (the full bound only when no daemon ever answers — see the
+  //    constant's doc). Timeout resolves to `null` = uncorroborated,
+  //    preserving the CORS-safe default.
+  //    Known limitation, accepted: the verdict proves "no WAN", not "this
+  //    host is unreachable" — a LAN-reachable, CORS-blocked host on a
+  //    LAN-without-WAN device now classifies as a network failure (no
+  //    fallback iframe; backdrop instead of a possibly-renderable LAN
+  //    artwork). Fielded artwork sources are WAN-hosted; the recorded
+  //    alternative in DEVICE_LOCAL_PLAYER.md removes this if it ever
+  //    bites.
+  const browserOffline =
+    typeof navigator !== 'undefined' && !navigator.onLine;
+  let offlineCorroborated = browserOffline;
+  if (!reachedServer && !offlineCorroborated) {
+    offlineCorroborated =
+      (await waitForDaemonConnectivity(DAEMON_VERDICT_WAIT_MS)) === false;
+  }
+  throw new ContentTypeDetectionError(
+    `Failed to determine content type: ${String(lastError)}`,
+    !reachedServer && offlineCorroborated,
+    candidates.length > 1
+  );
 }
 
 /**

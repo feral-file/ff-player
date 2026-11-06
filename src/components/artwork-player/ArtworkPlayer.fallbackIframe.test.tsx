@@ -17,7 +17,9 @@ import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
 
-const contentTypeMock = vi.hoisted(() => vi.fn<() => Promise<string>>());
+const contentTypeMock = vi.hoisted(() =>
+  vi.fn<() => Promise<{ contentType: string; resolvedURL: string }>>()
+);
 
 vi.mock('@/utils/helper', async importOriginal => ({
   ...(await importOriginal<typeof import('@/utils/helper')>()),
@@ -83,7 +85,10 @@ describe('ArtworkPlayer — fallback-typed iframe reports no outcome', () => {
     );
 
     // First mount: HEAD succeeds, the artwork is a real image…
-    contentTypeMock.mockResolvedValueOnce('image/jpeg');
+    contentTypeMock.mockResolvedValueOnce({
+      contentType: 'image/jpeg',
+      resolvedURL: EXTENSIONLESS,
+    });
     // …every later probe (the recovery remount, still offline) dies.
     contentTypeMock.mockRejectedValue(new Error('Network Error'));
 

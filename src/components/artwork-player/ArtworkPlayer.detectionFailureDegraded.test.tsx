@@ -30,7 +30,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ContentTypeDetectionError } from '@/utils/helper';
 import ArtworkPlayer from './ArtworkPlayer';
 
-const contentTypeMock = vi.hoisted(() => vi.fn<() => Promise<string>>());
+const contentTypeMock = vi.hoisted(() =>
+  vi.fn<() => Promise<{ contentType: string; resolvedURL: string }>>()
+);
 
 vi.mock('@/utils/helper', async importOriginal => ({
   ...(await importOriginal<typeof import('@/utils/helper')>()),
@@ -133,6 +135,33 @@ describe('ArtworkPlayer — network-classified detection failure raises degraded
   });
 });
 
+describe('ArtworkPlayer — exhausted IPFS gateway candidates raises degraded', () => {
+  it('raises the degraded flag when every fallback gateway failed too, instead of rendering a guaranteed-dead iframe', async () => {
+    // feral-file/feral-file#3583: once helper.ts's candidate walk has already
+    // tried the original host AND every fallback IPFS gateway, an iframe
+    // pointed at any of those same URLs can only reproduce the same broken
+    // image — `isNetworkFailure` is irrelevant here (this device may be
+    // online and the hosts reachable; none of them simply had the CID), so
+    // `exhaustedGatewayCandidates` alone must route to the real-failure path.
+    stubWebGL();
+    contentTypeMock.mockRejectedValue(
+      new ContentTypeDetectionError(
+        'Failed to determine content type: Error: HEAD request failed with status 404 Not Found',
+        false,
+        true
+      )
+    );
+
+    const setPlaybackDegraded = vi.fn();
+    const { container } = render(playerNode(setPlaybackDegraded));
+
+    await waitFor(() => {
+      expect(setPlaybackDegraded).toHaveBeenCalledWith(true, EXTENSIONLESS);
+    });
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+});
+
 describe('ArtworkPlayer — reachable-server detection failure does not raise degraded', () => {
   it('does not raise the degraded flag on a reachable-but-unhelpful response (HTTP 404/500)', async () => {
     stubWebGL();
@@ -194,7 +223,10 @@ describe('ArtworkPlayer — network-classified detection failure recovery loop',
       )
     );
     // Reconnect-recovery remount: the network is back, HEAD resolves a real type.
-    contentTypeMock.mockResolvedValueOnce('image/jpeg');
+    contentTypeMock.mockResolvedValueOnce({
+      contentType: 'image/jpeg',
+      resolvedURL: EXTENSIONLESS,
+    });
 
     const setPlaybackDegraded = vi.fn();
     let reload: (() => void) | null = null;
@@ -265,7 +297,10 @@ describe('ArtworkPlayer — network-classified detection failure render status',
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
 
     // The recovery remount owns the reset back to pending.
-    contentTypeMock.mockResolvedValueOnce('image/jpeg');
+    contentTypeMock.mockResolvedValueOnce({
+      contentType: 'image/jpeg',
+      resolvedURL: EXTENSIONLESS,
+    });
     await act(async () => {
       reload?.();
       await vi.advanceTimersByTimeAsync(0);

@@ -68,7 +68,10 @@ afterEach(() => {
 
 describe('ArtworkPlayer — model bootstrap error handling', () => {
   it('settles the error state without leaving the loading overlay visible', async () => {
-    helperMocks.getContentTypeFromURL.mockResolvedValue('model/gltf-binary');
+    helperMocks.getContentTypeFromURL.mockResolvedValue({
+      contentType: 'model/gltf-binary',
+      resolvedURL: MODEL_URL,
+    });
 
     renderWithContext(
       <ArtworkPlayer

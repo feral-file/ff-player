@@ -29,14 +29,22 @@ interface SourceOwners {
   note: (url: string, failed: boolean) => void;
 }
 
-/** An absent or empty authored MIME type uses the existing network detector. */
+/**
+ * An absent or empty authored MIME type uses the existing network detector,
+ * which also reports which URL actually answered — a content-addressed
+ * source may resolve through a fallback IPFS gateway instead of its own,
+ * dead host (see `ipfsGatewayCandidates` in helper.ts). `resolvedURL` is for
+ * rendering only; the DP-1 identity and offline-cache key stay the original
+ * `url` everywhere else.
+ */
 async function detectPreview(url: string, suppliedType: string | undefined) {
-  const resolvedType =
-    suppliedType !== undefined && suppliedType !== ''
-      ? suppliedType
-      : await getContentTypeFromURL(url);
-  const mimeType = resolvedType.toLowerCase();
-  return { mimeType, ...getPreviewTypeConfig(mimeType) };
+  if (suppliedType !== undefined && suppliedType !== '') {
+    const mimeType = suppliedType.toLowerCase();
+    return { mimeType, resolvedURL: url, ...getPreviewTypeConfig(mimeType) };
+  }
+  const { contentType, resolvedURL } = await getContentTypeFromURL(url);
+  const mimeType = contentType.toLowerCase();
+  return { mimeType, resolvedURL, ...getPreviewTypeConfig(mimeType) };
 }
 
 /** MIME detection owns only this request; a superseded result cannot patch the next slot. */
@@ -65,19 +73,19 @@ export function useArtworkSource(
     recovery.beginMount();
     transition.mountIncoming(url, showingKey);
     void detectPreview(url, suppliedType)
-      .then(config => {
+      .then(({ resolvedURL, ...config }) => {
         if (cancelled || !transition.matchesTarget(url, itemIdentity ?? '')) {
           return;
         }
         transition.resolveSource(url, {
           ...config,
-          displayPreviewURL: url,
+          displayPreviewURL: resolvedURL,
           displaySoftwareURL:
             config.previewType === PreviewHTMLTag.iframe &&
             !isModelMimeType(config.mimeType) &&
             usesWorkOrigin(url)
               ? ''
-              : url,
+              : resolvedURL,
         });
       })
       .catch((error: unknown) => {
@@ -87,8 +95,13 @@ export function useArtworkSource(
         console.error('[ArtworkPlayer] Failed to detect preview type:', error);
         if (
           error instanceof ContentTypeDetectionError &&
-          error.isNetworkFailure
+          (error.isNetworkFailure || error.exhaustedGatewayCandidates)
         ) {
+          // `exhaustedGatewayCandidates` means every fallback IPFS gateway
+          // was tried and failed too (see helper.ts), not just this one
+          // host — an iframe pointed at any of those same dead URLs below
+          // would only reproduce feral-file/feral-file#3583's broken image,
+          // so this is a real failure for the retry/skip budget to act on.
           noteRef.current(url, true);
           recovery.markArtworkFailed();
           return;

@@ -2,8 +2,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   appendDisplayModeParam,
   CONTENT_TYPE_HEAD_TIMEOUT_MS,
+  ContentTypeDetectionError,
   getContentTypeFromURL,
 } from './helper';
+
+/** `fetch`'s first argument as a comparable string, across every shape a mock may receive. */
+function requestedURLString(input: string | URL | Request): string {
+  if (typeof input === 'string') {
+    return input;
+  }
+  return input instanceof Request ? input.url : input.toString();
+}
 
 describe('getContentTypeFromURL', () => {
   afterEach(() => {
@@ -30,6 +39,12 @@ describe('getContentTypeFromURL', () => {
       expect.stringContaining('"cause":{"name":"Error","message":"tls alert"')
     );
   });
+});
+
+describe('getContentTypeFromURL — extension inference', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it('infers GLB and glTF MIME types from extensions when HEAD fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('blocked'));
@@ -37,10 +52,16 @@ describe('getContentTypeFromURL', () => {
 
     await expect(
       getContentTypeFromURL('https://example.com/artwork/model.glb')
-    ).resolves.toBe('model/gltf-binary');
+    ).resolves.toEqual({
+      contentType: 'model/gltf-binary',
+      resolvedURL: 'https://example.com/artwork/model.glb',
+    });
     await expect(
       getContentTypeFromURL('https://example.com/artwork/model.gltf')
-    ).resolves.toBe('model/gltf+json');
+    ).resolves.toEqual({
+      contentType: 'model/gltf+json',
+      resolvedURL: 'https://example.com/artwork/model.gltf',
+    });
   });
 
   it('prefers GLB extension inference when HEAD returns a generic binary type', async () => {
@@ -55,7 +76,16 @@ describe('getContentTypeFromURL', () => {
 
     await expect(
       getContentTypeFromURL('https://example.com/artwork/model.glb')
-    ).resolves.toBe('model/gltf-binary');
+    ).resolves.toEqual({
+      contentType: 'model/gltf-binary',
+      resolvedURL: 'https://example.com/artwork/model.glb',
+    });
+  });
+});
+
+describe('getContentTypeFromURL — URL resolution', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it.each([
@@ -65,7 +95,10 @@ describe('getContentTypeFromURL', () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('blocked'));
     vi.spyOn(console, 'log').mockImplementation(vi.fn());
 
-    await expect(getContentTypeFromURL(source)).resolves.toBe('model/gltf-binary');
+    await expect(getContentTypeFromURL(source)).resolves.toEqual({
+      contentType: 'model/gltf-binary',
+      resolvedURL: source,
+    });
 
     const [requestURL, requestInit] = vi.mocked(globalThis.fetch).mock.calls[0];
     expect(requestURL).toMatch(
@@ -78,6 +111,12 @@ describe('getContentTypeFromURL', () => {
     expect(requestInit).toMatchObject({ method: 'HEAD' });
     expect(requestInit?.signal).toBeInstanceOf(AbortSignal);
   });
+});
+
+describe('getContentTypeFromURL — data URLs', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it.each([
     ['image/png', 'data:image/png;base64,iVBORw0KGgo='],
@@ -89,10 +128,144 @@ describe('getContentTypeFromURL', () => {
     async (expectedType, source) => {
       const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
-      await expect(getContentTypeFromURL(source)).resolves.toBe(expectedType);
+      await expect(getContentTypeFromURL(source)).resolves.toEqual({
+        contentType: expectedType,
+        resolvedURL: source,
+      });
       expect(fetchSpy).not.toHaveBeenCalled();
     }
   );
+});
+
+// feral-file/feral-file#3583: Raster hands back a dead Infura gateway
+// (`0prod.infura-ipfs.io`) for a CID that Feral File's own gateway does not
+// pin (404) but Filebase mirrors (200) — matching ff-app's
+// `ipfsMediaCandidates()` fallback chain exactly.
+const DEAD_GATEWAY_URL =
+  'https://0prod.infura-ipfs.io/ipfs/bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+const FERALFILE_URL =
+  'https://ipfs.feralfile.com/ipfs/bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+const FILEBASE_URL =
+  'https://ipfs.filebase.io/ipfs/bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+
+/** A resolved HEAD `Response` reporting the given `Content-Type`. */
+function okContentTypeResponse(contentType: string): Response {
+  return new Response(null, { headers: { 'Content-Type': contentType }, status: 200 });
+}
+
+describe('getContentTypeFromURL — IPFS gateway fallback candidate order', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('falls through to the next gateway candidate when an earlier one fails, and renders from the one that answers', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((requestURL: string | URL | Request) => {
+        if (requestedURLString(requestURL).startsWith(FILEBASE_URL)) {
+          return Promise.resolve(okContentTypeResponse('image/jpeg'));
+        }
+        return Promise.reject(new Error('blocked'));
+      });
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    await expect(getContentTypeFromURL(DEAD_GATEWAY_URL)).resolves.toEqual({
+      contentType: 'image/jpeg',
+      resolvedURL: FILEBASE_URL,
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    const requestedURLs = fetchSpy.mock.calls.map(call => requestedURLString(call[0]));
+    expect(requestedURLs[0]).toMatch(new RegExp(`^${DEAD_GATEWAY_URL}\\?`));
+    expect(requestedURLs[1]).toMatch(new RegExp(`^${FERALFILE_URL}\\?`));
+    expect(requestedURLs[2]).toMatch(new RegExp(`^${FILEBASE_URL}\\?`));
+  });
+
+  it('never probes a fallback gateway when the original host already answers', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(okContentTypeResponse('image/jpeg'));
+
+    await expect(getContentTypeFromURL(DEAD_GATEWAY_URL)).resolves.toEqual({
+      contentType: 'image/jpeg',
+      resolvedURL: DEAD_GATEWAY_URL,
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('never probes a fallback gateway for a non-content-addressed URL', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('blocked'));
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    await expect(getContentTypeFromURL('https://cdn.example.com/artwork/preview')).rejects.toThrow(
+      'Failed to determine content type'
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('getContentTypeFromURL — IPFS gateway fallback timeout budget', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('bounds every candidate by its own timeout instead of sharing one budget', async () => {
+    vi.useFakeTimers();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (requestURL: string | URL | Request, init?: RequestInit) => {
+        if (requestedURLString(requestURL).startsWith(FILEBASE_URL)) {
+          return Promise.resolve(okContentTypeResponse('image/jpeg'));
+        }
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted', 'AbortError'));
+          });
+        });
+      }
+    );
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    const pending = getContentTypeFromURL(DEAD_GATEWAY_URL);
+    await vi.advanceTimersByTimeAsync(CONTENT_TYPE_HEAD_TIMEOUT_MS);
+    await vi.advanceTimersByTimeAsync(CONTENT_TYPE_HEAD_TIMEOUT_MS);
+
+    await expect(pending).resolves.toEqual({
+      contentType: 'image/jpeg',
+      resolvedURL: FILEBASE_URL,
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('getContentTypeFromURL — exhaustedGatewayCandidates classification', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('throws ContentTypeDetectionError.exhaustedGatewayCandidates when every gateway fails and the path has no inferable extension', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('blocked'));
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    const rejection: unknown = await getContentTypeFromURL(DEAD_GATEWAY_URL).catch(
+      (error: unknown) => error
+    );
+
+    expect(rejection).toBeInstanceOf(ContentTypeDetectionError);
+    expect((rejection as ContentTypeDetectionError).exhaustedGatewayCandidates).toBe(true);
+  });
+
+  it('does not set exhaustedGatewayCandidates for a plain, non-content-addressed URL', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('blocked'));
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+
+    const rejection: unknown = await getContentTypeFromURL(
+      'https://cdn.example.com/artwork/preview'
+    ).catch((error: unknown) => error);
+
+    expect(rejection).toBeInstanceOf(ContentTypeDetectionError);
+    expect((rejection as ContentTypeDetectionError).exhaustedGatewayCandidates).toBe(false);
+  });
 });
 
 describe('getContentTypeFromURL — HEAD probe timeout', () => {
@@ -121,7 +294,10 @@ describe('getContentTypeFromURL — HEAD probe timeout', () => {
     const pending = getContentTypeFromURL('https://example.com/artwork/model.glb');
     await vi.advanceTimersByTimeAsync(CONTENT_TYPE_HEAD_TIMEOUT_MS);
 
-    await expect(pending).resolves.toBe('model/gltf-binary');
+    await expect(pending).resolves.toEqual({
+      contentType: 'model/gltf-binary',
+      resolvedURL: 'https://example.com/artwork/model.glb',
+    });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });
