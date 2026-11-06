@@ -111,6 +111,15 @@ function fastRejectionError(): ContentTypeDetectionError {
   );
 }
 
+/** Both independent flags true at once — a transient offline blip during a genuine timeout. */
+function timedOutAndNetworkFailureError(): ContentTypeDetectionError {
+  return new ContentTypeDetectionError(
+    'Failed to determine content type: AbortError: signal is aborted without reason',
+    true,
+    true
+  );
+}
+
 const CANNOT_BE_DISPLAYED_TEXT =
   'The artwork cannot be displayed correctly on this device.';
 
@@ -353,6 +362,40 @@ describe('ArtworkPlayer — unresponsive-source memory survives a later fast rej
     );
     await waitForCannotBeDisplayed();
 
+    contentTypeMock.mockRejectedValueOnce(fastRejectionError());
+    await act(async () => {
+      reload?.();
+      await Promise.resolve();
+    });
+
+    await waitForCannotBeDisplayed();
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('remembers a timeout even when it coincides with a corroborated offline blip, for a later fast-failing retry once back online', async () => {
+    // run-reviewer round 2, F1: isNetworkFailure and timedOut are
+    // independent flags and can both be true on the same attempt (a
+    // connectivity drop exactly while the probe's own AbortController was
+    // mid-wait). Recording timedOut only in the isNetworkFailure-false
+    // branch would drop that attempt's unreachability evidence, so a later
+    // attempt — once back online, failing fast instead — would wrongly fall
+    // through to the iframe branch.
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    contentTypeMock.mockRejectedValueOnce(timedOutAndNetworkFailureError());
+
+    const setPlaybackDegraded = vi.fn();
+    let reload: (() => void) | null = null;
+    const { container } = render(
+      playerNode(setPlaybackDegraded, cb => {
+        reload = cb;
+      })
+    );
+    await waitFor(() => {
+      expect(setPlaybackDegraded).toHaveBeenCalledWith(true, EXTENSIONLESS);
+    });
+
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     contentTypeMock.mockRejectedValueOnce(fastRejectionError());
     await act(async () => {
       reload?.();

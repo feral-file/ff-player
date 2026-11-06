@@ -73,13 +73,21 @@ function handleDetectionFailure(
   if (!(error instanceof ContentTypeDetectionError)) {
     return false;
   }
+  // Recorded before branching on isNetworkFailure: the two flags are
+  // independent (see the class doc on ContentTypeDetectionError) and can
+  // both be true at once — e.g. a transient offline blip corroborates
+  // isNetworkFailure for the very attempt whose AbortController also timed
+  // out. Checking timedOut only in an isNetworkFailure-false branch would
+  // drop that attempt's unreachability evidence, so a later attempt against
+  // the same URL (once the device is back online and failing fast instead)
+  // would wrongly fall through to the iframe render again.
+  if (error.timedOut) {
+    confirmedUnreachable.add(url);
+  }
   if (error.isNetworkFailure) {
     noteRef.current(url, true);
     recovery.markArtworkFailed();
     return true;
-  }
-  if (error.timedOut) {
-    confirmedUnreachable.add(url);
   }
   if (confirmedUnreachable.has(url)) {
     recovery.fail();
