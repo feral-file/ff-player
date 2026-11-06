@@ -93,6 +93,33 @@ function stubWebGL() {
   );
 }
 
+/** The probe's own AbortController firing — feral-file#3583's genuine-timeout shape. */
+function timedOutAbortError(): ContentTypeDetectionError {
+  return new ContentTypeDetectionError(
+    'Failed to determine content type: AbortError: signal is aborted without reason',
+    false,
+    true
+  );
+}
+
+/** A fast native rejection — the CORS-block shape, and what a dead host degrades to later. */
+function fastRejectionError(): ContentTypeDetectionError {
+  return new ContentTypeDetectionError(
+    'Failed to determine content type: TypeError: Failed to fetch',
+    false,
+    false
+  );
+}
+
+const CANNOT_BE_DISPLAYED_TEXT =
+  'The artwork cannot be displayed correctly on this device.';
+
+async function waitForCannotBeDisplayed() {
+  await waitFor(() => {
+    expect(screen.queryByText(CANNOT_BE_DISPLAYED_TEXT)).toBeTruthy();
+  });
+}
+
 afterEach(() => {
   cleanup();
   canvasService.setCastInfo(null, false);
@@ -290,28 +317,91 @@ describe('ArtworkPlayer — unresponsive-source detection failure declares faile
     // telling the viewer playback failed.
     stubWebGL();
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
-    contentTypeMock.mockRejectedValue(
-      new ContentTypeDetectionError(
-        'Failed to determine content type: AbortError: signal is aborted without reason',
-        false,
-        true
-      )
-    );
+    contentTypeMock.mockRejectedValue(timedOutAbortError());
 
     const setPlaybackDegraded = vi.fn();
     const { container } = render(playerNode(setPlaybackDegraded));
 
-    await waitFor(() => {
-      expect(
-        screen.queryByText(
-          'The artwork cannot be displayed correctly on this device.'
-        )
-      ).toBeTruthy();
-    });
+    await waitForCannotBeDisplayed();
     expect(container.querySelector('iframe')).toBeNull();
     // Not the device-wide offline backdrop: this device is online, only the
     // one source is dead.
     expect(setPlaybackDegraded).not.toHaveBeenCalled();
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+  });
+});
+
+describe('ArtworkPlayer — unresponsive-source memory survives a later fast rejection (feral-file#3583, live FF1 finding)', () => {
+  // Live-verified on an FF1: after enough consecutive timeouts against the
+  // same dead host, Chromium stops waiting out the probe's own
+  // AbortController and starts rejecting `fetch` natively and fast instead —
+  // a bare TypeError, shape-identical to a CORS block, with `timedOut:
+  // false`. Without memory of the earlier genuine timeout, this later
+  // attempt would fall through to the iframe branch and reproduce the exact
+  // bug this file fixes, on the very source already proven dead.
+  it('keeps declaring the same URL failed once timed out, even after a later retry fails fast instead', async () => {
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValueOnce(timedOutAbortError());
+
+    const setPlaybackDegraded = vi.fn();
+    let reload: (() => void) | null = null;
+    const { container } = render(
+      playerNode(setPlaybackDegraded, cb => {
+        reload = cb;
+      })
+    );
+    await waitForCannotBeDisplayed();
+
+    contentTypeMock.mockRejectedValueOnce(fastRejectionError());
+    await act(async () => {
+      reload?.();
+      await Promise.resolve();
+    });
+
+    await waitForCannotBeDisplayed();
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('forgets a URL once it genuinely resolves, so a recovered source is not stuck declared-failed', async () => {
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValueOnce(timedOutAbortError());
+
+    const setPlaybackDegraded = vi.fn();
+    let reload: (() => void) | null = null;
+    const { container } = render(
+      playerNode(setPlaybackDegraded, cb => {
+        reload = cb;
+      })
+    );
+    await waitForCannotBeDisplayed();
+
+    contentTypeMock.mockResolvedValueOnce('image/jpeg');
+    await act(async () => {
+      reload?.();
+      await Promise.resolve();
+    });
+
+    const img = await waitFor(() => {
+      const el = container.querySelector('img');
+      if (!el?.src) {
+        throw new Error('image slot has not been given a source yet');
+      }
+      return el;
+    });
+    await fireMedia(img, 'load');
+
+    // A later re-failure of the same now-recovered URL is judged fresh, not
+    // short-circuited by stale memory of the earlier timeout.
+    contentTypeMock.mockRejectedValueOnce(fastRejectionError());
+    await act(async () => {
+      reload?.();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('iframe')).toBeTruthy();
+    });
   });
 });

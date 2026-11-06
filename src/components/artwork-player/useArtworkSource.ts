@@ -39,6 +39,55 @@ async function detectPreview(url: string, suppliedType: string | undefined) {
   return { mimeType, ...getPreviewTypeConfig(mimeType) };
 }
 
+/**
+ * Classifies a detection failure and applies the matching recovery action.
+ * Returns true when it fully handled the failure (the device-wide offline
+ * backdrop, or a declared per-item failure for a source proven — now or
+ * previously — unreachable); false means the caller falls back to the
+ * iframe render.
+ *
+ * feral-file#3583, live-verified on an FF1: after enough consecutive
+ * timeouts against the same dead host, Chromium stops waiting out the
+ * probe's own AbortController and starts rejecting `fetch` natively and fast
+ * instead (a bare `TypeError`, indistinguishable from a CORS block by shape
+ * alone) — a device-level connection-failure cache/backoff, not a change in
+ * the underlying source. So `timedOut` alone is remembered per URL in
+ * `confirmedUnreachable`: once ANY attempt proves a source out via a genuine
+ * timeout, every later attempt against that same URL is treated as failed
+ * too, regardless of how that later attempt's own rejection happened to
+ * shape up. Declaring it failed — instead of rendering an iframe at a source
+ * proven dead, which would just show Chromium's own in-frame net-error page
+ * indefinitely — uses the normal per-item path: the "cannot be displayed"
+ * message and the existing retry/skip budget.
+ */
+function handleDetectionFailure(
+  error: unknown,
+  url: string,
+  confirmedUnreachable: Set<string>,
+  failureOwners: {
+    noteRef: { current: (url: string, failed: boolean) => void };
+    recovery: ArtworkRecovery;
+  }
+): boolean {
+  const { noteRef, recovery } = failureOwners;
+  if (!(error instanceof ContentTypeDetectionError)) {
+    return false;
+  }
+  if (error.isNetworkFailure) {
+    noteRef.current(url, true);
+    recovery.markArtworkFailed();
+    return true;
+  }
+  if (error.timedOut) {
+    confirmedUnreachable.add(url);
+  }
+  if (confirmedUnreachable.has(url)) {
+    recovery.fail();
+    return true;
+  }
+  return false;
+}
+
 /** MIME detection owns only this request; a superseded result cannot patch the next slot. */
 export function useArtworkSource(
   props: ArtworkPlayerProps,
@@ -51,6 +100,8 @@ export function useArtworkSource(
   useLayoutEffect(() => {
     noteRef.current = note;
   }, [note]);
+  /** Per-URL memory for `handleDetectionFailure` — see its doc comment. */
+  const confirmedUnreachableRef = useRef<Set<string>>(new Set());
   const {
     previewURL: url,
     artworkPreviewMIMEType: suppliedType,
@@ -69,6 +120,7 @@ export function useArtworkSource(
         if (cancelled || !transition.matchesTarget(url, itemIdentity ?? '')) {
           return;
         }
+        confirmedUnreachableRef.current.delete(url);
         transition.resolveSource(url, {
           ...config,
           displayPreviewURL: url,
@@ -85,24 +137,13 @@ export function useArtworkSource(
           return;
         }
         console.error('[ArtworkPlayer] Failed to detect preview type:', error);
-        if (error instanceof ContentTypeDetectionError) {
-          if (error.isNetworkFailure) {
-            noteRef.current(url, true);
-            recovery.markArtworkFailed();
-            return;
-          }
-          // The device is online (otherwise isNetworkFailure would have
-          // caught it above), but this exact source never answered within
-          // budget — feral-file#3583. Pointing an iframe at it would just
-          // render Chromium's own in-frame net-error page indefinitely, with
-          // nothing telling the viewer playback failed. Declare it failed
-          // through the normal per-item path instead: shows the "cannot be
-          // displayed" message and engages the existing retry/skip budget,
-          // same as any other declared playback failure.
-          if (error.timedOut) {
-            recovery.fail();
-            return;
-          }
+        if (
+          handleDetectionFailure(error, url, confirmedUnreachableRef.current, {
+            noteRef,
+            recovery,
+          })
+        ) {
+          return;
         }
         transition.resolveSource(url, {
           previewType: PreviewHTMLTag.iframe,
