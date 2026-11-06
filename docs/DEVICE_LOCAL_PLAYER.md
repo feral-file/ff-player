@@ -103,6 +103,12 @@ the distinct callback and composition timings.
   so settings do not remain held behind an abandoned incoming slot.
 - Corroborated-offline MIME detection reports failed and degraded, without a
   fallback iframe or artwork-error modal. Offline recovery owns that case.
+- MIME detection whose own HEAD probe survives to its own abort (the probe's
+  `AbortError`, not a native rejection) reports failed through the ordinary
+  per-item path (artwork-error modal, bounded retry/advance) instead of the
+  fallback iframe, even while the device is online — feral-file#3583: an
+  iframe pointed at a source proven unreachable within the probe's own
+  budget only ever shows Chromium's in-frame net-error page, indefinitely.
 - WebGL recovery polls every 5 s for up to 10 minutes. On availability, it waits
   2 s and reloads the active iframe key. Recovery completion or timeout resumes
   an item retry suspended by GPU loss without charging another attempt. Each
@@ -169,8 +175,11 @@ A new slot mount resets that per-mount latch.
 MIME detection treats a response-less fetch failure as offline only with
 corroboration: `navigator.onLine === false` or the daemon connectivity verdict.
 It may wait up to `DAEMON_VERDICT_WAIT_MS` for the first daemon verdict. Reached
-HTTP errors, unknown types, and uncorroborated failures retain iframe fallback.
-A fallback-typed iframe (`mimeType: null`) reports no success outcome from `load`.
+HTTP errors, unknown types, and uncorroborated failures retain iframe fallback,
+unless the probe itself timed out (its own `AbortError`, not a native
+rejection) — that case reports failed through the ordinary per-item path
+instead, online or not (feral-file#3583). A fallback-typed iframe
+(`mimeType: null`) reports no success outcome from `load`.
 
 `CDPRequestHandler` records connectivity in `DaemonConnectivity` before dispatch.
 The network hook seeds from the store and rereads it when attaching. Daemon
