@@ -103,6 +103,12 @@ the distinct callback and composition timings.
   so settings do not remain held behind an abandoned incoming slot.
 - Corroborated-offline MIME detection reports failed and degraded, without a
   fallback iframe or artwork-error modal. Offline recovery owns that case.
+- MIME detection whose own HEAD probe survives to its own abort (the probe's
+  `AbortError`, not a native rejection) reports failed through the ordinary
+  per-item path (artwork-error modal, bounded retry/advance) instead of the
+  fallback iframe, even while the device is online — feral-file#3583: an
+  iframe pointed at a source proven unreachable within the probe's own
+  budget only ever shows Chromium's in-frame net-error page, indefinitely.
 - WebGL recovery polls every 5 s for up to 10 minutes. On availability, it waits
   2 s and reloads the active iframe key. Recovery completion or timeout resumes
   an item retry suspended by GPU loss without charging another attempt. Each
@@ -202,6 +208,7 @@ owns the ring; `ArtworkRecovery` reports through `ArtworkOutcomeReporter`.
 | Stage | Kind | Source in the player | `code` |
 |---|---|---|---|
 | `detect` | fail | Content-type HEAD answered non-2xx, or got no response at all, online or offline | HTTP status, or `network` (device-local: DNS, refused, timeout and CORS look the same to a browser) |
+| `detect` | fail | The probe's own 10 s budget ran out, now or on an earlier attempt for this URL; the attempt is declared failed with no fallback iframe (feral-file#3583) | `unreachable`; counts like a watchdog expiry |
 | `load` | fail | Image/video/audio/iframe/object/model element error, fatal HLS error | element kind, or `hls_<ErrorType>` |
 | `decode` | fail | A video/audio `MediaError` | `aborted`, `network`, `decode`, `src_not_supported` |
 | `watchdog` | fail | Per-slot stuck-load watchdog expired | the load phase that ran out: `transfer`, `decode`, `opaque`, `fixed` |
@@ -220,7 +227,7 @@ entries are recorded out of band and may precede the same attempt's
 `load`/`decode`/`watchdog` entry (a `.jpg` answering 404 yields `detect/404`
 then `load/image`), and a `detect` failure can precede an `ok` in the same
 play because the iframe fallback still plays the work and reports `ready` for
-a gateway's error page; entries must be applied in `seq` order. A `detect/network` followed by an iframe `ready` is how an unresolvable host shows up (Chromium's error page loads as the fallback iframe); it is never a verdict, only a reason for controld to re-probe the source at once (ffos-user#392, follow-up of 2026-11-05). Source URLs appear in the ring only over loopback CDP.
+a gateway's error page; entries must be applied in `seq` order. A `detect/network` followed by an iframe `ready` is how an unresolvable host shows up (Chromium's error page loads as the fallback iframe); it is never a verdict, only a reason for controld to re-probe the source at once (ffos-user#392, follow-up of 2026-11-05). A timed-out probe records `detect/network` then `detect/unreachable` for the same attempt and no `ready`: the second is the attempt's countable verdict. Source URLs appear in the ring only over loopback CDP.
 
 ## Recently played
 
@@ -270,8 +277,11 @@ A new slot mount resets that per-mount latch.
 MIME detection treats a response-less fetch failure as offline only with
 corroboration: `navigator.onLine === false` or the daemon connectivity verdict.
 It may wait up to `DAEMON_VERDICT_WAIT_MS` for the first daemon verdict. Reached
-HTTP errors, unknown types, and uncorroborated failures retain iframe fallback.
-A fallback-typed iframe (`mimeType: null`) reports no success outcome from `load`.
+HTTP errors, unknown types, and uncorroborated failures retain iframe fallback,
+unless the probe itself timed out (its own `AbortError`, not a native
+rejection) — that case reports failed through the ordinary per-item path
+instead, online or not (feral-file#3583). A fallback-typed iframe
+(`mimeType: null`) reports no success outcome from `load`.
 
 `CDPRequestHandler` records connectivity in `DaemonConnectivity` before dispatch.
 The network hook seeds from the store and rereads it when attaching. Daemon

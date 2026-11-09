@@ -9,6 +9,7 @@ import { AppContext } from '@/context/AppContext';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
 import type { PlaybackOutcomeEntry } from '@/models/media_health.model';
 import { canvasService } from '@/services/CanvasService';
+import { CONTENT_TYPE_HEAD_TIMEOUT_MS } from '@/utils/helper';
 import {
   noteDaemonConnectivity,
   resetDaemonConnectivityForTests,
@@ -309,6 +310,37 @@ describe('ArtworkPlayer play-outcome ring: an unanswered content-type probe', ()
         ['fail', 'detect', 'network', undefined],
         ['ok', 'ready', undefined, 'iframe'],
       ]);
+    } finally {
+      resetDaemonConnectivityForTests();
+    }
+  });
+
+  it('declares a timed-out probe failed as detect/unreachable, with no fallback ready', async () => {
+    // feral-file#3583 on main: a host that accepts the connection and never
+    // answers survives the probe's own 10 s abort. The observer records the
+    // device-local detect/network first; the attempt's own verdict is
+    // detect/unreachable, and no iframe mounts to report a false ready.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: unknown, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted', 'AbortError'));
+          });
+        })
+      )
+    );
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    noteDaemonConnectivity(true);
+    try {
+      render(node({ mimeType: '', previewURL: 'https://art.test/blackhole/abc' }));
+      await advance(CONTENT_TYPE_HEAD_TIMEOUT_MS);
+      await until(() => sinceSeq(mark).some(entry => entry.code === 'unreachable'));
+      expect(sinceSeq(mark).map(entry => [entry.kind, entry.stage, entry.code, entry.attempt])).toEqual([
+        ['fail', 'detect', 'network', 1],
+        ['fail', 'detect', 'unreachable', 1],
+      ]);
+      expect(document.querySelector('iframe')).toBeNull();
     } finally {
       resetDaemonConnectivityForTests();
     }

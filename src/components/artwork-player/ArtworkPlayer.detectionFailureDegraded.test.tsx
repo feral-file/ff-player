@@ -24,7 +24,13 @@ import { AppContext } from '@/context/AppContext';
 import { RenderStatus } from '@/models';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ContentTypeDetectionError } from '@/utils/helper';
@@ -43,7 +49,8 @@ const EXTENSIONLESS = 'https://feralfile.com/test/generative-piece';
 
 function playerNode(
   setPlaybackDegraded: (degraded: boolean, url?: string) => void,
-  onRegisterArtworkReload?: (reload: (() => void) | null) => void
+  onRegisterArtworkReload?: (reload: (() => void) | null) => void,
+  onItemCommitted?: (identity: string) => void
 ): React.ReactElement {
   return (
     <AppContext.Provider
@@ -66,6 +73,7 @@ function playerNode(
         displayPreferences={defaultDP1DisplayPreference}
         itemIdentity={EXTENSIONLESS}
         onRegisterArtworkReload={onRegisterArtworkReload}
+        onItemCommitted={onItemCommitted}
       />
     </AppContext.Provider>
   );
@@ -85,6 +93,52 @@ function stubWebGL() {
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
     {} as never
   );
+}
+
+/** The probe's own AbortController firing — feral-file#3583's genuine-timeout shape. */
+function timedOutAbortError(): ContentTypeDetectionError {
+  return new ContentTypeDetectionError(
+    'Failed to determine content type: AbortError: signal is aborted without reason',
+    false,
+    true
+  );
+}
+
+/** A fast native rejection — the CORS-block shape, and what a dead host degrades to later. */
+function fastRejectionError(): ContentTypeDetectionError {
+  return new ContentTypeDetectionError(
+    'Failed to determine content type: TypeError: Failed to fetch',
+    false,
+    false
+  );
+}
+
+/** Both independent flags true at once — a transient offline blip during a genuine timeout. */
+function timedOutAndNetworkFailureError(): ContentTypeDetectionError {
+  return new ContentTypeDetectionError(
+    'Failed to determine content type: AbortError: signal is aborted without reason',
+    true,
+    true
+  );
+}
+
+/** A reached-but-unhelpful HTTP response (e.g. a 405) — the server answered this attempt. */
+function reachedServerUnhelpfulError(): ContentTypeDetectionError {
+  return new ContentTypeDetectionError(
+    'Failed to determine content type: Error: HEAD request failed with status 405 Method Not Allowed',
+    false,
+    false,
+    true
+  );
+}
+
+const CANNOT_BE_DISPLAYED_TEXT =
+  'The artwork cannot be displayed correctly on this device.';
+
+async function waitForCannotBeDisplayed() {
+  await waitFor(() => {
+    expect(screen.queryByText(CANNOT_BE_DISPLAYED_TEXT)).toBeTruthy();
+  });
 }
 
 afterEach(() => {
@@ -271,5 +325,196 @@ describe('ArtworkPlayer — network-classified detection failure render status',
       await vi.advanceTimersByTimeAsync(0);
     });
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+  });
+});
+
+describe('ArtworkPlayer — unresponsive-source detection failure declares failed (feral-file#3583)', () => {
+  it('shows the "cannot be displayed" message and renders no iframe for a timed-out, online-device probe', async () => {
+    // feral-file#3583: a dead IPFS gateway accepts the connection but never
+    // answers. The device is online (isNetworkFailure: false, the degraded/
+    // offline backdrop is the wrong signal here), but this one source is
+    // proven unreachable (timedOut: true) — pointing an iframe at it would
+    // just render Chromium's own in-frame net-error page with nothing ever
+    // telling the viewer playback failed.
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValue(timedOutAbortError());
+
+    const setPlaybackDegraded = vi.fn();
+    const { container } = render(playerNode(setPlaybackDegraded));
+
+    await waitForCannotBeDisplayed();
+    expect(container.querySelector('iframe')).toBeNull();
+    // Not the device-wide offline backdrop: this device is online, only the
+    // one source is dead.
+    expect(setPlaybackDegraded).not.toHaveBeenCalled();
+    expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
+  });
+});
+
+describe('ArtworkPlayer — unresponsive-source detection failure settles the transition (run-reviewer F1)', () => {
+  it('commits the failed incoming slot through the transition owner instead of leaving it wedged', async () => {
+    // Before this fix, the confirmedUnreachable branch called only
+    // recovery.fail() and never touched `transition`: the incoming slot
+    // stayed at `loading: true` forever, `commitReadySlot` never saw it
+    // ready, and `onItemCommitted` never fired for the failed item — the
+    // settings latch stayed pinned to whatever was previously on screen
+    // (surfaced live as `DisplaySettingsService`'s "The showing changed or
+    // is still loading." on an advertised showingKey that could never
+    // settle). `transition.fail()` must be what declares it, so the failed
+    // slot still commits and later work can proceed.
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValue(timedOutAbortError());
+
+    const setPlaybackDegraded = vi.fn();
+    const onItemCommitted = vi.fn();
+    render(playerNode(setPlaybackDegraded, undefined, onItemCommitted));
+
+    await waitForCannotBeDisplayed();
+    await waitFor(() => {
+      expect(onItemCommitted).toHaveBeenCalledWith(EXTENSIONLESS);
+    });
+  });
+});
+
+describe('ArtworkPlayer — unresponsive-source memory survives a later fast rejection (feral-file#3583, live FF1 finding)', () => {
+  // Live-verified on an FF1: after enough consecutive timeouts against the
+  // same dead host, Chromium stops waiting out the probe's own
+  // AbortController and starts rejecting `fetch` natively and fast instead —
+  // a bare TypeError, shape-identical to a CORS block, with `timedOut:
+  // false`. Without memory of the earlier genuine timeout, this later
+  // attempt would fall through to the iframe branch and reproduce the exact
+  // bug this file fixes, on the very source already proven dead.
+  it('keeps declaring the same URL failed once timed out, even after a later retry fails fast instead', async () => {
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValueOnce(timedOutAbortError());
+
+    const setPlaybackDegraded = vi.fn();
+    let reload: (() => void) | null = null;
+    const { container } = render(
+      playerNode(setPlaybackDegraded, cb => {
+        reload = cb;
+      })
+    );
+    await waitForCannotBeDisplayed();
+
+    contentTypeMock.mockRejectedValueOnce(fastRejectionError());
+    await act(async () => {
+      reload?.();
+      await Promise.resolve();
+    });
+
+    await waitForCannotBeDisplayed();
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('remembers a timeout even when it coincides with a corroborated offline blip, for a later fast-failing retry once back online', async () => {
+    // run-reviewer round 2, F1: isNetworkFailure and timedOut are
+    // independent flags and can both be true on the same attempt (a
+    // connectivity drop exactly while the probe's own AbortController was
+    // mid-wait). Recording timedOut only in the isNetworkFailure-false
+    // branch would drop that attempt's unreachability evidence, so a later
+    // attempt — once back online, failing fast instead — would wrongly fall
+    // through to the iframe branch.
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    contentTypeMock.mockRejectedValueOnce(timedOutAndNetworkFailureError());
+
+    const setPlaybackDegraded = vi.fn();
+    let reload: (() => void) | null = null;
+    const { container } = render(
+      playerNode(setPlaybackDegraded, cb => {
+        reload = cb;
+      })
+    );
+    await waitFor(() => {
+      expect(setPlaybackDegraded).toHaveBeenCalledWith(true, EXTENSIONLESS);
+    });
+
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValueOnce(fastRejectionError());
+    await act(async () => {
+      reload?.();
+      await Promise.resolve();
+    });
+
+    await waitForCannotBeDisplayed();
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('forgets a URL once it genuinely resolves, so a recovered source is not stuck declared-failed', async () => {
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValueOnce(timedOutAbortError());
+
+    const setPlaybackDegraded = vi.fn();
+    let reload: (() => void) | null = null;
+    const { container } = render(
+      playerNode(setPlaybackDegraded, cb => {
+        reload = cb;
+      })
+    );
+    await waitForCannotBeDisplayed();
+
+    contentTypeMock.mockResolvedValueOnce('image/jpeg');
+    await act(async () => {
+      reload?.();
+      await Promise.resolve();
+    });
+
+    const img = await waitFor(() => {
+      const el = container.querySelector('img');
+      if (!el?.src) {
+        throw new Error('image slot has not been given a source yet');
+      }
+      return el;
+    });
+    await fireMedia(img, 'load');
+
+    // A later re-failure of the same now-recovered URL is judged fresh, not
+    // short-circuited by stale memory of the earlier timeout.
+    contentTypeMock.mockRejectedValueOnce(fastRejectionError());
+    await act(async () => {
+      reload?.();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('iframe')).toBeTruthy();
+    });
+  });
+});
+
+describe('ArtworkPlayer — unresponsive-source memory clears on a reached response (feral-file#3583 review F2)', () => {
+  it('forgets a timeout once a later retry reaches the server, even with an unhelpful response', async () => {
+    // The live finding this guards: a gateway that timed out once can start
+    // answering on a later attempt, just not usefully (e.g. a 405). That
+    // attempt reached the server — the reached-but-unhelpful-HTTP
+    // classification must stay unchanged (iframe fallback), not get
+    // overridden by the earlier timeout's stale memory.
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValueOnce(timedOutAbortError());
+
+    const setPlaybackDegraded = vi.fn();
+    let reload: (() => void) | null = null;
+    const { container } = render(
+      playerNode(setPlaybackDegraded, cb => {
+        reload = cb;
+      })
+    );
+    await waitForCannotBeDisplayed();
+
+    contentTypeMock.mockRejectedValueOnce(reachedServerUnhelpfulError());
+    await act(async () => {
+      reload?.();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('iframe')).toBeTruthy();
+    });
   });
 });
