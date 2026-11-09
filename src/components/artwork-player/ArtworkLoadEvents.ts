@@ -1,3 +1,4 @@
+import { PreviewHTMLTag } from '@/models';
 import type { ArtworkRecovery } from './ArtworkRecovery';
 import type { ArtworkTransition } from './ArtworkTransition';
 import type { SlotIndex, SlotLayer } from './artworkTypes';
@@ -38,13 +39,21 @@ export class ArtworkLoadEvents {
     }
     this.note(this.transition.slot(index)?.previewURL ?? '', true);
     this.recovery.clearLoadingIndicators();
-    this.recovery.fail();
+    this.recovery.fail({ stage: 'load', code: 'model' });
   }
+  /** Shared by iframe, PDF, and object elements; the code names the element kind. */
   iframeFailed(index: SlotIndex, layer: SlotLayer) {
     if (!this.transition.loadedSource(index, layer, false)) {
       return;
     }
     this.note(this.transition.slot(index)?.previewURL ?? '', true);
-    this.transition.fail(index, layer);
+    this.transition.fail(
+      {
+        stage: 'load',
+        code: layer.previewType === PreviewHTMLTag.object ? 'object' : 'iframe',
+      },
+      index,
+      layer
+    );
   }
 }

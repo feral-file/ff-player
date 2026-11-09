@@ -53,6 +53,24 @@ interval without reloading media. A late display-preference merge instead
 preserves elapsed time when pacing is unchanged; authored duration vetoes and
 natural-length media must not lose to an unresolved manifest's default timer.
 
+## Broken-source hints
+
+controld may mark sources broken on the cast (`mediaHealth` contract v1; see
+[Device-local player](DEVICE_LOCAL_PLAYER.md#media-health-hints-and-play-outcomes)).
+Every selection is resolved through those hints BEFORE it is published: the
+cast command resolves the start slot it publishes, the command facade resolves
+an explicit move before the session publishes it, and the timeline resolves a
+timer or source-end advance, a queued shuffle/refresh promotion, and a same-id
+source replacement. Each lands on the first unhinted slot forward in play
+order. `playlist` wraps, `none` does not,
+and `one` ignores hints because the viewer asked for that work. When nothing
+else is playable the requested slot plays and the retry budget judges it. The
+hinted items stay in the list; only the selection moves, and each slot passed
+over is reported as a `skip/hint` outcome. `checkStatus.skippedIndices` reports
+the slots these rules pass over, excluding the published one. A hint-only
+`setMediaHealth` push replaces the map between casts; the work on screen keeps
+playing and the next selection applies the new map.
+
 ## Route ownership
 
 `playlist-client.tsx` renders the route. `usePlaylistPlayback` composes the view,

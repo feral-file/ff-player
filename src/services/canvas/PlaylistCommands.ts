@@ -16,6 +16,8 @@ import {
 } from '@/models/cast_request_reply.model';
 import { CustomEventName } from '@/models/custom_event';
 import { DP1Action, DP1Call, DP1Item } from '@/models/dp1.model';
+import type { PlaybackOutcomeInput } from '@/models/media_health.model';
+import { resolveHintedSkip } from '@/utils/mediaHealthSkip';
 import { normalizePlaylistIndex } from '@/utils/playlist';
 import { contentPolicyStore, policyInForce } from '../ContentPolicyStore';
 import DP1ScheduleService from '../DP1ScheduleService';
@@ -411,11 +413,21 @@ export class PlaylistCommands {
     // forced pending here would never be answered and status polls would report
     // pending for a visibly rendered artwork. Casts that do change the selected
     // artwork still get their pending from resolveRenderStatusForCastInfo.
+    // Judged against the slot playback actually lands on once controld's
+    // broken-source hints are applied (a Now Display resets loop to
+    // `playlist`, so the resolver wraps), and that resolved slot is what the
+    // cast publishes: a hinted first slot that skips back onto the work
+    // already playing is the same work and keeps its `ready`, and the
+    // session's own continuity check (resolveRenderStatusForCastInfo) sees
+    // the same slot. The slots passed over are reported as skip outcomes
+    // here, so the timeline, which finds nothing left to skip, does not.
     const currentSelectedItem = selectedPlaylistItem(
       this.session.castInfo?.playlist?.items,
       this.session.castInfo?.index
     );
-    if (!isSameSelectedArtworkIdentity(currentSelectedItem, playableItems[0])) {
+    const landing = this.landing(playableItems, request.startIndex ?? 0);
+    const landingItem = playableItems[landing.index];
+    if (!isSameSelectedArtworkIdentity(currentSelectedItem, landingItem)) {
       this.session.setRenderStatus(RenderStatus.pending);
     }
 
@@ -433,14 +445,16 @@ export class PlaylistCommands {
         })),
       },
       playlistUrl: request.playlistUrl,
-      index: normalizePlaylistIndex(
-        request.startIndex ?? 0,
-        playableItems.length
-      ),
+      index: landing.index,
       playlistId: request.dp1CallData.id,
       loopMode: LoopMode.playlist,
       shuffle: false,
     });
+    // Every accepted Now Display opens a new outcome-ring cast generation
+    // (mediaHealth contract v1), including the boot replay, a scheduled
+    // task, and the fallback: each one puts a new list on the wall, which is
+    // what `castSeq` labels for controld's drain.
+    this.openCastGeneration(landing.skipped);
     // Explicit content is now on screen — tell AppContext so an active
     // boot-fallback retry (failed or still fetching) cannot fire later and
     // replace it with the default playlist. The fallback's own cast is
@@ -507,6 +521,30 @@ export class PlaylistCommands {
     return { ok: true };
   }
 
+  /** Opens the outcome ring's next cast generation and reports the hinted slots this cast passed over under it. */
+  private openCastGeneration(skipped: DP1Item[]) {
+    this.commands.beginCast();
+    for (const item of skipped) {
+      this.commands.recordPlaybackOutcome({
+        kind: 'skip',
+        stage: 'hint',
+        source: item.source,
+        attempt: 0,
+        elapsedMs: 0,
+      });
+    }
+  }
+
+  /** Where a cast lands from its requested slot once controld's broken-source hints are applied, and the slots it passed over. */
+  private landing(items: DP1Item[], requestedIndex: number) {
+    return resolveHintedSkip({
+      index: normalizePlaylistIndex(requestedIndex, items.length),
+      items,
+      loopMode: LoopMode.playlist,
+      isBroken: this.commands.isHintedBroken,
+    });
+  }
+
   /** The playlist slot matching a work exactly: same id AND same media. */
   public findSlot(
     items: DP1Item[] | undefined,
@@ -541,6 +579,10 @@ export class PlaylistCommands {
     private readonly commands: {
       processMessage: (message: Record<string, unknown>) => Reply | undefined;
       getStatus: () => CheckDeviceStatusReply;
+      beginCast: () => void;
+      /** Whether controld's latest push marks a source broken (mediaHealth v1). */
+      isHintedBroken: (source: string) => boolean;
+      recordPlaybackOutcome: (input: PlaybackOutcomeInput) => void;
     }
   ) {}
   private processMessage(message: Record<string, unknown>) {

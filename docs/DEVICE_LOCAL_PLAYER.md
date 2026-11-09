@@ -127,6 +127,108 @@ Current limitations that callers must preserve:
   nominal 3 s retry pacing. Watchdog and fatal-HLS failures do not raise that
   degraded signal. The failure budget still bounds attempts.
 
+## Media health: hints and play outcomes
+
+`contracts.mediaHealth` (v1) pairs the player with feral-controld's
+device-side media store (feral-file/ffos-user#392). Both halves are unsigned
+projections beside the DP-1 body, like `contentContext`, and neither is
+persisted: boot and hydrate never see a hint or an outcome.
+
+**Hints.** `displayPlaylist.request.mediaHealth` is a sparse map keyed by
+`item.source` as pushed, broken entries only, each `{category, reason}`. It
+rides every push (cast, boot cast, refresh) and is replaced whole on each
+accepted one; absent means no hints, on a refresh too. A status query and a
+scheduled cast leave the live map alone; a rejected push cannot install one; a
+disconnect, the fallback playlist, and a player-local scheduled task clear it.
+`canvas/MediaHealthHints` owns the map and parses it tolerantly: a malformed
+field is skipped, a malformed map ignored, and nothing here rejects a cast.
+
+Every selection is resolved through the hints BEFORE it is published, so a
+hinted work is never mounted: `canvas/PlaylistCommands` resolves a cast's
+start slot (so the cast publishes the slot playback lands on and judges
+render-status continuity against it, keeping `ready` when an identical
+hinted recast lands on the work already playing), `CanvasService` resolves
+an explicit move the same way before the session publishes it, and
+`PlaylistTimeline` resolves every selection it makes itself (advance, queued
+promotion, source replacement). The walk is forward in play order: `playlist`
+wraps, `none` does not, `one` ignores hints. Hinted items stay in
+`checkStatus.items`; the published index is where playback landed. When
+nothing else is playable the requested slot plays and the ordinary
+retry/skip budget judges it, so a hint can never blank the wall. Each slot
+passed over is reported as a `skip/hint` outcome by whichever owner passed
+it.
+
+**Hint-only push.** `setMediaHealth {castSeq, mediaHealth}` lets controld
+deliver a verdict reached between casts (a lookahead probe, an outcome
+drain) without a re-cast (ffos-user#392, follow-up of 2026-11-05). It is
+internal to the loopback CDP seam, like `resolveRecentlyPlayed`, and a
+controller must never be able to send it; controld's cast-session router does
+not forward it. It replaces the held map, with the same parse and the same
+"absent means no hints" rule as a push, and touches nothing else: castInfo,
+the timeline and the outcome ring are left alone, and the work on screen
+keeps playing until its slot ends, because the timeline only consults the
+map at its next selection. `castSeq` must equal the current
+`outcomes.castSeq` while a cast is held, so a push that races a new cast or a
+disconnect is refused with `staleCast` (`invalidCastSeq` when it is not an
+integer), and the held map stays as it was. Success replies `{ok:true,
+skippedIndices}`, the value the next status read reports. The manifest
+lists it under `contracts.mediaHealth.commands`; the version stays 1, so
+controld feature-detects the command by name.
+
+**Hint skips.** `checkStatus.skippedIndices` lists, ascending, the indices of
+`checkStatus.items` the player is passing over because of a hint it holds;
+it is always present on a supporting player (`[]` when nothing is hinted or
+nothing is cast). It reports the player's state, not controld's observation:
+controld copies it per item into `player_status.mediaHealth[i].skipped`, so a
+source controld observed broken but did not hint (an expired verdict, one the
+offline cache can replay, a push still in flight) never reads as skipped, and
+a hint the player still holds reads as skipped until a push replaces it
+(ffos-user#392, follow-up of 2026-11-05). It applies the selection rules
+above to every slot at once (`hintSkippedIndices`, cross-checked against the
+resolver): `[]` under `one` or when every slot is hinted, every hinted slot
+under `playlist`, and under `none` only a hinted slot with an unhinted one
+after it. The published index is never listed: the work on the wall is not
+being skipped, including one whose hint arrived on a refresh mid-play, which
+is listed once playback leaves it. `canvas/CanvasStatus` recomputes it on
+every status read.
+
+**Outcomes.** `checkStatus.outcomes` is `{castSeq, entries}`, always present
+on a supporting player and empty until the first mount reports. Entries are
+oldest first, at most 64, each `{seq, castSeq, source, kind, stage, code?,
+mediaType?, attempt, elapsedMs, at}`. The outer `castSeq` is the current
+generation and increments on every accepted Now Display; each entry keeps the
+`castSeq` it was recorded under, so its `(castSeq, seq)` identity never
+changes while it is retained and an undrained failure cannot count again as
+corroboration from a later cast. `seq` is monotonic for the page and never
+reset, so a `seq` that goes backwards means the player restarted. Nothing is
+removed on read; controld dedupes by the entry's `(castSeq, seq)` (or `seq`
+alone) and reads a jump as a gap. `canvas/PlaybackOutcomes`
+owns the ring; `ArtworkRecovery` reports through `ArtworkOutcomeReporter`.
+
+| Stage | Kind | Source in the player | `code` |
+|---|---|---|---|
+| `detect` | fail | Content-type HEAD answered non-2xx, or got no response at all, online or offline | HTTP status, or `network` (device-local: DNS, refused, timeout and CORS look the same to a browser) |
+| `detect` | fail | The probe's own 10 s budget ran out, now or on an earlier attempt for this URL; the attempt is declared failed with no fallback iframe (feral-file#3583) | `unreachable`; counts like a watchdog expiry |
+| `load` | fail | Image/video/audio/iframe/object/model element error, fatal HLS error | element kind, or `hls_<ErrorType>` |
+| `decode` | fail | A video/audio `MediaError` | `aborted`, `network`, `decode`, `src_not_supported` |
+| `watchdog` | fail | Per-slot stuck-load watchdog expired | the load phase that ran out: `transfer`, `decode`, `opaque`, `fixed` |
+| `webgl` | fail | GPU context lost on the probe canvas | `context_lost`; device-local, never a source verdict |
+| `exhausted` | fail | Retry budget spent; the playlist advances | the attempt limit |
+| `hint` | skip | The timeline honoured a hint; nothing mounted | none; `attempt` and `elapsedMs` are 0 |
+| `ready` | ok | The mount reached `ready` | none; `elapsedMs` is mount to ready |
+
+One `fail` entry per attempt: competing signals for the same attempt collapse
+at the transition into `failed`, so the ring and the retry budget agree on
+which try a verdict belongs to. `attempt` is 1-based within the per-item budget
+and resets on a new work or a genuine success. The number is fixed when the
+mount starts, so a retry success reports `attempt: 2` while a late success
+inside the mount the watchdog already failed keeps that mount's `attempt: 1`. `detect` and `webgl`
+entries are recorded out of band and may precede the same attempt's
+`load`/`decode`/`watchdog` entry (a `.jpg` answering 404 yields `detect/404`
+then `load/image`), and a `detect` failure can precede an `ok` in the same
+play because the iframe fallback still plays the work and reports `ready` for
+a gateway's error page; entries must be applied in `seq` order. A `detect/network` followed by an iframe `ready` is how an unresolvable host shows up (Chromium's error page loads as the fallback iframe); it is never a verdict, only a reason for controld to re-probe the source at once (ffos-user#392, follow-up of 2026-11-05). A timed-out probe records `detect/network` then `detect/unreachable` for the same attempt and no `ready`: the second is the attempt's countable verdict. Source URLs appear in the ring only over loopback CDP.
+
 ## Recently played
 
 `getRecentlyPlayed` returns a bounded reverse-chronological timeline of successful

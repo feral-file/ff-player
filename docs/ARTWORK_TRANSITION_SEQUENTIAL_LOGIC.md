@@ -11,6 +11,7 @@ stable interfaces; `CanvasService` remains the command/status interface.
 | `useArtworkSource` | MIME detection and software-URL selection for the current request. |
 | `SlotMediaResources` / `useSlotMedia` | Elements, media loaders, abort controllers, per-slot progress watchdogs, HLS instances, and media setup/cleanup. |
 | `ArtworkRecovery` / `useArtworkRecovery` | Render lifecycle, overlay delay, retry budget, and degraded reporting. |
+| `ArtworkOutcomes` | The play-outcome ring's wire shape for one mount attempt; reports only, never decides. |
 | `useWebGLRecovery` | GPU probe, context events, and recovery interval. |
 | `useCommittedComposition` | Selected versus committed visual settings and the layout-phase composition reporter. |
 | `useWorkOriginFrame` | Authenticated shell handshake and private-channel completion. |
@@ -41,7 +42,9 @@ A request invalidates the previous fade, removes the stale non-active layer,
 publishes pending, arms the loading delay, and creates an incoming layer. It
 resets that mount's failure and played latches. MIME results apply only while
 that request remains current. Unknown/unconfirmed types use iframe fallback;
-corroborated-offline detection follows the separate recovery contract.
+corroborated-offline detection follows the separate recovery contract. A probe
+that gets no response is recorded as a device-local `detect/network` outcome on
+both paths, before the fallback or the offline failure.
 
 The active layer remains mounted while incoming media loads. The delayed global
 loading overlay can cover it; retaining the outgoing slot does not imply that

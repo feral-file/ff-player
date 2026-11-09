@@ -6,6 +6,7 @@ import { DP1Defaults, DP1Item } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
+import { resolveHintedSkip } from '@/utils/mediaHealthSkip';
 import type { SlotMergedDisplay } from '@/utils/playlist';
 import {
   isNoDurationItem,
@@ -96,6 +97,37 @@ export class PlaylistTimeline {
     this.ports.resetPreference();
     this.ports.clearPreview();
   }
+  /**
+   * The slot a selection lands on once controld's broken-source hints are
+   * applied. Every selection site resolves through here BEFORE publishing, so
+   * a hinted work is never mounted; each slot passed over is reported as a
+   * `skip/hint` outcome so controld can confirm the hint was honoured. See
+   * resolveHintedSkip for the loop-mode and all-broken rules.
+   */
+  private playable(index: number, snapshot: DP1Item[]): number {
+    const { index: next, skipped } = resolveHintedSkip({
+      index,
+      items: snapshot,
+      loopMode: this.loop,
+      isBroken: source => canvasService.getMediaHealthHint(source) !== undefined,
+    });
+    for (const item of skipped) {
+      canvasService.recordPlaybackOutcome({
+        kind: 'skip',
+        stage: 'hint',
+        source: item.source,
+        attempt: 0,
+        elapsedMs: 0,
+      });
+    }
+    return next;
+  }
+  /** Mirror a hint-resolved selection the way every other index handoff here does. */
+  private select(index: number) {
+    this.index = index;
+    this.ui.setIndex(index);
+    canvasService.publishIndexUpdate(index);
+  }
   private replay(index: number, snapshot: DP1Item[], cause: AdvanceCause) {
     if (!snapshot.length) {
       return;
@@ -127,14 +159,17 @@ export class PlaylistTimeline {
 
     const hasDeferredRefresh = canvasService.hasDeferredRefreshPlaylist();
     const currentCastInfo = canvasService.getCastInfo();
-    const nextIndex = resolveQueuedPlaylistNextIndex({
-      targetIndex,
-      queuedPlaylist,
-      previousItems: currentCastInfo?.playlist?.items,
-      hasDeferredRefresh,
-      currentItemId: this.currentItem?.id,
-      keepCurrent,
-    });
+    const nextIndex = this.playable(
+      resolveQueuedPlaylistNextIndex({
+        targetIndex,
+        queuedPlaylist,
+        previousItems: currentCastInfo?.playlist?.items,
+        hasDeferredRefresh,
+        currentItemId: this.currentItem?.id,
+        keepCurrent,
+      }),
+      queuedPlaylist
+    );
 
     this.ui.setPlaylist(queuedPlaylist);
     this.ui.setIndex(nextIndex);
@@ -193,11 +228,15 @@ export class PlaylistTimeline {
       return;
     }
 
-    const nextIndex = resolveSequentialPlaylistAdvance({
+    const sequentialIndex = resolveSequentialPlaylistAdvance({
       currentIndex: fromIndex,
       playlistLength: snapshot.length,
       loopMode: this.loop,
     });
+    const nextIndex =
+      sequentialIndex === null
+        ? null
+        : this.playable(sequentialIndex, snapshot);
     if (nextIndex === null) {
       // Repeat-off holds the final work. Failure retries in place because
       // there is no next target; queued updates have already had first refusal.
@@ -411,7 +450,14 @@ export class PlaylistTimeline {
         castInfo.index ?? 0,
         castInfo.playlist.items.length
       );
-      this.ui.setIndex(startIndex);
+      const playableIndex = this.playable(startIndex, castInfo.playlist.items);
+      if (playableIndex === startIndex) {
+        this.ui.setIndex(startIndex);
+      } else {
+        // The cast landed on a hinted work: publish where playback really
+        // starts so status never reports a slot the wall skipped.
+        this.select(playableIndex);
+      }
     } else {
       this.clearPlayable();
     }
@@ -442,9 +488,13 @@ export class PlaylistTimeline {
           castInfo.index ?? 0,
           incoming.length
         );
-        this.index = resolvedIndex;
-        this.ui.setIndex(resolvedIndex);
+        const playableIndex = this.playable(resolvedIndex, incoming);
+        this.index = playableIndex;
+        this.ui.setIndex(playableIndex);
         canvasService.clearQueuedPlaylistPending();
+        if (playableIndex !== resolvedIndex) {
+          canvasService.publishIndexUpdate(playableIndex);
+        }
         return;
       }
       if (
@@ -477,12 +527,19 @@ export class PlaylistTimeline {
     }
 
     this.holding = false;
-    if (castInfo.playlist?.items?.length) {
-      this.ui.setIndex(
-        normalizePlaylistIndex(castInfo.index, castInfo.playlist.items.length)
-      );
-    } else {
+    const items = castInfo.playlist?.items;
+    if (!items?.length) {
       this.ui.setIndex(castInfo.index);
+      return;
+    }
+    const requested = normalizePlaylistIndex(castInfo.index, items.length);
+    const playableIndex = this.playable(requested, items);
+    if (playableIndex === requested) {
+      this.ui.setIndex(requested);
+    } else {
+      // An explicit move onto a hinted work lands on the next playable one,
+      // and the resolved slot is published so the controller sees it.
+      this.select(playableIndex);
     }
   }
   private changeLoop(castInfo: CastInfo) {

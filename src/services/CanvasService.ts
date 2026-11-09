@@ -27,16 +27,27 @@ import {
   UpdateDefaultDurationRequest,
 } from '@/models/cast_request_reply.model';
 import {
+  DP1Action,
   DP1Call,
   DP1Defaults,
   DP1DisplayPreference,
   DP1Item,
 } from '@/models/dp1.model';
+import type {
+  MediaHealthHint,
+  PlaybackOutcomeInput,
+  SetMediaHealthReply,
+  SetMediaHealthRequest,
+} from '@/models/media_health.model';
 import DeviceManager from '@/utils/DeviceManager';
+import { coerceLoopMode } from '@/utils/loopMode';
+import { resolveHintedSkip } from '@/utils/mediaHealthSkip';
 import { BootPlaylistStore } from './canvas/BootPlaylistStore';
 import { CanvasStatus } from './canvas/CanvasStatus';
 import { CursorService } from './canvas/CursorService';
 import { DisplaySettingsService } from './canvas/DisplaySettingsService';
+import { MediaHealthHintStore } from './canvas/MediaHealthHints';
+import { PlaybackOutcomeRing } from './canvas/PlaybackOutcomes';
 import { PlaybackRecovery } from './canvas/PlaybackRecovery';
 import { PlaybackSession } from './canvas/PlaybackSession';
 import { PlaylistCommands } from './canvas/PlaylistCommands';
@@ -133,6 +144,8 @@ class CanvasService {
           return this.getRecentlyPlayed();
         case CastCommand.resolveRecentlyPlayed:
           return this.resolveRecentlyPlayed(requestJson);
+        case CastCommand.setMediaHealth:
+          return this.setMediaHealth(requestJson);
         default:
           console.error(`[CAST] Unknown command: ${command}`);
           return { ok: false };
@@ -258,7 +271,56 @@ class CanvasService {
     dp1CallData: DP1Call,
     contentContext?: ContentContext
   ): void {
+    // A player-local scheduled task is a cast without a push, so it carries
+    // no hints: the previous push's map must not judge a different list.
+    this.hints.clear();
     this.playlists.executeScheduledDP1Task(dp1CallData, contentContext);
+  }
+
+  /**
+   * MediaHealth contract v1: controld's hint for a source on the latest push,
+   * or undefined when the source is not marked broken. The playlist timeline
+   * consults this before mounting a slot; nothing else reads it.
+   */
+  public getMediaHealthHint(source: string): MediaHealthHint | undefined {
+    return this.hints.hint(source);
+  }
+
+  /**
+   * MediaHealth contract v1, `setMediaHealth`: controld's hint-only push for
+   * a verdict reached between casts (ffos-user#392, follow-up of
+   * 2026-11-05). Replaces the held map and nothing else: no castInfo write,
+   * no timeline rebuild, no outcome entry, and the work on screen keeps
+   * playing, because the timeline consults the map only at its next
+   * selection. Fenced by `castSeq`, the ring generation the map was computed
+   * for, so a push racing a new cast cannot judge the wrong list; with no
+   * cast held there is nothing to describe (a disconnect cleared the map
+   * without opening a generation), so that is stale too. A refusal leaves the
+   * map untouched. Same tolerant parse as the push: an absent or malformed
+   * map means no hints.
+   */
+  private setMediaHealth(request: unknown): SetMediaHealthReply {
+    const { castSeq, mediaHealth } = (
+      request && typeof request === 'object' ? request : {}
+    ) as SetMediaHealthRequest;
+    if (typeof castSeq !== 'number' || !Number.isInteger(castSeq)) {
+      return { ok: false, error: 'invalidCastSeq' };
+    }
+    if (castSeq !== this.outcomes.castSeq || !this.session.castInfo) {
+      return { ok: false, error: 'staleCast' };
+    }
+    this.hints.replace(mediaHealth);
+    return { ok: true, skippedIndices: this.status.skippedIndices() };
+  }
+
+  /**
+   * MediaHealth contract v1: append one per-play outcome to the status ring.
+   * Called by the renderer's recovery owner for every mount decision and by
+   * the timeline when it honours a hint. Never throws and never blocks
+   * playback; the ring is observability only.
+   */
+  public recordPlaybackOutcome(input: PlaybackOutcomeInput): void {
+    this.outcomes.record(input);
   }
 
   public castPlaylistByURL(
@@ -286,6 +348,8 @@ class CanvasService {
   }
 
   public disconnect(): DisconnectReplyV2 {
+    // A cleared wall has nothing the hints could describe.
+    this.hints.clear();
     return this.recovery.disconnect();
   }
 
@@ -314,8 +378,37 @@ class CanvasService {
     return this.recovery.setSleepMode(request);
   }
 
+  /**
+   * An explicit move is resolved through controld's broken-source hints
+   * BEFORE the session publishes it, for the same reason a cast resolves its
+   * start slot: the session's render-status continuity compares the work on
+   * screen with the published slot, so publishing the hinted slot first and
+   * letting the timeline skip back would reset a still-playing work to
+   * pending with nothing left to answer it. The slots passed over are
+   * reported here; the timeline then finds nothing left to skip.
+   */
   private moveToArtwork(request: MoveToItemRequest): MoveToItemReply {
-    return this.session.moveToArtwork(request);
+    const cast = this.session.castInfo;
+    const items = cast?.playlist?.items ?? [];
+    if (request.index < 0 || !items.length) {
+      return this.session.moveToArtwork(request);
+    }
+    const landing = resolveHintedSkip({
+      index: request.index,
+      items,
+      loopMode: coerceLoopMode(cast?.loopMode),
+      isBroken: source => this.hints.hint(source) !== undefined,
+    });
+    for (const item of landing.skipped) {
+      this.outcomes.record({
+        kind: 'skip',
+        stage: 'hint',
+        source: item.source,
+        attempt: 0,
+        elapsedMs: 0,
+      });
+    }
+    return this.session.moveToArtwork({ ...request, index: landing.index });
   }
 
   public requestArtworkRefresh(): boolean {
@@ -345,7 +438,27 @@ class CanvasService {
   private displayPlaylist(
     request: DisplayPlaylistRequest
   ): DisplayPlaylistReply {
-    return this.playlists.displayPlaylist(request);
+    // Hints ride every accepted push that changes what is on the wall: a
+    // cast, a boot cast, and a refresh. A status query and a scheduled cast
+    // describe a list that is not playing, so they leave the live map alone.
+    // Installed BEFORE the command, because nowDisplayPlaylist judges
+    // render-status continuity against the hint-resolved start slot, and
+    // restored if the push is refused so the hints of a cast that never
+    // landed cannot judge the one still playing. Nothing between the two
+    // reads the map: the timeline consults it only from a later React effect.
+    const action = request.intent?.action;
+    const carriesHints =
+      action !== DP1Action.GetCurrentPlaylist &&
+      action !== DP1Action.SchedulePlay;
+    const previous = carriesHints ? this.hints.snapshot() : null;
+    if (carriesHints) {
+      this.hints.replace(request.mediaHealth);
+    }
+    const reply = this.playlists.displayPlaylist(request);
+    if (previous && !reply.ok) {
+      this.hints.restore(previous);
+    }
+    return reply;
   }
 
   private setShuffle(request: SetShuffleRequest): Reply {
@@ -390,12 +503,29 @@ class CanvasService {
   private readonly settings = new DisplaySettingsService();
   private readonly cursors = new CursorService();
   private readonly recovery = new PlaybackRecovery(this.session, this.history);
-  private readonly status = new CanvasStatus(this.session, this.settings);
+  private readonly hints = new MediaHealthHintStore();
+  private readonly outcomes = new PlaybackOutcomeRing();
+  private readonly status = new CanvasStatus(
+    this.session,
+    this.settings,
+    this.outcomes,
+    this.hints
+  );
   private readonly playlists = new PlaylistCommands(
     this.session,
     this.history,
     this.boot,
-    this
+    {
+      processMessage: message => this.processMessage(message),
+      getStatus: () => this.getStatus(),
+      beginCast: () => {
+        this.outcomes.beginCast();
+      },
+      isHintedBroken: source => this.hints.hint(source) !== undefined,
+      recordPlaybackOutcome: input => {
+        this.outcomes.record(input);
+      },
+    }
   );
   get onCastInfoChange() {
     return this.session.onCastInfoChange;
