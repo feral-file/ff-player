@@ -136,6 +136,9 @@ function FrameSlot({ index, slot, resources, events }: ArtworkSlotProps) {
       key={`${String(slot.iframeKey)}-${artworkIframeSandbox(slot.displaySoftwareURL)}`}
       ref={resources.refs(index).iframe}
       className={styles.iframe}
+      // Native text documents use black glyphs on transparent paper. Give
+      // only plain text an opaque canvas; authored HTML keeps transparency.
+      style={{ backgroundColor: slot.mimeType?.split(';')[0].trim().toLowerCase() === 'text/plain' ? '#ffffff' : undefined }}
       src={slot.displaySoftwareURL}
       onLoad={() => {
         if (!isWorkOriginURL(slot.displaySoftwareURL)) {

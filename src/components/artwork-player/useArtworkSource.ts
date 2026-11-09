@@ -14,6 +14,7 @@ import {
   usesWorkOrigin,
 } from '@/utils/workOrigin';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { verifiedIPFSDirectoryPresentationURL, needsIPFSDirectoryProbe } from '@/utils/ipfsDirectory';
 import type { ArtworkRecovery } from './ArtworkRecovery';
 import type { ArtworkTransition, Slots } from './ArtworkTransition';
 import {
@@ -29,14 +30,29 @@ interface SourceOwners {
   note: (url: string, failed: boolean) => void;
 }
 
-/** An absent or empty authored MIME type uses the existing network detector. */
+/** Reuse MIME detection to resolve query-losing IPFS directory redirects. */
 async function detectPreview(url: string, suppliedType: string | undefined) {
-  const resolvedType =
-    suppliedType !== undefined && suppliedType !== ''
-      ? suppliedType
-      : await getContentTypeFromURL(url);
+  let sourceResponse: Response | undefined;
+  const hasSuppliedType = suppliedType !== undefined && suppliedType !== '';
+  const probeDirectory = needsIPFSDirectoryProbe(url);
+  const suppliedConfig = hasSuppliedType ? getPreviewTypeConfig(suppliedType) : null;
+  const detect = () => probeDirectory
+    ? getContentTypeFromURL(url, response => {
+        sourceResponse = response;
+      })
+    : getContentTypeFromURL(url);
+  // Declared HTML normally skips HEAD. A possible directory redirect still
+  // needs inspection, but a blocked optional probe must not veto that source.
+  const resolvedType = hasSuppliedType
+    ? (probeDirectory && suppliedConfig?.previewType === PreviewHTMLTag.iframe
+        ? await detect().then(() => suppliedType, () => suppliedType)
+        : suppliedType)
+    : await detect();
   const mimeType = resolvedType.toLowerCase();
-  return { mimeType, ...getPreviewTypeConfig(mimeType) };
+  const displayURL = sourceResponse
+    ? await verifiedIPFSDirectoryPresentationURL(url, sourceResponse)
+    : url;
+  return { mimeType, displayURL, ...getPreviewTypeConfig(mimeType) };
 }
 
 /**
@@ -146,15 +162,16 @@ export function useArtworkSource(
           return;
         }
         confirmedUnreachableRef.current.delete(url);
+        const { displayURL, ...previewConfig } = config;
         transition.resolveSource(url, {
-          ...config,
-          displayPreviewURL: url,
+          ...previewConfig,
+          displayPreviewURL: displayURL,
           displaySoftwareURL:
             config.previewType === PreviewHTMLTag.iframe &&
             !isModelMimeType(config.mimeType) &&
             usesWorkOrigin(url)
               ? ''
-              : url,
+              : displayURL,
         });
       })
       .catch((error: unknown) => {

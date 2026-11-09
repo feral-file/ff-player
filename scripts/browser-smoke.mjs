@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Chromium } from './browser-smoke/chromium.mjs';
 import { SmokeFixtures } from './browser-smoke/fixtures.mjs';
+import { checkArtworkContent } from './browser-smoke/content-scenarios.mjs';
 import {
   PlayerProbe,
   initializePlayer,
@@ -47,6 +48,7 @@ async function main() {
     await checkImages(player);
     await checkVideo(player);
     await checkIsolatedHTML(player, fixtures);
+    await checkArtworkContent(player);
     await checkSleepWake(player);
     console.log(`Browser smoke passed. Evidence: ${artifacts}`);
   } catch (error) {
