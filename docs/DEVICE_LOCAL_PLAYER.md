@@ -295,3 +295,22 @@ and `hidden`. It overlays playback without unmounting it. FF OS checks
 
 Persisted storage keys and wire payload shapes are compatibility boundaries.
 Changing them requires the corresponding migration or paired-controller work.
+
+## Plain-text artworks and IPFS directory navigation
+
+Plain-text iframe artworks have an opaque white canvas behind the browser's
+native black text. The source bytes, Unicode, whitespace, and native text layout
+are preserved. HTML iframes retain transparency and their authored presentation.
+
+For an HTTP IPFS source with query parameters and no trailing slash, the bounded
+MIME HEAD probe also checks the final response URL. A successful HTML response
+that redirects to exactly the same origin and path plus `/` proves a directory:
+one additional bounded HEAD confirms that the query-preserving destination
+answers directly with HTML before the iframe uses it. The original query and
+fragment are preserved byte-for-byte. File CIDs, other redirects, and other media
+are unchanged.
+Authored HTML MIME types use the same optional probe; a failed probe retains the
+authored source. Playlist sources and item identities are never rewritten.
+Cached redirect chains may contain only the original source and its queryless
+destination. A missing or redirected confirmation retains the original source
+and its playable replay chain; the player never assumes a new cache key exists.

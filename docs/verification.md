@@ -87,7 +87,9 @@ Only a constrained container that cannot use Chromium's sandbox should add
 
 The smoke checks image Fit/Fill and matte bounds, outgoing composition during
 handoff, video playback, delayed isolated HTML readiness and storage/parent
-isolation, sleep/wake, and recently played. It writes screenshots, assertion
+isolation, plain-text contrast with exact Unicode/whitespace preservation, HTML
+transparency, query-losing IPFS directory redirects and cached redirect chains,
+sleep/wake, and recently played. It writes screenshots, assertion
 results (`evidence.json`), and browser diagnostics to the artifact directory,
 and exits nonzero on failure. Review the screenshots for visual defects;
 geometry assertions alone cannot judge a fade's appearance. Browser storage and
