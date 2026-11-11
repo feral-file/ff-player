@@ -127,4 +127,37 @@ describe('PlaylistClient after a grown refresh re-sent unchanged', () => {
 
     expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
   });
+
+  it('mounts the replaced source after a cancelled deferred refresh', async () => {
+    const items = [item('a', 60), item('b', 60)];
+    render(<LiveHarness />);
+    cast(items, undefined);
+    await advanceMs(0);
+    const replaced = [
+      items[0],
+      { ...items[1], source: 'https://example.com/b-v2.jpg' } as DP1Item,
+    ];
+    send(CastCommand.displayPlaylist, {
+      refresh: true,
+      dp1_call: dp1Call('pl', replaced),
+    });
+    // Removes the work on screen: deferred.
+    send(CastCommand.displayPlaylist, {
+      refresh: true,
+      dp1_call: dp1Call('pl', [item('x', 60), item('y', 60)]),
+    });
+    // Back to the replaced list: cancels the deferred refresh.
+    send(CastCommand.displayPlaylist, {
+      refresh: true,
+      dp1_call: dp1Call('pl', replaced),
+    });
+
+    send(CastCommand.moveToArtwork, { index: 1 });
+    await advanceMs(0);
+
+    expect(canvasService.getStatus().items?.[1]?.source).toBe(
+      replaced[1].source
+    );
+    expect(mountedURL()).toBe(replaced[1].source);
+  });
 });

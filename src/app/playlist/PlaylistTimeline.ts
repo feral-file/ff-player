@@ -4,6 +4,7 @@ import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import { DP1Defaults, DP1Item } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
+import { deepEqual } from '@/utils/helper';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
 import { resolveHintedSkip } from '@/utils/mediaHealthSkip';
@@ -552,14 +553,16 @@ export class PlaylistTimeline {
    * 1535 while showing item 119 % 50 = 19).
    */
   private installCastItems(items: DP1Item[]) {
-    if (sameItemIds(this.items, items)) {
-      return;
-    }
-    this.ports.clearMergedDisplay();
     const installed = items.map(item => ({
       ...item,
       duration: item.duration ?? NO_DURATION_VALUE,
     }));
+    // Whole items, not ids: a refresh can keep a work's id and replace its
+    // source, and the screen must not keep the obsolete one.
+    if (deepEqual(this.items, installed)) {
+      return;
+    }
+    this.ports.clearMergedDisplay();
     this.ui.setPlaylist(installed);
     this.items = installed;
   }
@@ -587,9 +590,4 @@ export class PlaylistTimeline {
       this.schedule(this.index, activePlaylist);
     }
   }
-}
-
-/** Whether two lists hold the same works in the same order (by item id). */
-function sameItemIds(a: DP1Item[], b: DP1Item[]): boolean {
-  return a.length === b.length && a.every((item, i) => item.id === b[i]?.id);
 }
