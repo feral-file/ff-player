@@ -532,6 +532,7 @@ export class PlaylistTimeline {
       this.ui.setIndex(castInfo.index);
       return;
     }
+    this.installCastItems(items);
     const requested = normalizePlaylistIndex(castInfo.index, items.length);
     const playableIndex = this.playable(requested, items);
     if (playableIndex === requested) {
@@ -541,6 +542,26 @@ export class PlaylistTimeline {
       // and the resolved slot is published so the controller sees it.
       this.select(playableIndex);
     }
+  }
+  /**
+   * An explicit move resolves its index against castInfo's list, and status
+   * reports that list; the screen must hold the same one. When it holds an
+   * earlier list (a refresh not yet installed), install castInfo's first —
+   * otherwise the renderer wraps the index against the shorter list and
+   * mounts a different work than status names (an FF1 reported item 119 of
+   * 1535 while showing item 119 % 50 = 19).
+   */
+  private installCastItems(items: DP1Item[]) {
+    if (sameItemIds(this.items, items)) {
+      return;
+    }
+    this.ports.clearMergedDisplay();
+    const installed = items.map(item => ({
+      ...item,
+      duration: item.duration ?? NO_DURATION_VALUE,
+    }));
+    this.ui.setPlaylist(installed);
+    this.items = installed;
   }
   private changeLoop(castInfo: CastInfo) {
     const nextLoopMode = coerceLoopMode(castInfo.loopMode);
@@ -566,4 +587,9 @@ export class PlaylistTimeline {
       this.schedule(this.index, activePlaylist);
     }
   }
+}
+
+/** Whether two lists hold the same works in the same order (by item id). */
+function sameItemIds(a: DP1Item[], b: DP1Item[]): boolean {
+  return a.length === b.length && a.every((item, i) => item.id === b[i]?.id);
 }

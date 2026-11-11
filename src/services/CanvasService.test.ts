@@ -342,6 +342,22 @@ describe('CanvasService deferred refresh', () => {
     });
   });
 
+  it('keeps a queued refresh pending when the same list is re-sent', () => {
+    const current = playlist('grow', ['A', 'B'].map(item), defaults('red'));
+    canvasService.setCastInfo(
+      { castCommand: CastCommand.displayPlaylist, playlist: current, index: 0 },
+      false
+    );
+    const grown = playlist('grow', ['A', 'B', 'C'].map(item), defaults('red')).items;
+    service.refreshPlaylist(grown);
+    expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
+
+    // castInfo already holds the grown list; the player has not installed it.
+    service.refreshPlaylist(grown);
+    expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
+    expect(canvasService.getQueuedPlaylistItems()?.map(entry => entry.id)).toEqual(['A', 'B', 'C']);
+  });
+
   it('ignores refresh payloads when only non-item metadata changes', () => {
     const currentPlaylist = playlist('same', ['A', 'B'].map(item), defaults('red'));
     canvasService.setCastInfo(
