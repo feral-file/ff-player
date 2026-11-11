@@ -700,7 +700,21 @@ export class PlaybackSession {
 
   /** Preserve a queued shuffle while publishing an origin-only refresh. */
   private refreshUnchangedItems(prior: CastInfo | null): void {
-    if (!(prior?.shuffle && this.originalPlaylistItems?.length)) {
+    // Two pending shapes, and only one is cancelled by an identical list.
+    // A DEFERRED refresh keeps castInfo on the list on screen, so a list
+    // identical to castInfo is a return to what is showing: cancel it. A
+    // QUEUED refresh already wrote its list into castInfo for the player to
+    // install at the next boundary, so an identical list is that same
+    // refresh re-sent and must keep it pending. Cancelling it left a wall
+    // cycling the old list for good while status reported the new one (an
+    // FF1 played a 50-item cast while castInfo held 1535 items, and
+    // moveToArtwork(119) mounted item 119 % 50 = 19).
+    const queuedInCastInfo =
+      this.queuedPlaylistPending && this.deferredRefreshPlaylist === null;
+    if (
+      !(prior?.shuffle && this.originalPlaylistItems?.length) &&
+      !queuedInCastInfo
+    ) {
       this.queuedPlaylistPending = false;
       this.setDeferredRefreshPlaylist(null);
     }
