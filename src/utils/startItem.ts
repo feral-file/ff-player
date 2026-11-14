@@ -14,13 +14,13 @@ export interface StartItem {
   source?: string;
 }
 
-const text = (value: unknown): string | undefined => {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed === '' ? undefined : trimmed;
-};
+/**
+ * A string that names something, exactly as given, or undefined. Trimming is
+ * used only to tell a blank value from a usable one: identities are compared
+ * as the exact strings both sides hold, so padding is never normalized away.
+ */
+const usable = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim() !== '' ? value : undefined;
 
 /**
  * The slot of `items` a cast should open on for the requested `startItem`,
@@ -36,6 +36,8 @@ const text = (value: unknown): string | undefined => {
  * is not an object with a usable string in `id` or `source` asks for
  * nothing. A work that is not in the list is not an error either. The cast
  * starts at its beginning, which is what it did before this argument existed.
+ *
+ * Ids and sources are compared exactly, as the strings both sides hold.
  */
 export function startItemIndex(
   items: DP1Item[],
@@ -49,16 +51,16 @@ export function startItemIndex(
     return undefined;
   }
   const { id: rawId, source: rawSource } = startItem as Record<string, unknown>;
-  const id = text(rawId);
+  const id = usable(rawId);
   if (id !== undefined) {
-    // `text` rather than a bare compare: an item off the wire may carry no
-    // id at all, and this must not throw on it.
-    const byId = items.findIndex(item => text(item.id) === id);
+    // An item off the wire may carry no id at all; `===` on undefined is
+    // simply no match, so nothing here can throw on it.
+    const byId = items.findIndex(item => (item.id as unknown) === id);
     if (byId >= 0) {
       return byId;
     }
   }
-  const source = text(rawSource);
+  const source = usable(rawSource);
   if (source !== undefined) {
     const bySource = items.findIndex(item => item.source === source);
     if (bySource >= 0) {

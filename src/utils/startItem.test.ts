@@ -33,6 +33,18 @@ describe('startItemIndex', () => {
     expect(startItemIndex([item('a'), item('b'), item('a')], { id: 'a' })).toBe(0);
   });
 
+  it('compares ids exactly: padding in the list is another id', () => {
+    const padded = [item('a'), item('c '), item('c')];
+    expect(startItemIndex(padded, { id: 'c' })).toBe(2);
+    expect(startItemIndex(padded, { id: 'c ' })).toBe(1);
+  });
+
+  it('compares sources exactly, padded ones included', () => {
+    const padded = [item('a'), item('b', ' https://art.test/b ')];
+    expect(startItemIndex(padded, { source: ' https://art.test/b ' })).toBe(1);
+    expect(startItemIndex(padded, { source: 'https://art.test/b' })).toBeUndefined();
+  });
+
   it('does not throw on an item that carries no id', () => {
     const idless = { source: 'https://art.test/x', license: {} } as DP1Item;
     expect(startItemIndex([idless, item('b')], { id: 'b' })).toBe(1);

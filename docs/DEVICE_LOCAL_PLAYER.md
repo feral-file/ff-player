@@ -132,8 +132,12 @@ Current limitations that callers must preserve:
 `displayPlaylist.request.startItem` is the work a controller asks a Now
 Display to open on: `{ "id": "<item id>", "source": "<item source>" }`,
 either field optional. It is an unsigned projection beside the DP-1 body,
-like `contentContext`, and it is not persisted: the boot replay starts at
-the beginning.
+like `contentContext`, and `startItem` itself is not persisted. What it
+resolves to is the cast's ordinary `index`, so saved-cast recovery is
+unchanged: the stored cast keeps the index playback has reached
+(`useCastInfo`), and a restart restores it there. Only the boot-playlist
+path (`BootHydration`, a `display_at_boot` cast) starts at slot 0, as it
+did before.
 
 It names a work, not an index, because the controller does not know the
 order a playlist URL or a dynamic query resolves to, and the list this
@@ -141,7 +145,8 @@ player plays is the one left after its own content-policy admission.
 `utils/startItem` resolves it against that admitted list: the id is searched
 across the whole list first, and the source is used only when no item
 carries the id (a dynamic playlist regenerates ids; two members of a series
-can share a source). The resolved slot then goes through the media-health
+can share a source). Ids and sources are compared exactly; trimming is
+used only to treat a blank value as absent. The resolved slot then goes through the media-health
 hints like any other start slot.
 
 Absent, malformed, or naming a work that is not in the admitted list, the
