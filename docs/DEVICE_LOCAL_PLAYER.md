@@ -127,6 +127,27 @@ Current limitations that callers must preserve:
   nominal 3 s retry pacing. Watchdog and fatal-HLS failures do not raise that
   degraded signal. The failure budget still bounds attempts.
 
+## Where a cast starts: `startItem`
+
+`displayPlaylist.request.startItem` is the work a controller asks a Now
+Display to open on: `{ "id": "<item id>", "source": "<item source>" }`,
+either field optional. It is an unsigned projection beside the DP-1 body,
+like `contentContext`, and it is not persisted: the boot replay starts at
+the beginning.
+
+It names a work, not an index, because the controller does not know the
+order a playlist URL or a dynamic query resolves to, and the list this
+player plays is the one left after its own content-policy admission.
+`utils/startItem` resolves it against that admitted list: the id is searched
+across the whole list first, and the source is used only when no item
+carries the id (a dynamic playlist regenerates ids; two members of a series
+can share a source). The resolved slot then goes through the media-health
+hints like any other start slot.
+
+Absent, malformed, or naming a work that is not in the admitted list, the
+cast starts at its beginning. Nothing here rejects a cast. The argument is
+ignored on `refresh` and on the boot and schedule actions.
+
 ## Media health: hints and play outcomes
 
 `contracts.mediaHealth` (v1) pairs the player with feral-controld's

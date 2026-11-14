@@ -18,6 +18,7 @@ import { CustomEventName } from '@/models/custom_event';
 import { DP1Action, DP1Call, DP1Item } from '@/models/dp1.model';
 import type { PlaybackOutcomeInput } from '@/models/media_health.model';
 import { resolveHintedSkip } from '@/utils/mediaHealthSkip';
+import { startItemIndex } from '@/utils/startItem';
 import { normalizePlaylistIndex } from '@/utils/playlist';
 import { contentPolicyStore, policyInForce } from '../ContentPolicyStore';
 import DP1ScheduleService from '../DP1ScheduleService';
@@ -175,6 +176,7 @@ export class PlaylistCommands {
           dp1CallData,
           playlistUrl,
           contentContext,
+          startItem: request.startItem,
         });
       }
 
@@ -425,7 +427,11 @@ export class PlaylistCommands {
       this.session.castInfo?.playlist?.items,
       this.session.castInfo?.index
     );
-    const landing = this.landing(playableItems, request.startIndex ?? 0);
+    // A controller's start work is resolved here, against the admitted list:
+    // that is the list `index` counts in, and controld cannot know it.
+    const requestedIndex =
+      request.startIndex ?? startItemIndex(playableItems, request.startItem);
+    const landing = this.landing(playableItems, requestedIndex ?? 0);
     const landingItem = playableItems[landing.index];
     if (!isSameSelectedArtworkIdentity(currentSelectedItem, landingItem)) {
       this.session.setRenderStatus(RenderStatus.pending);
