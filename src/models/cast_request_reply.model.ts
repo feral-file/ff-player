@@ -54,6 +54,12 @@ export interface NowDisplayRequest {
    * the start of a playlist they were already part-way through.
    */
   startIndex?: number;
+  /**
+   * The work a controller asked this cast to open on (see startItemIndex).
+   * Resolved against the list left after admission, and only when no
+   * `startIndex` was given. Unknown because it arrives off the wire.
+   */
+  startItem?: unknown;
 }
 export type NowDisplayReply = Reply;
 
@@ -143,6 +149,16 @@ export interface DisplayPlaylistRequest {
    * never trusted as a MediaHealthHints shape.
    */
   mediaHealth?: unknown;
+  /**
+   * The work a Now Display should open on: `{ id?, source? }`, matched by id
+   * and then by source against the list this player admits (startItemIndex).
+   * A controller sends it so the wall opens on the tapped work instead of on
+   * the first one. Absent, malformed, or naming a work that is not in the
+   * list: the cast starts at its beginning. Ignored on `refresh` and on the
+   * boot and schedule actions, which do not put a controller's choice on the
+   * wall. Typed as unknown because it is parsed tolerantly, never trusted.
+   */
+  startItem?: unknown;
 }
 export type DisplayPlaylistReply = Reply;
 
