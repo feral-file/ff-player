@@ -63,6 +63,13 @@ describe('displayPlaylist startItem', () => {
     expect(canvasService.getStatus().index).toBe(2);
   });
 
+  it('moves to the named work when the same playlist is displayed again', () => {
+    cast(abc());
+    expect(showing()).toBe('a');
+    expect(cast(abc(), { startItem: { id: 'c' } })).toEqual({ ok: true });
+    expect(showing()).toBe('c');
+  });
+
   it('counts the position in the list left after content admission', () => {
     const mixed = playlist(item('a', 'mature'), item('b'), item('c'));
     expect(cast(mixed, { startItem: { id: 'c' } })).toEqual({ ok: true });
