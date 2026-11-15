@@ -12,7 +12,8 @@
  */
 import { AppContext } from '@/context/AppContext';
 import { defaultDP1DisplayPreference } from '@/models/dp1.model';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { canvasService } from '@/services/CanvasService';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ArtworkPlayer from './ArtworkPlayer';
@@ -91,6 +92,30 @@ describe('ArtworkPlayer — an untyped source that is an image', () => {
     expect(img.src).toBe(CID_URL);
     expect(loadsAsImageMock).toHaveBeenCalledWith(CID_URL);
     expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('holds the slot as a bounded load while the image probe runs', async () => {
+    // A playlist advances an expired slot whose load is unbounded. The probe
+    // is bounded, so a short item must not be skipped during it.
+    stubWebGL();
+    contentTypeMock.mockRejectedValue(new Error('HEAD request failed: 429'));
+    let settle: (isImage: boolean) => void = () => undefined;
+    loadsAsImageMock.mockReturnValue(
+      new Promise<boolean>(resolve => {
+        settle = resolve;
+      })
+    );
+
+    render(playerNode());
+
+    await waitFor(() => {
+      expect(loadsAsImageMock).toHaveBeenCalled();
+    });
+    expect(canvasService.isRenderLoadBounded()).toBe(true);
+    await act(async () => {
+      settle(true);
+      await Promise.resolve();
+    });
   });
 
   it('keeps the fallback iframe when the source does not decode as an image', async () => {

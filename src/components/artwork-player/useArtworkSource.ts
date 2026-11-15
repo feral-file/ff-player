@@ -104,6 +104,12 @@ function mountUntyped(
   owners: { recovery: ArtworkRecovery; transition: ArtworkTransition },
   stillWanted: () => boolean
 ): void {
+  // The image probe ends by itself (IMAGE_PROBE_TIMEOUT_MS), so the load is
+  // bounded while it runs. Without this the playlist treats the wait as an
+  // unbounded load and advances an expired slot: a five-second item with a
+  // one-second-plus probe was skipped before any renderer mounted. The
+  // renderer that mounts next sets the flag for its own watchdog.
+  owners.recovery.markLoadBounded(true);
   void untypedSource(url).then(({ previewType, source }) => {
     if (!stillWanted()) {
       return;
