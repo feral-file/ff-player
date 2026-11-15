@@ -1,6 +1,7 @@
 import { PreviewHTMLTag } from '@/models';
 import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
 import { dataDocumentURL, releaseDataDocumentURLs } from '@/utils/dataDocument';
+import { loadsAsImage } from '@/utils/imageProbe';
 import {
   ContentTypeDetectionError,
   appendDisplayModeParam,
@@ -52,6 +53,70 @@ function fallbackIframeSource(url: string): Partial<SlotLayer> {
     displaySoftwareURL: usesWorkOrigin(url) ? '' : url,
     mimeType: null,
   };
+}
+
+/**
+ * The source for a slot whose Content-Type probe failed without proving the
+ * host dead: an image when the browser can decode the URL as one, otherwise
+ * the untyped iframe.
+ *
+ * The iframe is a guess for "probably a web page". It is the wrong guess for
+ * an image, which draws there at its natural size, unscaled (see
+ * loadsAsImage). A source proven to be an image is typed `image/*`, so it
+ * takes the image slot, follows the display's scaling, and reports its load
+ * outcome like any typed image. Everything else keeps the untyped iframe and
+ * its rule of reporting no outcome.
+ */
+async function untypedSource(
+  url: string
+): Promise<{ previewType: PreviewHTMLTag; source: Partial<SlotLayer> }> {
+  const resolved = resolveArtworkSourceURL(url);
+  const isImage =
+    (resolved.protocol === 'http:' || resolved.protocol === 'https:') &&
+    (await loadsAsImage(resolved.toString()));
+  if (!isImage) {
+    return {
+      previewType: PreviewHTMLTag.iframe,
+      source: fallbackIframeSource(url),
+    };
+  }
+  return {
+    previewType: PreviewHTMLTag.image,
+    source: {
+      previewType: PreviewHTMLTag.image,
+      isStreaming: false,
+      displayPreviewURL: url,
+      displaySoftwareURL: url,
+      mimeType: 'image/*',
+    },
+  };
+}
+
+/**
+ * Resolves an untyped source (see untypedSource) and mounts it, unless the
+ * mount that asked was superseded while the image probe ran. The probe is
+ * async where the old iframe guess was not, so a newer mount for the slot can
+ * have started in between; [stillWanted] is the same cancelled-or-retargeted
+ * check the typed path makes.
+ */
+function mountUntyped(
+  url: string,
+  owners: { recovery: ArtworkRecovery; transition: ArtworkTransition },
+  stillWanted: () => boolean
+): void {
+  // The image probe ends by itself (IMAGE_PROBE_TIMEOUT_MS), so the load is
+  // bounded while it runs. Without this the playlist treats the wait as an
+  // unbounded load and advances an expired slot: a five-second item with a
+  // one-second-plus probe was skipped before any renderer mounted. The
+  // renderer that mounts next sets the flag for its own watchdog.
+  owners.recovery.markLoadBounded(true);
+  void untypedSource(url).then(({ previewType, source }) => {
+    if (!stillWanted()) {
+      return;
+    }
+    owners.recovery.noteMediaType(previewType);
+    owners.transition.resolveSource(url, source);
+  });
 }
 
 /**
@@ -166,14 +231,16 @@ export function useArtworkSource(
     transition.prepareMount();
     recovery.beginMount();
     transition.mountIncoming(url, showingKey);
+    const isCurrent = () =>
+      !cancelled && transition.matchesTarget(url, itemIdentity ?? '');
     const onHeadFailure = (code: string) => {
-      if (!cancelled && transition.matchesTarget(url, itemIdentity ?? '')) {
+      if (isCurrent()) {
         recovery.noteDetectFailure(code);
       }
     };
     void detectPreview(url, suppliedType, onHeadFailure)
       .then(config => {
-        if (cancelled || !transition.matchesTarget(url, itemIdentity ?? '')) {
+        if (!isCurrent()) {
           return;
         }
         confirmedUnreachableRef.current.delete(url);
@@ -190,7 +257,7 @@ export function useArtworkSource(
         });
       })
       .catch((error: unknown) => {
-        if (cancelled || !transition.matchesTarget(url, itemIdentity ?? '')) {
+        if (!isCurrent()) {
           return;
         }
         console.error('[ArtworkPlayer] Failed to detect preview type:', error);
@@ -203,8 +270,7 @@ export function useArtworkSource(
         ) {
           return;
         }
-        recovery.noteMediaType(PreviewHTMLTag.iframe);
-        transition.resolveSource(url, fallbackIframeSource(url));
+        mountUntyped(url, { recovery, transition }, isCurrent);
       });
     return () => {
       cancelled = true;

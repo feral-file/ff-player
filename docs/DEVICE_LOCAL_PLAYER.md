@@ -109,6 +109,14 @@ the distinct callback and composition timings.
   fallback iframe, even while the device is online — feral-file#3583: an
   iframe pointed at a source proven unreachable within the probe's own
   budget only ever shows Chromium's in-frame net-error page, indefinitely.
+- MIME detection that fails any other way (a non-2xx answer, a 2xx with no
+  usable type, a CORS block) on a URL with no extension to infer from leaves
+  the source untyped. Before falling back to the iframe, the player asks the
+  browser whether the source decodes as an image (`loadsAsImage`, bounded at
+  8 s). An image takes the image slot, follows the display's scaling, and
+  reports its outcome like any typed image; an image left in the iframe would
+  draw at its natural size in the corner. Anything else keeps the fallback
+  iframe, which reports no outcome.
 - WebGL recovery polls every 5 s for up to 10 minutes. On availability, it waits
   2 s and reloads the active iframe key. Recovery completion or timeout resumes
   an item retry suspended by GPU loss without charging another attempt. Each
