@@ -90,7 +90,8 @@ describe('ModelViewerScreen cursor lock', () => {
     vi.useFakeTimers();
 
     const onError = vi.fn();
-    const setTimeoutSpy = vi.spyOn(window, 'setTimeout');
+    const appendChild = vi.fn();
+    const querySelector = vi.fn();
 
     render(
       <ModelViewerScreen
@@ -108,9 +109,14 @@ describe('ModelViewerScreen cursor lock', () => {
       viewer?.dispatchEvent(new Event('error'));
     });
 
+    // A late shadow root must not be inspected or patched after failure.
+    // Unrelated timers may still run; only cursor-lock work matters here.
+    cursorLockMocks.setShadowRoot({ appendChild, querySelector });
+
     await vi.advanceTimersByTimeAsync(500);
 
     expect(onError).toHaveBeenCalledTimes(1);
-    expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
+    expect(querySelector).not.toHaveBeenCalled();
+    expect(appendChild).not.toHaveBeenCalled();
   });
 });
