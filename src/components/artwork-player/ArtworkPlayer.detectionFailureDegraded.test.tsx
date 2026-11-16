@@ -383,7 +383,7 @@ describe('ArtworkPlayer — a HEAD never fails a work on its own (ff-player#311)
 
   it('mounts the fallback iframe when the GET is rejected early on an ordinary host', async () => {
     // Review F1: `Cross-Origin-Resource-Policy: same-origin` rejects the
-    // no-cors fetch exactly like DNS or a refused connection, yet the
+    // fetch exactly like DNS or a refused connection, yet the
     // iframe's navigation is not subject to it and shows the page.
     stubWebGL();
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);

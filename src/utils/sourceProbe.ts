@@ -7,17 +7,17 @@
 export const SOURCE_GET_TIMEOUT_MS = 10_000;
 
 /**
- * What a plain GET of a source got back. `answered`: an HTTP response,
- * whatever its status. `silent`: nothing at all within SOURCE_GET_TIMEOUT_MS;
- * a browser policy block (CORP, ORB) acts on a response that arrived, so it
- * can never look like this, only a host that accepted the request and never
- * answered can. `rejected`: the browser refused the request early. That is a
- * network failure (DNS, refused, reset) OR a policy block of a response that
- * DID arrive, e.g. `Cross-Origin-Resource-Policy: same-origin`, which blocks
- * this fetch but not the iframe's navigation (ff-player#337 review F1).
- * Script sees the same bare TypeError for both, and Resource Timing does not
- * separate them either (checked on Chromium 137), so `rejected` alone proves
- * nothing about the source.
+ * What a plain GET of a source got back. `answered`: a response that passed
+ * the CORS check. `silent`: no response headers at all within
+ * SOURCE_GET_TIMEOUT_MS; only a host that accepted the request and never
+ * answered looks like this. `rejected`: the browser settled the request
+ * early without a usable response. That is a network failure (DNS, refused,
+ * reset) OR a response that DID arrive and failed the CORS check or a policy
+ * such as `Cross-Origin-Resource-Policy: same-origin`, none of which stop the
+ * iframe's navigation (ff-player#337 review F1). Script sees the same bare
+ * TypeError for all of them, and Resource Timing does not separate them
+ * either (checked on Chromium 137), so `rejected` alone proves nothing about
+ * the source.
  */
 export type GetProbeResult = 'answered' | 'silent' | 'rejected';
 
@@ -33,11 +33,14 @@ export type GetProbeResult = 'answered' | 'silent' | 'rejected';
  * up on a source whose `HEAD` got no answer, it asks again with a GET. See
  * GetProbeResult for which answers are evidence.
  *
- * `no-cors` makes the answer independent of CORS: the response is opaque.
- * Chromium's opaque-response blocking hands a blocked HTML body back as an
- * empty opaque response, not an error (checked on Chromium 137). The
- * request is aborted as soon as headers arrive, so the body is not
- * downloaded. `no-store` keeps the HTTP cache from answering for a host that
+ * The request is CORS-mode, not `no-cors`, so that `silent` means what it
+ * says: a CORS fetch settles as soon as response headers arrive, resolving
+ * or failing the CORS check, while a `no-cors` fetch of HTML is held by
+ * Chromium's opaque-response blocking until body bytes arrive, so a page that
+ * flushes its headers and streams its body slowly would read as silent
+ * (ff-player#337 review F3; both checked on Chromium 137). A simple GET
+ * needs no preflight. The request is aborted once it settles, so the body is
+ * not downloaded. `no-store` keeps the HTTP cache from answering for a host that
  * has since gone. It does not bypass the offline cache's kiosk replay, which
  * intercepts the request itself and answers a recorded source URL (an onchfs
  * work the device has read included).
@@ -59,7 +62,7 @@ export async function probeGet(
   }, timeoutMs);
   try {
     await fetch(url, {
-      mode: 'no-cors',
+      mode: 'cors',
       cache: 'no-store',
       signal: controller.signal,
     });

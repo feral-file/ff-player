@@ -107,10 +107,12 @@ the distinct callback and composition timings.
   omit CORS headers on it and still serve the page, and the browser rejects
   all of those exactly like a dead host. So when the HEAD of a URL with no
   extension to infer a type from got no response on an online device, the
-  player asks a plain `no-cors` GET of the source (`probeGet`, bounded at
-  10 s, aborted once headers arrive). The GET fails the work only on
-  evidence a browser policy block cannot produce: no response at all for
-  10 s, or a rejected request to a host under the reserved `.invalid` TLD,
+  player asks a plain CORS-mode GET of the source (`probeGet`, bounded at
+  10 s, aborted once it settles). CORS mode settles as soon as headers
+  arrive, pass or fail; `no-cors` would wait for body bytes (opaque-response
+  blocking) and read a slow-streaming page as silent. The GET fails the work
+  only on evidence a browser policy block cannot produce: no response
+  headers at all for 10 s, or a rejected request to a host under the reserved `.invalid` TLD,
   which no resolver answers and only the offline cache's replay serves (every
   onchfs work, `https://<root>.onchfs.invalid/…`). Then the attempt reports
   failed as `detect/unreachable` through the ordinary per-item path
@@ -119,9 +121,9 @@ the distinct callback and composition timings.
   `ready` (ff-player#311, feral-file#3583). If the device went offline while
   the GET ran, the offline path above takes it instead. Any HTTP response,
   and any other rejection, lets the source mount untyped as below: a fast
-  rejection may be DNS or a refused connection, but it may also be
-  `Cross-Origin-Resource-Policy` blocking the fetch of a page the iframe
-  still shows, and script cannot tell them apart. Every attempt is judged
+  rejection may be DNS or a refused connection, but it may also be a page
+  without CORS headers, or `Cross-Origin-Resource-Policy` blocking the
+  fetch, that the iframe still shows, and script cannot tell them apart. Every attempt is judged
   afresh, so an onchfs work the device finishes reading from chain
   mid-retry plays on the next attempt.
 - MIME detection that fails without proving the source silent (a non-2xx

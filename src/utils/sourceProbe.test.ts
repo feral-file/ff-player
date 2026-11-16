@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 describe('probeGet', () => {
-  it('asks with a plain no-cors GET that bypasses the HTTP cache', async () => {
+  it('asks with a plain CORS-mode GET that bypasses the HTTP cache', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -21,7 +21,8 @@ describe('probeGet', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(URL);
     expect(init.method).toBeUndefined();
-    expect(init.mode).toBe('no-cors');
+    // CORS mode settles on headers; no-cors waits for body bytes (ORB).
+    expect(init.mode).toBe('cors');
     expect(init.cache).toBe('no-store');
   });
 
@@ -43,7 +44,7 @@ describe('probeGet', () => {
     expect(signal?.aborted).toBe(true);
   });
 
-  it('reports an early rejection (DNS, refused, a CORP block) as rejected, not silent', async () => {
+  it('reports an early rejection (DNS, refused, a failed CORS check, a CORP block) as rejected, not silent', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
     await expect(probeGet(URL)).resolves.toBe('rejected');
   });
