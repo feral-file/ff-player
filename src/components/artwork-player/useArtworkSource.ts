@@ -59,8 +59,8 @@ function fallbackIframeSource(url: string): Partial<SlotLayer> {
 
 /**
  * The source for a slot whose Content-Type probe failed: an image when the
- * browser can decode the URL as one, otherwise the untyped iframe, or null
- * when the source did not answer at all.
+ * browser can decode the URL as one, otherwise the untyped iframe;
+ * 'unreachable' when the source is proven not to answer.
  *
  * The iframe is a guess for "probably a web page". It is the wrong guess for
  * an image, which draws there at its natural size, unscaled (see
@@ -78,21 +78,30 @@ function fallbackIframeSource(url: string): Partial<SlotLayer> {
  * host no resolver answers (isUnresolvableHost, e.g. an onchfs work the
  * device has not read from chain yet). Any other rejection keeps the
  * fallback iframe, because CORP can block the fetch of a page the iframe
- * still shows (ff-player#337 review F1).
+ * still shows (ff-player#337 review F1). Any GET without an answer while the
+ * device is offline by then is the device's failure, not the source's:
+ * 'offline' (review F2; a dropped link usually rejects the GET at once).
  */
 async function untypedSource(
   url: string,
   headUnanswered: boolean
-): Promise<{ previewType: PreviewHTMLTag; source: Partial<SlotLayer> } | null> {
+): Promise<
+  | { previewType: PreviewHTMLTag; source: Partial<SlotLayer> }
+  | 'unreachable'
+  | 'offline'
+> {
   const resolved = resolveArtworkSourceURL(url);
   const isHTTP = resolved.protocol === 'http:' || resolved.protocol === 'https:';
   if (isHTTP && headUnanswered) {
     const get = await probeGet(resolved.toString());
+    if (get !== 'answered' && deviceOffline()) {
+      return 'offline';
+    }
     if (
       get === 'silent' ||
       (get === 'rejected' && isUnresolvableHost(resolved.toString()))
     ) {
-      return null;
+      return 'unreachable';
     }
   }
   const isImage = isHTTP && (await loadsAsImage(resolved.toString()));
@@ -121,12 +130,10 @@ async function untypedSource(
  * have started in between; [stillWanted] is the same cancelled-or-retargeted
  * check the typed path makes.
  *
- * A source proven not to answer (see untypedSource) is declared failed
- * through the transition owner, as `detect/unreachable`, unless the device
- * has gone offline while the GET ran: then the failure is the device's, and
- * the offline path (failOffline) takes it instead, which raises degraded and
- * spends none of the work's retry budget (ff-player#337 review F2). Otherwise
- * the source is declared failed as `detect/unreachable`: `transition.fail()`
+ * A GET that failed while the device went offline takes the offline path
+ * (failOffline), which raises degraded and spends none of the work's retry
+ * budget (ff-player#337 review F2). A source proven not to answer (see
+ * untypedSource) is declared failed as `detect/unreachable`: `transition.fail()`
  * commits the failed slot (releasing the settings latch so a later item can
  * still commit) before calling `recovery.fail()`, and the slot's source URLs
  * stay empty, so no iframe mounts and no error page reaches the wall. The
@@ -157,11 +164,11 @@ function mountUntyped(
     if (!stillWanted()) {
       return;
     }
-    if (untyped === null && deviceOffline()) {
+    if (untyped === 'offline') {
       failOffline(url, owners);
       return;
     }
-    if (untyped === null) {
+    if (untyped === 'unreachable') {
       owners.transition.fail(
         { stage: 'detect', code: 'unreachable' },
         owners.transition.incomingSlot ?? undefined

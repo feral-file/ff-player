@@ -397,27 +397,6 @@ describe('ArtworkPlayer — a HEAD never fails a work on its own (ff-player#311)
     });
   });
 
-  it('takes the offline path when the device went offline while the GET ran', async () => {
-    // Review F2: the failure is the device's, not the source's, so it must
-    // raise degraded instead of spending the work's retry budget.
-    stubWebGL();
-    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
-    contentTypeMock.mockRejectedValue(noResponseError());
-    probeGetMock.mockImplementation(() => {
-      onLine.mockReturnValue(false);
-      return Promise.resolve('silent');
-    });
-
-    const setPlaybackDegraded = vi.fn();
-    const { container } = render(playerNode(setPlaybackDegraded));
-
-    await waitFor(() => {
-      expect(setPlaybackDegraded).toHaveBeenCalledWith(true, EXTENSIONLESS);
-    });
-    expect(screen.queryByText(CANNOT_BE_DISPLAYED_TEXT)).toBeNull();
-    expect(container.querySelector('iframe')).toBeNull();
-  });
-
   it('asks no GET when the HEAD reached the server, even unhelpfully', async () => {
     stubWebGL();
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
@@ -456,5 +435,49 @@ describe('ArtworkPlayer — a HEAD never fails a work on its own (ff-player#311)
     await waitFor(() => {
       expect(container.querySelector('iframe')).toBeTruthy();
     });
+  });
+});
+
+describe('ArtworkPlayer — a GET that fails while the device goes offline takes the offline path (PR #337 review F2)', () => {
+  it('takes the offline path when the device went offline while the GET ran', async () => {
+    // Review F2: the failure is the device's, not the source's, so it must
+    // raise degraded instead of spending the work's retry budget.
+    stubWebGL();
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValue(noResponseError());
+    probeGetMock.mockImplementation(() => {
+      onLine.mockReturnValue(false);
+      return Promise.resolve('silent');
+    });
+
+    const setPlaybackDegraded = vi.fn();
+    const { container } = render(playerNode(setPlaybackDegraded));
+
+    await waitFor(() => {
+      expect(setPlaybackDegraded).toHaveBeenCalledWith(true, EXTENSIONLESS);
+    });
+    expect(screen.queryByText(CANNOT_BE_DISPLAYED_TEXT)).toBeNull();
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('takes the offline path when the link dropped and the GET was rejected at once', async () => {
+    // A dropped link rejects the GET fast (ERR_INTERNET_DISCONNECTED), not
+    // silently: the offline path must still take it, not the iframe.
+    stubWebGL();
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValue(noResponseError());
+    probeGetMock.mockImplementation(() => {
+      onLine.mockReturnValue(false);
+      return Promise.resolve('rejected');
+    });
+
+    const setPlaybackDegraded = vi.fn();
+    const { container } = render(playerNode(setPlaybackDegraded));
+
+    await waitFor(() => {
+      expect(setPlaybackDegraded).toHaveBeenCalledWith(true, EXTENSIONLESS);
+    });
+    expect(screen.queryByText(CANNOT_BE_DISPLAYED_TEXT)).toBeNull();
+    expect(container.querySelector('iframe')).toBeNull();
   });
 });
