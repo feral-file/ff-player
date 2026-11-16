@@ -71,7 +71,7 @@ function contentTypeFromDataURL(url: URL): string {
  * False means the `HEAD` got no answer: a dead host, DNS, a refused
  * connection, the probe's own timeout, or a CORS/CSP block, which the browser
  * cannot tell apart. The `HEAD` alone never fails a work on that evidence;
- * ArtworkPlayer's untyped path asks a plain GET first (`answersGet`).
+ * ArtworkPlayer's untyped path asks a plain GET first (`probeGet`).
  */
 export class ContentTypeDetectionError extends Error {
   constructor(

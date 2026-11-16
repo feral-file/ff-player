@@ -2,7 +2,8 @@ import { PreviewHTMLTag } from '@/models';
 import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
 import { dataDocumentURL, releaseDataDocumentURLs } from '@/utils/dataDocument';
 import { loadsAsImage } from '@/utils/imageProbe';
-import { answersGet } from '@/utils/sourceProbe';
+import { daemonConnectivity } from '@/services/DaemonConnectivity';
+import { isUnresolvableHost, probeGet } from '@/utils/sourceProbe';
 import {
   ContentTypeDetectionError,
   appendDisplayModeParam,
@@ -71,8 +72,13 @@ function fallbackIframeSource(url: string): Partial<SlotLayer> {
  * It is also the wrong guess for a source that answers nothing: the iframe
  * shows Chromium's own error page and reports it `ready`. So when the `HEAD`
  * got no response ([headUnanswered]), a plain GET decides first (see
- * answersGet). The `HEAD` alone never fails a work: a host may refuse it and
- * still serve the page.
+ * probeGet). The `HEAD` alone never fails a work: a host may refuse it and
+ * still serve the page. The GET fails it only on evidence a browser policy
+ * block cannot produce: silence for the whole bound, or a rejection from a
+ * host no resolver answers (isUnresolvableHost, e.g. an onchfs work the
+ * device has not read from chain yet). Any other rejection keeps the
+ * fallback iframe, because CORP can block the fetch of a page the iframe
+ * still shows (ff-player#337 review F1).
  */
 async function untypedSource(
   url: string,
@@ -80,8 +86,14 @@ async function untypedSource(
 ): Promise<{ previewType: PreviewHTMLTag; source: Partial<SlotLayer> } | null> {
   const resolved = resolveArtworkSourceURL(url);
   const isHTTP = resolved.protocol === 'http:' || resolved.protocol === 'https:';
-  if (isHTTP && headUnanswered && !(await answersGet(resolved.toString()))) {
-    return null;
+  if (isHTTP && headUnanswered) {
+    const get = await probeGet(resolved.toString());
+    if (
+      get === 'silent' ||
+      (get === 'rejected' && isUnresolvableHost(resolved.toString()))
+    ) {
+      return null;
+    }
   }
   const isImage = isHTTP && (await loadsAsImage(resolved.toString()));
   if (!isImage) {
@@ -109,8 +121,12 @@ async function untypedSource(
  * have started in between; [stillWanted] is the same cancelled-or-retargeted
  * check the typed path makes.
  *
- * A source that answered neither the `HEAD` nor the GET is declared failed
- * through the transition owner, as `detect/unreachable`: `transition.fail()`
+ * A source proven not to answer (see untypedSource) is declared failed
+ * through the transition owner, as `detect/unreachable`, unless the device
+ * has gone offline while the GET ran: then the failure is the device's, and
+ * the offline path (failOffline) takes it instead, which raises degraded and
+ * spends none of the work's retry budget (ff-player#337 review F2). Otherwise
+ * the source is declared failed as `detect/unreachable`: `transition.fail()`
  * commits the failed slot (releasing the settings latch so a later item can
  * still commit) before calling `recovery.fail()`, and the slot's source URLs
  * stay empty, so no iframe mounts and no error page reaches the wall. The
@@ -123,7 +139,11 @@ async function untypedSource(
 function mountUntyped(
   url: string,
   headUnanswered: boolean,
-  owners: { recovery: ArtworkRecovery; transition: ArtworkTransition },
+  owners: {
+    recovery: ArtworkRecovery;
+    transition: ArtworkTransition;
+    noteRef: { current: (url: string, failed: boolean) => void };
+  },
   stillWanted: () => boolean
 ): void {
   // The probes end by themselves (SOURCE_GET_TIMEOUT_MS,
@@ -137,6 +157,10 @@ function mountUntyped(
     if (!stillWanted()) {
       return;
     }
+    if (untyped === null && deviceOffline()) {
+      failOffline(url, owners);
+      return;
+    }
     if (untyped === null) {
       owners.transition.fail(
         { stage: 'detect', code: 'unreachable' },
@@ -147,6 +171,33 @@ function mountUntyped(
     owners.recovery.noteMediaType(untyped.previewType);
     owners.transition.resolveSource(url, untyped.source);
   });
+}
+
+/**
+ * The offline corroboration getContentTypeFromURL applies, read now without
+ * waiting: the browser's interface is down, or the daemon's last verdict is
+ * offline.
+ */
+function deviceOffline(): boolean {
+  return (
+    (typeof navigator !== 'undefined' && !navigator.onLine) ||
+    daemonConnectivity() === false
+  );
+}
+
+/**
+ * Raises the offline signal for [url] and fails the mount without a
+ * per-item verdict: offline recovery owns the remount.
+ */
+function failOffline(
+  url: string,
+  owners: {
+    noteRef: { current: (url: string, failed: boolean) => void };
+    recovery: ArtworkRecovery;
+  }
+): void {
+  owners.noteRef.current(url, true);
+  owners.recovery.markArtworkFailed();
 }
 
 /**
@@ -168,8 +219,7 @@ function handleOfflineDetection(
   // The `detect/network` ring entry was already recorded by the probe
   // observer when no response arrived, so this path only raises the offline
   // signal and fails the mount.
-  owners.noteRef.current(url, true);
-  owners.recovery.markArtworkFailed();
+  failOffline(url, owners);
   return true;
 }
 
@@ -232,7 +282,12 @@ export function useArtworkSource(
         }
         const headUnanswered =
           error instanceof ContentTypeDetectionError && !error.reachedServer;
-        mountUntyped(url, headUnanswered, { recovery, transition }, isCurrent);
+        mountUntyped(
+          url,
+          headUnanswered,
+          { recovery, transition, noteRef },
+          isCurrent
+        );
       });
     return () => {
       cancelled = true;

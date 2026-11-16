@@ -323,16 +323,16 @@ describe('ArtworkPlayer play-outcome ring: an unanswered content-type probe', ()
     }
   });
 
-  it('declares an unresolvable host failed as detect/unreachable, with no fallback ready', async () => {
-    // ff-player#311: DNS failure or a refused connection, e.g. an onchfs
-    // work the device has not read from chain yet. Neither the HEAD nor the
-    // GET gets a response, so no iframe mounts to show Chromium's error
-    // page as a ready work.
+  it('declares an unresolvable .invalid host failed as detect/unreachable, with no fallback ready', async () => {
+    // ff-player#311: an onchfs work the device has not read from chain yet.
+    // Its host is under the reserved .invalid TLD, so a rejected GET proves
+    // nothing on the device holds it; no iframe mounts to show Chromium's
+    // error page as a ready work.
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     noteDaemonConnectivity(true);
     try {
-      render(node({ mimeType: '', previewURL: 'https://art.test/onchfs/abc' }));
+      render(node({ mimeType: '', previewURL: 'https://abc.onchfs.invalid/?fxhash=1' }));
       await until(() => sinceSeq(mark).some(entry => entry.code === 'unreachable'));
       expect(sinceSeq(mark).map(entry => [entry.kind, entry.stage, entry.code, entry.attempt])).toEqual([
         ['fail', 'detect', 'network', 1],

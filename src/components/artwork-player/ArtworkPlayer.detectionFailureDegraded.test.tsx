@@ -38,8 +38,8 @@ import ArtworkPlayer from './ArtworkPlayer';
 
 const contentTypeMock = vi.hoisted(() => vi.fn<() => Promise<string>>());
 
-const answersGetMock = vi.hoisted(() =>
-  vi.fn<(url: string) => Promise<boolean>>()
+const probeGetMock = vi.hoisted(() =>
+  vi.fn<(url: string) => Promise<'answered' | 'silent' | 'rejected'>>()
 );
 
 vi.mock('@/utils/helper', async importOriginal => ({
@@ -49,7 +49,10 @@ vi.mock('@/utils/helper', async importOriginal => ({
 // The plain-GET confirmation a HEAD with no response gets (sourceProbe.ts).
 // It answers by default: a reachable page whose HEAD was refused or
 // CORS-blocked.
-vi.mock('@/utils/sourceProbe', () => ({ answersGet: answersGetMock }));
+vi.mock('@/utils/sourceProbe', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/utils/sourceProbe')>()),
+  probeGet: probeGetMock,
+}));
 
 // Extensionless trusted-origin URL: preview typing must go through the HEAD
 // probe (`getContentTypeFromURL`, mocked above), which is the seam under test.
@@ -130,7 +133,7 @@ async function waitForCannotBeDisplayed() {
 }
 
 beforeEach(() => {
-  answersGetMock.mockResolvedValue(true);
+  probeGetMock.mockResolvedValue('answered');
 });
 
 afterEach(() => {
@@ -321,22 +324,21 @@ describe('ArtworkPlayer — network-classified detection failure render status',
   });
 });
 
-describe('ArtworkPlayer — a source that answers neither the HEAD nor a GET is declared failed (ff-player#311)', () => {
+describe('ArtworkPlayer — a source whose GET gets no answer at all is declared failed (ff-player#311)', () => {
   it('shows the "cannot be displayed" message and renders no iframe, without raising degraded', async () => {
-    // An unresolvable host (DNS, refused, a black-holed gateway, an onchfs
-    // work the device has not read yet) on an online device. Pointing an
-    // iframe at it would show Chromium's own error page and report it
-    // ready for the whole item.
+    // A black-holed host on an online device: neither the HEAD nor the GET
+    // gets anything back. Pointing an iframe at it would show Chromium's own
+    // error page and report it ready for the whole item.
     stubWebGL();
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     contentTypeMock.mockRejectedValue(noResponseError());
-    answersGetMock.mockResolvedValue(false);
+    probeGetMock.mockResolvedValue('silent');
 
     const setPlaybackDegraded = vi.fn();
     const { container } = render(playerNode(setPlaybackDegraded));
 
     await waitForCannotBeDisplayed();
-    expect(answersGetMock).toHaveBeenCalledWith(EXTENSIONLESS);
+    expect(probeGetMock).toHaveBeenCalledWith(EXTENSIONLESS);
     expect(container.querySelector('iframe')).toBeNull();
     // Not the device-wide offline backdrop: this device is online, only the
     // one source is dead.
@@ -351,7 +353,7 @@ describe('ArtworkPlayer — a source that answers neither the HEAD nor a GET is 
     stubWebGL();
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     contentTypeMock.mockRejectedValue(noResponseError());
-    answersGetMock.mockResolvedValue(false);
+    probeGetMock.mockResolvedValue('silent');
 
     const onItemCommitted = vi.fn();
     render(playerNode(vi.fn(), undefined, onItemCommitted));
@@ -376,7 +378,44 @@ describe('ArtworkPlayer — a HEAD never fails a work on its own (ff-player#311)
     await waitFor(() => {
       expect(container.querySelector('iframe')).toBeTruthy();
     });
-    expect(answersGetMock).toHaveBeenCalledWith(EXTENSIONLESS);
+    expect(probeGetMock).toHaveBeenCalledWith(EXTENSIONLESS);
+  });
+
+  it('mounts the fallback iframe when the GET is rejected early on an ordinary host', async () => {
+    // Review F1: `Cross-Origin-Resource-Policy: same-origin` rejects the
+    // no-cors fetch exactly like DNS or a refused connection, yet the
+    // iframe's navigation is not subject to it and shows the page.
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValue(noResponseError());
+    probeGetMock.mockResolvedValue('rejected');
+
+    const { container } = render(playerNode(vi.fn()));
+
+    await waitFor(() => {
+      expect(container.querySelector('iframe')).toBeTruthy();
+    });
+  });
+
+  it('takes the offline path when the device went offline while the GET ran', async () => {
+    // Review F2: the failure is the device's, not the source's, so it must
+    // raise degraded instead of spending the work's retry budget.
+    stubWebGL();
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValue(noResponseError());
+    probeGetMock.mockImplementation(() => {
+      onLine.mockReturnValue(false);
+      return Promise.resolve('silent');
+    });
+
+    const setPlaybackDegraded = vi.fn();
+    const { container } = render(playerNode(setPlaybackDegraded));
+
+    await waitFor(() => {
+      expect(setPlaybackDegraded).toHaveBeenCalledWith(true, EXTENSIONLESS);
+    });
+    expect(screen.queryByText(CANNOT_BE_DISPLAYED_TEXT)).toBeNull();
+    expect(container.querySelector('iframe')).toBeNull();
   });
 
   it('asks no GET when the HEAD reached the server, even unhelpfully', async () => {
@@ -389,7 +428,7 @@ describe('ArtworkPlayer — a HEAD never fails a work on its own (ff-player#311)
     await waitFor(() => {
       expect(container.querySelector('iframe')).toBeTruthy();
     });
-    expect(answersGetMock).not.toHaveBeenCalled();
+    expect(probeGetMock).not.toHaveBeenCalled();
   });
 
   it('judges every attempt afresh: a source that failed mounts once it answers', async () => {
@@ -398,7 +437,7 @@ describe('ArtworkPlayer — a HEAD never fails a work on its own (ff-player#311)
     stubWebGL();
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     contentTypeMock.mockRejectedValue(noResponseError());
-    answersGetMock.mockResolvedValueOnce(false);
+    probeGetMock.mockResolvedValueOnce('silent');
 
     let reload: (() => void) | null = null;
     const { container } = render(
