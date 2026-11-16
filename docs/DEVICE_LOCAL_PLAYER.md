@@ -103,15 +103,33 @@ the distinct callback and composition timings.
   so settings do not remain held behind an abandoned incoming slot.
 - Corroborated-offline MIME detection reports failed and degraded, without a
   fallback iframe or artwork-error modal. Offline recovery owns that case.
-- MIME detection whose own HEAD probe survives to its own abort (the probe's
-  `AbortError`, not a native rejection) reports failed through the ordinary
-  per-item path (artwork-error modal, bounded retry/advance) instead of the
-  fallback iframe, even while the device is online — feral-file#3583: an
-  iframe pointed at a source proven unreachable within the probe's own
-  budget only ever shows Chromium's in-frame net-error page, indefinitely.
-- MIME detection that fails any other way (a non-2xx answer, a 2xx with no
-  usable type, a CORS block) on a URL with no extension to infer from leaves
-  the source untyped. Before falling back to the iframe, the player asks the
+- The HEAD only types a work; it never fails one. A host may refuse HEAD or
+  omit CORS headers on it and still serve the page, and the browser rejects
+  all of those exactly like a dead host. So when the HEAD of a URL with no
+  extension to infer a type from got no response on an online device, the
+  player asks a plain CORS-mode GET of the source (`probeGet`, bounded at
+  10 s, aborted once it settles). CORS mode settles as soon as headers
+  arrive, pass or fail; `no-cors` would wait for body bytes (opaque-response
+  blocking) and read a slow-streaming page as silent. The GET fails the work
+  only on evidence a browser policy block cannot produce: no response
+  headers at all for 10 s, or a rejected request to a host under the reserved `.invalid` TLD,
+  which no resolver answers and only the offline cache's replay serves (every
+  onchfs work, `https://<root>.onchfs.invalid/…`). Then the attempt reports
+  failed as `detect/unreachable` through the ordinary per-item path
+  (artwork-error modal, bounded retry/advance) with no iframe mounted: an
+  iframe at such a source only shows Chromium's error page and reports it
+  `ready` (ff-player#311, feral-file#3583). If the device went offline while
+  the GET ran, the offline path above takes it instead. Any HTTP response,
+  and any other rejection, lets the source mount untyped as below: a fast
+  rejection may be DNS or a refused connection, but it may also be a page
+  without CORS headers, or `Cross-Origin-Resource-Policy` blocking the
+  fetch, that the iframe still shows, and script cannot tell them apart. Every attempt is judged
+  afresh, so an onchfs work the device finishes reading from chain
+  mid-retry plays on the next attempt.
+- MIME detection that fails without proving the source silent (a non-2xx
+  answer, a 2xx with no usable type, a HEAD with no response whose GET did
+  not prove the source silent) on a URL with no extension to infer from leaves the source
+  untyped. Before falling back to the iframe, the player asks the
   browser whether the source decodes as an image (`loadsAsImage`, bounded at
   8 s). An image takes the image slot, follows the display's scaling, and
   reports its outcome like any typed image; an image left in the iframe would
@@ -130,6 +148,10 @@ Current limitations that callers must preserve:
 
 - Chromium can emit iframe/PDF `load` for its own navigation-error page. Such a
   load may report ready; the player cannot inspect a cross-origin document.
+  A source proven silent is no longer mounted (see above). An ordinary host
+  that fails fast (DNS, refused) or answers with an HTTP error page still
+  mounts the fallback iframe and reports ready, because the player cannot
+  tell that apart from a policy-blocked page the iframe would show.
 - For the first ordinary media/model/iframe error on a newly degraded URL,
   AppContext's M7 recovery can request an immediate reload and shorten the
   nominal 3 s retry pacing. Watchdog and fatal-HLS failures do not raise that
@@ -242,7 +264,7 @@ owns the ring; `ArtworkRecovery` reports through `ArtworkOutcomeReporter`.
 | Stage | Kind | Source in the player | `code` |
 |---|---|---|---|
 | `detect` | fail | Content-type HEAD answered non-2xx, or got no response at all, online or offline | HTTP status, or `network` (device-local: DNS, refused, timeout and CORS look the same to a browser) |
-| `detect` | fail | The probe's own 10 s budget ran out, now or on an earlier attempt for this URL; the attempt is declared failed with no fallback iframe (feral-file#3583) | `unreachable`; counts like a watchdog expiry |
+| `detect` | fail | The HEAD got no response on an online device and a plain GET of the source proved it silent (no response in 10 s, or a rejected request to a reserved `.invalid` host such as an onchfs work not yet read); the attempt is declared failed with no fallback iframe (ff-player#311, feral-file#3583) | `unreachable`; counts like a watchdog expiry |
 | `load` | fail | Image/video/audio/iframe/object/model element error, fatal HLS error | element kind, or `hls_<ErrorType>` |
 | `decode` | fail | A video/audio `MediaError` | `aborted`, `network`, `decode`, `src_not_supported` |
 | `watchdog` | fail | Per-slot stuck-load watchdog expired | the load phase that ran out: `transfer`, `decode`, `opaque`, `fixed` |
@@ -261,7 +283,7 @@ entries are recorded out of band and may precede the same attempt's
 `load`/`decode`/`watchdog` entry (a `.jpg` answering 404 yields `detect/404`
 then `load/image`), and a `detect` failure can precede an `ok` in the same
 play because the iframe fallback still plays the work and reports `ready` for
-a gateway's error page; entries must be applied in `seq` order. A `detect/network` followed by an iframe `ready` is how an unresolvable host shows up (Chromium's error page loads as the fallback iframe); it is never a verdict, only a reason for controld to re-probe the source at once (ffos-user#392, follow-up of 2026-11-05). A timed-out probe records `detect/network` then `detect/unreachable` for the same attempt and no `ready`: the second is the attempt's countable verdict. Source URLs appear in the ring only over loopback CDP.
+a gateway's error page; entries must be applied in `seq` order. A `detect/network` followed by an iframe `ready` is a HEAD that got no response while the GET did not prove the source silent (a refused or CORS-blocked HEAD, or a fast-failing ordinary host); it is never a verdict, only a reason for controld to re-probe the source at once (ffos-user#392, follow-up of 2026-11-05). A source that answered neither records `detect/network` then `detect/unreachable` for the same attempt and no `ready`: the second is the attempt's countable verdict. controld records neither for an onchfs source (`*.onchfs.invalid`), whose bytes come only from the device (ffos-user#464). Source URLs appear in the ring only over loopback CDP.
 
 ## Recently played
 
@@ -311,10 +333,11 @@ A new slot mount resets that per-mount latch.
 MIME detection treats a response-less fetch failure as offline only with
 corroboration: `navigator.onLine === false` or the daemon connectivity verdict.
 It may wait up to `DAEMON_VERDICT_WAIT_MS` for the first daemon verdict. Reached
-HTTP errors, unknown types, and uncorroborated failures retain iframe fallback,
-unless the probe itself timed out (its own `AbortError`, not a native
-rejection) — that case reports failed through the ordinary per-item path
-instead, online or not (feral-file#3583). A fallback-typed iframe
+HTTP errors and unknown types retain iframe fallback. An uncorroborated
+failure with no response retains it unless a plain GET of the source proves
+it silent (no response in 10 s, or a rejected `.invalid` host); then it reports
+failed through the ordinary per-item path, or takes the offline path if the
+device went offline meanwhile (ff-player#311). A fallback-typed iframe
 (`mimeType: null`) reports no success outcome from `load`.
 
 `CDPRequestHandler` records connectivity in `DaemonConnectivity` before dispatch.

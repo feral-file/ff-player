@@ -65,35 +65,18 @@ function contentTypeFromDataURL(url: URL): string {
  * (ArtworkPlayer's fallback-iframe path, for the offline degraded signal)
  * read this instead of parsing the message string.
  *
- * Carries `timedOut` separately. True when `fetch` never got a response and
- * the rejection is specifically the probe's own `AbortError`, meaning the
- * request survived the full `CONTENT_TYPE_HEAD_TIMEOUT_MS` budget without
- * either a response or a native rejection. A CORS/CSP block or a DNS/
- * connection-refused failure is rejected natively by the browser, almost
- * always well under a second; only a host that accepts the connection and
- * then never answers (a black-holed gateway — feral-file#3583) survives long
- * enough for this probe's own abort to be the thing that fires. `timedOut`
- * is therefore evidence this ONE source is unreachable, independent of
- * `isNetworkFailure`'s device-wide offline corroboration: it can be true
- * while the device is otherwise fully online. ArtworkPlayer's fallback-
- * iframe path reads it to avoid pointing an iframe at a source proven dead,
- * which would otherwise just render Chromium's own in-frame net-error page
- * indefinitely with nothing telling the viewer playback failed.
- *
- * Carries `reachedServer` separately from `timedOut`: true whenever `fetch`
- * resolved with ANY response, even an unhelpful one (4xx/5xx, or 2xx with no
- * `Content-Type`) — mutually exclusive with `timedOut` and `isNetworkFailure`,
- * both of which require no response at all. A caller that remembers a prior
- * `timedOut` verdict per-URL (feral-file#3583 review F2: a gateway that timed
- * out once can start answering, e.g. With a `405`, on a later attempt) reads
- * this to tell "the source is still silent" apart from "the source answered,
- * just not usefully" and clear that memory in the latter case.
+ * Carries `reachedServer`: true whenever `fetch` resolved with ANY response,
+ * even an unhelpful one (4xx/5xx, or 2xx with no `Content-Type`) — mutually
+ * exclusive with `isNetworkFailure`, which requires no response at all.
+ * False means the `HEAD` got no answer: a dead host, DNS, a refused
+ * connection, the probe's own timeout, or a CORS/CSP block, which the browser
+ * cannot tell apart. The `HEAD` alone never fails a work on that evidence;
+ * ArtworkPlayer's untyped path asks a plain GET first (`probeGet`).
  */
 export class ContentTypeDetectionError extends Error {
   constructor(
     message: string,
     public readonly isNetworkFailure: boolean,
-    public readonly timedOut = false,
     public readonly reachedServer = false
   ) {
     super(message);
@@ -230,25 +213,9 @@ export async function getContentTypeFromURL(
       offlineCorroborated =
         (await waitForDaemonConnectivity(DAEMON_VERDICT_WAIT_MS)) === false;
     }
-    // An aborted `fetch` rejects with a `DOMException` named `AbortError` —
-    // checked via `instanceof DOMException`, not `instanceof Error`: the Web
-    // IDL spec does not make `DOMException` an `Error` subclass, and jsdom's
-    // own `DOMException` (unlike V8's) does not extend `Error` either, so an
-    // `instanceof Error` check here would silently never match under test.
-    // `error.name === 'AbortError'` means OUR AbortController fired, i.e.
-    // nothing — not a response, not a native rejection — arrived in the
-    // whole CONTENT_TYPE_HEAD_TIMEOUT_MS budget. A CORS/CSP block or a DNS/
-    // connection-refused failure rejects `fetch` natively and fast, long
-    // before this abort would fire, so this is independent evidence the
-    // source itself is unreachable (see the class doc above).
-    const abortedByOwnTimeout =
-      !reachedServer &&
-      error instanceof DOMException &&
-      error.name === 'AbortError';
     throw new ContentTypeDetectionError(
       `Failed to determine content type: ${String(error)}`,
       !reachedServer && offlineCorroborated,
-      abortedByOwnTimeout,
       reachedServer
     );
   } finally {

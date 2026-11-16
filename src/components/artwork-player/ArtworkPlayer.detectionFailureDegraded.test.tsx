@@ -32,15 +32,26 @@ import {
   waitFor,
 } from '@testing-library/react';
 import * as React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContentTypeDetectionError } from '@/utils/helper';
 import ArtworkPlayer from './ArtworkPlayer';
 
 const contentTypeMock = vi.hoisted(() => vi.fn<() => Promise<string>>());
 
+const probeGetMock = vi.hoisted(() =>
+  vi.fn<(url: string) => Promise<'answered' | 'silent' | 'rejected'>>()
+);
+
 vi.mock('@/utils/helper', async importOriginal => ({
   ...(await importOriginal<typeof import('@/utils/helper')>()),
   getContentTypeFromURL: contentTypeMock,
+}));
+// The plain-GET confirmation a HEAD with no response gets (sourceProbe.ts).
+// It answers by default: a reachable page whose HEAD was refused or
+// CORS-blocked.
+vi.mock('@/utils/sourceProbe', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/utils/sourceProbe')>()),
+  probeGet: probeGetMock,
 }));
 
 // Extensionless trusted-origin URL: preview typing must go through the HEAD
@@ -95,30 +106,11 @@ function stubWebGL() {
   );
 }
 
-/** The probe's own AbortController firing — feral-file#3583's genuine-timeout shape. */
-function timedOutAbortError(): ContentTypeDetectionError {
-  return new ContentTypeDetectionError(
-    'Failed to determine content type: AbortError: signal is aborted without reason',
-    false,
-    true
-  );
-}
-
-/** A fast native rejection — the CORS-block shape, and what a dead host degrades to later. */
-function fastRejectionError(): ContentTypeDetectionError {
+/** A HEAD that got no response while online: DNS, refused, timeout or a CORS block. */
+function noResponseError(): ContentTypeDetectionError {
   return new ContentTypeDetectionError(
     'Failed to determine content type: TypeError: Failed to fetch',
-    false,
     false
-  );
-}
-
-/** Both independent flags true at once — a transient offline blip during a genuine timeout. */
-function timedOutAndNetworkFailureError(): ContentTypeDetectionError {
-  return new ContentTypeDetectionError(
-    'Failed to determine content type: AbortError: signal is aborted without reason',
-    true,
-    true
   );
 }
 
@@ -126,7 +118,6 @@ function timedOutAndNetworkFailureError(): ContentTypeDetectionError {
 function reachedServerUnhelpfulError(): ContentTypeDetectionError {
   return new ContentTypeDetectionError(
     'Failed to determine content type: Error: HEAD request failed with status 405 Method Not Allowed',
-    false,
     false,
     true
   );
@@ -140,6 +131,10 @@ async function waitForCannotBeDisplayed() {
     expect(screen.queryByText(CANNOT_BE_DISPLAYED_TEXT)).toBeTruthy();
   });
 }
+
+beforeEach(() => {
+  probeGetMock.mockResolvedValue('answered');
+});
 
 afterEach(() => {
   cleanup();
@@ -193,7 +188,8 @@ describe('ArtworkPlayer — reachable-server detection failure does not raise de
     contentTypeMock.mockRejectedValue(
       new ContentTypeDetectionError(
         'Failed to determine content type: Error: HEAD request failed with status 404 Not Found',
-        false
+        false,
+        true
       )
     );
 
@@ -328,48 +324,39 @@ describe('ArtworkPlayer — network-classified detection failure render status',
   });
 });
 
-describe('ArtworkPlayer — unresponsive-source detection failure declares failed (feral-file#3583)', () => {
-  it('shows the "cannot be displayed" message and renders no iframe for a timed-out, online-device probe', async () => {
-    // feral-file#3583: a dead IPFS gateway accepts the connection but never
-    // answers. The device is online (isNetworkFailure: false, the degraded/
-    // offline backdrop is the wrong signal here), but this one source is
-    // proven unreachable (timedOut: true) — pointing an iframe at it would
-    // just render Chromium's own in-frame net-error page with nothing ever
-    // telling the viewer playback failed.
+describe('ArtworkPlayer — a source whose GET gets no answer at all is declared failed (ff-player#311)', () => {
+  it('shows the "cannot be displayed" message and renders no iframe, without raising degraded', async () => {
+    // A black-holed host on an online device: neither the HEAD nor the GET
+    // gets anything back. Pointing an iframe at it would show Chromium's own
+    // error page and report it ready for the whole item.
     stubWebGL();
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
-    contentTypeMock.mockRejectedValue(timedOutAbortError());
+    contentTypeMock.mockRejectedValue(noResponseError());
+    probeGetMock.mockResolvedValue('silent');
 
     const setPlaybackDegraded = vi.fn();
     const { container } = render(playerNode(setPlaybackDegraded));
 
     await waitForCannotBeDisplayed();
+    expect(probeGetMock).toHaveBeenCalledWith(EXTENSIONLESS);
     expect(container.querySelector('iframe')).toBeNull();
     // Not the device-wide offline backdrop: this device is online, only the
     // one source is dead.
     expect(setPlaybackDegraded).not.toHaveBeenCalled();
     expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.failed);
   });
-});
 
-describe('ArtworkPlayer — unresponsive-source detection failure settles the transition (run-reviewer F1)', () => {
   it('commits the failed incoming slot through the transition owner instead of leaving it wedged', async () => {
-    // Before this fix, the confirmedUnreachable branch called only
-    // recovery.fail() and never touched `transition`: the incoming slot
-    // stayed at `loading: true` forever, `commitReadySlot` never saw it
-    // ready, and `onItemCommitted` never fired for the failed item — the
-    // settings latch stayed pinned to whatever was previously on screen
-    // (surfaced live as `DisplaySettingsService`'s "The showing changed or
-    // is still loading." on an advertised showingKey that could never
-    // settle). `transition.fail()` must be what declares it, so the failed
-    // slot still commits and later work can proceed.
+    // feral-file#3583 review F1: the failure must settle the slot through
+    // `transition.fail()`, so the failed slot still commits, the settings
+    // latch is released, and later work can proceed.
     stubWebGL();
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
-    contentTypeMock.mockRejectedValue(timedOutAbortError());
+    contentTypeMock.mockRejectedValue(noResponseError());
+    probeGetMock.mockResolvedValue('silent');
 
-    const setPlaybackDegraded = vi.fn();
     const onItemCommitted = vi.fn();
-    render(playerNode(setPlaybackDegraded, undefined, onItemCommitted));
+    render(playerNode(vi.fn(), undefined, onItemCommitted));
 
     await waitForCannotBeDisplayed();
     await waitFor(() => {
@@ -378,104 +365,68 @@ describe('ArtworkPlayer — unresponsive-source detection failure settles the tr
   });
 });
 
-describe('ArtworkPlayer — unresponsive-source memory survives a later fast rejection (feral-file#3583, live FF1 finding)', () => {
-  // Live-verified on an FF1: after enough consecutive timeouts against the
-  // same dead host, Chromium stops waiting out the probe's own
-  // AbortController and starts rejecting `fetch` natively and fast instead —
-  // a bare TypeError, shape-identical to a CORS block, with `timedOut:
-  // false`. Without memory of the earlier genuine timeout, this later
-  // attempt would fall through to the iframe branch and reproduce the exact
-  // bug this file fixes, on the very source already proven dead.
-  it('keeps declaring the same URL failed once timed out, even after a later retry fails fast instead', async () => {
+describe('ArtworkPlayer — a HEAD never fails a work on its own (ff-player#311)', () => {
+  it('mounts the fallback iframe when the HEAD got no response but a GET is answered', async () => {
+    // A host that refuses HEAD, or omits CORS headers on it, rejects the
+    // probe exactly like a dead host; the page itself is served.
     stubWebGL();
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
-    contentTypeMock.mockRejectedValueOnce(timedOutAbortError());
+    contentTypeMock.mockRejectedValue(noResponseError());
 
-    const setPlaybackDegraded = vi.fn();
-    let reload: (() => void) | null = null;
-    const { container } = render(
-      playerNode(setPlaybackDegraded, cb => {
-        reload = cb;
-      })
-    );
-    await waitForCannotBeDisplayed();
+    const { container } = render(playerNode(vi.fn()));
 
-    contentTypeMock.mockRejectedValueOnce(fastRejectionError());
-    await act(async () => {
-      reload?.();
-      await Promise.resolve();
-    });
-
-    await waitForCannotBeDisplayed();
-    expect(container.querySelector('iframe')).toBeNull();
-  });
-
-  it('remembers a timeout even when it coincides with a corroborated offline blip, for a later fast-failing retry once back online', async () => {
-    // run-reviewer round 2, F1: isNetworkFailure and timedOut are
-    // independent flags and can both be true on the same attempt (a
-    // connectivity drop exactly while the probe's own AbortController was
-    // mid-wait). Recording timedOut only in the isNetworkFailure-false
-    // branch would drop that attempt's unreachability evidence, so a later
-    // attempt — once back online, failing fast instead — would wrongly fall
-    // through to the iframe branch.
-    stubWebGL();
-    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
-    contentTypeMock.mockRejectedValueOnce(timedOutAndNetworkFailureError());
-
-    const setPlaybackDegraded = vi.fn();
-    let reload: (() => void) | null = null;
-    const { container } = render(
-      playerNode(setPlaybackDegraded, cb => {
-        reload = cb;
-      })
-    );
     await waitFor(() => {
-      expect(setPlaybackDegraded).toHaveBeenCalledWith(true, EXTENSIONLESS);
+      expect(container.querySelector('iframe')).toBeTruthy();
     });
-
-    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
-    contentTypeMock.mockRejectedValueOnce(fastRejectionError());
-    await act(async () => {
-      reload?.();
-      await Promise.resolve();
-    });
-
-    await waitForCannotBeDisplayed();
-    expect(container.querySelector('iframe')).toBeNull();
+    expect(probeGetMock).toHaveBeenCalledWith(EXTENSIONLESS);
   });
 
-  it('forgets a URL once it genuinely resolves, so a recovered source is not stuck declared-failed', async () => {
+  it('mounts the fallback iframe when the GET is rejected early on an ordinary host', async () => {
+    // Review F1: `Cross-Origin-Resource-Policy: same-origin` rejects the
+    // fetch exactly like DNS or a refused connection, yet the
+    // iframe's navigation is not subject to it and shows the page.
     stubWebGL();
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
-    contentTypeMock.mockRejectedValueOnce(timedOutAbortError());
+    contentTypeMock.mockRejectedValue(noResponseError());
+    probeGetMock.mockResolvedValue('rejected');
 
-    const setPlaybackDegraded = vi.fn();
+    const { container } = render(playerNode(vi.fn()));
+
+    await waitFor(() => {
+      expect(container.querySelector('iframe')).toBeTruthy();
+    });
+  });
+
+  it('asks no GET when the HEAD reached the server, even unhelpfully', async () => {
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValue(reachedServerUnhelpfulError());
+
+    const { container } = render(playerNode(vi.fn()));
+
+    await waitFor(() => {
+      expect(container.querySelector('iframe')).toBeTruthy();
+    });
+    expect(probeGetMock).not.toHaveBeenCalled();
+  });
+
+  it('judges every attempt afresh: a source that failed mounts once it answers', async () => {
+    // No per-URL memory: a host that was silent on one attempt (an onchfs
+    // work still being read from chain) plays on the next one that answers.
+    stubWebGL();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValue(noResponseError());
+    probeGetMock.mockResolvedValueOnce('silent');
+
     let reload: (() => void) | null = null;
     const { container } = render(
-      playerNode(setPlaybackDegraded, cb => {
+      playerNode(vi.fn(), cb => {
         reload = cb;
       })
     );
     await waitForCannotBeDisplayed();
+    expect(container.querySelector('iframe')).toBeNull();
 
-    contentTypeMock.mockResolvedValueOnce('image/jpeg');
-    await act(async () => {
-      reload?.();
-      await Promise.resolve();
-    });
-
-    const img = await waitFor(() => {
-      const el = container.querySelector('img');
-      if (!el?.src) {
-        throw new Error('image slot has not been given a source yet');
-      }
-      return el;
-    });
-    await fireMedia(img, 'load');
-
-    // A later re-failure of the same now-recovered URL is judged fresh, not
-    // short-circuited by stale memory of the earlier timeout.
-    contentTypeMock.mockRejectedValueOnce(fastRejectionError());
     await act(async () => {
       reload?.();
       await Promise.resolve();
@@ -487,34 +438,46 @@ describe('ArtworkPlayer — unresponsive-source memory survives a later fast rej
   });
 });
 
-describe('ArtworkPlayer — unresponsive-source memory clears on a reached response (feral-file#3583 review F2)', () => {
-  it('forgets a timeout once a later retry reaches the server, even with an unhelpful response', async () => {
-    // The live finding this guards: a gateway that timed out once can start
-    // answering on a later attempt, just not usefully (e.g. a 405). That
-    // attempt reached the server — the reached-but-unhelpful-HTTP
-    // classification must stay unchanged (iframe fallback), not get
-    // overridden by the earlier timeout's stale memory.
+describe('ArtworkPlayer — a GET that fails while the device goes offline takes the offline path (PR #337 review F2)', () => {
+  it('takes the offline path when the device went offline while the GET ran', async () => {
+    // Review F2: the failure is the device's, not the source's, so it must
+    // raise degraded instead of spending the work's retry budget.
     stubWebGL();
-    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
-    contentTypeMock.mockRejectedValueOnce(timedOutAbortError());
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValue(noResponseError());
+    probeGetMock.mockImplementation(() => {
+      onLine.mockReturnValue(false);
+      return Promise.resolve('silent');
+    });
 
     const setPlaybackDegraded = vi.fn();
-    let reload: (() => void) | null = null;
-    const { container } = render(
-      playerNode(setPlaybackDegraded, cb => {
-        reload = cb;
-      })
-    );
-    await waitForCannotBeDisplayed();
-
-    contentTypeMock.mockRejectedValueOnce(reachedServerUnhelpfulError());
-    await act(async () => {
-      reload?.();
-      await Promise.resolve();
-    });
+    const { container } = render(playerNode(setPlaybackDegraded));
 
     await waitFor(() => {
-      expect(container.querySelector('iframe')).toBeTruthy();
+      expect(setPlaybackDegraded).toHaveBeenCalledWith(true, EXTENSIONLESS);
     });
+    expect(screen.queryByText(CANNOT_BE_DISPLAYED_TEXT)).toBeNull();
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('takes the offline path when the link dropped and the GET was rejected at once', async () => {
+    // A dropped link rejects the GET fast (ERR_INTERNET_DISCONNECTED), not
+    // silently: the offline path must still take it, not the iframe.
+    stubWebGL();
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    contentTypeMock.mockRejectedValue(noResponseError());
+    probeGetMock.mockImplementation(() => {
+      onLine.mockReturnValue(false);
+      return Promise.resolve('rejected');
+    });
+
+    const setPlaybackDegraded = vi.fn();
+    const { container } = render(playerNode(setPlaybackDegraded));
+
+    await waitFor(() => {
+      expect(setPlaybackDegraded).toHaveBeenCalledWith(true, EXTENSIONLESS);
+    });
+    expect(screen.queryByText(CANNOT_BE_DISPLAYED_TEXT)).toBeNull();
+    expect(container.querySelector('iframe')).toBeNull();
   });
 });
