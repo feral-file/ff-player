@@ -2,6 +2,7 @@ import { PreviewHTMLTag } from '@/models';
 import { DP1DisplayPreference, Scaling } from '@/models/dp1.model';
 import { dataDocumentURL, releaseDataDocumentURLs } from '@/utils/dataDocument';
 import { loadsAsImage } from '@/utils/imageProbe';
+import { answersGet } from '@/utils/sourceProbe';
 import {
   ContentTypeDetectionError,
   appendDisplayModeParam,
@@ -56,9 +57,9 @@ function fallbackIframeSource(url: string): Partial<SlotLayer> {
 }
 
 /**
- * The source for a slot whose Content-Type probe failed without proving the
- * host dead: an image when the browser can decode the URL as one, otherwise
- * the untyped iframe.
+ * The source for a slot whose Content-Type probe failed: an image when the
+ * browser can decode the URL as one, otherwise the untyped iframe, or null
+ * when the source did not answer at all.
  *
  * The iframe is a guess for "probably a web page". It is the wrong guess for
  * an image, which draws there at its natural size, unscaled (see
@@ -66,14 +67,23 @@ function fallbackIframeSource(url: string): Partial<SlotLayer> {
  * takes the image slot, follows the display's scaling, and reports its load
  * outcome like any typed image. Everything else keeps the untyped iframe and
  * its rule of reporting no outcome.
+ *
+ * It is also the wrong guess for a source that answers nothing: the iframe
+ * shows Chromium's own error page and reports it `ready`. So when the `HEAD`
+ * got no response ([headUnanswered]), a plain GET decides first (see
+ * answersGet). The `HEAD` alone never fails a work: a host may refuse it and
+ * still serve the page.
  */
 async function untypedSource(
-  url: string
-): Promise<{ previewType: PreviewHTMLTag; source: Partial<SlotLayer> }> {
+  url: string,
+  headUnanswered: boolean
+): Promise<{ previewType: PreviewHTMLTag; source: Partial<SlotLayer> } | null> {
   const resolved = resolveArtworkSourceURL(url);
-  const isImage =
-    (resolved.protocol === 'http:' || resolved.protocol === 'https:') &&
-    (await loadsAsImage(resolved.toString()));
+  const isHTTP = resolved.protocol === 'http:' || resolved.protocol === 'https:';
+  if (isHTTP && headUnanswered && !(await answersGet(resolved.toString()))) {
+    return null;
+  }
+  const isImage = isHTTP && (await loadsAsImage(resolved.toString()));
   if (!isImage) {
     return {
       previewType: PreviewHTMLTag.iframe,
@@ -94,114 +104,73 @@ async function untypedSource(
 
 /**
  * Resolves an untyped source (see untypedSource) and mounts it, unless the
- * mount that asked was superseded while the image probe ran. The probe is
+ * mount that asked was superseded while the probes ran. The probes are
  * async where the old iframe guess was not, so a newer mount for the slot can
  * have started in between; [stillWanted] is the same cancelled-or-retargeted
  * check the typed path makes.
+ *
+ * A source that answered neither the `HEAD` nor the GET is declared failed
+ * through the transition owner, as `detect/unreachable`: `transition.fail()`
+ * commits the failed slot (releasing the settings latch so a later item can
+ * still commit) before calling `recovery.fail()`, and the slot's source URLs
+ * stay empty, so no iframe mounts and no error page reaches the wall. The
+ * "cannot be displayed" message and the ordinary retry/advance budget follow.
+ * Ring (mediaHealth v1): the probe observer already recorded this attempt's
+ * `detect/network` (device-local, never counted); `detect/unreachable` is the
+ * attempt's countable verdict, like a watchdog expiry. controld drops both
+ * for an onchfs source, whose bytes come only from the device.
  */
 function mountUntyped(
   url: string,
+  headUnanswered: boolean,
   owners: { recovery: ArtworkRecovery; transition: ArtworkTransition },
   stillWanted: () => boolean
 ): void {
-  // The image probe ends by itself (IMAGE_PROBE_TIMEOUT_MS), so the load is
-  // bounded while it runs. Without this the playlist treats the wait as an
-  // unbounded load and advances an expired slot: a five-second item with a
-  // one-second-plus probe was skipped before any renderer mounted. The
-  // renderer that mounts next sets the flag for its own watchdog.
+  // The probes end by themselves (SOURCE_GET_TIMEOUT_MS,
+  // IMAGE_PROBE_TIMEOUT_MS), so the load is bounded while they run. Without
+  // this the playlist treats the wait as an unbounded load and advances an
+  // expired slot: a five-second item with a one-second-plus probe was
+  // skipped before any renderer mounted. The renderer that mounts next sets
+  // the flag for its own watchdog.
   owners.recovery.markLoadBounded(true);
-  void untypedSource(url).then(({ previewType, source }) => {
+  void untypedSource(url, headUnanswered).then(untyped => {
     if (!stillWanted()) {
       return;
     }
-    owners.recovery.noteMediaType(previewType);
-    owners.transition.resolveSource(url, source);
+    if (untyped === null) {
+      owners.transition.fail(
+        { stage: 'detect', code: 'unreachable' },
+        owners.transition.incomingSlot ?? undefined
+      );
+      return;
+    }
+    owners.recovery.noteMediaType(untyped.previewType);
+    owners.transition.resolveSource(url, untyped.source);
   });
 }
 
 /**
- * Classifies a detection failure and applies the matching recovery action.
- * Returns true when it fully handled the failure (the device-wide offline
- * backdrop, or a declared per-item failure for a source proven — now or
- * previously — unreachable); false means the caller falls back to the
- * iframe render.
- *
- * feral-file#3583, live-verified on an FF1: after enough consecutive
- * timeouts against the same dead host, Chromium stops waiting out the
- * probe's own AbortController and starts rejecting `fetch` natively and fast
- * instead (a bare `TypeError`, indistinguishable from a CORS block by shape
- * alone) — a device-level connection-failure cache/backoff, not a change in
- * the underlying source. So `timedOut` alone is remembered per URL in
- * `confirmedUnreachable`: once ANY attempt proves a source out via a genuine
- * timeout, every later attempt against that same URL is treated as failed
- * too, regardless of how that later attempt's own rejection happened to
- * shape up. Declaring it failed — instead of rendering an iframe at a source
- * proven dead, which would just show Chromium's own in-frame net-error page
- * indefinitely — uses the normal per-item path: the "cannot be displayed"
- * message and the existing retry/skip budget.
+ * Applies the device-wide offline case of a detection failure: the `HEAD`
+ * got no response and the device is corroborated offline. Returns true when
+ * it handled the failure; false means the caller mounts the source untyped.
  */
-function handleDetectionFailure(
+function handleOfflineDetection(
   error: unknown,
   url: string,
-  confirmedUnreachable: Set<string>,
-  failureOwners: {
+  owners: {
     noteRef: { current: (url: string, failed: boolean) => void };
     recovery: ArtworkRecovery;
-    transition: ArtworkTransition;
   }
 ): boolean {
-  const { noteRef, recovery, transition } = failureOwners;
-  if (!(error instanceof ContentTypeDetectionError)) {
+  if (!(error instanceof ContentTypeDetectionError) || !error.isNetworkFailure) {
     return false;
   }
-  // Recorded before branching on isNetworkFailure: the two flags are
-  // independent (see the class doc on ContentTypeDetectionError) and can
-  // both be true at once — e.g. a transient offline blip corroborates
-  // isNetworkFailure for the very attempt whose AbortController also timed
-  // out. Checking timedOut only in an isNetworkFailure-false branch would
-  // drop that attempt's unreachability evidence, so a later attempt against
-  // the same URL (once the device is back online and failing fast instead)
-  // would wrongly fall through to the iframe render again.
-  if (error.timedOut) {
-    confirmedUnreachable.add(url);
-  } else if (error.reachedServer) {
-    // The source answered this attempt — even unhelpfully (feral-file#3583
-    // review F2: a gateway that timed out once can start answering, e.g.
-    // with a 405, on a later attempt). That disproves any earlier `timedOut`
-    // verdict remembered for this URL, so the reached-but-unhelpful-HTTP
-    // classification below stays genuinely unchanged instead of being
-    // overridden by stale memory.
-    confirmedUnreachable.delete(url);
-  }
-  if (error.isNetworkFailure) {
-    // Corroborated offline. The `detect/network` ring entry was already
-    // recorded by the probe observer when no response arrived, so this
-    // path only raises the offline signal and fails the mount.
-    noteRef.current(url, true);
-    recovery.markArtworkFailed();
-    return true;
-  }
-  if (confirmedUnreachable.has(url)) {
-    // Unlike the isNetworkFailure branch above (pre-existing, unchanged),
-    // this declared failure must settle the incoming slot through the
-    // transition owner itself: `transition.fail()` commits the failed slot
-    // (releasing the settings latch so a later item can still commit) before
-    // calling `recovery.fail()`, instead of leaving the slot wedged at
-    // `loading: true` forever (feral-file#3583 review F1). Its source URLs
-    // stay empty — `resolveSource` was never reached on this path — so no
-    // fallback iframe mounts for the failed slot either.
-    // Ring (mediaHealth v1): the probe observer already recorded this
-    // attempt's `detect/network` (device-local, never counted). The
-    // attempt's own verdict is `detect/unreachable`: the probe's 10 s budget
-    // proved the host silent, now or on an earlier attempt for this URL, so
-    // it counts like a watchdog expiry, not like an offline blip.
-    transition.fail(
-      { stage: 'detect', code: 'unreachable' },
-      transition.incomingSlot ?? undefined
-    );
-    return true;
-  }
-  return false;
+  // The `detect/network` ring entry was already recorded by the probe
+  // observer when no response arrived, so this path only raises the offline
+  // signal and fails the mount.
+  owners.noteRef.current(url, true);
+  owners.recovery.markArtworkFailed();
+  return true;
 }
 
 /** MIME detection owns only this request; a superseded result cannot patch the next slot. */
@@ -216,8 +185,6 @@ export function useArtworkSource(
   useLayoutEffect(() => {
     noteRef.current = note;
   }, [note]);
-  /** Per-URL memory for `handleDetectionFailure` — see its doc comment. */
-  const confirmedUnreachableRef = useRef<Set<string>>(new Set());
   const {
     previewURL: url,
     artworkPreviewMIMEType: suppliedType,
@@ -243,7 +210,6 @@ export function useArtworkSource(
         if (!isCurrent()) {
           return;
         }
-        confirmedUnreachableRef.current.delete(url);
         recovery.noteMediaType(config.previewType);
         transition.resolveSource(url, {
           ...config,
@@ -261,16 +227,12 @@ export function useArtworkSource(
           return;
         }
         console.error('[ArtworkPlayer] Failed to detect preview type:', error);
-        if (
-          handleDetectionFailure(error, url, confirmedUnreachableRef.current, {
-            noteRef,
-            recovery,
-            transition,
-          })
-        ) {
+        if (handleOfflineDetection(error, url, { noteRef, recovery })) {
           return;
         }
-        mountUntyped(url, { recovery, transition }, isCurrent);
+        const headUnanswered =
+          error instanceof ContentTypeDetectionError && !error.reachedServer;
+        mountUntyped(url, headUnanswered, { recovery, transition }, isCurrent);
       });
     return () => {
       cancelled = true;

@@ -10,6 +10,7 @@ import { defaultDP1DisplayPreference } from '@/models/dp1.model';
 import type { PlaybackOutcomeEntry } from '@/models/media_health.model';
 import { canvasService } from '@/services/CanvasService';
 import { CONTENT_TYPE_HEAD_TIMEOUT_MS } from '@/utils/helper';
+import { SOURCE_GET_TIMEOUT_MS } from '@/utils/sourceProbe';
 import {
   noteDaemonConnectivity,
   resetDaemonConnectivityForTests,
@@ -287,16 +288,23 @@ describe('ArtworkPlayer play-outcome ring: decode, detect, and GPU stages', () =
 describe('ArtworkPlayer play-outcome ring: an unanswered content-type probe', () => {
   useRingHarness();
 
-  it('records an unanswered probe on an online device as device-local detect/network, then the fallback ready', async () => {
-    // The fxhash onchfs case: an unresolvable host behind an extensionless
-    // URL. The browser cannot tell DNS from CORS, so the work still plays in
-    // the fallback iframe; the entry is the only trace controld gets.
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+  it('records a HEAD with no response as device-local detect/network, then the fallback ready when a GET is answered', async () => {
+    // A host that refuses HEAD or omits CORS headers on it: the browser
+    // rejects the probe like a dead host, but the page is served, so the
+    // plain-GET confirmation lets it play in the fallback iframe.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: unknown, init?: RequestInit) =>
+        init?.method === 'HEAD'
+          ? Promise.reject(new TypeError('Failed to fetch'))
+          : Promise.resolve(new Response(null, { status: 200 }))
+      )
+    );
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     noteDaemonConnectivity(true);
     vi.spyOn(WebGLRecovery.prototype, 'available').mockReturnValue(true);
     try {
-      render(node({ mimeType: '', previewURL: 'https://art.test/onchfs/abc' }));
+      render(node({ mimeType: '', previewURL: 'https://art.test/cors/abc' }));
       await until(() => document.querySelector('iframe') !== null);
       const frame = document.querySelector('iframe');
       await act(async () => {
@@ -315,26 +323,16 @@ describe('ArtworkPlayer play-outcome ring: an unanswered content-type probe', ()
     }
   });
 
-  it('declares a timed-out probe failed as detect/unreachable, with no fallback ready', async () => {
-    // feral-file#3583 on main: a host that accepts the connection and never
-    // answers survives the probe's own 10 s abort. The observer records the
-    // device-local detect/network first; the attempt's own verdict is
-    // detect/unreachable, and no iframe mounts to report a false ready.
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((_url: unknown, init?: RequestInit) =>
-        new Promise((_resolve, reject) => {
-          init?.signal?.addEventListener('abort', () => {
-            reject(new DOMException('The operation was aborted', 'AbortError'));
-          });
-        })
-      )
-    );
+  it('declares an unresolvable host failed as detect/unreachable, with no fallback ready', async () => {
+    // ff-player#311: DNS failure or a refused connection, e.g. an onchfs
+    // work the device has not read from chain yet. Neither the HEAD nor the
+    // GET gets a response, so no iframe mounts to show Chromium's error
+    // page as a ready work.
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     noteDaemonConnectivity(true);
     try {
-      render(node({ mimeType: '', previewURL: 'https://art.test/blackhole/abc' }));
-      await advance(CONTENT_TYPE_HEAD_TIMEOUT_MS);
+      render(node({ mimeType: '', previewURL: 'https://art.test/onchfs/abc' }));
       await until(() => sinceSeq(mark).some(entry => entry.code === 'unreachable'));
       expect(sinceSeq(mark).map(entry => [entry.kind, entry.stage, entry.code, entry.attempt])).toEqual([
         ['fail', 'detect', 'network', 1],
@@ -355,5 +353,40 @@ describe('ArtworkPlayer play-outcome ring: an unanswered content-type probe', ()
     expect(
       sinceSeq(mark).filter(entry => entry.stage === 'detect').map(entry => entry.code)
     ).toEqual(['network']);
+  });
+});
+
+describe('ArtworkPlayer play-outcome ring: a source that never answers', () => {
+  useRingHarness();
+
+  it('declares a host that never answers failed once the GET also times out', async () => {
+    // feral-file#3583: a host that accepts the connection and never answers
+    // survives the HEAD's own 10 s abort; the GET gets the same budget.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: unknown, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted', 'AbortError'));
+          });
+        })
+      )
+    );
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    noteDaemonConnectivity(true);
+    try {
+      render(node({ mimeType: '', previewURL: 'https://art.test/blackhole/abc' }));
+      await advance(CONTENT_TYPE_HEAD_TIMEOUT_MS);
+      expect(sinceSeq(mark).some(entry => entry.code === 'unreachable')).toBe(false);
+      await advance(SOURCE_GET_TIMEOUT_MS);
+      await until(() => sinceSeq(mark).some(entry => entry.code === 'unreachable'));
+      expect(sinceSeq(mark).map(entry => [entry.kind, entry.stage, entry.code, entry.attempt])).toEqual([
+        ['fail', 'detect', 'network', 1],
+        ['fail', 'detect', 'unreachable', 1],
+      ]);
+      expect(document.querySelector('iframe')).toBeNull();
+    } finally {
+      resetDaemonConnectivityForTests();
+    }
   });
 });
