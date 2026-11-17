@@ -55,7 +55,7 @@ describe('SetupOverlay known states (connectivity)', () => {
         (_, el) =>
           el?.tagName === 'P' &&
           el.textContent ===
-            'After you join, wait about 10 seconds: if this code changes, scan it again Nothing opened? Wi-Fi Settings → FF1-Setup-ABCD Password correct-horse · Keep connected Still stuck? Mobile data/VPN off → http://10.42.0.1'
+            'Nothing opened? Wi-Fi Settings → FF1-Setup-ABCD Password correct-horse · Keep connected Still stuck? Mobile data/VPN off → http://10.42.0.1'
       )
     ).toBeTruthy();
     expect(screen.getByText(/Mobile data\/VPN off/)).toBeTruthy();
@@ -79,7 +79,7 @@ describe('SetupOverlay known states (connectivity)', () => {
         (_, el) =>
           el?.tagName === 'P' &&
           el.textContent ===
-            'After you join, wait about 10 seconds: if this code changes, scan it again Nothing opened? Wi-Fi Settings → FF1-Setup-ABCD Keep connected'
+            'Nothing opened? Wi-Fi Settings → FF1-Setup-ABCD Keep connected'
       )
     ).toBeTruthy();
     expect(screen.queryByText(/Password/)).toBeNull();
@@ -585,7 +585,9 @@ describe('SetupOverlay arbitration with mintPairingDisplay', () => {
     await screen.findByText('Resetting to factory settings');
 
     displayMintPairing({ state: MintPairingDisplayState.Hidden });
-    expect(await screen.findByText('Resetting to factory settings')).toBeTruthy();
+    expect(
+      await screen.findByText('Resetting to factory settings')
+    ).toBeTruthy();
   });
 
   it('isRenderableSetupDisplayState agrees with renderSetupPanel for every known state', () => {
