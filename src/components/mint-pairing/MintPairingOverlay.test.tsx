@@ -119,7 +119,7 @@ describe('MintPairingOverlay arbitration with setupDisplay', () => {
 
     // Both overlays paint full-screen at the same z-index; the newest
     // command must own the screen instead of DOM mount order.
-    displaySetup({ state: 'scanning' });
+    displaySetup({ state: 'joining' });
     await waitFor(() => {
       expect(screen.queryByText('PAIR-123')).toBeNull();
     });
@@ -134,10 +134,12 @@ describe('MintPairingOverlay arbitration with setupDisplay', () => {
     });
     expect(await screen.findByText('PAIR-123')).toBeTruthy();
 
-    // Unknown future states and hidden/ready paint no setup panel, so the
-    // pairing code must stay — blanking it for an invisible panel would
-    // hide the accepted command entirely.
+    // Unknown future states, hidden/ready, and the narration-only states
+    // paint no setup panel, so the pairing code must stay — blanking it for
+    // an invisible panel would hide the accepted command entirely.
     displaySetup({ state: 'future_lan_approval' });
+    displaySetup({ state: 'connecting' });
+    displaySetup({ state: 'scanning' });
     displaySetup({ state: 'hidden' });
     displaySetup({ state: 'ready' });
     expect(await screen.findByText('PAIR-123')).toBeTruthy();

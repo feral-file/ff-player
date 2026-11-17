@@ -99,46 +99,10 @@ describe('SetupOverlay known states (connection progress)', () => {
 
     expect(await screen.findByText('Connecting to Wi-Fi')).toBeTruthy();
   });
-
-  it('renders a bare join_failed with a fallback action line', async () => {
-    // A reason-less join_failed is valid per the CDP validator; the panel
-    // must not be a dead-end title while controld re-raises the AP.
-    render(<SetupOverlay />);
-
-    displaySetup({ state: SetupDisplayState.JoinFailed });
-
-    expect(await screen.findByText("Couldn't connect to Wi-Fi")).toBeTruthy();
-    expect(screen.getByText('Please try again.')).toBeTruthy();
-  });
-
-  it('renders join_failed with the provided reason', async () => {
-    render(<SetupOverlay />);
-
-    displaySetup({
-      state: SetupDisplayState.JoinFailed,
-      reason: 'Incorrect password.',
-    });
-
-    expect(await screen.findByText("Couldn't connect to Wi-Fi")).toBeTruthy();
-    expect(screen.getByText('Incorrect password.')).toBeTruthy();
-    // No rejoin instruction: the AP re-raise re-renders softap_qr right
-    // after, and that screen is the rejoin instruction.
-    expect(screen.queryByText(/setup network/)).toBeNull();
-  });
-
-  it('renders join_failed without a reason line when none is provided', async () => {
-    render(<SetupOverlay />);
-
-    displaySetup({ state: SetupDisplayState.JoinFailed });
-
-    expect(await screen.findByText("Couldn't connect to Wi-Fi")).toBeTruthy();
-  });
 });
 
-// The connecting and setup_error prose-narration states are tested in
-// SetupOverlayNarration.test.tsx (split to stay inside the max-lines budget),
-// as is join_failed's blank-`reason` handling — all three panels share that
-// invariant, so the cases that pin it are kept together over there.
+// The narration-only states (scanning, connecting, finalizing, join_failed,
+// setup_error) paint no panel; SetupOverlayNarration.test.tsx pins that.
 
 describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
   afterEach(() => {
@@ -324,30 +288,6 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
     expect(container.querySelector('svg')).not.toBeNull();
   });
 
-  it('renders the scanning state while the pre-hotspot Wi-Fi scan runs', async () => {
-    render(<SetupOverlay />);
-
-    displaySetup({ state: SetupDisplayState.Scanning });
-
-    expect(await screen.findByText('Looking for Wi-Fi networks')).toBeTruthy();
-    expect(
-      screen.getByText('The setup screen will appear in a moment.')
-    ).toBeTruthy();
-  });
-
-  it('renders the finalizing state between join success and the claim step', async () => {
-    render(<SetupOverlay />);
-
-    displaySetup({ state: SetupDisplayState.Finalizing });
-
-    expect(await screen.findByText('Wi-Fi connected')).toBeTruthy();
-    expect(
-      screen.getByText(
-        /Getting your Art Computer ready\. This can take a minute\./
-      )
-    ).toBeTruthy();
-  });
-
   it('renders the factory_reset state with a do-not-power-off warning', async () => {
     render(<SetupOverlay />);
 
@@ -475,8 +415,8 @@ describe('SetupOverlay bundled artwork background', () => {
   it('renders the same-origin bundled artwork beneath a visible panel', async () => {
     const { container } = render(overlayWithCastInfo(null));
 
-    displaySetup({ state: SetupDisplayState.Scanning });
-    await screen.findByText('Looking for Wi-Fi networks');
+    displaySetup({ state: SetupDisplayState.FactoryReset });
+    await screen.findByText('Resetting to factory settings');
 
     const iframe = container.querySelector('iframe');
     expect(iframe?.getAttribute('src')).toBe('/setup-artwork/index.html');
@@ -546,8 +486,8 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
   it('keeps the same iframe node across panel state transitions', async () => {
     const { container } = render(<SetupOverlay />);
 
-    displaySetup({ state: SetupDisplayState.Scanning });
-    await screen.findByText('Looking for Wi-Fi networks');
+    displaySetup({ state: SetupDisplayState.FactoryReset });
+    await screen.findByText('Resetting to factory settings');
     const iframe = container.querySelector('iframe');
     expect(iframe).not.toBeNull();
 
@@ -562,9 +502,9 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
     const { container, rerender } = render(overlayWithCastInfo(null));
 
     act(() => {
-      displaySetup({ state: SetupDisplayState.Finalizing });
+      displaySetup({ state: SetupDisplayState.Joining });
     });
-    expect(screen.getByText('Wi-Fi connected')).toBeTruthy();
+    expect(screen.getByText('Connecting to Wi-Fi')).toBeTruthy();
     expect(container.querySelector('iframe')).not.toBeNull();
 
     rerender(
@@ -580,7 +520,7 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
     });
     expect(container.querySelector('iframe')).toBeNull();
     // The panel itself must survive the handoff — only the background yields.
-    expect(screen.getByText('Wi-Fi connected')).toBeTruthy();
+    expect(screen.getByText('Connecting to Wi-Fi')).toBeTruthy();
   });
 
   it('cancels a pending fade-out when a panel re-shows, keeping the same node', () => {
@@ -603,7 +543,7 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
       vi.advanceTimersByTime(FADE_OUT_MS / 2);
     });
     act(() => {
-      displaySetup({ state: SetupDisplayState.JoinFailed });
+      displaySetup({ state: SetupDisplayState.Joining });
     });
     act(() => {
       vi.advanceTimersByTime(FADE_OUT_MS * 2);
@@ -626,26 +566,26 @@ describe('SetupOverlay arbitration with mintPairingDisplay', () => {
   it('yields to a non-hidden mintPairingDisplay command (last command wins)', async () => {
     render(<SetupOverlay />);
 
-    displaySetup({ state: SetupDisplayState.Scanning });
-    await screen.findByText('Looking for Wi-Fi networks');
+    displaySetup({ state: SetupDisplayState.FactoryReset });
+    await screen.findByText('Resetting to factory settings');
 
     displayMintPairing({
       state: MintPairingDisplayState.PairingCode,
       pairingCode: 'PAIR-123',
     });
     await waitFor(() => {
-      expect(screen.queryByText('Looking for Wi-Fi networks')).toBeNull();
+      expect(screen.queryByText('Resetting to factory settings')).toBeNull();
     });
   });
 
   it('keeps its panel when mintPairingDisplay goes hidden', async () => {
     render(<SetupOverlay />);
 
-    displaySetup({ state: SetupDisplayState.Scanning });
-    await screen.findByText('Looking for Wi-Fi networks');
+    displaySetup({ state: SetupDisplayState.FactoryReset });
+    await screen.findByText('Resetting to factory settings');
 
     displayMintPairing({ state: MintPairingDisplayState.Hidden });
-    expect(await screen.findByText('Looking for Wi-Fi networks')).toBeTruthy();
+    expect(await screen.findByText('Resetting to factory settings')).toBeTruthy();
   });
 
   it('isRenderableSetupDisplayState agrees with renderSetupPanel for every known state', () => {

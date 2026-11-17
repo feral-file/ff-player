@@ -55,7 +55,7 @@ export const CONNECTING_GRACE_MS = 60_000;
 
 /**
  * Full-screen artwork layer rendered by SetupOverlay beneath its panels so
- * setup states play over art instead of a black void. Deliberately NOT cast
+ * setup states show art instead of a black void. Deliberately NOT cast
  * through CanvasService: a cast would be persisted as the device's castInfo
  * (useCastInfo writes every notified cast) and mask the real fallback
  * playlist on the next boot, which is compatibility-sensitive boot-recovery
@@ -63,7 +63,9 @@ export const CONNECTING_GRACE_MS = 60_000;
  *
  * Two situations put it on screen, and one invariant keeps it off.
  *
- * 1. A setup panel is visible and nothing is cast — the original case.
+ * 1. A setup flow is active and nothing is cast — the original case. The
+ *    narration-only setup states paint no panel, so this keys off the flow,
+ *    not a panel: a never-set-up unit must not wait on a black screen.
  * 2. `offlineDegraded`: the device has no connectivity AND the artwork the
  *    player is trying to show failed to load. A claimed device that boots
  *    offline restores its playlist but cannot fetch any asset, so without
@@ -184,8 +186,13 @@ function useBootConnectingWindow(browserOnline: boolean): boolean {
 }
 
 export default function SetupArtworkBackground({
+  setupActive,
   panelVisible,
 }: {
+  // The controller is in a setup flow. Raises the backdrop when nothing is
+  // cast, whether or not the current state paints a panel.
+  setupActive: boolean;
+  // A panel is painted right now. Only silences the status chip.
   panelVisible: boolean;
 }) {
   const appContext = useContext(AppContext)?.context;
@@ -210,7 +217,7 @@ export default function SetupArtworkBackground({
   // with this z-index 999 layer would replace the diagnostic with a p5
   // sketch.
   const show =
-    (panelVisible || degradedBackdrop) && (!castInfo || degradedBackdrop);
+    (setupActive || degradedBackdrop) && (!castInfo || degradedBackdrop);
 
   // The panel owns the messaging whenever one is up (a re-provision QR over
   // a long-offline device already explains the situation), so the chip only

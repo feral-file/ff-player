@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { SetupDisplayDetail, SetupDisplayState } from '@/models/custom_event';
 
 /**
- * How long a no-network setup panel stays over a work the Art Computer has
- * saved to display. The rule (feral-file/feral-file#3635, decided 2026-11-17):
- * "An Art Computer plugged in where it has no network displays what it
- * displayed last. The join code for Wi-Fi setup shows for about a minute after
+ * How long the Wi-Fi join code stays over a work the Art Computer has saved
+ * to display. The rule (feral-file/feral-file#3635, decided 2026-11-17): "An
+ * Art Computer plugged in where it has no network displays what it displayed
+ * last. The join code for Wi-Fi setup shows for about a minute after
  * power-on, then clears." Setup stays reachable because the daemon keeps the
  * hotspot up, and a power cycle starts a new minute.
  */
@@ -14,55 +14,54 @@ export const SETUP_PANEL_WINDOW_MS = 60_000;
 /**
  * How the window treats one `setupDisplay` state.
  *
- * - `timed`: no-network narration and the join code. Clears after the window
- *   when there is a saved work to display.
- * - `hold`: someone is in the middle of setup. Never cleared, and the timed
- *   panel that follows it gets a fresh window.
- * - `untimed`: needs a person or must not be interrupted (pairing, errors,
- *   update, factory reset). Never cleared.
- * - `none`: nothing is painted.
+ * - `timed`: the plain join code. Clears after the window when there is a
+ *   saved work to display.
+ * - `hold`: someone is in the middle of setup. Never cleared, and the join
+ *   code that follows it gets a fresh window.
+ * - `untimed`: a panel that is never cleared (a join code that says why it
+ *   is back, pairing, update, factory reset).
+ * - `silent`: a narration-only state. No panel; the episode continues.
+ * - `none`: no setup flow (hidden, ready, or a state this build does not
+ *   know).
  */
-export type SetupPanelKind = 'timed' | 'hold' | 'untimed' | 'none';
+export type SetupPanelKind = 'timed' | 'hold' | 'untimed' | 'silent' | 'none';
 
-/**
- * Classifies a `setupDisplay` command for the window. Unknown future states
- * read as `none`, matching `renderSetupPanel`, which paints nothing for them.
- */
+function joinCodeKind(display: SetupDisplayDetail): SetupPanelKind {
+  // A phone on the hotspot is a person mid-setup. Known limit: the daemon in
+  // FF OS 3.0.1 sends `client_attached` for Apple clients only, so the join
+  // code can clear while an Android phone is on the hotspot. That phone
+  // already has the setup page from its own captive-portal prompt; what it
+  // loses is the typed fallback address on this panel, which a power cycle
+  // brings back.
+  if (display.client_attached === true) {
+    return 'hold';
+  }
+  // The daemon puts `reason` on the join code only to say why the code is
+  // back: a failed join or the attached phone leaving. This panel is the
+  // only place that line shows, so it needs a person.
+  return (display.reason?.trim() ?? '') === '' ? 'timed' : 'untimed';
+}
+
+/** Classifies a `setupDisplay` command for the window. */
 export function setupPanelKind(display: SetupDisplayDetail): SetupPanelKind {
   switch (display.state as SetupDisplayState) {
     case SetupDisplayState.SoftApQr: {
-      // A phone on the hotspot is a person mid-setup, whether or not the
-      // panel can swap to the portal code. Known limit: the daemon in FF OS
-      // 3.0.1 sends `client_attached` for Apple clients only, so the join
-      // code can clear while an Android phone is on the hotspot. That phone
-      // already has the setup page from its own captive-portal prompt; what
-      // it loses is the typed fallback address on this panel, which a power
-      // cycle brings back.
-      if (display.client_attached === true) {
-        return 'hold';
-      }
-      // The daemon puts `reason` on the join code only to say why the code
-      // is back: a failed join or the attached phone leaving. This panel is
-      // the one lasting place that line shows, so it needs a person.
-      return (display.reason?.trim() ?? '') === '' ? 'timed' : 'untimed';
+      return joinCodeKind(display);
     }
-    case SetupDisplayState.Scanning:
-    case SetupDisplayState.Connecting: {
-      return 'timed';
-    }
-    case SetupDisplayState.Joining:
-    case SetupDisplayState.Finalizing: {
+    case SetupDisplayState.Joining: {
       return 'hold';
     }
-    // join_failed stays untimed: after a failed join the daemon repaints the
-    // join code within a millisecond, and its other use (a failed pre-claim
-    // update) is an error a person has to see.
-    case SetupDisplayState.JoinFailed:
-    case SetupDisplayState.SetupError:
     case SetupDisplayState.Updating:
     case SetupDisplayState.ClaimQr:
     case SetupDisplayState.FactoryReset: {
       return 'untimed';
+    }
+    case SetupDisplayState.Scanning:
+    case SetupDisplayState.Connecting:
+    case SetupDisplayState.Finalizing:
+    case SetupDisplayState.JoinFailed:
+    case SetupDisplayState.SetupError: {
+      return 'silent';
     }
     default: {
       return 'none';
@@ -72,17 +71,15 @@ export function setupPanelKind(display: SetupDisplayDetail): SetupPanelKind {
 
 /**
  * What the window remembers within one no-network episode. `deadline` is null
- * while no episode is open.
+ * until the episode's first join code appears.
  */
 export interface SetupPanelClock {
   deadline: number | null;
-  joinCodeShown: boolean;
   afterHold: boolean;
 }
 
 export const idleSetupPanelClock: SetupPanelClock = {
   deadline: null,
-  joinCodeShown: false,
   afterHold: false,
 };
 
@@ -92,33 +89,16 @@ export interface SetupPanelObservation {
   online: boolean;
 }
 
-function timedDeadline(
-  clock: SetupPanelClock,
-  observation: SetupPanelObservation
-): number {
-  const fresh = observation.now + SETUP_PANEL_WINDOW_MS;
-  const firstJoinCode =
-    observation.display.state === (SetupDisplayState.SoftApQr as string) &&
-    !clock.joinCodeShown;
-  // The window counts from when the episode's panel first appears. The
-  // daemon raises the hotspot 30 seconds to 5 minutes after power-on, so the
-  // first join code of an episode gets the whole window from when it
-  // appears. Repaints and later hotspot phases do not extend it.
-  if (clock.deadline === null || firstJoinCode || clock.afterHold) {
-    return fresh;
-  }
-  return clock.deadline;
-}
-
 /**
  * Advances the window for one observation: a new `setupDisplay` command or a
  * connectivity change. Pure, so every timing case is unit-tested without a
  * component.
  *
- * An episode ends only when the device is online and no setup-flow panel is
- * showing. A stale online flag therefore cannot reset the window while the
- * daemon is still narrating a no-network state, and a `hidden` between
- * hotspot phases does not end the episode while the device is offline.
+ * The window counts from the episode's first join code. Repaints and later
+ * hotspot phases do not extend it; the join code after a hold gets a fresh
+ * one. An episode ends only when the device is online and the controller is
+ * not narrating a no-network state, so a stale online flag or a `hidden`
+ * while offline cannot bring the cleared code back.
  */
 export function advanceSetupPanelClock(
   clock: SetupPanelClock,
@@ -129,21 +109,24 @@ export function advanceSetupPanelClock(
     return clock.afterHold ? clock : { ...clock, afterHold: true };
   }
   if (kind === 'timed') {
+    const fresh = clock.deadline === null || clock.afterHold;
     return {
-      deadline: timedDeadline(clock, observation),
-      joinCodeShown:
-        clock.joinCodeShown ||
-        observation.display.state === (SetupDisplayState.SoftApQr as string),
+      deadline: fresh
+        ? observation.now + SETUP_PANEL_WINDOW_MS
+        : clock.deadline,
       afterHold: false,
     };
+  }
+  if (kind === 'silent') {
+    return clock;
   }
   return observation.online ? idleSetupPanelClock : clock;
 }
 
 /**
- * True when the panel for `display` must not be painted: a timed panel whose
- * window has passed, on a unit with a saved work to display. A unit with
- * nothing saved keeps every setup panel, as do `hold` and `untimed` states.
+ * True when the join code must not be painted: its window has passed, on a
+ * unit with a saved work to display. A unit with nothing saved keeps it, and
+ * `hold` and `untimed` panels are never cleared.
  */
 export function isSetupPanelCleared(
   clock: SetupPanelClock,
@@ -170,9 +153,9 @@ interface TrackedClock {
  * cleared. `display` must be a new object per `setupDisplay` command (it is
  * the event detail), so a re-sent state is still observed.
  *
- * The clock advances during render, not in an effect: a panel that earns a
- * fresh window (a failed join after the first minute) must paint on the same
- * commit as its command instead of blinking hidden for a frame.
+ * The clock advances during render, not in an effect: a join code that earns
+ * a fresh window (after a hold) must paint on the same commit as its command
+ * instead of blinking hidden for a frame.
  */
 export function useSetupPanelCleared(
   display: SetupDisplayDetail,

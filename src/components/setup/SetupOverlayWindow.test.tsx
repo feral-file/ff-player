@@ -1,7 +1,7 @@
 /**
  * The one-minute rule on the mounted overlay (feral-file/feral-file#3635): a
- * unit with a saved work to display clears the no-network panels about a
- * minute after power-on; a unit with nothing saved keeps them. Split from
+ * unit with a saved work to display clears the join code about a minute
+ * after it appears; a unit with nothing saved keeps it. Split from
  * SetupOverlay.test.tsx to stay inside the max-lines budget.
  */
 import { AppContext } from '@/context/AppContext';
@@ -118,15 +118,16 @@ describe('SetupOverlay one-minute window', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('gives the join code its own minute after the boot narration', () => {
-    render(overlay({ saved: true }));
+  it('gives the join code its minute when the hotspot rises after narration', () => {
+    const { container } = render(overlay({ saved: true }));
     advance(5_000);
     displaySetup({
       state: SetupDisplayState.Connecting,
       reason: 'Looking for your Wi-Fi network…',
     });
-    advance(35_000);
-    expect(screen.getByText('Connecting to the network')).toBeTruthy();
+    // Narration paints nothing over the saved work.
+    expect(container.innerHTML).toBe('');
+    advance(295_000);
 
     displaySetup(joinCode);
     advance(SETUP_PANEL_WINDOW_MS - 1);
@@ -134,17 +135,6 @@ describe('SetupOverlay one-minute window', () => {
     advance(1);
     expect(screen.queryByText(joinTitle)).toBeNull();
   });
-
-  it('clears the boot narration a minute after it appears', () => {
-    render(overlay({ saved: true }));
-    advance(5_000);
-    displaySetup({ state: SetupDisplayState.Connecting });
-    advance(59_999);
-    expect(screen.getByText('Connecting to the network')).toBeTruthy();
-    advance(1);
-    expect(screen.queryByText('Connecting to the network')).toBeNull();
-  });
-
 });
 
 describe('SetupOverlay one-minute window exceptions', () => {
@@ -155,9 +145,6 @@ describe('SetupOverlay one-minute window exceptions', () => {
     displaySetup(joinCode);
     advance(24 * 3_600_000);
     expect(screen.getByText(joinTitle)).toBeTruthy();
-    displaySetup({ state: SetupDisplayState.Connecting });
-    advance(24 * 3_600_000);
-    expect(screen.getByText('Connecting to the network')).toBeTruthy();
   });
 
   it('never clears when cast state holds no work (setLoop with no artwork)', () => {
@@ -177,7 +164,7 @@ describe('SetupOverlay one-minute window exceptions', () => {
       client_attached: true,
     });
     advance(600_000);
-    expect(screen.getByText('Finish setup on your phone')).toBeTruthy();
+    expect(screen.getByText(joinTitle)).toBeTruthy();
 
     // The next raise repaints the plain join code: back for a minute.
     displaySetup(joinCode);
@@ -219,10 +206,8 @@ describe('SetupOverlay one-minute window, panels that need a person', () => {
 
   it.each([
     [SetupDisplayState.ClaimQr, 'Pair with the Feral File app'],
-    [SetupDisplayState.SetupError, 'Setup needs attention'],
     [SetupDisplayState.Updating, 'Updating software'],
     [SetupDisplayState.FactoryReset, 'Resetting to factory settings'],
-    [SetupDisplayState.JoinFailed, "Couldn't connect to Wi-Fi"],
   ])('never clears %s', (state, title) => {
     render(overlay({ saved: true }));
     displaySetup(joinCode);

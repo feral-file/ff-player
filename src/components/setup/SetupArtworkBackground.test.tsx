@@ -24,6 +24,7 @@ const activeCast = { castCommand: CastCommand.displayPlaylist } as CastInfo;
 
 function renderBackground(opts: {
   panelVisible: boolean;
+  setupActive?: boolean;
   hasCast: boolean;
   isOnline: boolean;
   playbackDegraded: boolean;
@@ -41,7 +42,10 @@ function renderBackground(opts: {
           playbackDegraded: opts.playbackDegraded,
         },
       }}>
-      <SetupArtworkBackground panelVisible={opts.panelVisible} />
+      <SetupArtworkBackground
+        setupActive={opts.setupActive ?? opts.panelVisible}
+        panelVisible={opts.panelVisible}
+      />
     </AppContext.Provider>
   );
   return container;
@@ -235,6 +239,7 @@ describe('SetupArtworkBackground offline status chip', () => {
 
 function backgroundNode(opts: {
   panelVisible: boolean;
+  setupActive?: boolean;
   hasCast: boolean;
   isOnline: boolean;
   playbackDegraded: boolean;
@@ -252,7 +257,10 @@ function backgroundNode(opts: {
           playbackDegraded: opts.playbackDegraded,
         },
       }}>
-      <SetupArtworkBackground panelVisible={opts.panelVisible} />
+      <SetupArtworkBackground
+        setupActive={opts.setupActive ?? opts.panelVisible}
+        panelVisible={opts.panelVisible}
+      />
     </AppContext.Provider>
   );
 }
@@ -429,5 +437,47 @@ describe('SetupArtworkBackground chip escalation', () => {
     });
     expect(container.textContent).toContain('No internet connection');
     expect(container.textContent).not.toContain('Connecting to the internet…');
+  });
+});
+
+describe('SetupArtworkBackground during a setup state with no panel', () => {
+  afterEach(cleanup);
+
+  const noPanel = { setupActive: true, panelVisible: false };
+
+  it('shows the bundled artwork, without a chip, when nothing is cast', () => {
+    const container = renderBackground({
+      ...noPanel,
+      hasCast: false,
+      isOnline: false,
+      playbackDegraded: false,
+    });
+    expect(container.querySelector('iframe')).not.toBeNull();
+    expect(container.querySelector('p')).toBeNull();
+  });
+
+  it('puts nothing over a displaying work', () => {
+    const container = renderBackground({
+      ...noPanel,
+      hasCast: true,
+      isOnline: false,
+      playbackDegraded: false,
+    });
+    expect(container.innerHTML).toBe('');
+  });
+
+  it('shows the chip on the bare backdrop when the saved work cannot load', () => {
+    const container = renderBackground({
+      ...noPanel,
+      hasCast: true,
+      isOnline: false,
+      playbackDegraded: true,
+    });
+    expect(container.querySelector('iframe')).not.toBeNull();
+    // jsdom's navigator.onLine is true, so the chip is past its soft
+    // "Connecting…" text; the escalation tests above pin both wordings.
+    expect(container.querySelector('p')?.textContent).toBe(
+      'No internet connection'
+    );
   });
 });
