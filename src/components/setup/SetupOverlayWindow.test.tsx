@@ -6,6 +6,7 @@
  */
 import { AppContext } from '@/context/AppContext';
 import { CastCommand, type CastInfo } from '@/models';
+import type { DP1Call } from '@/models/dp1.model';
 import { CustomEventName, SetupDisplayState } from '@/models/custom_event';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,12 +17,21 @@ vi.mock('qrcode.react', () => ({
   QRCodeSVG: ({ value }: { value: string }) => <svg data-qr-value={value} />,
 }));
 
-const savedCast = { castCommand: CastCommand.displayPlaylist } as CastInfo;
+const savedCast = {
+  castCommand: CastCommand.displayPlaylist,
+  playlist: { items: [{ id: 'work-1' }] } as unknown as DP1Call,
+} as CastInfo;
+// What `setLoop` persists on a unit with no artwork: cast state, no work.
+const loopOnlyCast = { castCommand: CastCommand.setLoop } as CastInfo;
 const joinTitle =
   "Scan the QR code, then follow your phone's prompt to connect";
 const joinCode = { state: SetupDisplayState.SoftApQr, ssid: 'FF1-ABCD' };
 
-function overlay(opts: { saved: boolean; isOnline?: boolean }) {
+function overlay(opts: {
+  saved: boolean;
+  isOnline?: boolean;
+  cast?: CastInfo;
+}) {
   return (
     <AppContext.Provider
       value={{
@@ -29,7 +39,7 @@ function overlay(opts: { saved: boolean; isOnline?: boolean }) {
           isInitialized: true,
           isOnline: opts.isOnline ?? false,
           appRemoteConfig: { defaultPlaylistURL: '' },
-          castInfo: opts.saved ? savedCast : null,
+          castInfo: opts.cast ?? (opts.saved ? savedCast : null),
           displaySettings: null,
           cursorPositions: null,
           playbackDegraded: false,
@@ -108,7 +118,7 @@ describe('SetupOverlay one-minute window', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('counts the boot narration from player start, then gives the join code its minute', () => {
+  it('gives the join code its own minute after the boot narration', () => {
     render(overlay({ saved: true }));
     advance(5_000);
     displaySetup({
@@ -125,11 +135,11 @@ describe('SetupOverlay one-minute window', () => {
     expect(screen.queryByText(joinTitle)).toBeNull();
   });
 
-  it('clears the boot narration a minute after player start', () => {
+  it('clears the boot narration a minute after it appears', () => {
     render(overlay({ saved: true }));
     advance(5_000);
     displaySetup({ state: SetupDisplayState.Connecting });
-    advance(54_999);
+    advance(59_999);
     expect(screen.getByText('Connecting to the network')).toBeTruthy();
     advance(1);
     expect(screen.queryByText('Connecting to the network')).toBeNull();
@@ -150,7 +160,14 @@ describe('SetupOverlay one-minute window exceptions', () => {
     expect(screen.getByText('Connecting to the network')).toBeTruthy();
   });
 
-  it('stays up when a phone attaches at 50 seconds, then gives a fresh minute', () => {
+  it('never clears when cast state holds no work (setLoop with no artwork)', () => {
+    render(overlay({ saved: false, cast: loopOnlyCast }));
+    displaySetup(joinCode);
+    advance(24 * 3_600_000);
+    expect(screen.getByText(joinTitle)).toBeTruthy();
+  });
+
+  it('stays up when an Apple client attaches at 50 seconds, then gives a fresh minute', () => {
     render(overlay({ saved: true }));
     displaySetup(joinCode);
     advance(50_000);
@@ -162,15 +179,20 @@ describe('SetupOverlay one-minute window exceptions', () => {
     advance(600_000);
     expect(screen.getByText('Finish setup on your phone')).toBeTruthy();
 
-    // The phone left without finishing: the join code is back for a minute.
-    displaySetup({ ...joinCode, reason: 'Your phone left the setup Wi-Fi.' });
+    // The next raise repaints the plain join code: back for a minute.
+    displaySetup(joinCode);
     advance(SETUP_PANEL_WINDOW_MS - 1);
     expect(screen.getByText(joinTitle)).toBeTruthy();
     advance(1);
     expect(screen.queryByText(joinTitle)).toBeNull();
   });
 
-  it('stays up through a join and gives a fresh minute when it fails', () => {
+});
+
+describe('SetupOverlay one-minute window, panels that need a person', () => {
+  useWindowTimers();
+
+  it('keeps the failed-join reason on screen after a join fails', () => {
     render(overlay({ saved: true }));
     displaySetup(joinCode);
     advance(SETUP_PANEL_WINDOW_MS);
@@ -180,9 +202,19 @@ describe('SetupOverlay one-minute window exceptions', () => {
 
     displaySetup({ state: SetupDisplayState.JoinFailed, reason: 'Wrong password.' });
     displaySetup({ ...joinCode, reason: 'Wrong password.' });
+    advance(24 * 3_600_000);
     expect(screen.getByText(joinTitle)).toBeTruthy();
+    expect(screen.getByText('Wrong password.')).toBeTruthy();
+  });
+
+  it('keeps the phone-left line on screen', () => {
+    render(overlay({ saved: true }));
+    displaySetup(joinCode);
     advance(SETUP_PANEL_WINDOW_MS);
-    expect(screen.queryByText(joinTitle)).toBeNull();
+    const reason = 'Your phone left the setup Wi-Fi. Scan the code to join again.';
+    displaySetup({ ...joinCode, reason });
+    advance(24 * 3_600_000);
+    expect(screen.getByText(reason)).toBeTruthy();
   });
 
   it.each([

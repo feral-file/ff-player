@@ -584,11 +584,14 @@ export default function SetupOverlay() {
   // about a minute so the work shows with nothing over it (see
   // SETUP_PANEL_WINDOW_MS). The context read is optional for the same reason
   // as in SetupArtworkBackground; without a provider nothing is saved and
-  // every panel stays, as on a unit that was never set up.
+  // every panel stays, as on a unit that was never set up. "Saved" means a
+  // playlist with at least one work: cast state alone is not enough, because
+  // `setLoop` on a unit with no artwork persists a cast with only a command
+  // and a loop mode, and clearing the panel there would leave a blank screen.
   const appContext = useContext(AppContext)?.context;
   const cleared = useSetupPanelCleared(
     display,
-    Boolean(appContext?.castInfo),
+    (appContext?.castInfo?.playlist?.items?.length ?? 0) > 0,
     appContext?.isOnline ?? true
   );
   const panel = cleared ? null : renderSetupPanel(display);

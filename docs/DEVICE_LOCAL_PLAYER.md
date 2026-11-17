@@ -448,21 +448,29 @@ persistent setup failure. Setup-state arbitration remains with the existing
 controller/overlay contract.
 
 An Art Computer plugged in where it has no network displays what it displayed
-last (feral-file/feral-file#3635). When a cast is active, the no-network panels
-(`connecting`, `scanning`, and the `softap_qr` join code) clear after
-`SETUP_PANEL_WINDOW_MS` (60 s) and the work shows with nothing over it. The
-window counts from player start for an episode under way at power-on, and from
-the panel's first appearance for an episode that begins later. The first join
-code of an episode gets the whole window from when it appears, because the
-controller raises the hotspot 30 seconds to 5 minutes after power-on. Re-sent
-states and later hotspot phases do not show the panel again; a power cycle
-does. While a phone is on the hotspot (`client_attached`) or a join is running
-(`joining`, `finalizing`) the panel stays, and the join code that follows a
-failed attempt gets a fresh window. An episode ends when the device is online
-and no setup-flow panel is showing. With no active cast every panel stays, and
+last (feral-file/feral-file#3635). When the cast holds a playlist with at least
+one work, the no-network panels (`connecting`, `scanning`, and the `softap_qr`
+join code) clear after `SETUP_PANEL_WINDOW_MS` (60 s) and the work shows with
+nothing over it. The window counts from when the episode's panel first appears,
+and the first join code of an episode gets the whole window from when it
+appears, because the controller raises the hotspot 30 seconds to 5 minutes
+after power-on. Re-sent states and later hotspot phases do not show the panel
+again; a power cycle does. While a phone is on the hotspot (`client_attached`)
+or a join is running (`joining`, `finalizing`) the panel stays, and the join
+code that follows gets a fresh window. A join code carrying `reason` (a failed
+join, or the attached phone leaving) is never cleared: it is the only lasting
+display of that line. An episode ends when the device is online and no
+setup-flow panel is showing. With no saved work every panel stays (cast state
+without playlist items, such as a bare `setLoop`, does not count), and
 `claim_qr`, `join_failed`, `setup_error`, `updating`, and `factory_reset` are
 never cleared. The rule needs no controller field; `setupPanelWindow.ts` owns
 it.
+
+Known limit: the controller in FF OS 3.0.1 sends `client_attached` for Apple
+clients only, so the join code can clear while an Android phone is on the
+hotspot. Setup continues on that phone's own captive-portal page; the panel's
+typed fallback address and hotspot password are what clear, and a power cycle
+shows them again.
 
 Mint pairing uses `{command: "mintPairingDisplay", request: {state, pairingCode?,
 browserName?}}`, with states `pairing_code`, `request_received`, `creating_token`,

@@ -19,7 +19,7 @@ const attached: SetupDisplayDetail = { ...joinCode, client_attached: true };
 const joining: SetupDisplayDetail = { state: SetupDisplayState.Joining };
 const hidden: SetupDisplayDetail = { state: SetupDisplayState.Hidden };
 
-/** Feeds observations in order with the player started at 0, offline unless stated. */
+/** Feeds observations in order, offline unless stated. */
 function run(
   steps: [now: number, display: SetupDisplayDetail, online?: boolean][],
   from: SetupPanelClock = idleSetupPanelClock
@@ -28,7 +28,6 @@ function run(
     (clock, [now, display, online]) =>
       advanceSetupPanelClock(clock, {
         now,
-        playerStartedAt: 0,
         display,
         online: online ?? false,
       }),
@@ -64,22 +63,29 @@ describe('setupPanelKind', () => {
     expect(setupPanelKind(attached)).toBe('hold');
   });
 
+  it('never times a join code that says why it is back', () => {
+    expect(setupPanelKind({ ...joinCode, reason: 'Wrong password.' })).toBe(
+      'untimed'
+    );
+    expect(setupPanelKind({ ...joinCode, reason: '  ' })).toBe('timed');
+  });
+
   it('paints nothing for a state this build does not know', () => {
     expect(setupPanelKind({ state: 'future_state' })).toBe('none');
   });
 });
 
 describe('advanceSetupPanelClock', () => {
-  it('counts a boot episode from player start', () => {
+  it('counts from when the panel first appears', () => {
     const clock = run([[4_000, connecting]]);
-    expect(clock.deadline).toBe(SETUP_PANEL_WINDOW_MS);
-    expect(isSetupPanelCleared(clock, connecting, true, 59_999)).toBe(false);
-    expect(isSetupPanelCleared(clock, connecting, true, 60_000)).toBe(true);
+    expect(clock.deadline).toBe(4_000 + SETUP_PANEL_WINDOW_MS);
+    expect(isSetupPanelCleared(clock, connecting, true, 63_999)).toBe(false);
+    expect(isSetupPanelCleared(clock, connecting, true, 64_000)).toBe(true);
   });
 
   it('gives the first join code of an episode a whole window', () => {
     // The daemon raises the hotspot ~40 s after power-on; the code must not
-    // get only the 20 s left of the boot window.
+    // get only the 20 s left of the narration's window.
     const clock = run([
       [2_000, connecting],
       [40_000, joinCode],
@@ -132,14 +138,24 @@ describe('advanceSetupPanelClock holds, exemptions, and episodes', () => {
     expect(isSetupPanelCleared(after, joinCode, true, 260_000)).toBe(true);
   });
 
-  it('holds during a join and gives a fresh window when it fails', () => {
+  it('holds during a join and gives a fresh window after it', () => {
+    const clock = run([
+      [0, joinCode],
+      [90_000, joining],
+      [150_000, connecting],
+    ]);
+    expect(clock.deadline).toBe(210_000);
+  });
+
+  it('keeps the join code that carries a failed join reason', () => {
+    const retry = { ...joinCode, reason: 'Wrong password.' };
     const clock = run([
       [0, joinCode],
       [90_000, joining],
       [150_000, { state: SetupDisplayState.JoinFailed }],
-      [150_001, { ...joinCode, reason: 'Wrong password.' }],
+      [150_001, retry],
     ]);
-    expect(clock.deadline).toBe(210_001);
+    expect(isSetupPanelCleared(clock, retry, true, 3_600_000)).toBe(false);
   });
 
   it('never clears pairing, error, update, or reset panels', () => {

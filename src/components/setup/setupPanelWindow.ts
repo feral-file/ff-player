@@ -32,8 +32,19 @@ export function setupPanelKind(display: SetupDisplayDetail): SetupPanelKind {
   switch (display.state as SetupDisplayState) {
     case SetupDisplayState.SoftApQr: {
       // A phone on the hotspot is a person mid-setup, whether or not the
-      // panel can swap to the portal code.
-      return display.client_attached === true ? 'hold' : 'timed';
+      // panel can swap to the portal code. Known limit: the daemon in FF OS
+      // 3.0.1 sends `client_attached` for Apple clients only, so the join
+      // code can clear while an Android phone is on the hotspot. That phone
+      // already has the setup page from its own captive-portal prompt; what
+      // it loses is the typed fallback address on this panel, which a power
+      // cycle brings back.
+      if (display.client_attached === true) {
+        return 'hold';
+      }
+      // The daemon puts `reason` on the join code only to say why the code
+      // is back: a failed join or the attached phone leaving. This panel is
+      // the one lasting place that line shows, so it needs a person.
+      return (display.reason?.trim() ?? '') === '' ? 'timed' : 'untimed';
     }
     case SetupDisplayState.Scanning:
     case SetupDisplayState.Connecting: {
@@ -77,7 +88,6 @@ export const idleSetupPanelClock: SetupPanelClock = {
 
 export interface SetupPanelObservation {
   now: number;
-  playerStartedAt: number;
   display: SetupDisplayDetail;
   online: boolean;
 }
@@ -86,22 +96,18 @@ function timedDeadline(
   clock: SetupPanelClock,
   observation: SetupPanelObservation
 ): number {
-  const { now, playerStartedAt, display } = observation;
-  const fresh = now + SETUP_PANEL_WINDOW_MS;
-  // An episode already under way at power-on counts from player start; one
-  // that begins later counts from when its panel first appears.
-  const bootDeadline = playerStartedAt + SETUP_PANEL_WINDOW_MS;
-  let deadline = clock.deadline ?? (now < bootDeadline ? bootDeadline : fresh);
+  const fresh = observation.now + SETUP_PANEL_WINDOW_MS;
   const firstJoinCode =
-    display.state === (SetupDisplayState.SoftApQr as string) &&
+    observation.display.state === (SetupDisplayState.SoftApQr as string) &&
     !clock.joinCodeShown;
-  // The daemon raises the hotspot 30 seconds to 5 minutes after power-on, so
-  // the first join code of an episode gets the whole window from when it
+  // The window counts from when the episode's panel first appears. The
+  // daemon raises the hotspot 30 seconds to 5 minutes after power-on, so the
+  // first join code of an episode gets the whole window from when it
   // appears. Repaints and later hotspot phases do not extend it.
-  if (firstJoinCode || clock.afterHold) {
-    deadline = Math.max(deadline, fresh);
+  if (clock.deadline === null || firstJoinCode || clock.afterHold) {
+    return fresh;
   }
-  return deadline;
+  return clock.deadline;
 }
 
 /**
@@ -153,10 +159,6 @@ export function isSetupPanelCleared(
   );
 }
 
-// `performance.now()` counts from page load, which is player start, and does
-// not jump when the device's wall clock is set after a first network sync.
-const playerStartedAt = 0;
-
 interface TrackedClock {
   display: SetupDisplayDetail;
   online: boolean;
@@ -181,8 +183,8 @@ export function useSetupPanelCleared(
   let clock = tracked?.clock ?? idleSetupPanelClock;
   if (tracked?.display !== display || tracked.online !== online) {
     clock = advanceSetupPanelClock(clock, {
+      // Monotonic: the device's wall clock jumps on its first network sync.
       now: performance.now(),
-      playerStartedAt,
       display,
       online,
     });
