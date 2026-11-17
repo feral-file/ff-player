@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactElement, useEffect, useState } from 'react';
+import { ReactElement, useContext, useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   CustomEventName,
@@ -9,6 +9,8 @@ import {
   SetupDisplayDetail,
   SetupDisplayState,
 } from '@/models/custom_event';
+import { AppContext } from '@/context/AppContext';
+import { useSetupPanelCleared } from './setupPanelWindow';
 import SetupArtworkBackground from './SetupArtworkBackground';
 import styles from './SetupOverlay.module.scss';
 
@@ -534,6 +536,10 @@ export function renderSetupPanel(
  * transitions, and it must stay in the tree when the overlay hides so it can
  * play its exit fade (the player's standard cast fade) instead of
  * hard-cutting off screen; it unmounts itself once that fade completes.
+ *
+ * On a unit with a saved work to display, the no-network panels (connecting,
+ * scanning, the join code) clear after about a minute; `setupPanelWindow.ts`
+ * owns that timing.
  */
 export default function SetupOverlay() {
   const [display, setDisplay] = useState<SetupDisplayDetail>(hiddenDisplay);
@@ -574,7 +580,18 @@ export default function SetupOverlay() {
     };
   }, []);
 
-  const panel = renderSetupPanel(display);
+  // A unit with a saved work to display clears the no-network panels after
+  // about a minute so the work shows with nothing over it (see
+  // SETUP_PANEL_WINDOW_MS). The context read is optional for the same reason
+  // as in SetupArtworkBackground; without a provider nothing is saved and
+  // every panel stays, as on a unit that was never set up.
+  const appContext = useContext(AppContext)?.context;
+  const cleared = useSetupPanelCleared(
+    display,
+    Boolean(appContext?.castInfo),
+    appContext?.isOnline ?? true
+  );
+  const panel = cleared ? null : renderSetupPanel(display);
 
   return (
     <>

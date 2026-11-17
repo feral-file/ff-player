@@ -447,6 +447,23 @@ Without the URL the join panel remains. `reason` carries failed-join detail.
 persistent setup failure. Setup-state arbitration remains with the existing
 controller/overlay contract.
 
+An Art Computer plugged in where it has no network displays what it displayed
+last (feral-file/feral-file#3635). When a cast is active, the no-network panels
+(`connecting`, `scanning`, and the `softap_qr` join code) clear after
+`SETUP_PANEL_WINDOW_MS` (60 s) and the work shows with nothing over it. The
+window counts from player start for an episode under way at power-on, and from
+the panel's first appearance for an episode that begins later. The first join
+code of an episode gets the whole window from when it appears, because the
+controller raises the hotspot 30 seconds to 5 minutes after power-on. Re-sent
+states and later hotspot phases do not show the panel again; a power cycle
+does. While a phone is on the hotspot (`client_attached`) or a join is running
+(`joining`, `finalizing`) the panel stays, and the join code that follows a
+failed attempt gets a fresh window. An episode ends when the device is online
+and no setup-flow panel is showing. With no active cast every panel stays, and
+`claim_qr`, `join_failed`, `setup_error`, `updating`, and `factory_reset` are
+never cleared. The rule needs no controller field; `setupPanelWindow.ts` owns
+it.
+
 Mint pairing uses `{command: "mintPairingDisplay", request: {state, pairingCode?,
 browserName?}}`, with states `pairing_code`, `request_received`, `creating_token`,
 and `hidden`. It overlays playback without unmounting it. FF OS checks
