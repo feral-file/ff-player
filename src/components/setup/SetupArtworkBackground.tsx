@@ -2,6 +2,7 @@
 
 import { useContext, useEffect, useRef, useState } from 'react';
 import { AppContext } from '@/context/AppContext';
+import { REFRESH_BUDGET_BACKOFF_MS } from '@/context/runtime/PlaybackReconnect';
 import styles from './SetupArtworkBackground.module.scss';
 
 /**
@@ -39,6 +40,41 @@ export const FADE_OUT_MS = 650;
  * seconds) but far below the 15s/60s/240s retry ladder's later rungs.
  */
 export const RECOVERY_HANDOVER_MS = 30_000;
+
+/**
+ * How long a unit with a saved work waits, after that work fails to load
+ * offline, before the bundled artwork may stand in for it: the first retry
+ * interval plus time for that retry's load to land. A unit that has a work
+ * saved shows that work, not someone else's (feral-file/feral-file#3635). On
+ * a cold boot the daemon is not yet serving the kept copy when the first
+ * load runs, so that load misses and the retry is what succeeds; until then
+ * the screen stays black. PlaybackReconnect exposes no "retry failed" signal
+ * (repeat failures of one URL are deduplicated), so the retry's failure is
+ * read as the work still being degraded when this delay ends.
+ */
+export const SAVED_WORK_RETRY_GRACE_MS = REFRESH_BUDGET_BACKOFF_MS[0] + 10_000;
+
+/**
+ * True once `playbackDegraded` has held for SAVED_WORK_RETRY_GRACE_MS. Keyed
+ * on the degraded flag alone, so connectivity flapping does not restart it;
+ * each new degradation gets its own wait.
+ */
+function useRetryGraceLapsed(playbackDegraded: boolean): boolean {
+  const [lapsed, setLapsed] = useState(false);
+  useEffect(() => {
+    if (!playbackDegraded) {
+      setLapsed(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setLapsed(true);
+    }, SAVED_WORK_RETRY_GRACE_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [playbackDegraded]);
+  return lapsed;
+}
 
 /**
  * Boot-settle window for the status chip. A cold boot races Wi-Fi
@@ -207,8 +243,13 @@ export default function SetupArtworkBackground({
   // the flag before the hold effect has run, and the backdrop must start
   // its fade on that very render, not one effect-tick later.
   const recoveryHold = useRecoveryHold(offlineDegraded, playbackDegraded);
+  // A saved work gets its first retry before the bundled artwork (and its
+  // chip) may replace it; see SAVED_WORK_RETRY_GRACE_MS.
+  const hasSavedWork = (castInfo?.playlist?.items?.length ?? 0) > 0;
+  const retryGraceLapsed = useRetryGraceLapsed(playbackDegraded);
   const degradedBackdrop =
-    offlineDegraded || (recoveryHold && playbackDegraded);
+    (offlineDegraded || (recoveryHold && playbackDegraded)) &&
+    (!hasSavedWork || retryGraceLapsed);
 
   // Both factors are gated on the degraded backdrop, not the bare degraded
   // flag. An artwork that fails while the device is ONLINE is a different

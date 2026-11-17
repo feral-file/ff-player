@@ -11,13 +11,15 @@
  */
 import { AppContext } from '@/context/AppContext';
 import { CastCommand, type CastInfo } from '@/models';
+import type { DP1Call } from '@/models/dp1.model';
 import { act, cleanup, render } from '@testing-library/react';
 import * as React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SetupArtworkBackground, {
   CONNECTING_GRACE_MS,
   FADE_OUT_MS,
   RECOVERY_HANDOVER_MS,
+  SAVED_WORK_RETRY_GRACE_MS,
 } from './SetupArtworkBackground';
 
 const activeCast = { castCommand: CastCommand.displayPlaylist } as CastInfo;
@@ -25,6 +27,7 @@ const activeCast = { castCommand: CastCommand.displayPlaylist } as CastInfo;
 function renderBackground(opts: {
   panelVisible: boolean;
   setupActive?: boolean;
+  cast?: CastInfo;
   hasCast: boolean;
   isOnline: boolean;
   playbackDegraded: boolean;
@@ -36,7 +39,7 @@ function renderBackground(opts: {
           isInitialized: true,
           isOnline: opts.isOnline,
           appRemoteConfig: { defaultPlaylistURL: '' },
-          castInfo: opts.hasCast ? activeCast : null,
+          castInfo: opts.cast ?? (opts.hasCast ? activeCast : null),
           displaySettings: null,
           cursorPositions: null,
           playbackDegraded: opts.playbackDegraded,
@@ -240,6 +243,7 @@ describe('SetupArtworkBackground offline status chip', () => {
 function backgroundNode(opts: {
   panelVisible: boolean;
   setupActive?: boolean;
+  cast?: CastInfo;
   hasCast: boolean;
   isOnline: boolean;
   playbackDegraded: boolean;
@@ -251,7 +255,7 @@ function backgroundNode(opts: {
           isInitialized: true,
           isOnline: opts.isOnline,
           appRemoteConfig: { defaultPlaylistURL: '' },
-          castInfo: opts.hasCast ? activeCast : null,
+          castInfo: opts.cast ?? (opts.hasCast ? activeCast : null),
           displaySettings: null,
           cursorPositions: null,
           playbackDegraded: opts.playbackDegraded,
@@ -479,5 +483,73 @@ describe('SetupArtworkBackground during a setup state with no panel', () => {
     expect(container.querySelector('p')?.textContent).toBe(
       'No internet connection'
     );
+  });
+});
+
+describe('SetupArtworkBackground with a saved work that fails offline', () => {
+  const savedWork = {
+    castCommand: CastCommand.displayPlaylist,
+    playlist: { items: [{ id: 'work-1' }] } as unknown as DP1Call,
+  } as CastInfo;
+  const failing = {
+    panelVisible: false,
+    hasCast: true,
+    cast: savedWork,
+    isOnline: false,
+    playbackDegraded: true,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('shows no bundled artwork and no chip before the first retry has had its turn', () => {
+    const { container } = render(backgroundNode(failing));
+    expect(container.innerHTML).toBe('');
+    act(() => {
+      vi.advanceTimersByTime(SAVED_WORK_RETRY_GRACE_MS - 1);
+    });
+    expect(container.innerHTML).toBe('');
+  });
+
+  it('never shows the bundled artwork when the retry loads the work', () => {
+    const { container, rerender } = render(backgroundNode(failing));
+    act(() => {
+      vi.advanceTimersByTime(16_000);
+    });
+    rerender(backgroundNode({ ...failing, playbackDegraded: false }));
+    act(() => {
+      vi.advanceTimersByTime(10 * SAVED_WORK_RETRY_GRACE_MS);
+    });
+    expect(container.innerHTML).toBe('');
+  });
+
+  it('shows the bundled artwork and the chip once the retry has failed too', () => {
+    const { container } = render(backgroundNode(failing));
+    act(() => {
+      vi.advanceTimersByTime(SAVED_WORK_RETRY_GRACE_MS);
+    });
+    expect(container.querySelector('iframe')).not.toBeNull();
+    expect(container.querySelector('p')?.textContent).toBe(
+      'No internet connection'
+    );
+  });
+
+  it('shows the bundled artwork at once when nothing is saved', () => {
+    const { container } = render(
+      backgroundNode({
+        panelVisible: false,
+        setupActive: true,
+        hasCast: false,
+        isOnline: false,
+        playbackDegraded: false,
+      })
+    );
+    expect(container.querySelector('iframe')).not.toBeNull();
   });
 });

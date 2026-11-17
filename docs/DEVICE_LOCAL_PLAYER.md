@@ -448,7 +448,11 @@ During any setup-flow state, with or without a panel, the bundled,
 offline-complete `public/setup-artwork/` shows when no cast is active, so a
 unit with nothing saved never waits on a black screen. It also shows when
 offline playback is degraded; only that bare backdrop carries the connectivity
-chip, and never while a panel is up or over a displaying work. This is a
+chip, and never while a panel is up or over a displaying work. When the cast
+holds a playlist with at least one work, the degraded backdrop and its chip
+wait `SAVED_WORK_RETRY_GRACE_MS` (the first refresh retry interval plus 10 s)
+after the failure, so a unit shows its own work or black, not the bundled
+work, while the first retry runs. This is a
 render-only layer; it must not replace persisted cast or fallback state.
 
 `softap_qr` requires `ssid` and accepts `password`, `portal_url`, `reason`, and
