@@ -31,7 +31,7 @@ afterEach(() => {
   canvasService.setCastInfo(null, false);
 });
 
-it('resets loop and shuffle when a fresh Now Display playlist is applied', () => {
+it('a fresh Now Display resets shuffle, and starts in playlist when Repeat was never set', () => {
   canvasService.setCastInfo(
     {
       castCommand: CastCommand.displayPlaylist,
@@ -57,6 +57,50 @@ it('resets loop and shuffle when a fresh Now Display playlist is applied', () =>
   expect(next?.loopMode).toBe(LoopMode.playlist);
   expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['B', 'C']);
   expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
+});
+
+it('a fresh Now Display starts in the Repeat mode last set on the device', async () => {
+  const DeviceManager = (await import('@/utils/DeviceManager')).default;
+  const display = (id: string, ids: string[]) =>
+    canvasService.processMessage({
+      command: CastCommand.displayPlaylist,
+      request: {
+        intent: { action: DP1Action.NowDisplay },
+        dp1_call: playlist(id, ids.map(item)),
+      },
+    });
+  try {
+    expect(display('first', ['A', 'B'])).toEqual({ ok: true });
+    expect(
+      canvasService.processMessage({
+        command: CastCommand.setLoop,
+        request: { mode: LoopMode.one },
+      })
+    ).toEqual({ ok: true });
+    expect(canvasService.getCastInfo()?.loopMode).toBe(LoopMode.one);
+
+    // Another list: Repeat one is still on, shuffle is not inherited.
+    expect(display('second', ['C', 'D'])).toEqual({ ok: true });
+    const next = canvasService.getCastInfo();
+    expect(next?.loopMode).toBe(LoopMode.one);
+    expect(next?.shuffle).toBe(false);
+    expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['C', 'D']);
+
+    // And it survives the cast being cleared, as after a restart.
+    canvasService.setCastInfo(null, false);
+    expect(display('third', ['E'])).toEqual({ ok: true });
+    expect(canvasService.getCastInfo()?.loopMode).toBe(LoopMode.one);
+
+    // Changing Repeat is what ends it.
+    canvasService.processMessage({
+      command: CastCommand.setLoop,
+      request: { mode: LoopMode.playlist },
+    });
+    expect(display('fourth', ['F', 'G'])).toEqual({ ok: true });
+    expect(canvasService.getCastInfo()?.loopMode).toBe(LoopMode.playlist);
+  } finally {
+    await DeviceManager.setLoopMode(LoopMode.playlist).catch(() => undefined);
+  }
 });
 
 it('preserves render status in cast info and status replies', () => {

@@ -575,6 +575,9 @@ export class PlaybackSession {
     const mode = coerceLoopMode(rawMode);
 
     console.log('[CanvasService] setLoop', mode);
+    // Kept for the device, not only for this cast: the next Now Display
+    // starts in it (PlaylistCommands.displayPlaylist).
+    DeviceManager.setLoopMode(mode).catch(console.error);
     this.setCastInfo({
       ...this.currentCast,
       castCommand: CastCommand.setLoop,

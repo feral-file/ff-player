@@ -1,6 +1,7 @@
 import { LocalStorageItem } from '@/constants';
 import { DisplaySettings } from '@/models/display_settings.model';
 import { CastInfo, ViewMode } from '@/models';
+import { LoopMode } from '@/models/cast_info.model';
 import { DP1Call } from '@/models/dp1.model';
 import {
   parseRecentlyPlayed,
@@ -14,6 +15,7 @@ interface BootPlaylistRecord {
   contentContext: ContentContext;
 }
 import { stripEphemeralCastInfoFields } from './castInfo';
+import { coerceLoopMode } from './loopMode';
 import indexedDBStorage from './IndexedDBStorage';
 
 const PRELOAD_KEYS: string[] = [
@@ -24,6 +26,7 @@ const PRELOAD_KEYS: string[] = [
   LocalStorageItem.dp1ScheduledTask,
   LocalStorageItem.bootPlaylist,
   LocalStorageItem.defaultItemDuration,
+  LocalStorageItem.loopMode,
   LocalStorageItem.recentlyPlayed,
   LocalStorageItem.recentlyPlayedIncomplete,
 ];
@@ -379,6 +382,32 @@ class DeviceManager {
   public getCachedDefaultItemDurationSeconds(): number | null {
     return parseDurationSeconds(
       this.getCachedValue(LocalStorageItem.defaultItemDuration)
+    );
+  }
+
+  /**
+   * Persist the device's Repeat choice. `setLoop` is the only writer: Repeat
+   * is something a person sets on this Art Computer, not a property of one
+   * playlist, so it is kept beside the default duration and not only on the
+   * cast it was set during. The cache is written first, and again after
+   * initialization, for the reasons given on
+   * {@link setDefaultItemDurationSeconds}.
+   */
+  public async setLoopMode(mode: LoopMode): Promise<void> {
+    this.cache.set(LocalStorageItem.loopMode, mode);
+    await this.ensureInitialized();
+    this.cache.set(LocalStorageItem.loopMode, mode);
+    await indexedDBStorage.setItem(LocalStorageItem.loopMode, mode);
+  }
+
+  /**
+   * The Repeat choice a new Now Display starts in. `playlist` when nothing
+   * was ever set, or the stored value is not a mode this build knows: that
+   * is what every display started in before the choice was kept.
+   */
+  public getCachedLoopMode(): LoopMode {
+    return coerceLoopMode(
+      this.getCachedValue(LocalStorageItem.loopMode) ?? undefined
     );
   }
 

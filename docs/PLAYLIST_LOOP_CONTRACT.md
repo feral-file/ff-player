@@ -2,7 +2,11 @@
 
 `ff-player` is the canonical playback surface for FF1 playlist loop behavior.
 
-Each **Now Display** playlist (`DP1Action.NowDisplay`, including boot display) resets playback toggles on cast state: `loopMode` → `playlist`, `shuffle` → `false`. Remote clients can set other modes again after the new playlist is active.
+Repeat (`loopMode`) is a setting of the Art Computer, not of one playlist. `setLoop` stores it on the device (`LocalStorageItem.loopMode`), and every **Now Display** playlist (`DP1Action.NowDisplay`, including the boot display, a scheduled display, a History replay and the fallback playlist) starts in the stored mode. A person who chooses Repeat one keeps the work they display until they change Repeat, across displays and restarts. A device where Repeat was never set starts in `playlist`.
+
+Shuffle is an order of one list, so each Now Display still resets `shuffle` → `false`.
+
+The start slot of a Now Display is resolved through the broken-source hints as under `playlist`, whatever the stored mode: the display opens on a work that can be shown, and Repeat applies from there.
 
 ## Loop modes
 

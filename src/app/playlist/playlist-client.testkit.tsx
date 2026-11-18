@@ -12,6 +12,7 @@ import type { CastInfo } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import { canvasService } from '@/services/CanvasService';
+import DeviceManager from '@/utils/DeviceManager';
 import { act, cleanup } from '@testing-library/react';
 import * as React from 'react';
 import { vi } from 'vitest';
@@ -100,6 +101,9 @@ export function teardownPlaylistWiringTest(): void {
   cleanup();
   vi.useRealTimers();
   canvasService.setCastInfo(null, false);
+  // Repeat is kept on the device and every Now Display starts in it, so a
+  // case that sent setLoop would otherwise set the mode of the next one.
+  void DeviceManager.setLoopMode(LoopMode.playlist).catch(() => undefined);
   const s = canvasInternals();
   s.queuedPlaylistPending = false;
   s.deferredRefreshPlaylist = null;
