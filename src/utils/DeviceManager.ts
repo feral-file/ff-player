@@ -386,14 +386,21 @@ class DeviceManager {
   }
 
   /**
+   * The Repeat choice made since this page loaded, if any. Held apart from
+   * the cache because a startup preload read still in flight when the choice
+   * was made resolves later with the older stored value and overwrites the
+   * cache entry; a reader running in that gap must still get the choice.
+   */
+  private chosenLoopMode: LoopMode | null = null;
+
+  /**
    * Persist the device's Repeat choice. `setLoop` is the only writer: Repeat
    * is something a person sets on this Art Computer, not a property of one
    * playlist, so it is kept beside the default duration and not only on the
-   * cast it was set during. The cache is written first, and again after
-   * initialization, for the reasons given on
-   * {@link setDefaultItemDurationSeconds}.
+   * cast it was set during.
    */
   public async setLoopMode(mode: LoopMode): Promise<void> {
+    this.chosenLoopMode = mode;
     this.cache.set(LocalStorageItem.loopMode, mode);
     await this.ensureInitialized();
     this.cache.set(LocalStorageItem.loopMode, mode);
@@ -401,13 +408,27 @@ class DeviceManager {
   }
 
   /**
+   * The device's Repeat choice, read after storage has answered. For a caller
+   * that can wait (the boot restore) or that ran before the preload finished
+   * and must correct itself (an early Now Display).
+   */
+  public async getLoopMode(): Promise<LoopMode> {
+    await this.ensureInitialized();
+    const raw = await this.fetchAndCache(LocalStorageItem.loopMode);
+    return this.chosenLoopMode ?? coerceLoopMode(raw ?? undefined);
+  }
+
+  /**
    * The Repeat choice a new Now Display starts in. `playlist` when nothing
    * was ever set, or the stored value is not a mode this build knows: that
-   * is what every display started in before the choice was kept.
+   * is what every display started in before the choice was kept. Before the
+   * preload has finished it cannot see what is stored; see
+   * {@link getLoopMode}.
    */
   public getCachedLoopMode(): LoopMode {
-    return coerceLoopMode(
-      this.getCachedValue(LocalStorageItem.loopMode) ?? undefined
+    return (
+      this.chosenLoopMode ??
+      coerceLoopMode(this.getCachedValue(LocalStorageItem.loopMode) ?? undefined)
     );
   }
 
