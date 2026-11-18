@@ -35,7 +35,9 @@ function restart() {
 function gatedStorage(stored: string | null) {
   let release: (() => void) | undefined;
   const gate = new Promise<string | null>(resolve => {
-    release = () => resolve(stored);
+    release = () => {
+      resolve(stored);
+    };
   });
   vi.spyOn(indexedDBStorage, 'getItem').mockImplementation(
     async (key: string) => (key === loopKey ? gate : null)
