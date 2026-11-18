@@ -18,7 +18,6 @@ import { CustomEventName } from '@/models/custom_event';
 import { DP1Action, DP1Call, DP1Item } from '@/models/dp1.model';
 import type { PlaybackOutcomeInput } from '@/models/media_health.model';
 import DeviceManager from '@/utils/DeviceManager';
-import { coerceLoopMode } from '@/utils/loopMode';
 import { resolveHintedSkip } from '@/utils/mediaHealthSkip';
 import { startItemIndex } from '@/utils/startItem';
 import { normalizePlaylistIndex } from '@/utils/playlist';
@@ -460,9 +459,6 @@ export class PlaylistCommands {
       loopMode: DeviceManager.getCachedLoopMode(),
       shuffle: false,
     });
-    if (!DeviceManager.isInitialized()) {
-      this.adoptStoredLoopMode();
-    }
     // Every accepted Now Display opens a new outcome-ring cast generation
     // (mediaHealth contract v1), including the boot replay, a scheduled
     // task, and the fallback: each one puts a new list on the wall, which is
@@ -532,28 +528,6 @@ export class PlaylistCommands {
     });
 
     return { ok: true };
-  }
-
-  /**
-   * Gives the cast on screen the device's Repeat once storage has answered.
-   * The command entry point is up before the storage preload finishes (the
-   * daemon's boot replay arrives in that window), so a Display accepted then
-   * read an empty cache and started in `playlist`. A Repeat set meanwhile is
-   * already in the cache and is what the read returns.
-   */
-  private adoptStoredLoopMode() {
-    DeviceManager.getLoopMode()
-      .then(mode => {
-        const cast = this.session.castInfo;
-        if (cast && coerceLoopMode(cast.loopMode) !== mode) {
-          this.session.setCastInfo({
-            ...cast,
-            castCommand: CastCommand.setLoop,
-            loopMode: mode,
-          });
-        }
-      })
-      .catch(console.error);
   }
 
   /** Opens the outcome ring's next cast generation and reports the hinted slots this cast passed over under it. */

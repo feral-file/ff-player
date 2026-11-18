@@ -4,7 +4,7 @@
 
 Repeat (`loopMode`) is a setting of the Art Computer, not of one playlist. `setLoop` stores it on the device (`LocalStorageItem.loopMode`), and every **Now Display** playlist (`DP1Action.NowDisplay`, including the boot display, a scheduled display, a History replay and the fallback playlist) starts in the stored mode. A person who chooses Repeat one keeps the work they display until they change Repeat, across displays and restarts. A device where Repeat was never set starts in `playlist`.
 
-The command entry point is up before the storage preload finishes. A Now Display accepted in that window starts in `playlist` and takes the stored mode as soon as storage answers (`PlaylistCommands.adoptStoredLoopMode`); a Repeat set in that window wins over the stored one.
+The command entry point is up before the storage preload finishes. A Now Display accepted in that moment starts in `playlist`. Nothing corrects it: setting Repeat again does, and the stored choice is untouched, so the next Display starts in it.
 
 Shuffle is an order of one list, so each Now Display still resets `shuffle` → `false`.
 
