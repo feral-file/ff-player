@@ -2,6 +2,7 @@
 
 import { useContext, useEffect, useRef, useState } from 'react';
 import { AppContext } from '@/context/AppContext';
+import { REFRESH_BUDGET_BACKOFF_MS } from '@/context/runtime/PlaybackReconnect';
 import styles from './SetupArtworkBackground.module.scss';
 
 /**
@@ -41,6 +42,41 @@ export const FADE_OUT_MS = 650;
 export const RECOVERY_HANDOVER_MS = 30_000;
 
 /**
+ * How long a unit with a saved work waits, after that work fails to load
+ * offline, before the bundled artwork may stand in for it: the first retry
+ * interval plus time for that retry's load to land. A unit that has a work
+ * saved shows that work, not someone else's (feral-file/feral-file#3635). On
+ * a cold boot the daemon is not yet serving the kept copy when the first
+ * load runs, so that load misses and the retry is what succeeds; until then
+ * the screen stays black. PlaybackReconnect exposes no "retry failed" signal
+ * (repeat failures of one URL are deduplicated), so the retry's failure is
+ * read as the work still being degraded when this delay ends.
+ */
+export const SAVED_WORK_RETRY_GRACE_MS = REFRESH_BUDGET_BACKOFF_MS[0] + 10_000;
+
+/**
+ * True once `playbackDegraded` has held for SAVED_WORK_RETRY_GRACE_MS. Keyed
+ * on the degraded flag alone, so connectivity flapping does not restart it;
+ * each new degradation gets its own wait.
+ */
+function useRetryGraceLapsed(playbackDegraded: boolean): boolean {
+  const [lapsed, setLapsed] = useState(false);
+  useEffect(() => {
+    if (!playbackDegraded) {
+      setLapsed(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setLapsed(true);
+    }, SAVED_WORK_RETRY_GRACE_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [playbackDegraded]);
+  return lapsed;
+}
+
+/**
  * Boot-settle window for the status chip. A cold boot races Wi-Fi
  * association: the page paints one to two seconds before the interface is
  * even up (observed ~5s to WAN on the field device), so an immediate
@@ -55,7 +91,7 @@ export const CONNECTING_GRACE_MS = 60_000;
 
 /**
  * Full-screen artwork layer rendered by SetupOverlay beneath its panels so
- * setup states play over art instead of a black void. Deliberately NOT cast
+ * setup states show art instead of a black void. Deliberately NOT cast
  * through CanvasService: a cast would be persisted as the device's castInfo
  * (useCastInfo writes every notified cast) and mask the real fallback
  * playlist on the next boot, which is compatibility-sensitive boot-recovery
@@ -63,7 +99,11 @@ export const CONNECTING_GRACE_MS = 60_000;
  *
  * Two situations put it on screen, and one invariant keeps it off.
  *
- * 1. A setup panel is visible and nothing is cast — the original case.
+ * 1. A setup flow is active and no work is saved — the original case. The
+ *    narration-only setup states paint no panel, so this keys off the flow,
+ *    not a panel: a unit with nothing to display must not wait on a black
+ *    screen. "Saved" means a playlist with at least one work; cast state
+ *    alone is not a work (`setLoop` on an empty unit persists one).
  * 2. `offlineDegraded`: the device has no connectivity AND the artwork the
  *    player is trying to show failed to load. A claimed device that boots
  *    offline restores its playlist but cannot fetch any asset, so without
@@ -77,7 +117,7 @@ export const CONNECTING_GRACE_MS = 60_000;
  * during the remount; the recovered artwork crossfades in over it.
  *
  * The invariant: a device that is playing artwork normally must NEVER get
- * this layer over it. That is what the `!castInfo || degradedBackdrop`
+ * this layer over it. That is what the `!hasSavedWork || degradedBackdrop`
  * factor enforces — an OTA `updating` panel raised over live playback still
  * shows the user's artwork through the panel scrim, unchanged.
  *
@@ -128,7 +168,9 @@ function useBrowserOnline(): boolean {
  * connectivity edge — while `playbackDegraded` is still true and the
  * reconnect-recovery remount is still in flight, which put the broken slot
  * on screen for a few seconds after every offline boot. Once the backdrop
- * has been raised for offline degradation, it stays up until the artwork
+ * has been raised for offline degradation (`offlineBackdrop`: actually on
+ * screen, not merely due — the hold preserves a backdrop and never
+ * introduces one while online), it stays up until the artwork
  * actually recovers (`playbackDegraded` false — the remounted artwork then
  * crossfades in over this layer), bounded by RECOVERY_HANDOVER_MS so a
  * permanently-broken-but-online artwork still falls through to
@@ -136,12 +178,12 @@ function useBrowserOnline(): boolean {
  * indefinitely.
  */
 function useRecoveryHold(
-  offlineDegraded: boolean,
+  offlineBackdrop: boolean,
   playbackDegraded: boolean
 ): boolean {
   const [recoveryHold, setRecoveryHold] = useState(false);
   useEffect(() => {
-    if (offlineDegraded) {
+    if (offlineBackdrop) {
       setRecoveryHold(true);
       return undefined;
     }
@@ -155,7 +197,7 @@ function useRecoveryHold(
     return () => {
       clearTimeout(timer);
     };
-  }, [offlineDegraded, playbackDegraded]);
+  }, [offlineBackdrop, playbackDegraded]);
   return recoveryHold;
 }
 
@@ -184,8 +226,13 @@ function useBootConnectingWindow(browserOnline: boolean): boolean {
 }
 
 export default function SetupArtworkBackground({
+  setupActive,
   panelVisible,
 }: {
+  // The controller is in a setup flow. Raises the backdrop when no work is
+  // saved, whether or not the current state paints a panel.
+  setupActive: boolean;
+  // A panel is painted right now. Only silences the status chip.
   panelVisible: boolean;
 }) {
   const appContext = useContext(AppContext)?.context;
@@ -196,12 +243,18 @@ export default function SetupArtworkBackground({
   const offlineNow = !isOnline || !browserOnline;
   const offlineDegraded = offlineNow && playbackDegraded;
 
+  // A saved work gets its first retry before the bundled artwork (and its
+  // chip) may replace it; see SAVED_WORK_RETRY_GRACE_MS.
+  const hasSavedWork = (castInfo?.playlist?.items?.length ?? 0) > 0;
+  const retryGraceLapsed = useRetryGraceLapsed(playbackDegraded);
+  const offlineBackdrop =
+    offlineDegraded && (!hasSavedWork || retryGraceLapsed);
   // The `&& playbackDegraded` matters on the exit render: recovery clears
   // the flag before the hold effect has run, and the backdrop must start
   // its fade on that very render, not one effect-tick later.
-  const recoveryHold = useRecoveryHold(offlineDegraded, playbackDegraded);
+  const recoveryHold = useRecoveryHold(offlineBackdrop, playbackDegraded);
   const degradedBackdrop =
-    offlineDegraded || (recoveryHold && playbackDegraded);
+    offlineBackdrop || (recoveryHold && playbackDegraded);
 
   // Both factors are gated on the degraded backdrop, not the bare degraded
   // flag. An artwork that fails while the device is ONLINE is a different
@@ -210,7 +263,7 @@ export default function SetupArtworkBackground({
   // with this z-index 999 layer would replace the diagnostic with a p5
   // sketch.
   const show =
-    (panelVisible || degradedBackdrop) && (!castInfo || degradedBackdrop);
+    (setupActive || degradedBackdrop) && (!hasSavedWork || degradedBackdrop);
 
   // The panel owns the messaging whenever one is up (a re-provision QR over
   // a long-offline device already explains the situation), so the chip only

@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactElement, useEffect, useState } from 'react';
+import { ReactElement, useContext, useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   CustomEventName,
@@ -8,7 +8,10 @@ import {
   MintPairingDisplayState,
   SetupDisplayDetail,
   SetupDisplayState,
+  isSetupFlowState,
 } from '@/models/custom_event';
+import { AppContext } from '@/context/AppContext';
+import { useSetupPanelCleared } from './setupPanelWindow';
 import SetupArtworkBackground from './SetupArtworkBackground';
 import styles from './SetupOverlay.module.scss';
 
@@ -19,11 +22,8 @@ const qrSize = 320;
 /**
  * controld's `reason` prose, or `undefined` when there is nothing worth
  * rendering. The CDP validator only checks that `reason` is a string, so an
- * empty or whitespace-only value is a valid command and reaches these panels
- * — most plausibly from a daemon-side template whose substitution came back
- * empty. Collapsing that to absent is what makes every panel below take its
- * no-reason branch (fallback line, or no subtitle element at all) instead of
- * rendering a blank subtitle under the title.
+ * empty or whitespace-only value is a valid command. Collapsing that to
+ * absent keeps the join panel from rendering a blank line under its title.
  */
 function proseReason(display: SetupDisplayDetail): string | undefined {
   // Explicit `=== ''` rather than a truthiness fold: `??` cannot express this
@@ -51,24 +51,6 @@ function escapeWifiField(value: string): string {
  * `P:` field when there's no password, since an empty `P:` after `T:WPA`
  * makes phones attempt (and fail) WPA auth with an empty key.
  */
-/**
- * True only for a value the standard URL parser accepts with an http(s)
- * scheme and a host. The swap makes portal_url the only scannable target,
- * so a merely HTTP-shaped string (`http://?`, `http:///`, an out-of-range
- * port) must keep the join QR rather than paint an inert code.
- */
-function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return (
-      (url.protocol === 'http:' || url.protocol === 'https:') &&
-      url.hostname !== ''
-    );
-  } catch {
-    return false;
-  }
-}
-
 function softApQrValue(ssid: string, password: string | undefined): string {
   const escapedSsid = escapeWifiField(ssid);
   if (!password) {
@@ -78,25 +60,18 @@ function softApQrValue(ssid: string, password: string | undefined): string {
 }
 
 /**
- * One QR on screen at a time, in two phases. The join phase shows the WIFI:
- * code plus a direct on-link portal address as text — never a second "open
- * the portal" code beside it, which read as a competing entry point. controld
- * gets the address NetworkManager actually assigned to the active hotspot and
- * sends it as portal_url. Once the user accepts the no-internet setup Wi-Fi,
- * a literal on-link IP bypasses Private DNS and cellular DNS entirely.
- * Older controllers omit the optional field, and this player then omits the
- * manual-address instruction rather than presenting an unreliable DNS name.
+ * The one setup QR: the WIFI: join code plus a direct on-link portal address
+ * as text, never a second "open the portal" code beside it, which read as a
+ * competing entry point. controld gets the address NetworkManager actually
+ * assigned to the active hotspot and sends it as portal_url. Once the user
+ * accepts the no-internet setup Wi-Fi, a literal on-link IP bypasses Private
+ * DNS and cellular DNS entirely. Older controllers omit the optional field,
+ * and this player then omits the manual-address instruction rather than
+ * presenting an unreliable DNS name.
  *
- * The attached phase (client_attached, sent once the hotspot's portal sees
- * the phone's first request) REPLACES the join code with a QR encoding that
- * same portal_url. iOS decides on its own whether to present the captive
- * sheet: it does so only while a "Wi-Fi app" (Settings, Safari) is in front,
- * and a phone that joined from the Camera app's scan logs `waiting for UI`
- * until the user switches apps (feral-file#3515). The camera is still aimed
- * at this screen, so the swapped code surfaces a browser link where the join
- * prompt was; opening it loads the setup page and, as a side effect, brings a
- * Wi-Fi app forward. Without a portal_url there is nothing to encode, so the
- * join phase stays up.
+ * `client_attached` (a phone is on the hotspot) does not change this panel:
+ * the fallback lines below already carry the phone that got no prompt to the
+ * setup page.
  */
 /*
  * Scanning a WIFI: code only proposes the hotspot; the phone owns the prompt
@@ -108,27 +83,13 @@ function softApQrValue(ssid: string, password: string | undefined): string {
 function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   const ssid = display.ssid ?? '';
   const portalUrl = display.portal_url?.trim();
-  // The swap makes portal_url the only scannable target, so it must be a
-  // link a camera app will offer to open: a bare address or a stray value
-  // would leave one inert code and no join code. Anything else stays on the
-  // join phase, where the address is a typed fallback and harmless.
-  if (display.client_attached === true && portalUrl && isHttpUrl(portalUrl)) {
-    return (
-      <SoftApPortalQrPanel
-        ssid={ssid}
-        password={display.password}
-        portalUrl={portalUrl}
-      />
-    );
-  }
   // After a failed join (or once the attached phone left the hotspot) the
-  // daemon sends the join QR back WITH a reason; the join_failed panel it
-  // replaces is on screen for a millisecond, so this line is the only place
-  // the reason is visible on the device (the phone's picker carries its own
-  // banner). It renders at the panel's compact scale, not the shared
+  // daemon sends the join QR back WITH a reason, and this line is the only
+  // place the reason is visible on the device (the phone's picker carries
+  // its own banner). It renders at the panel's compact scale, not the shared
   // .subtitle scale: at 1080p the full-size line wrapped to two rows and
-  // pushed the last recovery cue below the bottom edge (visual smoke
-  // 2026-09-08), and the join panel is the densest setup layout.
+  // pushed the last recovery cue below the bottom edge, and the join panel
+  // is the densest setup layout.
   const joinFailure = proseReason(display);
   return (
     <section className={styles.overlay} aria-live="polite">
@@ -149,15 +110,7 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
           />
         </div>
         <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          {/* Sets the wait, conditionally: across the 2026-09-07 trials iOS
-              took 5–12 s between the Join tap and associating, during which
-              the join code is still up and taps do nothing; the code then
-              changes for Apple phones only (feral-file#3515). Android and
-              older controllers never change it, so the line promises a
-              wait, not a change. */}
-          After you join, wait about 10 seconds: if this code changes, scan it
-          again
-          <br /> Nothing opened? Wi-Fi Settings → <strong>{ssid}</strong>
+          Nothing opened? Wi-Fi Settings → <strong>{ssid}</strong>
           <br />{' '}
           {display.password ? (
             <>
@@ -177,171 +130,11 @@ function SoftApQrPanel({ display }: { display: SetupDisplayDetail }) {
   );
 }
 
-/**
- * Attached phase of the soft-AP step (see SoftApQrPanel). The QR is the
- * portal address; the title reads as the phone-side instruction because the
- * swap fires on the hotspot's FIRST request from the phone — its captive
- * probe — which also happens on phones where the sheet did open, so the
- * screen must not send a user already typing in the portal back to scan.
- * The subtitle carries the scan and typed-address recovery, the hotspot
- * credentials for a second device, and the keep-connected cue: the phone
- * is on a no-internet SSID its OS offers to abandon, and the address on the
- * code is unroutable anywhere else.
- */
-function SoftApPortalQrPanel({
-  ssid,
-  password,
-  portalUrl,
-}: {
-  ssid: string;
-  password: string | undefined;
-  portalUrl: string;
-}) {
-  return (
-    <section className={styles.overlay} aria-live="polite">
-      <div className={styles.panel}>
-        <p className={styles.title}>Finish setup on your phone</p>
-        <div className={styles.qrFrame}>
-          <QRCodeSVG value={portalUrl} size={qrSize} marginSize={2} />
-        </div>
-        <p className={`${styles.subtitle} ${styles.softApSubtitle}`}>
-          Nothing opened? Scan the code, or mobile data/VPN off →{' '}
-          <strong>{portalUrl}</strong>
-          <br /> Wi-Fi <strong>{ssid}</strong>
-          {password ? (
-            <>
-              {' '}
-              · Password <strong>{password}</strong>
-            </>
-          ) : null}{' '}
-          · Keep connected
-        </p>
-      </div>
-    </section>
-  );
-}
-
-/**
- * Pre-hotspot scan: `feral-controld` completes a full Wi-Fi scan before it
- * raises the setup hotspot (the single radio cannot scan once the AP holds
- * it), so this is the first thing a factory-fresh device shows. Rendering it
- * — rather than a black screen — is what tells the user the frame is alive
- * and the QR screen is coming.
- */
-function ScanningPanel() {
-  return (
-    <section className={styles.overlay} aria-live="polite">
-      <div className={styles.panel}>
-        <p className={styles.title}>Looking for Wi-Fi networks</p>
-        <p className={styles.subtitle}>
-          The setup screen will appear in a moment.
-        </p>
-      </div>
-    </section>
-  );
-}
-
 function JoiningPanel() {
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
         <p className={styles.title}>Connecting to Wi-Fi</p>
-      </div>
-    </section>
-  );
-}
-
-/**
- * Post-join finalization: covers the relayer-topic wait plus the pre-claim
- * update check (and its retries) between a successful Wi-Fi join and the
- * claim screen. Without this state that window is a silent black screen and
- * users assume setup stalled.
- */
-function FinalizingPanel() {
-  return (
-    <section className={styles.overlay} aria-live="polite">
-      <div className={styles.panel}>
-        <p className={styles.title}>Wi-Fi connected</p>
-        <p className={styles.subtitle}>
-          Getting your Art Computer ready. This can take a minute.
-        </p>
-      </div>
-    </section>
-  );
-}
-
-/*
- * Provisioned-device connectivity narration (controld's boot/offline hedge,
- * M-0/M-1): the device has saved Wi-Fi but its link or internet access is
- * not confirmed yet. The title is deliberately neutral — on a NORMAL reboot
- * controld paints this state in the ~1s window between CDP connect and the
- * first online confirmation, so an asserting title (join_failed's
- * "Couldn't connect") would flash a false failure on every boot. The reason
- * line carries controld's evidence-scoped prose ("Checking the network
- * connection…", "…no internet access. Retrying…"); a bare request — reason
- * absent or blank — renders the title alone.
- */
-function ConnectingPanel({ display }: { display: SetupDisplayDetail }) {
-  const reason = proseReason(display);
-  return (
-    <section className={styles.overlay} aria-live="polite">
-      <div className={styles.panel}>
-        <p className={styles.title}>Connecting to the network</p>
-        {reason ? <p className={styles.subtitle}>{reason}</p> : null}
-      </div>
-    </section>
-  );
-}
-
-/*
- * Persistent provisioning failure (controld's escalation latches: the setup
- * hotspot repeatedly failing to start or to release the radio). The reason
- * line carries controld's full prose — what happened, that retries continue
- * automatically underneath, and the power-cycle fallback — so this panel
- * adds only a title. The title must not assert a failed Wi-Fi join
- * (join_failed's does): these errors fire while no join is in progress at
- * all, and on old players the send-time downgrade already shows this prose
- * under the wrong "Couldn't connect" title — the native rendering exists to
- * fix exactly that. A bare request (no usable reason — both an absent one
- * and a blank one are valid per the CDP validator; see `proseReason`) still
- * gets one honest line so the panel is never a dead-end title.
- */
-function SetupErrorPanel({ display }: { display: SetupDisplayDetail }) {
-  return (
-    <section className={styles.overlay} aria-live="polite">
-      <div className={styles.panel}>
-        <p className={styles.title}>Setup needs attention</p>
-        <p className={styles.subtitle}>
-          {proseReason(display) ??
-            'The Art Computer ran into a problem with setup mode. It will keep trying automatically.'}
-        </p>
-      </div>
-    </section>
-  );
-}
-
-/*
- * Title + reason only — no "rejoin and try again" instruction. join_failed
- * is a transient frame: the provisioning machine re-raises the AP after ANY
- * join failure and the narration re-renders softap_qr, so the QR screen
- * that follows IS the rejoin instruction (the cross-repo contract is
- * ffos-user docs/setup-flow.md, "Join and the AP bounce": every failure
- * class re-raises the AP; setupui narrates join_failed, then softap_qr on
- * AP-up). The reason string from controld already carries the action
- * ("Please check it and try again."), and the phone gets the same reason
- * as a banner on the portal picker. A bare join_failed (no usable reason —
- * both an absent one and a blank one are valid per the CDP validator; see
- * `proseReason`) still gets one actionable line so the panel is never a
- * dead-end title while the re-raise is in flight.
- */
-function JoinFailedPanel({ display }: { display: SetupDisplayDetail }) {
-  return (
-    <section className={styles.overlay} aria-live="polite">
-      <div className={styles.panel}>
-        <p className={styles.title}>Couldn&apos;t connect to Wi-Fi</p>
-        <p className={styles.subtitle}>
-          {proseReason(display) ?? 'Please try again.'}
-        </p>
       </div>
     </section>
   );
@@ -463,32 +256,12 @@ export function renderSetupPanel(
   display: SetupDisplayDetail
 ): ReactElement | null {
   switch (display.state as SetupDisplayState) {
-    case SetupDisplayState.Scanning: {
-      return <ScanningPanel />;
-    }
-
     case SetupDisplayState.SoftApQr: {
       return <SoftApQrPanel display={display} />;
     }
 
     case SetupDisplayState.Joining: {
       return <JoiningPanel />;
-    }
-
-    case SetupDisplayState.Finalizing: {
-      return <FinalizingPanel />;
-    }
-
-    case SetupDisplayState.JoinFailed: {
-      return <JoinFailedPanel display={display} />;
-    }
-
-    case SetupDisplayState.Connecting: {
-      return <ConnectingPanel display={display} />;
-    }
-
-    case SetupDisplayState.SetupError: {
-      return <SetupErrorPanel display={display} />;
     }
 
     case SetupDisplayState.Updating: {
@@ -503,6 +276,15 @@ export function renderSetupPanel(
       return <FactoryResetPanel />;
     }
 
+    // Narration-only states paint nothing: a screen stays only when the
+    // person has to do something or has to not do something
+    // (feral-file/feral-file#3635). The controller still sends them, and
+    // they are accepted and ignored.
+    case SetupDisplayState.Scanning:
+    case SetupDisplayState.Connecting:
+    case SetupDisplayState.Finalizing:
+    case SetupDisplayState.JoinFailed:
+    case SetupDisplayState.SetupError:
     case SetupDisplayState.Ready:
     case SetupDisplayState.Hidden: {
       return null;
@@ -527,20 +309,29 @@ export function renderSetupPanel(
  * through the `setupDisplay` CDP command; it is the launcher-ui replacement
  * for those screens now that setup lives inside ff-player.
  *
- * Any visible panel gets the bundled artwork layered beneath it (see
- * SetupArtworkBackground for why it's iframe-based and cast-gated). The
- * background is a stable, ALWAYS-rendered sibling of the panel: it stays
+ * Any setup-flow state, with or without a panel, gets the bundled artwork
+ * (see SetupArtworkBackground for why it's iframe-based and cast-gated), so
+ * a unit with nothing saved never waits on a black screen. The background is
+ * a stable, ALWAYS-rendered sibling of the panel: it stays
  * mounted — and the artwork keeps running uninterrupted — across setup state
  * transitions, and it must stay in the tree when the overlay hides so it can
  * play its exit fade (the player's standard cast fade) instead of
  * hard-cutting off screen; it unmounts itself once that fade completes.
+ *
+ * On a unit with a saved work to display, the join code clears after about a
+ * minute; `setupPanelWindow.ts` owns that timing.
  */
 export default function SetupOverlay() {
   const [display, setDisplay] = useState<SetupDisplayDetail>(hiddenDisplay);
 
   useEffect(() => {
     const handleDisplay = (event: Event) => {
-      setDisplay((event as CustomEvent<SetupDisplayDetail>).detail);
+      const { detail } = event as CustomEvent<SetupDisplayDetail>;
+      if (detail.state === (SetupDisplayState.SetupError as string)) {
+        // No panel for this state; the log line keeps it diagnosable.
+        console.warn('[SetupOverlay] setup_error:', detail.reason ?? '');
+      }
+      setDisplay(detail);
     };
 
     window.addEventListener(CustomEventName.SetupDisplay, handleDisplay);
@@ -574,11 +365,28 @@ export default function SetupOverlay() {
     };
   }, []);
 
-  const panel = renderSetupPanel(display);
+  // A unit with a saved work to display clears the join code after about a
+  // minute so the work shows with nothing over it (see
+  // SETUP_PANEL_WINDOW_MS). The context read is optional for the same reason
+  // as in SetupArtworkBackground; without a provider nothing is saved and
+  // every panel stays, as on a unit that was never set up. "Saved" means a
+  // playlist with at least one work: cast state alone is not enough, because
+  // `setLoop` on a unit with no artwork persists a cast with only a command
+  // and a loop mode, and clearing the panel there would leave a blank screen.
+  const appContext = useContext(AppContext)?.context;
+  const cleared = useSetupPanelCleared(
+    display,
+    (appContext?.castInfo?.playlist?.items?.length ?? 0) > 0,
+    appContext?.isOnline ?? true
+  );
+  const panel = cleared ? null : renderSetupPanel(display);
 
   return (
     <>
-      <SetupArtworkBackground panelVisible={panel !== null} />
+      <SetupArtworkBackground
+        setupActive={isSetupFlowState(display.state)}
+        panelVisible={panel !== null}
+      />
       {panel}
     </>
   );

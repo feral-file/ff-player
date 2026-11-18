@@ -353,8 +353,8 @@ backoff. It rearms on a different degraded URL, a genuine offline-to-online edge
 next opportunity; recovery does not depend on another external notification.
 
 The setup artwork supplies an offline backdrop when degradation and offline
-signals agree. On reconnection the backdrop can hold for up to 30 s while the
-work recovers. Cached/progressive video keeps playing without WAN; streaming
+signals agree. On reconnection a backdrop that is showing can hold for up to
+30 s while the work recovers; reconnection never raises one. Cached/progressive video keeps playing without WAN; streaming
 video pauses. Current signal limitations include iframe navigation-error loads,
 HLS failures that do not raise degradation, and a silent daemon on an interface
 that stays up. A LAN-reachable but CORS-blocked source with no WAN may be classified
@@ -435,17 +435,52 @@ are paired contracts with ffos-user.
 
 ## Setup and mint overlays
 
-Setup panels render the bundled, offline-complete `public/setup-artwork/` beneath
-their scrim when no cast is active, or when offline playback is degraded. This
-is a render-only layer; it must not replace persisted cast or fallback state.
+A setup screen stays only when the person has to do something or has to not do
+something (feral-file/feral-file#3635). The panels are the `softap_qr` join
+code, `joining`, `claim_qr`, `updating`, and `factory_reset`. The
+narration-only states `scanning`, `connecting`, `finalizing`, `join_failed`,
+and `setup_error` are accepted (`{ok: true}`) and paint nothing; `setup_error`
+writes a console warning with its reason. They stay in
+`ffos-player-contract.json` because shipped controllers check that list and
+keep sending them. Unknown states are accepted and ignored the same way.
+
+During any setup-flow state, with or without a panel, the bundled,
+offline-complete `public/setup-artwork/` shows when the cast holds no work
+(no cast, or cast state with an empty playlist), so a unit with nothing saved
+never waits on a black screen. It also shows when
+offline playback is degraded; only that bare backdrop carries the connectivity
+chip, and never while a panel is up or over a displaying work. When the cast
+holds a playlist with at least one work, the degraded backdrop and its chip
+wait `SAVED_WORK_RETRY_GRACE_MS` (the first refresh retry interval plus 10 s)
+after the failure, so a unit shows its own work or black, not the bundled
+work, while the first retry runs. This is a
+render-only layer; it must not replace persisted cast or fallback state.
 
 `softap_qr` requires `ssid` and accepts `password`, `portal_url`, `reason`, and
-`client_attached`. A valid HTTP(S) portal URL supplies direct-IP recovery. Once
-`client_attached` is true, that URL replaces the join QR with the portal QR.
-Without the URL the join panel remains. `reason` carries failed-join detail.
-`connecting` narrates provisioned-device connectivity; `setup_error` reports a
-persistent setup failure. Setup-state arbitration remains with the existing
-controller/overlay contract.
+`client_attached`. A `portal_url` is shown as the typed fallback address.
+`client_attached` does not change the panel. `reason` says why the join code is
+back (a failed join, or the attached phone leaving). Setup-state arbitration
+remains with the existing controller/overlay contract; the mint overlay yields
+only to setup states that paint a panel.
+
+An Art Computer plugged in where it has no network displays what it displayed
+last. When the cast holds a playlist with at least one work, the join code
+clears `SETUP_PANEL_WINDOW_MS` (60 s) after it first appears in a no-network
+episode, and the work shows with nothing over it. Repaints and later hotspot
+phases do not show it again; a power cycle does. While a phone is on the
+hotspot (`client_attached`) or a join is running (`joining`) the panel stays,
+and the join code that follows gets a fresh window. A join code carrying
+`reason` is never cleared. An episode ends when the device is online and the
+controller is in no setup-flow state. With no saved work the join code stays
+(cast state without playlist items, such as a bare `setLoop`, does not count).
+`claim_qr`, `updating`, and `factory_reset` are never cleared. The rule needs
+no controller field; `setupPanelWindow.ts` owns it.
+
+Known limit: the controller in FF OS 3.0.1 sends `client_attached` for Apple
+clients only, so the join code can clear while an Android phone is on the
+hotspot. Setup continues on that phone's own captive-portal page; the panel's
+typed fallback address and hotspot password are what clear, and a power cycle
+shows them again.
 
 Mint pairing uses `{command: "mintPairingDisplay", request: {state, pairingCode?,
 browserName?}}`, with states `pairing_code`, `request_received`, `creating_token`,

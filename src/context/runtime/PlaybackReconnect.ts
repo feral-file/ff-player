@@ -1,6 +1,7 @@
 import { canvasService } from '@/services/CanvasService';
 const REFRESH_BUDGET_MAX_ATTEMPTS = 3;
-const REFRESH_BUDGET_BACKOFF_MS = [15_000, 60_000, 240_000];
+/** Delay after each refresh attempt. Exported so the offline backdrop can wait out the first retry. */
+export const REFRESH_BUDGET_BACKOFF_MS = [15_000, 60_000, 240_000];
 const REFRESH_BUDGET_SETTLE_MS = 60_000;
 const REFRESH_BUDGET_MAX_AGE_MS = 10 * 60_000;
 /** Owns M7's per-URL retry budget and its active timer, independently of the renderer's per-mount retries. */
