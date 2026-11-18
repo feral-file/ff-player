@@ -353,8 +353,8 @@ backoff. It rearms on a different degraded URL, a genuine offline-to-online edge
 next opportunity; recovery does not depend on another external notification.
 
 The setup artwork supplies an offline backdrop when degradation and offline
-signals agree. On reconnection the backdrop can hold for up to 30 s while the
-work recovers. Cached/progressive video keeps playing without WAN; streaming
+signals agree. On reconnection a backdrop that is showing can hold for up to
+30 s while the work recovers; reconnection never raises one. Cached/progressive video keeps playing without WAN; streaming
 video pauses. Current signal limitations include iframe navigation-error loads,
 HLS failures that do not raise degradation, and a silent daemon on an interface
 that stays up. A LAN-reachable but CORS-blocked source with no WAN may be classified
@@ -445,8 +445,9 @@ writes a console warning with its reason. They stay in
 keep sending them. Unknown states are accepted and ignored the same way.
 
 During any setup-flow state, with or without a panel, the bundled,
-offline-complete `public/setup-artwork/` shows when no cast is active, so a
-unit with nothing saved never waits on a black screen. It also shows when
+offline-complete `public/setup-artwork/` shows when the cast holds no work
+(no cast, or cast state with an empty playlist), so a unit with nothing saved
+never waits on a black screen. It also shows when
 offline playback is degraded; only that bare backdrop carries the connectivity
 chip, and never while a panel is up or over a displaying work. When the cast
 holds a playlist with at least one work, the degraded backdrop and its chip

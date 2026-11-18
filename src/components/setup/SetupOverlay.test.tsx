@@ -8,6 +8,7 @@ import {
 } from '@/models/custom_event';
 import { AppContext } from '@/context/AppContext';
 import { CastCommand, CastInfo } from '@/models';
+import type { DP1Call } from '@/models/dp1.model';
 import SetupOverlay, { renderSetupPanel } from './SetupOverlay';
 import { FADE_OUT_MS } from './SetupArtworkBackground';
 
@@ -382,9 +383,14 @@ describe('SetupOverlay hide and unknown-state behavior', () => {
 });
 
 // The bundled-artwork background must render under every visible panel while
-// nothing is cast, and must never cover a live cast (e.g. an OTA `updating`
-// overlay raised over the user's playing artwork) — see
+// no work is saved, and must never cover a displaying work (e.g. an OTA
+// `updating` overlay raised over the user's playing artwork) — see
 // SetupArtworkBackground for the design rationale.
+const savedCast = {
+  castCommand: CastCommand.displayPlaylist,
+  playlist: { items: [{ id: 'work-1' }] } as unknown as DP1Call,
+} as CastInfo;
+
 function overlayWithCastInfo(castInfo: CastInfo | null) {
   return (
     <AppContext.Provider
@@ -426,11 +432,7 @@ describe('SetupOverlay bundled artwork background', () => {
   });
 
   it('does not render the background while a cast is active', async () => {
-    const { container } = render(
-      overlayWithCastInfo({
-        castCommand: CastCommand.displayPlaylist,
-      } as CastInfo)
-    );
+    const { container } = render(overlayWithCastInfo(savedCast));
 
     displaySetup({ state: SetupDisplayState.Updating, progress: 10 });
     await screen.findByText('Updating software');
@@ -507,11 +509,7 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
     expect(screen.getByText('Connecting to Wi-Fi')).toBeTruthy();
     expect(container.querySelector('iframe')).not.toBeNull();
 
-    rerender(
-      overlayWithCastInfo({
-        castCommand: CastCommand.displayPlaylist,
-      } as CastInfo)
-    );
+    rerender(overlayWithCastInfo(savedCast));
 
     // Still mounted while its exit fade plays, gone after.
     expect(container.querySelector('iframe')).not.toBeNull();

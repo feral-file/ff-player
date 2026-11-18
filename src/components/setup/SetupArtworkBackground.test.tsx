@@ -1,13 +1,17 @@
 /**
  * Show-condition matrix for the bundled setup artwork.
  *
- * The layer answers two independent needs — "a setup panel is up and nothing
- * is cast" and "the device is offline and the artwork it should be showing
- * failed to load" — while preserving one hard invariant: a device playing
- * artwork normally must never get this layer painted over it (the OTA
+ * The layer answers two independent needs — "a setup flow is active and no
+ * work is saved" and "the device is offline and the artwork it should be
+ * showing failed to load" — while preserving one hard invariant: a device
+ * playing artwork normally must never get this layer painted over it (the OTA
  * `updating` panel raised over live playback is the case that matters).
  * Every combination is pinned here because the condition is a single
  * expression that is easy to "simplify" into breaking one of the three.
+ *
+ * `hasCast: true` is a saved work (a playlist with an item), so its degraded
+ * backdrop waits out SAVED_WORK_RETRY_GRACE_MS; tests that are about what
+ * happens after that call `lapseRetryGrace()`.
  */
 import { AppContext } from '@/context/AppContext';
 import { CastCommand, type CastInfo } from '@/models';
@@ -22,24 +26,31 @@ import SetupArtworkBackground, {
   SAVED_WORK_RETRY_GRACE_MS,
 } from './SetupArtworkBackground';
 
-const activeCast = { castCommand: CastCommand.displayPlaylist } as CastInfo;
+const savedWork = {
+  castCommand: CastCommand.displayPlaylist,
+  playlist: { items: [{ id: 'work-1' }] } as unknown as DP1Call,
+} as CastInfo;
+// What `setLoop` persists on a unit with no artwork: cast state, no work.
+const loopOnlyCast = { castCommand: CastCommand.setLoop } as CastInfo;
 
-function renderBackground(opts: {
+interface BackgroundOpts {
   panelVisible: boolean;
   setupActive?: boolean;
   cast?: CastInfo;
   hasCast: boolean;
   isOnline: boolean;
   playbackDegraded: boolean;
-}): HTMLElement {
-  const { container } = render(
+}
+
+function backgroundNode(opts: BackgroundOpts): React.ReactElement {
+  return (
     <AppContext.Provider
       value={{
         context: {
           isInitialized: true,
           isOnline: opts.isOnline,
           appRemoteConfig: { defaultPlaylistURL: '' },
-          castInfo: opts.cast ?? (opts.hasCast ? activeCast : null),
+          castInfo: opts.cast ?? (opts.hasCast ? savedWork : null),
           displaySettings: null,
           cursorPositions: null,
           playbackDegraded: opts.playbackDegraded,
@@ -51,8 +62,30 @@ function renderBackground(opts: {
       />
     </AppContext.Provider>
   );
-  return container;
 }
+
+function renderBackground(opts: BackgroundOpts): HTMLElement {
+  return render(backgroundNode(opts)).container;
+}
+
+function advance(ms: number) {
+  act(() => {
+    vi.advanceTimersByTime(ms);
+  });
+}
+
+function lapseRetryGrace() {
+  advance(SAVED_WORK_RETRY_GRACE_MS);
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 interface ShowCase {
   panelVisible: boolean;
@@ -68,7 +101,7 @@ const showMatrix: ShowCase[] = [
   { panelVisible: false, hasCast: false, isOnline: true, playbackDegraded: true, shown: false },
   { panelVisible: false, hasCast: false, isOnline: false, playbackDegraded: false, shown: false },
   { panelVisible: false, hasCast: false, isOnline: false, playbackDegraded: true, shown: true },
-  // No panel, cast active: the field bug — a claimed device that booted
+  // No panel, saved work: the field bug — a claimed device that booted
   // offline restores its playlist but can fetch nothing, so the wall is
   // black until this layer covers it.
   { panelVisible: false, hasCast: true, isOnline: true, playbackDegraded: false, shown: false },
@@ -80,7 +113,7 @@ const showMatrix: ShowCase[] = [
   { panelVisible: true, hasCast: false, isOnline: true, playbackDegraded: true, shown: true },
   { panelVisible: true, hasCast: false, isOnline: false, playbackDegraded: false, shown: true },
   { panelVisible: true, hasCast: false, isOnline: false, playbackDegraded: true, shown: true },
-  // Panel visible, cast active: healthy playback keeps the wall, and so does
+  // Panel visible, saved work: healthy playback keeps the wall, and so does
   // an artwork that failed while ONLINE — that is a broken asset or an
   // unsupported format, which the player's own error modal explains. Only
   // the offline case gets the backdrop behind the panel, which is what makes
@@ -92,14 +125,12 @@ const showMatrix: ShowCase[] = [
 ];
 
 describe('SetupArtworkBackground show condition', () => {
-  afterEach(() => {
-    cleanup();
-  });
-
   it.each(showMatrix)(
     'panel=$panelVisible cast=$hasCast online=$isOnline degraded=$playbackDegraded → shown=$shown',
     (testCase: ShowCase) => {
       const container = renderBackground(testCase);
+      // The settled state: a saved work's first retry has had its turn.
+      lapseRetryGrace();
 
       expect(container.querySelector('iframe') !== null).toBe(testCase.shown);
     }
@@ -107,7 +138,7 @@ describe('SetupArtworkBackground show condition', () => {
 
   it('never covers a device that is playing artwork normally', () => {
     // Called out separately from the matrix because it is the invariant the
-    // layer exists under, not just another row: an OTA `updating` narration
+    // layer exists under, not just another row: an OTA `updating` panel
     // must leave the user's artwork visible through the panel scrim.
     const container = renderBackground({
       panelVisible: true,
@@ -121,10 +152,6 @@ describe('SetupArtworkBackground show condition', () => {
 });
 
 describe('SetupArtworkBackground browser-level offline evidence', () => {
-  afterEach(() => {
-    cleanup();
-  });
-
   it('raises the backdrop on the window offline event while isOnline is stuck true', () => {
     // Reload-while-offline: the daemon's edge-triggered push was spent
     // before the reload, so `isOnline` sits at its optimistic seed and the
@@ -136,6 +163,7 @@ describe('SetupArtworkBackground browser-level offline evidence', () => {
       isOnline: true,
       playbackDegraded: true,
     });
+    lapseRetryGrace();
     expect(container.querySelector('iframe')).toBeNull();
 
     act(() => {
@@ -159,10 +187,6 @@ describe('SetupArtworkBackground browser-level offline evidence', () => {
 });
 
 describe('SetupArtworkBackground navigator.onLine initial read', () => {
-  afterEach(() => {
-    cleanup();
-  });
-
   it('raises the backdrop from the initial navigator.onLine read, with no offline event needed', () => {
     // Reload-while-offline, the harder half of the browser-level-evidence
     // contract: the FIRST render must already see browser-offline via the
@@ -181,6 +205,7 @@ describe('SetupArtworkBackground navigator.onLine initial read', () => {
       isOnline: true,
       playbackDegraded: true,
     });
+    lapseRetryGrace();
 
     expect(container.querySelector('iframe')).not.toBeNull();
   });
@@ -194,16 +219,13 @@ describe('SetupArtworkBackground navigator.onLine initial read', () => {
       isOnline: true,
       playbackDegraded: true,
     });
+    lapseRetryGrace();
 
     expect(container.querySelector('iframe')).toBeNull();
   });
 });
 
 describe('SetupArtworkBackground offline status chip', () => {
-  afterEach(() => {
-    cleanup();
-  });
-
   it('labels the bare offline backdrop', () => {
     const container = renderBackground({
       panelVisible: false,
@@ -211,6 +233,7 @@ describe('SetupArtworkBackground offline status chip', () => {
       isOnline: false,
       playbackDegraded: true,
     });
+    lapseRetryGrace();
 
     expect(container.textContent).toContain('No internet connection');
   });
@@ -222,6 +245,7 @@ describe('SetupArtworkBackground offline status chip', () => {
       isOnline: false,
       playbackDegraded: true,
     });
+    lapseRetryGrace();
 
     expect(container.querySelector('iframe')).not.toBeNull();
     expect(container.textContent).not.toContain('No internet connection');
@@ -240,57 +264,23 @@ describe('SetupArtworkBackground offline status chip', () => {
   });
 });
 
-function backgroundNode(opts: {
-  panelVisible: boolean;
-  setupActive?: boolean;
-  cast?: CastInfo;
-  hasCast: boolean;
-  isOnline: boolean;
-  playbackDegraded: boolean;
-}): React.ReactElement {
-  return (
-    <AppContext.Provider
-      value={{
-        context: {
-          isInitialized: true,
-          isOnline: opts.isOnline,
-          appRemoteConfig: { defaultPlaylistURL: '' },
-          castInfo: opts.cast ?? (opts.hasCast ? activeCast : null),
-          displaySettings: null,
-          cursorPositions: null,
-          playbackDegraded: opts.playbackDegraded,
-        },
-      }}>
-      <SetupArtworkBackground
-        setupActive={opts.setupActive ?? opts.panelVisible}
-        panelVisible={opts.panelVisible}
-      />
-    </AppContext.Provider>
-  );
-}
-
 describe('SetupArtworkBackground reconnect handover', () => {
   // The field bug this latch exists for: dropping the backdrop on the
   // connectivity edge revealed the still-broken slot underneath (blank, or
   // Chromium's in-iframe net-error page) for the seconds the recovery
   // remount needs. The exit signal is the artwork RECOVERING, not the
   // network returning.
-  afterEach(() => {
-    cleanup();
-    vi.useRealTimers();
-  });
+  const offline = { panelVisible: false, hasCast: true, isOnline: false, playbackDegraded: true };
+  const reconnected = { ...offline, isOnline: true };
+  const recovered = { ...reconnected, playbackDegraded: false };
 
   it('keeps the backdrop up when connectivity returns while the artwork is still degraded', () => {
-    vi.useFakeTimers();
-    const { container, rerender } = render(
-      backgroundNode({ panelVisible: false, hasCast: true, isOnline: false, playbackDegraded: true })
-    );
+    const { container, rerender } = render(backgroundNode(offline));
+    lapseRetryGrace();
     expect(container.querySelector('iframe')).not.toBeNull();
 
     act(() => {
-      rerender(
-        backgroundNode({ panelVisible: false, hasCast: true, isOnline: true, playbackDegraded: true })
-      );
+      rerender(backgroundNode(reconnected));
     });
 
     expect(container.querySelector('iframe')).not.toBeNull();
@@ -299,97 +289,77 @@ describe('SetupArtworkBackground reconnect handover', () => {
     expect(container.textContent).not.toContain('No internet connection');
   });
 
+  it('never introduces the backdrop when connectivity returned before it was shown', () => {
+    // The hold preserves a backdrop that is on screen. A saved work that
+    // fails offline and is back online inside its retry grace never had
+    // one, so none may appear while online — not when the grace ends, and
+    // not at any point in the handover window after it.
+    const { container, rerender } = render(backgroundNode(offline));
+    advance(1_000);
+    act(() => {
+      rerender(backgroundNode(reconnected));
+    });
+
+    advance(SAVED_WORK_RETRY_GRACE_MS - 1_000);
+    expect(container.innerHTML).toBe('');
+    advance(RECOVERY_HANDOVER_MS + FADE_OUT_MS);
+    expect(container.innerHTML).toBe('');
+  });
+
   it('exits when the artwork actually recovers, via the normal fade', () => {
-    vi.useFakeTimers();
-    const { container, rerender } = render(
-      backgroundNode({ panelVisible: false, hasCast: true, isOnline: false, playbackDegraded: true })
-    );
+    const { container, rerender } = render(backgroundNode(offline));
+    lapseRetryGrace();
 
     act(() => {
-      rerender(
-        backgroundNode({ panelVisible: false, hasCast: true, isOnline: true, playbackDegraded: true })
-      );
+      rerender(backgroundNode(reconnected));
     });
     expect(container.querySelector('iframe')).not.toBeNull();
 
     act(() => {
-      rerender(
-        backgroundNode({ panelVisible: false, hasCast: true, isOnline: true, playbackDegraded: false })
-      );
+      rerender(backgroundNode(recovered));
     });
-    act(() => {
-      vi.advanceTimersByTime(FADE_OUT_MS);
-    });
+    advance(FADE_OUT_MS);
     expect(container.querySelector('iframe')).toBeNull();
   });
 
-});
-
-describe('SetupArtworkBackground reconnect handover bounds', () => {
-  afterEach(() => {
-    cleanup();
-    vi.useRealTimers();
-  });
-
   it('yields after RECOVERY_HANDOVER_MS so a permanently-broken-but-online artwork falls through to the player error modal', () => {
-    vi.useFakeTimers();
-    const { container, rerender } = render(
-      backgroundNode({ panelVisible: false, hasCast: true, isOnline: false, playbackDegraded: true })
-    );
+    const { container, rerender } = render(backgroundNode(offline));
+    lapseRetryGrace();
 
     act(() => {
-      rerender(
-        backgroundNode({ panelVisible: false, hasCast: true, isOnline: true, playbackDegraded: true })
-      );
+      rerender(backgroundNode(reconnected));
     });
     expect(container.querySelector('iframe')).not.toBeNull();
 
-    act(() => {
-      vi.advanceTimersByTime(RECOVERY_HANDOVER_MS);
-    });
-    act(() => {
-      vi.advanceTimersByTime(FADE_OUT_MS);
-    });
+    advance(RECOVERY_HANDOVER_MS);
+    advance(FADE_OUT_MS);
     expect(container.querySelector('iframe')).toBeNull();
   });
 
   it('re-arms cleanly: a second offline episode gets a fresh handover, not a spent latch', () => {
-    vi.useFakeTimers();
-    const { container, rerender } = render(
-      backgroundNode({ panelVisible: false, hasCast: true, isOnline: false, playbackDegraded: true })
-    );
+    const { container, rerender } = render(backgroundNode(offline));
+    lapseRetryGrace();
+    expect(container.querySelector('iframe')).not.toBeNull();
     // Episode 1 recovers fully.
     act(() => {
-      rerender(
-        backgroundNode({ panelVisible: false, hasCast: true, isOnline: true, playbackDegraded: false })
-      );
+      rerender(backgroundNode(recovered));
     });
-    act(() => {
-      vi.advanceTimersByTime(FADE_OUT_MS);
-    });
+    advance(FADE_OUT_MS);
     expect(container.querySelector('iframe')).toBeNull();
 
     // Episode 2: offline degradation again, then reconnect while degraded.
     act(() => {
-      rerender(
-        backgroundNode({ panelVisible: false, hasCast: true, isOnline: false, playbackDegraded: true })
-      );
+      rerender(backgroundNode(offline));
     });
+    lapseRetryGrace();
     act(() => {
-      rerender(
-        backgroundNode({ panelVisible: false, hasCast: true, isOnline: true, playbackDegraded: true })
-      );
+      rerender(backgroundNode(reconnected));
     });
     expect(container.querySelector('iframe')).not.toBeNull();
   });
 });
 
 describe('SetupArtworkBackground chip escalation', () => {
-  afterEach(() => {
-    cleanup();
-    vi.useRealTimers();
-  });
-
   it('reads "Connecting to the internet…" on a boot that has never been online', () => {
     // Cold offline boot: the page paints before Wi-Fi association finishes,
     // so navigator.onLine is false from the very first render. That outage
@@ -401,13 +371,13 @@ describe('SetupArtworkBackground chip escalation', () => {
       isOnline: true,
       playbackDegraded: true,
     });
+    lapseRetryGrace();
 
     expect(container.textContent).toContain('Connecting to the internet…');
     expect(container.textContent).not.toContain('No internet connection');
   });
 
   it('escalates to "No internet connection" once the boot-settle window elapses', () => {
-    vi.useFakeTimers();
     vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
     const container = renderBackground({
       panelVisible: false,
@@ -415,11 +385,10 @@ describe('SetupArtworkBackground chip escalation', () => {
       isOnline: true,
       playbackDegraded: true,
     });
+    lapseRetryGrace();
     expect(container.textContent).toContain('Connecting to the internet…');
 
-    act(() => {
-      vi.advanceTimersByTime(CONNECTING_GRACE_MS);
-    });
+    advance(CONNECTING_GRACE_MS - SAVED_WORK_RETRY_GRACE_MS);
     expect(container.textContent).toContain('No internet connection');
     expect(container.textContent).not.toContain('Connecting to the internet…');
   });
@@ -434,6 +403,7 @@ describe('SetupArtworkBackground chip escalation', () => {
       isOnline: true,
       playbackDegraded: true,
     });
+    lapseRetryGrace();
     expect(container.querySelector('iframe')).toBeNull();
 
     act(() => {
@@ -445,8 +415,6 @@ describe('SetupArtworkBackground chip escalation', () => {
 });
 
 describe('SetupArtworkBackground during a setup state with no panel', () => {
-  afterEach(cleanup);
-
   const noPanel = { setupActive: true, panelVisible: false };
 
   it('shows the bundled artwork, without a chip, when nothing is cast', () => {
@@ -454,6 +422,21 @@ describe('SetupArtworkBackground during a setup state with no panel', () => {
       ...noPanel,
       hasCast: false,
       isOnline: false,
+      playbackDegraded: false,
+    });
+    expect(container.querySelector('iframe')).not.toBeNull();
+    expect(container.querySelector('p')).toBeNull();
+  });
+
+  it('shows the bundled artwork when the cast state holds no work', () => {
+    // `setLoop` on a unit with no artwork leaves cast state with no
+    // playlist. Nothing mounts to report degradation, so without the
+    // backdrop a narration-only setup state is a black screen.
+    const container = renderBackground({
+      ...noPanel,
+      hasCast: true,
+      cast: loopOnlyCast,
+      isOnline: true,
       playbackDegraded: false,
     });
     expect(container.querySelector('iframe')).not.toBeNull();
@@ -469,86 +452,55 @@ describe('SetupArtworkBackground during a setup state with no panel', () => {
     });
     expect(container.innerHTML).toBe('');
   });
-
-  it('shows the chip on the bare backdrop when the saved work cannot load', () => {
-    const container = renderBackground({
-      ...noPanel,
-      hasCast: true,
-      isOnline: false,
-      playbackDegraded: true,
-    });
-    expect(container.querySelector('iframe')).not.toBeNull();
-    // jsdom's navigator.onLine is true, so the chip is past its soft
-    // "Connecting…" text; the escalation tests above pin both wordings.
-    expect(container.querySelector('p')?.textContent).toBe(
-      'No internet connection'
-    );
-  });
 });
 
 describe('SetupArtworkBackground with a saved work that fails offline', () => {
-  const savedWork = {
-    castCommand: CastCommand.displayPlaylist,
-    playlist: { items: [{ id: 'work-1' }] } as unknown as DP1Call,
-  } as CastInfo;
   const failing = {
     panelVisible: false,
     hasCast: true,
-    cast: savedWork,
     isOnline: false,
     playbackDegraded: true,
   };
 
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    cleanup();
-    vi.useRealTimers();
-  });
-
   it('shows no bundled artwork and no chip before the first retry has had its turn', () => {
     const { container } = render(backgroundNode(failing));
     expect(container.innerHTML).toBe('');
-    act(() => {
-      vi.advanceTimersByTime(SAVED_WORK_RETRY_GRACE_MS - 1);
-    });
+    advance(SAVED_WORK_RETRY_GRACE_MS - 1);
     expect(container.innerHTML).toBe('');
   });
 
   it('never shows the bundled artwork when the retry loads the work', () => {
     const { container, rerender } = render(backgroundNode(failing));
-    act(() => {
-      vi.advanceTimersByTime(16_000);
-    });
+    advance(16_000);
     rerender(backgroundNode({ ...failing, playbackDegraded: false }));
-    act(() => {
-      vi.advanceTimersByTime(10 * SAVED_WORK_RETRY_GRACE_MS);
-    });
+    advance(10 * SAVED_WORK_RETRY_GRACE_MS);
     expect(container.innerHTML).toBe('');
   });
 
   it('shows the bundled artwork and the chip once the retry has failed too', () => {
+    // jsdom's navigator.onLine is true, so the chip is past its soft
+    // "Connecting…" text; the escalation tests above pin both wordings.
     const { container } = render(backgroundNode(failing));
-    act(() => {
-      vi.advanceTimersByTime(SAVED_WORK_RETRY_GRACE_MS);
-    });
+    lapseRetryGrace();
     expect(container.querySelector('iframe')).not.toBeNull();
     expect(container.querySelector('p')?.textContent).toBe(
       'No internet connection'
     );
   });
 
-  it('shows the bundled artwork at once when nothing is saved', () => {
+  it('waits out the retry during a setup state with no panel too', () => {
     const { container } = render(
-      backgroundNode({
-        panelVisible: false,
-        setupActive: true,
-        hasCast: false,
-        isOnline: false,
-        playbackDegraded: false,
-      })
+      backgroundNode({ ...failing, setupActive: true })
+    );
+    advance(SAVED_WORK_RETRY_GRACE_MS - 1);
+    expect(container.innerHTML).toBe('');
+    advance(1);
+    expect(container.querySelector('iframe')).not.toBeNull();
+  });
+
+  it('shows the bundled artwork at once when the cast state holds no work', () => {
+    const { container } = render(
+      backgroundNode({ ...failing, cast: loopOnlyCast })
     );
     expect(container.querySelector('iframe')).not.toBeNull();
   });
