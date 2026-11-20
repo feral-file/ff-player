@@ -156,4 +156,8 @@ export interface SetupDisplayDetail {
   // woven into the "the app finds this frame automatically" guidance.
   // snake_case matches the setupDisplay wire contract field.
   device_name?: string;
+  // Every state: the installed FF OS version, e.g. "3.0.1". The overlay shows
+  // it small in a corner of any visible panel so an old build is obvious at
+  // boot. Optional; older controllers omit it and the label is not drawn.
+  version?: string;
 }
