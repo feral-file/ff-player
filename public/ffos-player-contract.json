@@ -121,7 +121,12 @@
           ]
         }
       },
-      "notes": "Requests missing a required field for their state are rejected with {ok:false}. progress must be a finite number. The player renders overlay-driving commands (mintPairingDisplay, setupDisplay) without arbitration, so the controller must keep at most one non-hidden at a time.",
+      "commonFields": {
+        "optional": [
+          "version"
+        ]
+      },
+      "notes": "Requests missing a required field for their state are rejected with {ok:false}. Any state may carry version, the installed FF OS version string; the player shows it small in a corner of every visible panel, and a missing or non-string value draws no label and never rejects the request. progress must be a finite number. The player renders overlay-driving commands (mintPairingDisplay, setupDisplay) without arbitration, so the controller must keep at most one non-hidden at a time.",
       "acceptedResponse": {
         "ok": true
       }

@@ -444,8 +444,9 @@ is a render-only layer; it must not replace persisted cast or fallback state.
 `client_attached` is true, that URL replaces the join QR with the portal QR.
 Without the URL the join panel remains. `reason` carries failed-join detail.
 `connecting` narrates provisioned-device connectivity; `setup_error` reports a
-persistent setup failure. Setup-state arbitration remains with the existing
-controller/overlay contract.
+persistent setup failure. Any state may carry `version`, the installed FF OS
+version, which every visible panel shows small in its bottom-right corner.
+Setup-state arbitration remains with the existing controller/overlay contract.
 
 Mint pairing uses `{command: "mintPairingDisplay", request: {state, pairingCode?,
 browserName?}}`, with states `pairing_code`, `request_received`, `creating_token`,

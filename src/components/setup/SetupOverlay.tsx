@@ -521,6 +521,20 @@ export function renderSetupPanel(
 }
 
 /**
+ * The installed FF OS version as the corner label reads it ("v3.0.1"), or
+ * `undefined` when there is nothing to show. Guarded on type here rather than
+ * in the CDP validator: a malformed label must never cost the setup panel
+ * itself, so it is dropped instead of rejecting the whole request.
+ */
+export function versionLabel(display: SetupDisplayDetail): string | undefined {
+  if (typeof display.version !== 'string') {
+    return undefined;
+  }
+  const trimmed = display.version.trim().replace(/^v/i, '');
+  return trimmed === '' ? undefined : `v${trimmed}`;
+}
+
+/**
  * SetupOverlay renders the device's out-of-box and recovery setup flow
  * (Wi-Fi hotspot join, firmware update, claim pairing) above whatever else
  * is mounted. `feral-controld` owns lifecycle state and drives this display
@@ -575,11 +589,15 @@ export default function SetupOverlay() {
   }, []);
 
   const panel = renderSetupPanel(display);
+  // Drawn only beside a visible panel, so a hidden or unknown state still
+  // leaves nothing on screen.
+  const version = panel === null ? undefined : versionLabel(display);
 
   return (
     <>
       <SetupArtworkBackground panelVisible={panel !== null} />
       {panel}
+      {version ? <p className={styles.version}>{version}</p> : null}
     </>
   );
 }
