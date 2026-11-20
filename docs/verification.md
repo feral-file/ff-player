@@ -169,6 +169,7 @@ procedure, runnable entirely in a browser:
    ```js
    setup('scanning');
    setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1'});
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', version:'3.0.1'}); // installed-version label, bottom-right
    setup('softap_qr', {ssid:'FF1-DEMO4242'});               // open network
    setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', client_attached:true}); // phone joined: portal-address QR
    setup('joining');
@@ -221,6 +222,9 @@ procedure, runnable entirely in a browser:
    portal address, not the WIFI: payload), the "Finish setup on your phone"
    heading, and a recovery block that keeps scan-again, mobile-data/VPN,
    direct-IP, Wi-Fi name, password, and keep-connected cues legible.
+9. On the `version` variant, confirm the `v3.0.1` label sits small and muted
+   in the bottom-right corner, clear of the panel's last line, at all three
+   viewports.
 
 Report the pass (viewports checked, anything off) in the PR body; review
 agents treat its absence as a missing-verification finding.
