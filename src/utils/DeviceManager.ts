@@ -1,6 +1,7 @@
 import { LocalStorageItem } from '@/constants';
 import { DisplaySettings } from '@/models/display_settings.model';
 import { CastInfo, ViewMode } from '@/models';
+import { LoopMode } from '@/models/cast_info.model';
 import { DP1Call } from '@/models/dp1.model';
 import {
   parseRecentlyPlayed,
@@ -14,6 +15,7 @@ interface BootPlaylistRecord {
   contentContext: ContentContext;
 }
 import { stripEphemeralCastInfoFields } from './castInfo';
+import { coerceLoopMode } from './loopMode';
 import indexedDBStorage from './IndexedDBStorage';
 
 const PRELOAD_KEYS: string[] = [
@@ -24,6 +26,7 @@ const PRELOAD_KEYS: string[] = [
   LocalStorageItem.dp1ScheduledTask,
   LocalStorageItem.bootPlaylist,
   LocalStorageItem.defaultItemDuration,
+  LocalStorageItem.loopMode,
   LocalStorageItem.recentlyPlayed,
   LocalStorageItem.recentlyPlayedIncomplete,
 ];
@@ -379,6 +382,44 @@ class DeviceManager {
   public getCachedDefaultItemDurationSeconds(): number | null {
     return parseDurationSeconds(
       this.getCachedValue(LocalStorageItem.defaultItemDuration)
+    );
+  }
+
+  /**
+   * Persist the device's Repeat choice. `setLoop` is the only writer: Repeat
+   * is something a person sets on this Art Computer, not a property of one
+   * playlist, so it is kept beside the default duration and not only on the
+   * cast it was set during.
+   */
+  public async setLoopMode(mode: LoopMode): Promise<void> {
+    this.cache.set(LocalStorageItem.loopMode, mode);
+    await this.ensureInitialized();
+    this.cache.set(LocalStorageItem.loopMode, mode);
+    await indexedDBStorage.setItem(LocalStorageItem.loopMode, mode);
+  }
+
+  /**
+   * The device's Repeat choice, read after storage has answered. For a caller
+   * that can wait (the boot restore).
+   */
+  public async getLoopMode(): Promise<LoopMode> {
+    await this.ensureInitialized();
+    const raw = await this.fetchAndCache(LocalStorageItem.loopMode);
+    return coerceLoopMode(raw ?? undefined);
+  }
+
+  /**
+   * The Repeat choice a new Now Display starts in. `playlist` when nothing
+   * was ever set, or the stored value is not a mode this build knows: that
+   * is what every display started in before the choice was kept. Before the
+   * startup preload has finished it cannot see what is stored, so a Display
+   * accepted in that moment starts in `playlist`. That is left as it is on
+   * purpose: setting Repeat again corrects it, and the stored choice is
+   * untouched.
+   */
+  public getCachedLoopMode(): LoopMode {
+    return coerceLoopMode(
+      this.getCachedValue(LocalStorageItem.loopMode) ?? undefined
     );
   }
 

@@ -17,6 +17,7 @@ import {
 import { CustomEventName } from '@/models/custom_event';
 import { DP1Action, DP1Call, DP1Item } from '@/models/dp1.model';
 import type { PlaybackOutcomeInput } from '@/models/media_health.model';
+import DeviceManager from '@/utils/DeviceManager';
 import { resolveHintedSkip } from '@/utils/mediaHealthSkip';
 import { startItemIndex } from '@/utils/startItem';
 import { normalizePlaylistIndex } from '@/utils/playlist';
@@ -438,8 +439,10 @@ export class PlaylistCommands {
     }
 
     console.log('[CanvasService] Display playlist');
-    // Each Now Display starts a new cast session surface: do not inherit prior
-    // shuffle / loop toggles from the previous playlist on the same device tab.
+    // Each Now Display starts a new cast session surface. Shuffle is an
+    // order of the previous list and does not carry over. Repeat is the
+    // device's own setting (setLoop keeps it) and does: a person who chose
+    // Repeat one gets it on every work they display, until they change it.
     this.session.setCastInfo({
       castCommand: CastCommand.displayPlaylist,
       contentContext,
@@ -453,7 +456,7 @@ export class PlaylistCommands {
       playlistUrl: request.playlistUrl,
       index: landing.index,
       playlistId: request.dp1CallData.id,
-      loopMode: LoopMode.playlist,
+      loopMode: DeviceManager.getCachedLoopMode(),
       shuffle: false,
     });
     // Every accepted Now Display opens a new outcome-ring cast generation
