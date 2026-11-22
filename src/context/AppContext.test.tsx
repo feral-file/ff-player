@@ -20,6 +20,7 @@ const { axiosGet, canvasServiceMocks, deviceManager, reactSetCastInfo } =
       // A pre-policy record has no stored context and reads as curated.
       getBootPlaylistContentContext: vi.fn().mockResolvedValue('curated'),
       getCastInfo: vi.fn().mockResolvedValue(null),
+      getLoopMode: vi.fn().mockResolvedValue('playlist'),
       setItem: vi.fn().mockResolvedValue(undefined),
       setDeviceDisplaySettings: vi.fn().mockResolvedValue(undefined),
       setDeviceInfo: vi.fn().mockResolvedValue(undefined),
@@ -124,6 +125,7 @@ beforeEach(() => {
   deviceManager.getItem.mockResolvedValue('true');
   deviceManager.getBootPlaylistContentContext.mockResolvedValue('curated');
   deviceManager.getCastInfo.mockResolvedValue(null);
+  deviceManager.getLoopMode.mockResolvedValue('playlist');
   deviceManager.getDeviceDisplaySettings.mockResolvedValue(null);
   deviceManager.removeItem.mockResolvedValue(undefined);
   deviceManager.setItem.mockResolvedValue(undefined);
@@ -197,6 +199,33 @@ describe('AppContext persisted source compatibility', () => {
     // viewer made themselves.
     const [restored] = canvasServiceMocks.setCastInfo.mock.calls.at(-1) ?? [];
     expect(restored?.contentContext).toBe('personal');
+  });
+});
+
+describe('AppContext boot restore and Repeat', () => {
+  it('restores the boot cast in the Repeat mode kept on the device', async () => {
+    deviceManager.getItem.mockResolvedValue(null);
+    deviceManager.getLoopMode.mockResolvedValue('one');
+    deviceManager.getBootPlaylist.mockResolvedValue({
+      dpVersion: '1',
+      id: 'repeat-boot',
+      title: 'Repeat boot',
+      items: [{ id: 'kept-artwork', source: 'about:blank', license: {} }],
+    });
+
+    render(
+      <AppProvider>
+        <div data-testid="app-ready" />
+      </AppProvider>
+    );
+
+    await waitFor(() => {
+      expect(canvasServiceMocks.setCastInfo).toHaveBeenCalled();
+    });
+    // A restart that came back rotating would undo a choice the person made
+    // once and expects to hold.
+    const [restored] = canvasServiceMocks.setCastInfo.mock.calls.at(-1) ?? [];
+    expect(restored?.loopMode).toBe('one');
   });
 
   it('restores a legacy cast snapshot without revalidating its source', async () => {

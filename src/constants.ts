@@ -11,6 +11,9 @@ export enum LocalStorageItem {
   bootPlaylist = 'boot_playlist',
   versionUpdateReload = 'versionUpdateReload',
   defaultItemDuration = 'defaultItemDuration',
+  // The Repeat choice (LoopMode) last set on this device. It outlives the
+  // playlist it was set on: every Now Display starts in it.
+  loopMode = 'loopMode',
   // Bounded device-local evidence of artworks that reached the viewer's
   // visual commit boundary. This is deliberately independent from castInfo:
   // castInfo is recovery state for one current cast, not a playback timeline.
