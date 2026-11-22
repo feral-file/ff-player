@@ -183,30 +183,21 @@ function FactoryResetPanel() {
  * Pairing screen. Shown for the first-pair claim during setup AND whenever a
  * user later asks to pair another phone (`showPairingQRCode` from the app),
  * so the copy must read as a general "pair the app with this frame" page —
- * not as a final setup step. The PRIMARY path is app auto-discovery: the app
- * browses mDNS (`_ff1._tcp`) on the local network and finds this frame by
- * its advertised name. The app only auto-prompts to pair when the frame has
- * no pairing yet (first claim); once claimed, additional phones must add the
- * frame manually inside the app — "look for <name>" is the one instruction
- * that routes both cases without a separate screen. The QR code is
- * deliberately framed as the backup for when discovery fails (cross-VLAN,
- * multicast-filtering APs). Either way the app asks for the frame's Wi-Fi:
- * it sets up a first owner only there, and the claim will only complete on
- * the LAN once the legacy relayer is gone (until then a code from this
+ * not as a final setup step. The code on screen is the only way to set up
+ * the first owner: its invitation makes the scanning phone the first owner,
+ * on the device's Wi-Fi. The app only auto-prompts to pair when the frame has
+ * no pairing yet (first claim); on an already-claimed frame the code carries
+ * no invitation and is for adding another phone. The claim will only complete
+ * on the LAN once the legacy relayer is gone (until then a code from this
  * screen can also enroll over it, ffos-user docs/ff1-control-v1.md §5.1).
  */
 function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
-  const frameName = display.device_name?.trim();
   return (
     <section className={styles.overlay} aria-live="polite">
       <div className={styles.panel}>
         <p className={styles.title}>Pair with the Feral File app</p>
-        {/* "Look for <name>" covers both discovery cases in two words: on a
-            first claim the app auto-prompts (the frame appears), and on an
-            already-claimed frame the user finds it via manual add. The old
-            "If pairing doesn't start automatically, add ... in the app"
-            conditional routed the second case explicitly; looking for the
-            name routes both. */}
+        {/* The code on screen is the only way to set up the first owner;
+            the app does not lead from LAN discovery to setup. */}
         {/* The same-Wi-Fi requirement leads, as its own line: the app sets
             up a first owner only on the frame's Wi-Fi, so a phone on mobile
             data or another network cannot finish here. The last line asks
@@ -221,9 +212,7 @@ function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
           Connect your phone to the same Wi-Fi as this Art Computer.
         </p>
         <p className={styles.stepLabel}>
-          Then open the app and look for{' '}
-          {frameName ? <strong>{frameName}</strong> : 'this Art Computer'}
-          {display.url ? ', or scan this code.' : '.'}
+          Then scan this code with your phone&apos;s camera or the Feral File app.
         </p>
         {display.url ? (
           <>
