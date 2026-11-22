@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { deflateSync } from 'node:zlib';
+import { serveContentFixture } from './content-fixtures.mjs';
 
 export const pause = ms =>
   new Promise(resolve => {
@@ -126,6 +127,9 @@ export class SmokeFixtures {
     const url = new URL(request.url, 'http://localhost');
     response.setHeader('Access-Control-Allow-Origin', '*');
     try {
+      if (serveContentFixture(url, response)) {
+        return;
+      }
       if (url.pathname === '/report') {
         this.reports.push(JSON.parse(url.searchParams.get('data')));
         response.end('ok');

@@ -90,7 +90,8 @@ export class ContentTypeDetectionError extends Error {
  * directly; other sources use a cache-busting `HEAD` request. When the browser
  * network stack fails before a response arrives, serialize the error into
  * stable text because Chromium's remote console turns raw `Error` objects into
- * `{}` in the device log.
+ * `{}` in the device log. The optional response observer lets source resolution
+ * reuse this bounded probe to inspect redirects without a second request.
  */
 export async function getContentTypeFromURL(
   previewURL: string,
@@ -108,7 +109,12 @@ export async function getContentTypeFromURL(
    * re-probe the source sooner. A 2xx without a usable Content-Type is not
    * reported.
    */
-  onHeadFailure?: (code: string) => void
+  onHeadFailure?: (code: string) => void,
+  /**
+   * Receives the successful (2xx) HEAD response, before Content-Type
+   * handling, so a caller can inspect redirect state and headers.
+   */
+  onResponse?: (response: Response) => void
 ): Promise<string> {
   const url = resolveArtworkSourceURL(previewURL);
   if (url.protocol === 'data:') {
@@ -151,6 +157,7 @@ export async function getContentTypeFromURL(
       );
     }
 
+    onResponse?.(response);
     const contentType = response.headers.get('Content-Type');
     if (contentType) {
       return inferContentTypeFromURL(url, contentType) ?? contentType;

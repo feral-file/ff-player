@@ -17,6 +17,7 @@ import {
   usesWorkOrigin,
 } from '@/utils/workOrigin';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { verifiedIPFSDirectoryPresentationURL, needsIPFSDirectoryProbe } from '@/utils/ipfsDirectory';
 import type { ArtworkRecovery } from './ArtworkRecovery';
 import type { ArtworkTransition, Slots } from './ArtworkTransition';
 import {
@@ -32,18 +33,37 @@ interface SourceOwners {
   note: (url: string, failed: boolean) => void;
 }
 
-/** An absent or empty authored MIME type uses the existing network detector; a probe that answered non-2xx or not at all is reported to the recovery owner even when inference carries on. */
+/**
+ * An absent or empty authored MIME type uses the existing network detector; a probe that answered non-2xx or not at all is reported to the recovery owner even when inference carries on.
+ * Reuse MIME detection to resolve query-losing IPFS directory redirects.
+ */
 async function detectPreview(
   url: string,
   suppliedType: string | undefined,
   onHeadFailure: (code: string) => void
 ) {
-  const resolvedType =
-    suppliedType !== undefined && suppliedType !== ''
-      ? suppliedType
-      : await getContentTypeFromURL(url, onHeadFailure);
+  let sourceResponse: Response | undefined;
+  const hasSuppliedType = suppliedType !== undefined && suppliedType !== '';
+  const probeDirectory = needsIPFSDirectoryProbe(url);
+  const suppliedConfig = hasSuppliedType ? getPreviewTypeConfig(suppliedType) : null;
+  const detect = (reportFailure?: (code: string) => void) => probeDirectory
+    ? getContentTypeFromURL(url, reportFailure, response => {
+        sourceResponse = response;
+      })
+    : getContentTypeFromURL(url, reportFailure);
+  // Declared HTML normally skips HEAD. A possible directory redirect still
+  // needs inspection, but a blocked optional probe must not veto that source,
+  // so it reports no head failure either.
+  const resolvedType = hasSuppliedType
+    ? (probeDirectory && suppliedConfig?.previewType === PreviewHTMLTag.iframe
+        ? await detect().then(() => suppliedType, () => suppliedType)
+        : suppliedType)
+    : await detect(onHeadFailure);
   const mimeType = resolvedType.toLowerCase();
-  return { mimeType, ...getPreviewTypeConfig(mimeType) };
+  const displayURL = sourceResponse
+    ? await verifiedIPFSDirectoryPresentationURL(url, sourceResponse)
+    : url;
+  return { mimeType, displayURL, ...getPreviewTypeConfig(mimeType) };
 }
 
 /** The untyped fallback: an iframe, or the work-origin shell when the source uses one. */
@@ -268,15 +288,16 @@ export function useArtworkSource(
           return;
         }
         recovery.noteMediaType(config.previewType);
+        const { displayURL, ...previewConfig } = config;
         transition.resolveSource(url, {
-          ...config,
-          displayPreviewURL: url,
+          ...previewConfig,
+          displayPreviewURL: displayURL,
           displaySoftwareURL:
             config.previewType === PreviewHTMLTag.iframe &&
             !isModelMimeType(config.mimeType) &&
             usesWorkOrigin(url)
               ? ''
-              : url,
+              : displayURL,
         });
       })
       .catch((error: unknown) => {
