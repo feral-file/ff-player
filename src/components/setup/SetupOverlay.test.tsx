@@ -8,6 +8,7 @@ import {
 } from '@/models/custom_event';
 import { AppContext } from '@/context/AppContext';
 import { CastCommand, CastInfo } from '@/models';
+import type { DP1Call } from '@/models/dp1.model';
 import SetupOverlay, { renderSetupPanel } from './SetupOverlay';
 import { FADE_OUT_MS } from './SetupArtworkBackground';
 
@@ -55,7 +56,7 @@ describe('SetupOverlay known states (connectivity)', () => {
         (_, el) =>
           el?.tagName === 'P' &&
           el.textContent ===
-            'After you join, wait about 10 seconds: if this code changes, scan it again Nothing opened? Wi-Fi Settings → FF1-Setup-ABCD Password correct-horse · Keep connected Still stuck? Mobile data/VPN off → http://10.42.0.1'
+            'Nothing opened? Wi-Fi Settings → FF1-Setup-ABCD Password correct-horse · Keep connected Still stuck? Mobile data/VPN off → http://10.42.0.1'
       )
     ).toBeTruthy();
     expect(screen.getByText(/Mobile data\/VPN off/)).toBeTruthy();
@@ -79,7 +80,7 @@ describe('SetupOverlay known states (connectivity)', () => {
         (_, el) =>
           el?.tagName === 'P' &&
           el.textContent ===
-            'After you join, wait about 10 seconds: if this code changes, scan it again Nothing opened? Wi-Fi Settings → FF1-Setup-ABCD Keep connected'
+            'Nothing opened? Wi-Fi Settings → FF1-Setup-ABCD Keep connected'
       )
     ).toBeTruthy();
     expect(screen.queryByText(/Password/)).toBeNull();
@@ -99,46 +100,10 @@ describe('SetupOverlay known states (connection progress)', () => {
 
     expect(await screen.findByText('Connecting to Wi-Fi')).toBeTruthy();
   });
-
-  it('renders a bare join_failed with a fallback action line', async () => {
-    // A reason-less join_failed is valid per the CDP validator; the panel
-    // must not be a dead-end title while controld re-raises the AP.
-    render(<SetupOverlay />);
-
-    displaySetup({ state: SetupDisplayState.JoinFailed });
-
-    expect(await screen.findByText("Couldn't connect to Wi-Fi")).toBeTruthy();
-    expect(screen.getByText('Please try again.')).toBeTruthy();
-  });
-
-  it('renders join_failed with the provided reason', async () => {
-    render(<SetupOverlay />);
-
-    displaySetup({
-      state: SetupDisplayState.JoinFailed,
-      reason: 'Incorrect password.',
-    });
-
-    expect(await screen.findByText("Couldn't connect to Wi-Fi")).toBeTruthy();
-    expect(screen.getByText('Incorrect password.')).toBeTruthy();
-    // No rejoin instruction: the AP re-raise re-renders softap_qr right
-    // after, and that screen is the rejoin instruction.
-    expect(screen.queryByText(/setup network/)).toBeNull();
-  });
-
-  it('renders join_failed without a reason line when none is provided', async () => {
-    render(<SetupOverlay />);
-
-    displaySetup({ state: SetupDisplayState.JoinFailed });
-
-    expect(await screen.findByText("Couldn't connect to Wi-Fi")).toBeTruthy();
-  });
 });
 
-// The connecting and setup_error prose-narration states are tested in
-// SetupOverlayNarration.test.tsx (split to stay inside the max-lines budget),
-// as is join_failed's blank-`reason` handling — all three panels share that
-// invariant, so the cases that pin it are kept together over there.
+// The narration-only states (scanning, connecting, finalizing, join_failed,
+// setup_error) paint no panel; SetupOverlayNarration.test.tsx pins that.
 
 describe('SetupOverlay softap_qr WIFI: payload encoding', () => {
   afterEach(() => {
@@ -324,30 +289,6 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
     expect(container.querySelector('svg')).not.toBeNull();
   });
 
-  it('renders the scanning state while the pre-hotspot Wi-Fi scan runs', async () => {
-    render(<SetupOverlay />);
-
-    displaySetup({ state: SetupDisplayState.Scanning });
-
-    expect(await screen.findByText('Looking for Wi-Fi networks')).toBeTruthy();
-    expect(
-      screen.getByText('The setup screen will appear in a moment.')
-    ).toBeTruthy();
-  });
-
-  it('renders the finalizing state between join success and the claim step', async () => {
-    render(<SetupOverlay />);
-
-    displaySetup({ state: SetupDisplayState.Finalizing });
-
-    expect(await screen.findByText('Wi-Fi connected')).toBeTruthy();
-    expect(
-      screen.getByText(
-        /Getting your Art Computer ready\. This can take a minute\./
-      )
-    ).toBeTruthy();
-  });
-
   it('renders the factory_reset state with a do-not-power-off warning', async () => {
     render(<SetupOverlay />);
 
@@ -442,9 +383,14 @@ describe('SetupOverlay hide and unknown-state behavior', () => {
 });
 
 // The bundled-artwork background must render under every visible panel while
-// nothing is cast, and must never cover a live cast (e.g. an OTA `updating`
-// overlay raised over the user's playing artwork) — see
+// no work is saved, and must never cover a displaying work (e.g. an OTA
+// `updating` overlay raised over the user's playing artwork) — see
 // SetupArtworkBackground for the design rationale.
+const savedCast = {
+  castCommand: CastCommand.displayPlaylist,
+  playlist: { items: [{ id: 'work-1' }] } as unknown as DP1Call,
+} as CastInfo;
+
 function overlayWithCastInfo(castInfo: CastInfo | null) {
   return (
     <AppContext.Provider
@@ -475,8 +421,8 @@ describe('SetupOverlay bundled artwork background', () => {
   it('renders the same-origin bundled artwork beneath a visible panel', async () => {
     const { container } = render(overlayWithCastInfo(null));
 
-    displaySetup({ state: SetupDisplayState.Scanning });
-    await screen.findByText('Looking for Wi-Fi networks');
+    displaySetup({ state: SetupDisplayState.FactoryReset });
+    await screen.findByText('Resetting to factory settings');
 
     const iframe = container.querySelector('iframe');
     expect(iframe?.getAttribute('src')).toBe('/setup-artwork/index.html');
@@ -486,11 +432,7 @@ describe('SetupOverlay bundled artwork background', () => {
   });
 
   it('does not render the background while a cast is active', async () => {
-    const { container } = render(
-      overlayWithCastInfo({
-        castCommand: CastCommand.displayPlaylist,
-      } as CastInfo)
-    );
+    const { container } = render(overlayWithCastInfo(savedCast));
 
     displaySetup({ state: SetupDisplayState.Updating, progress: 10 });
     await screen.findByText('Updating software');
@@ -546,8 +488,8 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
   it('keeps the same iframe node across panel state transitions', async () => {
     const { container } = render(<SetupOverlay />);
 
-    displaySetup({ state: SetupDisplayState.Scanning });
-    await screen.findByText('Looking for Wi-Fi networks');
+    displaySetup({ state: SetupDisplayState.FactoryReset });
+    await screen.findByText('Resetting to factory settings');
     const iframe = container.querySelector('iframe');
     expect(iframe).not.toBeNull();
 
@@ -562,16 +504,12 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
     const { container, rerender } = render(overlayWithCastInfo(null));
 
     act(() => {
-      displaySetup({ state: SetupDisplayState.Finalizing });
+      displaySetup({ state: SetupDisplayState.Joining });
     });
-    expect(screen.getByText('Wi-Fi connected')).toBeTruthy();
+    expect(screen.getByText('Connecting to Wi-Fi')).toBeTruthy();
     expect(container.querySelector('iframe')).not.toBeNull();
 
-    rerender(
-      overlayWithCastInfo({
-        castCommand: CastCommand.displayPlaylist,
-      } as CastInfo)
-    );
+    rerender(overlayWithCastInfo(savedCast));
 
     // Still mounted while its exit fade plays, gone after.
     expect(container.querySelector('iframe')).not.toBeNull();
@@ -580,7 +518,7 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
     });
     expect(container.querySelector('iframe')).toBeNull();
     // The panel itself must survive the handoff — only the background yields.
-    expect(screen.getByText('Wi-Fi connected')).toBeTruthy();
+    expect(screen.getByText('Connecting to Wi-Fi')).toBeTruthy();
   });
 
   it('cancels a pending fade-out when a panel re-shows, keeping the same node', () => {
@@ -603,7 +541,7 @@ describe('SetupOverlay bundled artwork background lifecycle', () => {
       vi.advanceTimersByTime(FADE_OUT_MS / 2);
     });
     act(() => {
-      displaySetup({ state: SetupDisplayState.JoinFailed });
+      displaySetup({ state: SetupDisplayState.Joining });
     });
     act(() => {
       vi.advanceTimersByTime(FADE_OUT_MS * 2);
@@ -626,26 +564,28 @@ describe('SetupOverlay arbitration with mintPairingDisplay', () => {
   it('yields to a non-hidden mintPairingDisplay command (last command wins)', async () => {
     render(<SetupOverlay />);
 
-    displaySetup({ state: SetupDisplayState.Scanning });
-    await screen.findByText('Looking for Wi-Fi networks');
+    displaySetup({ state: SetupDisplayState.FactoryReset });
+    await screen.findByText('Resetting to factory settings');
 
     displayMintPairing({
       state: MintPairingDisplayState.PairingCode,
       pairingCode: 'PAIR-123',
     });
     await waitFor(() => {
-      expect(screen.queryByText('Looking for Wi-Fi networks')).toBeNull();
+      expect(screen.queryByText('Resetting to factory settings')).toBeNull();
     });
   });
 
   it('keeps its panel when mintPairingDisplay goes hidden', async () => {
     render(<SetupOverlay />);
 
-    displaySetup({ state: SetupDisplayState.Scanning });
-    await screen.findByText('Looking for Wi-Fi networks');
+    displaySetup({ state: SetupDisplayState.FactoryReset });
+    await screen.findByText('Resetting to factory settings');
 
     displayMintPairing({ state: MintPairingDisplayState.Hidden });
-    expect(await screen.findByText('Looking for Wi-Fi networks')).toBeTruthy();
+    expect(
+      await screen.findByText('Resetting to factory settings')
+    ).toBeTruthy();
   });
 
   it('isRenderableSetupDisplayState agrees with renderSetupPanel for every known state', () => {

@@ -165,30 +165,24 @@ procedure, runnable entirely in a browser:
      new CustomEvent('mintPairingDisplay', {detail:{state, ...extra}}));
    ```
 
-3. Walk the setup flow in order, reading it as a sequence (after a failed
-   join the device re-raises the AP, so `softap_qr` follows `join_failed`):
+3. Walk the setup flow in order, reading it as a sequence. Five panels
+   exist: the Wi-Fi join code, "Connecting to Wi-Fi", "Pair with the Feral
+   File app", "Updating software", and "Resetting to factory settings":
 
    ```js
-   setup('scanning');
    setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1'});
    setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', version:'3.0.1'}); // installed-version label, bottom-right
    setup('softap_qr', {ssid:'FF1-DEMO4242'});               // open network
-   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', client_attached:true}); // phone joined: portal-address QR
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', client_attached:true}); // phone joined: same panel, same WIFI: code
    setup('joining');
-   setup('join_failed', {reason:'Wrong Wi-Fi password. Please check it and try again.'});
-   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', reason:'Wrong Wi-Fi password. Please check it and try again.'}); // re-raised join QR with the failure line under the title
-   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', reason:'Your phone left the setup Wi-Fi. Scan the code to join again.'}); // join QR back after the attached phone dropped off the hotspot
-   // Provisioned-device boot/offline narration (not part of the OOBE story):
-   // neutral title, prose body from controld.
-   setup('connecting', {reason:'Looking for your Wi-Fi network… Setup mode will start in a few minutes if the connection does not return.'});
-   setup('connecting');                                     // bare variant: title only
-   // Persistent provisioning failure (controld's escalation latches):
-   setup('setup_error', {reason:'The Art Computer could not start setup mode. It will keep trying automatically. If this persists, disconnect power for ten seconds and restart. (FF1-DEMO4242)'});
-   // ^ keep the identity suffix: controld's withIdentity appends " (FF1-XXXX)"
-   //   on-wire, so this is the longest string the wrapping check must survive.
-   setup('setup_error', {reason:'The Art Computer could not release its setup hotspot. It will keep trying automatically. If this persists, disconnect power for ten seconds and restart.'});
-   setup('setup_error');                                    // bare variant: title + fallback line
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', reason:'Wrong Wi-Fi password. Please check it and try again.'}); // join code back with the failure line under the title
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', reason:'Your phone left the setup Wi-Fi. Scan the code to join again.'}); // join code back after the attached phone dropped off the hotspot
+   // Narration-only states paint no panel:
+   setup('scanning');
+   setup('connecting', {reason:'Looking for your Wi-Fi network…'});
    setup('finalizing');
+   setup('join_failed', {reason:'Wrong Wi-Fi password. Please check it and try again.'});
+   setup('setup_error', {reason:'The Art Computer could not start setup mode.'}); // console warning carries the reason
    setup('updating', {progress:42});
    setup('claim_qr', {url:'https://link.feralfile.com/device_connect/demo', device_name:'FF1-DEMO4242'});
    setup('claim_qr', {url:'https://link.feralfile.com/device_connect/demo'}); // nameless variant
@@ -213,20 +207,20 @@ procedure, runnable entirely in a browser:
    name): they must render the real PPMori-Bold face, not a synthesized
    smear — compare stroke weight against the pairing-code digits.
 6. On `softap_qr`, confirm the platform-neutral heading carries the complete
-   happy path and the single recovery block keeps the code-changes wait cue,
-   Wi-Fi Settings, password, keep-connected, mobile-data/VPN, and direct-IP
-   cues legible without crowding the QR.
-7. On the re-raised `softap_qr` variants carrying `reason`, confirm the line
-   sits under the title at its own size, the QR is not pushed off the
-   panel, and the recovery block below stays legible — this is the densest
-   join-phase layout.
-8. On the `client_attached` repaint, confirm the panel shows ONE code (the
-   portal address, not the WIFI: payload), the "Finish setup on your phone"
-   heading, and a recovery block that keeps scan-again, mobile-data/VPN,
-   direct-IP, Wi-Fi name, password, and keep-connected cues legible.
-9. On the `version` variant, confirm the `v3.0.1` label sits small and muted
-   in the bottom-right corner, clear of the panel's last line, at all three
-   viewports.
+   happy path and the single recovery block keeps the Wi-Fi Settings,
+   password, keep-connected, mobile-data/VPN, and direct-IP cues legible
+   without crowding the QR.
+7. On the `softap_qr` variants carrying `reason`, confirm the line sits
+   under the title at its own size, the QR is not pushed off the panel, and
+   the recovery block below stays legible — this is the densest join-phase
+   layout.
+8. On the `client_attached` repaint, confirm the panel is unchanged: the
+   same heading, the same WIFI: join code, and the same recovery block.
+9. On each narration-only state, confirm no panel paints. The bundled
+   artwork shows behind it only when no work is saved to display.
+10. On the `version` variant, confirm the `v3.0.1` label sits small and muted
+    in the bottom-right corner, clear of the panel's last line, at all three
+    viewports.
 
 Report the pass (viewports checked, anything off) in the PR body; review
 agents treat its absence as a missing-verification finding.
