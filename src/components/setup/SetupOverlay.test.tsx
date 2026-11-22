@@ -231,7 +231,7 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
     cleanup();
   });
 
-  it('renders claim_qr with app-discovery as primary and the QR as backup', async () => {
+  it('renders claim_qr with the code on screen as the only setup path', async () => {
     const { container } = render(<SetupOverlay />);
 
     displaySetup({
@@ -243,9 +243,6 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
     expect(
       await screen.findByText('Pair with the Feral File app')
     ).toBeTruthy();
-    // Primary path: open the app on the same Wi-Fi and look for the frame
-    // by name — covers both the auto-prompt and manual-add cases.
-    expect(screen.getByText('FF1-8EVTK3RE')).toBeTruthy();
     // The same-Wi-Fi requirement leads on its own line (first-owner
     // enrollment is LAN-only), pinned as the full sentence.
     expect(
@@ -255,10 +252,7 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        (_, el) =>
-          el?.tagName === 'P' &&
-          el.textContent ===
-            'Then open the app and look for FF1-8EVTK3RE, or scan this code.'
+        "Then scan this code with your phone's camera or the Feral File app."
       )
     ).toBeTruthy();
     // Ask to keep the code private, and never claim the same-Wi-Fi rule
@@ -285,7 +279,11 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
     expect(
       await screen.findByText('Pair with the Feral File app')
     ).toBeTruthy();
-    expect(screen.getByText(/look for\s+this Art Computer/)).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Then scan this code with your phone's camera or the Feral File app."
+      )
+    ).toBeTruthy();
     expect(container.querySelector('svg')).not.toBeNull();
   });
 
