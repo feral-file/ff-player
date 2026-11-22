@@ -41,4 +41,10 @@ describe('ffos-player-contract.json setupDisplay manifest', () => {
     const fields = contract.contracts.setupDisplay.stateFields;
     expect(fields.softap_qr.optional).toContain('client_attached');
   });
+
+  it('declares the version label any state may carry', () => {
+    expect(contract.contracts.setupDisplay.commonFields.optional).toContain(
+      'version'
+    );
+  });
 });

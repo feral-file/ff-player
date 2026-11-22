@@ -98,3 +98,23 @@
   margin-top: 3vh;
   font-size: clamp(22px, 3vmin, 42px);
 }
+
+// The installed FF OS version, small and muted in the bottom-right corner of
+// every visible setup panel, so an old build is obvious at boot without
+// competing with the panel. Above the overlay's scrim (z-index 1000) and
+// inside its 6vh/6vw padding band, which no panel content reaches. ~22px at
+// 1080p; the cap keeps it in proportion to the capped text on 4K.
+.version {
+  position: fixed;
+  right: 3vw;
+  bottom: 3vh;
+  z-index: 1001;
+  margin: 0;
+  font-family: 'PP Mori', sans-serif;
+  font-size: clamp(14px, 2vmin, 26px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+}

@@ -2,7 +2,13 @@
 
 `ff-player` is the canonical playback surface for FF1 playlist loop behavior.
 
-Each **Now Display** playlist (`DP1Action.NowDisplay`, including boot display) resets playback toggles on cast state: `loopMode` → `playlist`, `shuffle` → `false`. Remote clients can set other modes again after the new playlist is active.
+Repeat (`loopMode`) is a setting of the Art Computer, not of one playlist. `setLoop` stores it on the device (`LocalStorageItem.loopMode`), and every **Now Display** playlist (`DP1Action.NowDisplay`, including the boot display, a scheduled display, a History replay and the fallback playlist) starts in the stored mode. A person who chooses Repeat one keeps the work they display until they change Repeat, across displays and restarts. A device where Repeat was never set starts in `playlist`.
+
+The command entry point is up before the storage preload finishes. A Now Display accepted in that moment starts in `playlist`. Nothing corrects it: setting Repeat again does, and the stored choice is untouched, so the next Display starts in it.
+
+Shuffle is an order of one list, so each Now Display still resets `shuffle` → `false`.
+
+The start slot of a Now Display is resolved through the broken-source hints as under `playlist`, whatever the stored mode: the display opens on a work that can be shown, and Repeat applies from there.
 
 ## Loop modes
 
@@ -52,6 +58,24 @@ rearms its timer. Changing the saved default duration restarts the full effectiv
 interval without reloading media. A late display-preference merge instead
 preserves elapsed time when pacing is unchanged; authored duration vetoes and
 natural-length media must not lose to an unresolved manifest's default timer.
+
+## Broken-source hints
+
+controld may mark sources broken on the cast (`mediaHealth` contract v1; see
+[Device-local player](DEVICE_LOCAL_PLAYER.md#media-health-hints-and-play-outcomes)).
+Every selection is resolved through those hints BEFORE it is published: the
+cast command resolves the start slot it publishes, the command facade resolves
+an explicit move before the session publishes it, and the timeline resolves a
+timer or source-end advance, a queued shuffle/refresh promotion, and a same-id
+source replacement. Each lands on the first unhinted slot forward in play
+order. `playlist` wraps, `none` does not,
+and `one` ignores hints because the viewer asked for that work. When nothing
+else is playable the requested slot plays and the retry budget judges it. The
+hinted items stay in the list; only the selection moves, and each slot passed
+over is reported as a `skip/hint` outcome. `checkStatus.skippedIndices` reports
+the slots these rules pass over, excluding the published one. A hint-only
+`setMediaHealth` push replaces the map between casts; the work on screen keeps
+playing and the next selection applies the new map.
 
 ## Route ownership
 

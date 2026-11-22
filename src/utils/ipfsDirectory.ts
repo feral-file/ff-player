@@ -78,7 +78,7 @@ export async function verifiedIPFSDirectoryPresentationURL(
   }
   const result = { confirmed: false };
   try {
-    await getContentTypeFromURL(candidate, reply => {
+    await getContentTypeFromURL(candidate, undefined, reply => {
       const mime = reply.headers
         .get('Content-Type')
         ?.split(';')[0]

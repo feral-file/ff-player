@@ -103,12 +103,38 @@ the distinct callback and composition timings.
   so settings do not remain held behind an abandoned incoming slot.
 - Corroborated-offline MIME detection reports failed and degraded, without a
   fallback iframe or artwork-error modal. Offline recovery owns that case.
-- MIME detection whose own HEAD probe survives to its own abort (the probe's
-  `AbortError`, not a native rejection) reports failed through the ordinary
-  per-item path (artwork-error modal, bounded retry/advance) instead of the
-  fallback iframe, even while the device is online — feral-file#3583: an
-  iframe pointed at a source proven unreachable within the probe's own
-  budget only ever shows Chromium's in-frame net-error page, indefinitely.
+- The HEAD only types a work; it never fails one. A host may refuse HEAD or
+  omit CORS headers on it and still serve the page, and the browser rejects
+  all of those exactly like a dead host. So when the HEAD of a URL with no
+  extension to infer a type from got no response on an online device, the
+  player asks a plain CORS-mode GET of the source (`probeGet`, bounded at
+  10 s, aborted once it settles). CORS mode settles as soon as headers
+  arrive, pass or fail; `no-cors` would wait for body bytes (opaque-response
+  blocking) and read a slow-streaming page as silent. The GET fails the work
+  only on evidence a browser policy block cannot produce: no response
+  headers at all for 10 s, or a rejected request to a host under the reserved `.invalid` TLD,
+  which no resolver answers and only the offline cache's replay serves (every
+  onchfs work, `https://<root>.onchfs.invalid/…`). Then the attempt reports
+  failed as `detect/unreachable` through the ordinary per-item path
+  (artwork-error modal, bounded retry/advance) with no iframe mounted: an
+  iframe at such a source only shows Chromium's error page and reports it
+  `ready` (ff-player#311, feral-file#3583). If the device went offline while
+  the GET ran, the offline path above takes it instead. Any HTTP response,
+  and any other rejection, lets the source mount untyped as below: a fast
+  rejection may be DNS or a refused connection, but it may also be a page
+  without CORS headers, or `Cross-Origin-Resource-Policy` blocking the
+  fetch, that the iframe still shows, and script cannot tell them apart. Every attempt is judged
+  afresh, so an onchfs work the device finishes reading from chain
+  mid-retry plays on the next attempt.
+- MIME detection that fails without proving the source silent (a non-2xx
+  answer, a 2xx with no usable type, a HEAD with no response whose GET did
+  not prove the source silent) on a URL with no extension to infer from leaves the source
+  untyped. Before falling back to the iframe, the player asks the
+  browser whether the source decodes as an image (`loadsAsImage`, bounded at
+  8 s). An image takes the image slot, follows the display's scaling, and
+  reports its outcome like any typed image; an image left in the iframe would
+  draw at its natural size in the corner. Anything else keeps the fallback
+  iframe, which reports no outcome.
 - WebGL recovery polls every 5 s for up to 10 minutes. On availability, it waits
   2 s and reloads the active iframe key. Recovery completion or timeout resumes
   an item retry suspended by GPU loss without charging another attempt. Each
@@ -122,10 +148,142 @@ Current limitations that callers must preserve:
 
 - Chromium can emit iframe/PDF `load` for its own navigation-error page. Such a
   load may report ready; the player cannot inspect a cross-origin document.
+  A source proven silent is no longer mounted (see above). An ordinary host
+  that fails fast (DNS, refused) or answers with an HTTP error page still
+  mounts the fallback iframe and reports ready, because the player cannot
+  tell that apart from a policy-blocked page the iframe would show.
 - For the first ordinary media/model/iframe error on a newly degraded URL,
   AppContext's M7 recovery can request an immediate reload and shorten the
   nominal 3 s retry pacing. Watchdog and fatal-HLS failures do not raise that
   degraded signal. The failure budget still bounds attempts.
+
+## Where a cast starts: `startItem`
+
+`displayPlaylist.request.startItem` is the work a controller asks a Now
+Display to open on: `{ "id": "<item id>", "source": "<item source>" }`,
+either field optional. It is an unsigned projection beside the DP-1 body,
+like `contentContext`, and `startItem` itself is not persisted. What it
+resolves to is the cast's ordinary `index`, so saved-cast recovery is
+unchanged: the stored cast keeps the index playback has reached
+(`useCastInfo`), and a restart restores it there. Only the boot-playlist
+path (`BootHydration`, a `display_at_boot` cast) starts at slot 0, as it
+did before.
+
+It names a work, not an index, because the controller does not know the
+order a playlist URL or a dynamic query resolves to, and the list this
+player plays is the one left after its own content-policy admission.
+`utils/startItem` resolves it against that admitted list: the id is searched
+across the whole list first, and the source is used only when no item
+carries the id (a dynamic playlist regenerates ids; two members of a series
+can share a source). Ids and sources are compared exactly; trimming is
+used only to treat a blank value as absent. The resolved slot then goes through the media-health
+hints like any other start slot.
+
+Absent, malformed, or naming a work that is not in the admitted list, the
+cast starts at its beginning. Nothing here rejects a cast. The argument is
+ignored on `refresh` and on the boot and schedule actions.
+
+## Media health: hints and play outcomes
+
+`contracts.mediaHealth` (v1) pairs the player with feral-controld's
+device-side media store (feral-file/ffos-user#392). Both halves are unsigned
+projections beside the DP-1 body, like `contentContext`, and neither is
+persisted: boot and hydrate never see a hint or an outcome.
+
+**Hints.** `displayPlaylist.request.mediaHealth` is a sparse map keyed by
+`item.source` as pushed, broken entries only, each `{category, reason}`. It
+rides every push (cast, boot cast, refresh) and is replaced whole on each
+accepted one; absent means no hints, on a refresh too. A status query and a
+scheduled cast leave the live map alone; a rejected push cannot install one; a
+disconnect, the fallback playlist, and a player-local scheduled task clear it.
+`canvas/MediaHealthHints` owns the map and parses it tolerantly: a malformed
+field is skipped, a malformed map ignored, and nothing here rejects a cast.
+
+Every selection is resolved through the hints BEFORE it is published, so a
+hinted work is never mounted: `canvas/PlaylistCommands` resolves a cast's
+start slot (so the cast publishes the slot playback lands on and judges
+render-status continuity against it, keeping `ready` when an identical
+hinted recast lands on the work already playing), `CanvasService` resolves
+an explicit move the same way before the session publishes it, and
+`PlaylistTimeline` resolves every selection it makes itself (advance, queued
+promotion, source replacement). The walk is forward in play order: `playlist`
+wraps, `none` does not, `one` ignores hints. Hinted items stay in
+`checkStatus.items`; the published index is where playback landed. When
+nothing else is playable the requested slot plays and the ordinary
+retry/skip budget judges it, so a hint can never blank the wall. Each slot
+passed over is reported as a `skip/hint` outcome by whichever owner passed
+it.
+
+**Hint-only push.** `setMediaHealth {castSeq, mediaHealth}` lets controld
+deliver a verdict reached between casts (a lookahead probe, an outcome
+drain) without a re-cast (ffos-user#392, follow-up of 2026-11-05). It is
+internal to the loopback CDP seam, like `resolveRecentlyPlayed`, and a
+controller must never be able to send it; controld's cast-session router does
+not forward it. It replaces the held map, with the same parse and the same
+"absent means no hints" rule as a push, and touches nothing else: castInfo,
+the timeline and the outcome ring are left alone, and the work on screen
+keeps playing until its slot ends, because the timeline only consults the
+map at its next selection. `castSeq` must equal the current
+`outcomes.castSeq` while a cast is held, so a push that races a new cast or a
+disconnect is refused with `staleCast` (`invalidCastSeq` when it is not an
+integer), and the held map stays as it was. Success replies `{ok:true,
+skippedIndices}`, the value the next status read reports. The manifest
+lists it under `contracts.mediaHealth.commands`; the version stays 1, so
+controld feature-detects the command by name.
+
+**Hint skips.** `checkStatus.skippedIndices` lists, ascending, the indices of
+`checkStatus.items` the player is passing over because of a hint it holds;
+it is always present on a supporting player (`[]` when nothing is hinted or
+nothing is cast). It reports the player's state, not controld's observation:
+controld copies it per item into `player_status.mediaHealth[i].skipped`, so a
+source controld observed broken but did not hint (an expired verdict, one the
+offline cache can replay, a push still in flight) never reads as skipped, and
+a hint the player still holds reads as skipped until a push replaces it
+(ffos-user#392, follow-up of 2026-11-05). It applies the selection rules
+above to every slot at once (`hintSkippedIndices`, cross-checked against the
+resolver): `[]` under `one` or when every slot is hinted, every hinted slot
+under `playlist`, and under `none` only a hinted slot with an unhinted one
+after it. The published index is never listed: the work on the wall is not
+being skipped, including one whose hint arrived on a refresh mid-play, which
+is listed once playback leaves it. `canvas/CanvasStatus` recomputes it on
+every status read.
+
+**Outcomes.** `checkStatus.outcomes` is `{castSeq, entries}`, always present
+on a supporting player and empty until the first mount reports. Entries are
+oldest first, at most 64, each `{seq, castSeq, source, kind, stage, code?,
+mediaType?, attempt, elapsedMs, at}`. The outer `castSeq` is the current
+generation and increments on every accepted Now Display; each entry keeps the
+`castSeq` it was recorded under, so its `(castSeq, seq)` identity never
+changes while it is retained and an undrained failure cannot count again as
+corroboration from a later cast. `seq` is monotonic for the page and never
+reset, so a `seq` that goes backwards means the player restarted. Nothing is
+removed on read; controld dedupes by the entry's `(castSeq, seq)` (or `seq`
+alone) and reads a jump as a gap. `canvas/PlaybackOutcomes`
+owns the ring; `ArtworkRecovery` reports through `ArtworkOutcomeReporter`.
+
+| Stage | Kind | Source in the player | `code` |
+|---|---|---|---|
+| `detect` | fail | Content-type HEAD answered non-2xx, or got no response at all, online or offline | HTTP status, or `network` (device-local: DNS, refused, timeout and CORS look the same to a browser) |
+| `detect` | fail | The HEAD got no response on an online device and a plain GET of the source proved it silent (no response in 10 s, or a rejected request to a reserved `.invalid` host such as an onchfs work not yet read); the attempt is declared failed with no fallback iframe (ff-player#311, feral-file#3583) | `unreachable`; counts like a watchdog expiry |
+| `load` | fail | Image/video/audio/iframe/object/model element error, fatal HLS error | element kind, or `hls_<ErrorType>` |
+| `decode` | fail | A video/audio `MediaError` | `aborted`, `network`, `decode`, `src_not_supported` |
+| `watchdog` | fail | Per-slot stuck-load watchdog expired | the load phase that ran out: `transfer`, `decode`, `opaque`, `fixed` |
+| `webgl` | fail | GPU context lost on the probe canvas | `context_lost`; device-local, never a source verdict |
+| `exhausted` | fail | Retry budget spent; the playlist advances | the attempt limit |
+| `hint` | skip | The timeline honoured a hint; nothing mounted | none; `attempt` and `elapsedMs` are 0 |
+| `ready` | ok | The mount reached `ready` | none; `elapsedMs` is mount to ready |
+
+One `fail` entry per attempt: competing signals for the same attempt collapse
+at the transition into `failed`, so the ring and the retry budget agree on
+which try a verdict belongs to. `attempt` is 1-based within the per-item budget
+and resets on a new work or a genuine success. The number is fixed when the
+mount starts, so a retry success reports `attempt: 2` while a late success
+inside the mount the watchdog already failed keeps that mount's `attempt: 1`. `detect` and `webgl`
+entries are recorded out of band and may precede the same attempt's
+`load`/`decode`/`watchdog` entry (a `.jpg` answering 404 yields `detect/404`
+then `load/image`), and a `detect` failure can precede an `ok` in the same
+play because the iframe fallback still plays the work and reports `ready` for
+a gateway's error page; entries must be applied in `seq` order. A `detect/network` followed by an iframe `ready` is a HEAD that got no response while the GET did not prove the source silent (a refused or CORS-blocked HEAD, or a fast-failing ordinary host); it is never a verdict, only a reason for controld to re-probe the source at once (ffos-user#392, follow-up of 2026-11-05). A source that answered neither records `detect/network` then `detect/unreachable` for the same attempt and no `ready`: the second is the attempt's countable verdict. controld records neither for an onchfs source (`*.onchfs.invalid`), whose bytes come only from the device (ffos-user#464). Source URLs appear in the ring only over loopback CDP.
 
 ## Recently played
 
@@ -175,10 +333,11 @@ A new slot mount resets that per-mount latch.
 MIME detection treats a response-less fetch failure as offline only with
 corroboration: `navigator.onLine === false` or the daemon connectivity verdict.
 It may wait up to `DAEMON_VERDICT_WAIT_MS` for the first daemon verdict. Reached
-HTTP errors, unknown types, and uncorroborated failures retain iframe fallback,
-unless the probe itself timed out (its own `AbortError`, not a native
-rejection) — that case reports failed through the ordinary per-item path
-instead, online or not (feral-file#3583). A fallback-typed iframe
+HTTP errors and unknown types retain iframe fallback. An uncorroborated
+failure with no response retains it unless a plain GET of the source proves
+it silent (no response in 10 s, or a rejected `.invalid` host); then it reports
+failed through the ordinary per-item path, or takes the offline path if the
+device went offline meanwhile (ff-player#311). A fallback-typed iframe
 (`mimeType: null`) reports no success outcome from `load`.
 
 `CDPRequestHandler` records connectivity in `DaemonConnectivity` before dispatch.
@@ -285,8 +444,9 @@ is a render-only layer; it must not replace persisted cast or fallback state.
 `client_attached` is true, that URL replaces the join QR with the portal QR.
 Without the URL the join panel remains. `reason` carries failed-join detail.
 `connecting` narrates provisioned-device connectivity; `setup_error` reports a
-persistent setup failure. Setup-state arbitration remains with the existing
-controller/overlay contract.
+persistent setup failure. Any state may carry `version`, the installed FF OS
+version, which every visible panel shows small in its bottom-right corner.
+Setup-state arbitration remains with the existing controller/overlay contract.
 
 Mint pairing uses `{command: "mintPairingDisplay", request: {state, pairingCode?,
 browserName?}}`, with states `pairing_code`, `request_received`, `creating_token`,

@@ -67,6 +67,14 @@ human release operation.
 - Run `npm run verify` before handing work off for review.
 - Re-run `npm run verify` after addressing any valid review feedback.
 - If the change touches playback, cast recovery, display settings, or route behavior, pair verification with a manual smoke pass for the affected flow.
+- **Media health (hints and outcomes):** Cast a playlist with
+  `request.mediaHealth` naming one item's source. The wall must start on, or
+  advance to, the next unhinted work without ever mounting the hinted one;
+  `checkStatus.items` still lists it, `index` is where playback landed, and
+  `outcomes.entries` carries one `{kind:"skip", stage:"hint"}` per slot passed
+  over; `skippedIndices` lists the hinted index and never the published one. With a cast playing, send `setMediaHealth` with the current `outcomes.castSeq` and a hint on a later work: the work on screen keeps playing, the next advance passes the hinted one, and a stale `castSeq` replies `staleCast`. Cast a dead source without a hint: expect three `fail` entries with
+  increasing `attempt`, then `exhausted`, then the advance. A working item must
+  report one `{kind:"ok", stage:"ready"}` per mount with its `mediaType`.
 - **Playlist route / repeat-off hold:** With loop `none`, advance to the last timed slot so playback holds on the final artwork; confirm a queued shuffle or refresh **promotes the new playlist on cast** only in that hold (not when the final item has no finite slot timer); leaving `none` via `setLoop` should resume the slot timer from the held frame. Expect the current artwork to stay selected after shuffle (anchor at index `0`) until its slot timer completes before advancing.
 
 ## Production browser smoke
@@ -163,6 +171,7 @@ procedure, runnable entirely in a browser:
    ```js
    setup('scanning');
    setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1'});
+   setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', version:'3.0.1'}); // installed-version label, bottom-right
    setup('softap_qr', {ssid:'FF1-DEMO4242'});               // open network
    setup('softap_qr', {ssid:'FF1-DEMO4242', password:'48151623', portal_url:'http://10.42.0.1', client_attached:true}); // phone joined: portal-address QR
    setup('joining');
@@ -215,6 +224,9 @@ procedure, runnable entirely in a browser:
    portal address, not the WIFI: payload), the "Finish setup on your phone"
    heading, and a recovery block that keeps scan-again, mobile-data/VPN,
    direct-IP, Wi-Fi name, password, and keep-connected cues legible.
+9. On the `version` variant, confirm the `v3.0.1` label sits small and muted
+   in the bottom-right corner, clear of the panel's last line, at all three
+   viewports.
 
 Report the pass (viewports checked, anything off) in the PR body; review
 agents treat its absence as a missing-verification finding.

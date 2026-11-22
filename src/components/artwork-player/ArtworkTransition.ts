@@ -1,4 +1,5 @@
 import { RenderStatus } from '@/models';
+import type { PlaybackFailure } from '@/models/media_health.model';
 import type { Dispatch, SetStateAction } from 'react';
 import type { ArtworkRecovery } from './ArtworkRecovery';
 import {
@@ -188,8 +189,8 @@ export class ArtworkTransition {
     }
     return true;
   }
-  /** Failures still commit their layer, releasing the settings latch, but cannot count as played. */
-  fail(slotIndex?: SlotIndex, expectedLayer?: SlotLayer) {
+  /** Failures still commit their layer, releasing the settings latch, but cannot count as played. `outcome` names the stage for the status ring. */
+  fail(outcome: PlaybackFailure, slotIndex?: SlotIndex, expectedLayer?: SlotLayer) {
     if (
       slotIndex !== undefined &&
       !this.isCurrentArtworkSlot(slotIndex, expectedLayer)
@@ -201,7 +202,7 @@ export class ArtworkTransition {
       this.updateSlot(slotIndex, { loading: false });
       this.media.abort(slotIndex);
     }
-    this.recovery.fail();
+    this.recovery.fail(outcome);
   }
   prepareMount() {
     this.transitionTokenRef.current++;

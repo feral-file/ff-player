@@ -5,3 +5,4 @@ export * from './render_status.model';
 export * from './cast_request_reply.model';
 export * from './common.model';
 export * from './display_settings.model';
+export * from './media_health.model';

@@ -142,8 +142,43 @@ describe('getContentTypeFromURL — daemon-verdict corroboration', () => {
   });
 });
 
+describe('getContentTypeFromURL — probe failure observer', () => {
+  /** Detect an extensionless URL, collecting what the observer saw. */
+  async function observe(): Promise<string[]> {
+    const codes: string[] = [];
+    await getContentTypeFromURL(
+      'https://example.com/ipfs/bafy-test-cid',
+      code => codes.push(code)
+    ).catch(() => undefined);
+    return codes;
+  }
+
+  it('reports an unanswered HEAD as network on an online device', async () => {
+    armRejectedHead(true);
+    noteDaemonConnectivity(true);
+    expect(await observe()).toEqual(['network']);
+  });
+
+  it('reports an unanswered HEAD as network once when offline', async () => {
+    armRejectedHead(false);
+    expect(await observe()).toEqual(['network']);
+  });
+
+  it('reports the status of a non-2xx answer, and nothing for a typed 2xx', async () => {
+    vi.spyOn(console, 'log').mockImplementation(vi.fn());
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 503 }));
+    expect(await observe()).toEqual(['503']);
+    fetchSpy.mockResolvedValue(
+      new Response(null, { status: 200, headers: { 'Content-Type': 'image/png' } })
+    );
+    expect(await observe()).toEqual([]);
+  });
+});
+
 describe('getContentTypeFromURL — unresponsive-source classification (feral-file#3583)', () => {
-  it('marks timedOut when the probe survives its own AbortError on an online device', async () => {
+  it('reports a probe that survives to its own AbortError as no response, not offline, on an online device', async () => {
     // A black-holed gateway (connection accepted, never answers) is the only
     // shape that survives the full CONTENT_TYPE_HEAD_TIMEOUT_MS budget — see
     // helper.test.ts's "aborts the HEAD probe" case for the same fetch mock.
@@ -164,11 +199,10 @@ describe('getContentTypeFromURL — unresponsive-source classification (feral-fi
 
     const rejection = await pending;
     expectNetworkFailure(rejection, false);
-    expect((rejection as ContentTypeDetectionError).timedOut).toBe(true);
     expect((rejection as ContentTypeDetectionError).reachedServer).toBe(false);
   });
 
-  it('does NOT mark timedOut for a fast CORS-style rejection — the probe never actually waited out its budget', async () => {
+  it('reports a fast CORS-style rejection as no response too: the HEAD alone cannot tell it from a dead host', async () => {
     // Same bare-rejection shape `armRejectedHead` uses elsewhere in this
     // file: a reachable host's CORS block rejects `fetch` natively, almost
     // instantly, well before this probe's own abort would ever fire.
@@ -177,15 +211,10 @@ describe('getContentTypeFromURL — unresponsive-source classification (feral-fi
 
     const rejection = await classify();
     expectNetworkFailure(rejection, false);
-    expect((rejection as ContentTypeDetectionError).timedOut).toBe(false);
+    expect((rejection as ContentTypeDetectionError).reachedServer).toBe(false);
   });
 
-  it('can report both flags together when an aborted probe is also corroborated offline — the consumer picks isNetworkFailure first', async () => {
-    // The two flags are computed independently and are not mutually
-    // exclusive: an offline device whose probe also survives to its own
-    // abort reports both. useArtworkSource.ts checks isNetworkFailure first
-    // and returns before ever reading timedOut, so this combination is
-    // harmless — asserted directly in useArtworkSource's own tests.
+  it('reports an aborted probe on a corroborated-offline device as a network failure', async () => {
     vi.useFakeTimers();
     vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => {
       return new Promise((_resolve, reject) => {
@@ -202,6 +231,5 @@ describe('getContentTypeFromURL — unresponsive-source classification (feral-fi
 
     const rejection = await pending;
     expectNetworkFailure(rejection, true);
-    expect((rejection as ContentTypeDetectionError).timedOut).toBe(true);
   });
 });

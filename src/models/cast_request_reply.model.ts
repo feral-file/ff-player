@@ -5,6 +5,7 @@ import { DP1Call, DP1Intent, DP1Item, Scaling } from './dp1.model';
 import { CastCommand, LoopMode, RenderStatus, ViewMode } from '.';
 import type { ContentContext } from '@/services/contentPolicy';
 import type { DeviceFraming } from '@/utils/deviceFraming';
+import type { PlaybackOutcomes } from './media_health.model';
 
 export interface CursorOffset {
   dx: number;
@@ -53,6 +54,12 @@ export interface NowDisplayRequest {
    * the start of a playlist they were already part-way through.
    */
   startIndex?: number;
+  /**
+   * The work a controller asked this cast to open on (see startItemIndex).
+   * Resolved against the list left after admission, and only when no
+   * `startIndex` was given. Unknown because it arrives off the wire.
+   */
+  startItem?: unknown;
 }
 export type NowDisplayReply = Reply;
 
@@ -112,6 +119,18 @@ export interface CheckDeviceStatusReply extends Reply {
   sleepMode?: boolean;
   loopMode?: LoopMode;
   shuffle?: boolean;
+
+  // mediaHealth contract v1: the per-play outcome ring (see
+  // media_health.model). ALWAYS present from this player, empty until the
+  // first mount reports; a manifest without `contracts.mediaHealth` is an
+  // older build that omits the key entirely. Live-only like renderStatus.
+  outcomes?: PlaybackOutcomes;
+
+  // mediaHealth contract v1: indices into `items` the player is passing over
+  // because of a held hint (see hintSkippedIndices). ALWAYS present from this
+  // player, [] when nothing is hinted; controld copies it per item into
+  // player_status.mediaHealth[i].skipped. Never includes `index`.
+  skippedIndices?: number[];
 }
 
 export interface DisplayPlaylistRequest {
@@ -122,6 +141,24 @@ export interface DisplayPlaylistRequest {
   /** Daemon-only projection hint: blocked current work must not finish/crossfade. */
   retireBlockedCurrent?: boolean;
   contentContext?: ContentContext;
+  /**
+   * mediaHealth contract v1: controld's broken-source hints for this push,
+   * keyed by `item.source`. The timeline moves past a hinted slot without
+   * mounting it; the item stays in `items`. Absent means no hints. Typed as
+   * unknown because the field is parsed tolerantly (parseMediaHealthHints),
+   * never trusted as a MediaHealthHints shape.
+   */
+  mediaHealth?: unknown;
+  /**
+   * The work a Now Display should open on: `{ id?, source? }`, matched by id
+   * and then by source against the list this player admits (startItemIndex).
+   * A controller sends it so the wall opens on the tapped work instead of on
+   * the first one. Absent, malformed, or naming a work that is not in the
+   * list: the cast starts at its beginning. Ignored on `refresh` and on the
+   * boot and schedule actions, which do not put a controller's choice on the
+   * wall. Typed as unknown because it is parsed tolerantly, never trusted.
+   */
+  startItem?: unknown;
 }
 export type DisplayPlaylistReply = Reply;
 

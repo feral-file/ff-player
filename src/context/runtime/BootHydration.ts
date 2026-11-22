@@ -98,6 +98,9 @@ export class BootHydration {
           index: 0,
           isPaused: false,
           playlistId: bootPlaylist.id,
+          // The boot display is a Now Display like any other: it starts in
+          // the Repeat mode kept on the device (PLAYLIST_LOOP_CONTRACT.md).
+          loopMode: await DeviceManager.getLoopMode(),
           // Restore the origin the cast was accepted under. A record written
           // before this key existed reads as curated, so an upgrade cannot
           // turn an old boot cast into an unfiltered personal one.
