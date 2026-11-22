@@ -459,9 +459,11 @@ render-only layer; it must not replace persisted cast or fallback state.
 `softap_qr` requires `ssid` and accepts `password`, `portal_url`, `reason`, and
 `client_attached`. A `portal_url` is shown as the typed fallback address.
 `client_attached` does not change the panel. `reason` says why the join code is
-back (a failed join, or the attached phone leaving). Setup-state arbitration
-remains with the existing controller/overlay contract; the mint overlay yields
-only to setup states that paint a panel.
+back (a failed join, or the attached phone leaving). Any state may carry
+`version`, the installed FF OS version, which every visible panel shows small in
+its bottom-right corner. Setup-state arbitration remains with the existing
+controller/overlay contract; the mint overlay yields only to setup states that
+paint a panel.
 
 An Art Computer plugged in where it has no network displays what it displayed
 last. When the cast holds a playlist with at least one work, the join code
