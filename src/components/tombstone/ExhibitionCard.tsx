@@ -1,7 +1,7 @@
 'use client';
 
 import type { LabelTuning } from '@/utils/labelTuning';
-import { CSSProperties } from 'react';
+import { CSSProperties, useEffect, useState } from 'react';
 import { designPx } from './designPx';
 
 /**
@@ -161,6 +161,22 @@ export default function ExhibitionCard({
   visible: boolean;
   tuning: LabelTuning;
 }) {
+  // A card that mounts already visible would cut in; one frame at opacity 0
+  // first lets it fade in over the outgoing work.
+  const [painted, setPainted] = useState(false);
+  const present = card !== null;
+  useEffect(() => {
+    if (!present) {
+      setPainted(false);
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      setPainted(true);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [present]);
   if (!card) {
     return null;
   }
@@ -170,7 +186,7 @@ export default function ExhibitionCard({
       data-testid="exhibition-card"
       data-kind={card.kind}
       aria-hidden={!visible}
-      style={frameStyle(tuning, visible)}>
+      style={frameStyle(tuning, visible && painted)}>
       <div
         style={{
           display: 'flex',
