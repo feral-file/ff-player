@@ -16,7 +16,7 @@ import { useEffect, useMemo, useState } from 'react';
 const WAIT_FOR_WORK_MS = 15000;
 
 type CardKind = CardContent['kind'];
-interface Step {
+export interface Step {
   kind: CardKind;
   seconds: number;
 }
@@ -109,14 +109,30 @@ export function stepsFor(
  * one held until the work is on screen (or WAIT_FOR_WORK_MS passes).
  * Returns the current step index and whether a card covers the screen.
  */
-function useCardClock(showingKey: string, steps: Step[], workIsUp: boolean) {
-  const [state, setState] = useState({ key: '', step: 0, timeUp: false });
+export function useCardClock(
+  showingKey: string,
+  steps: Step[],
+  workIsUp: boolean
+) {
+  const [state, setState] = useState({
+    key: '',
+    step: 0,
+    timeUp: false,
+    released: false,
+  });
   const current = state.key === showingKey ? state : null;
   const stepCount = steps.length;
   const seconds = steps[current?.step ?? 0]?.seconds ?? 0;
 
+  // A card that has left stays gone for its showing: a later change of work
+  // (the title card's showing spans many works) or a title that arrives late
+  // must not bring the black back.
   useEffect(() => {
-    setState({ key: showingKey, step: 0, timeUp: false });
+    setState(previous =>
+      previous.key === showingKey && previous.released
+        ? previous
+        : { key: showingKey, step: 0, timeUp: false, released: false }
+    );
   }, [showingKey, stepCount]);
 
   useEffect(() => {
@@ -151,11 +167,35 @@ function useCardClock(showingKey: string, steps: Step[], workIsUp: boolean) {
     };
   }, [waiting, showingKey]);
 
+  const held = waiting && !waitedOut;
+  const leaving = Boolean(current?.timeUp) && !current?.released && !held;
+  useEffect(() => {
+    if (leaving) {
+      setState(previous => ({ ...previous, released: true }));
+    }
+  }, [leaving]);
+
   const covering =
     stepCount > 0 &&
     showingKey !== '' &&
-    (!current || !current.timeUp || (waiting && !waitedOut));
+    (!current || (!current.released && (!current.timeUp || held)));
   return { step: Math.min(current?.step ?? 0, stepCount - 1), covering };
+}
+
+/**
+ * What makes two casts the same playlist for the title card's clock. The
+ * playlist's own `id` when it has one, so sending the same playlist again
+ * does not restart the card. A playlist with no `id` is known by its title
+ * and its works, so a different one still starts its own card.
+ */
+function usePlaylistIdentity(call: DP1Call | undefined, items: DP1Item[]) {
+  return useMemo(() => {
+    if (call?.id) {
+      return call.id;
+    }
+    const works = items.map((_, at) => itemIdentityFor(items, at)).join(',');
+    return `anon:${call?.title ?? ''}:${works}`;
+  }, [call?.id, call?.title, items]);
 }
 
 /**
@@ -212,7 +252,7 @@ export function useExhibitionCards(inputs: CardInputs) {
   const { artistName, title } = useTombstoneInfo(
     inputs.enabled ? item : undefined
   );
-  const playlistId = call?.id ?? '';
+  const playlistId = usePlaylistIdentity(call, playlist);
   const tick = useTitleCardTick(playlistId, tuning);
   const off = tuning.form === 'off';
   const steps = useMemo(
@@ -222,13 +262,19 @@ export function useExhibitionCards(inputs: CardInputs) {
       }
       // Every other title card may stay a second length, to compare the two.
       const alternate = tuning.titleSecondsAlt > 0 && tick % 2 === 1;
-      return stepsFor(call, item, index, tuning).map(owed =>
+      const owedSteps = stepsFor(call, item, index, tuning);
+      // The title card's seconds start when there is a title to read: a
+      // title that comes from a remote manifest may arrive late.
+      if (off && !title) {
+        return [];
+      }
+      return owedSteps.map(owed =>
         owed.kind === 'title' && alternate
           ? { ...owed, seconds: tuning.titleSecondsAlt }
           : owed
       );
     },
-    [inputs.enabled, call, item, index, tuning, tick]
+    [inputs.enabled, call, item, index, tuning, tick, off, title]
   );
   const workIsUp =
     item !== undefined &&
