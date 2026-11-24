@@ -1,17 +1,13 @@
-'use client';
-
-import { useEffect, useState } from 'react';
-
 /**
- * Prototype knobs for the label and the cards (feral-file#3615): the values
- * Sean and Casey are settling by looking at a real screen. The player reads
- * them from `/label-tuning.json`, a static file beside the bundle, and
- * re-reads it every few seconds, so editing that file on a device changes the
- * label without a rebuild or a new display command.
- *
- * This file exists for the design session. Once the values are decided they
- * become constants and the polling goes away; nothing else may read tuning
+ * How the player names a work (feral-file#3615). Sean and Casey settled the
+ * form on an FF1 on 2026-11-24: no label over the work; a full-black title
+ * card when a playlist starts and once an hour after, for ten seconds. These
+ * are constants of the build. The design sessions read them from a file
+ * beside the bundle and polled it; that is gone, and nothing reads tuning
  * from the network.
+ *
+ * The other forms (`label`, `card`, `both`) and their knobs remain so the
+ * earlier forms can be looked at again by changing `DEFAULT_LABEL_TUNING`.
  */
 export interface LabelTuning {
   /**
@@ -65,7 +61,7 @@ export interface LabelTuning {
 }
 
 export const DEFAULT_LABEL_TUNING: LabelTuning = {
-  form: 'label',
+  form: 'off',
   episodeMinutes: 60,
   titleEveryWork: false,
   titleSeconds: 10,
@@ -87,9 +83,6 @@ export const DEFAULT_LABEL_TUNING: LabelTuning = {
   cardMuted: '#8A8A8A',
 };
 
-const TUNING_URL = '/label-tuning.json';
-const POLL_MS = 3000;
-
 /** Keeps only keys whose value has the default's type, so a typo cannot break the label. */
 export function mergeLabelTuning(raw: unknown): LabelTuning {
   const merged: Record<string, unknown> = { ...DEFAULT_LABEL_TUNING };
@@ -105,32 +98,7 @@ export function mergeLabelTuning(raw: unknown): LabelTuning {
   return merged as unknown as LabelTuning;
 }
 
-/** Current tuning; the defaults until the file is read, and whenever it is missing or malformed. */
+/** The build's tuning. A hook so its callers need not change if it ever varies by device. */
 export function useLabelTuning(): LabelTuning {
-  const [tuning, setTuning] = useState<LabelTuning>(DEFAULT_LABEL_TUNING);
-  useEffect(() => {
-    let stopped = false;
-    let lastText = '';
-    const read = () => {
-      // Inside a promise so a fetch that throws outright cannot break the route.
-      Promise.resolve()
-        .then(() => fetch(TUNING_URL, { cache: 'no-store' }))
-        .then(response => (response.ok ? response.text() : ''))
-        .then(text => {
-          if (stopped || text === lastText) {
-            return;
-          }
-          lastText = text;
-          setTuning(mergeLabelTuning(text ? JSON.parse(text) : null));
-        })
-        .catch(() => undefined);
-    };
-    read();
-    const timer = setInterval(read, POLL_MS);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-    };
-  }, []);
-  return tuning;
+  return DEFAULT_LABEL_TUNING;
 }

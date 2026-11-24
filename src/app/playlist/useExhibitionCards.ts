@@ -256,10 +256,9 @@ export function useExhibitionCards(inputs: CardInputs) {
       kind: current.kind,
       key: `${clockKey}:${String(step)}`,
       seconds: current.seconds,
-      exhibition:
-        current.kind === 'opening' || current.kind === 'title'
-          ? call?.title
-          : exhibition,
+      // The title card names the exhibition as the label did: not for a
+      // lone work, whose playlist title only repeats the work's.
+      exhibition: current.kind === 'opening' ? call?.title : exhibition,
       description:
         current.kind === 'title' && tuning.titleDescription
           ? cardDescription(
@@ -277,8 +276,9 @@ export function useExhibitionCards(inputs: CardInputs) {
     };
   }, [steps, step, call, item, clockKey, exhibition, position, artistName, title, tuning.qrUrl, tuning.titleDescription]);
 
-  // A work card with nothing to name says nothing; skip it.
-  const usable = card && (card.kind !== 'work' || card.title) ? card : null;
+  // A work or title card with nothing to name says nothing; skip it.
+  const names = card?.kind === 'work' || card?.kind === 'title';
+  const usable = card && (!names || card.title) ? card : null;
   return {
     card: usable,
     covering: covering && usable !== null,

@@ -7,10 +7,17 @@
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import { DEFAULT_LABEL_TUNING, mergeLabelTuning } from '@/utils/labelTuning';
 import { describe, expect, it } from 'vitest';
-import { curatorNames, exhibitionName, stepsFor } from './useExhibitionCards';
+import {
+  cardDescription,
+  curatorNames,
+  exhibitionName,
+  stepsFor,
+} from './useExhibitionCards';
 
 const item = (extra: Partial<DP1Item> = {}) =>
   ({ id: 'a', source: 'https://art.test/a', ...extra }) as DP1Item;
+// The earlier forms, still reachable by changing the default.
+const LABEL_FORM = mergeLabelTuning({ form: 'label' });
 const call = (extra: Partial<DP1Call> = {}) =>
   ({ dpVersion: '1.1.0', title: 'Living Code', ...extra }) as DP1Call;
 
@@ -20,7 +27,7 @@ describe('stepsFor', () => {
       call({ note: { text: 'About the show.', duration: 15 } }),
       item({ note: { text: 'About the work.' } }),
       0,
-      DEFAULT_LABEL_TUNING
+      LABEL_FORM
     );
     expect(steps).toEqual([
       { kind: 'opening', seconds: 15 },
@@ -33,7 +40,7 @@ describe('stepsFor', () => {
       call({ note: { text: 'About the show.' } }),
       item(),
       3,
-      DEFAULT_LABEL_TUNING
+      LABEL_FORM
     );
     expect(steps).toEqual([]);
   });
@@ -43,7 +50,29 @@ describe('stepsFor', () => {
     expect(stepsFor(call(), item(), 1, both)).toEqual([
       { kind: 'work', seconds: 6 },
     ]);
-    expect(stepsFor(call(), item(), 1, DEFAULT_LABEL_TUNING)).toEqual([]);
+    expect(stepsFor(call(), item(), 1, LABEL_FORM)).toEqual([]);
+  });
+
+  it('with the default form owes one title card and nothing else', () => {
+    const noted = item({ note: { text: 'A note.' } });
+    const steps = stepsFor(
+      call({ note: { text: 'Opening.' } }),
+      noted,
+      0,
+      DEFAULT_LABEL_TUNING
+    );
+    expect(steps).toEqual([
+      { kind: 'title', seconds: DEFAULT_LABEL_TUNING.titleSeconds },
+    ]);
+    expect(stepsFor(call(), undefined, 0, DEFAULT_LABEL_TUNING)).toEqual([]);
+  });
+});
+
+describe('cardDescription', () => {
+  it('keeps whole sentences up to the limit and drops the rest', () => {
+    expect(cardDescription('One. Two. Three.', 9)).toBe('One. Two.');
+    expect(cardDescription('  ')).toBeUndefined();
+    expect(cardDescription(undefined)).toBeUndefined();
   });
 });
 
