@@ -1,6 +1,7 @@
 'use client';
 
 import type { LabelTuning } from '@/utils/labelTuning';
+import { QRCodeSVG } from 'qrcode.react';
 import { CSSProperties, useEffect, useState } from 'react';
 import { designPx } from './designPx';
 
@@ -11,9 +12,11 @@ import { designPx } from './designPx';
  * - `note`: a curator's note before one work, with the work named above it.
  * - `work`: the work named on its own, when it has no note and the form asks
  *   for a card.
+ * - `title`: the title card, with labels off: season and episode top right,
+ *   the work on screen with its description, and a QR code to more.
  */
 export interface CardContent {
-  kind: 'opening' | 'note' | 'work';
+  kind: 'opening' | 'note' | 'work' | 'title';
   key: string;
   seconds: number;
   exhibition?: string;
@@ -24,6 +27,8 @@ export interface CardContent {
   noteTitle?: string;
   text?: string;
   credit?: string;
+  description?: string;
+  link?: string;
 }
 
 const FADE_MS = 900;
@@ -145,6 +150,85 @@ function Work({ card, tuning }: { card: CardContent; tuning: LabelTuning }) {
   );
 }
 
+function Title({ card, tuning }: { card: CardContent; tuning: LabelTuning }) {
+  const scale = tuning.cardScale;
+  const nameSize = designPx(44 * scale);
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        // The code's foot sits on the baseline of the last line of text.
+        alignItems: 'last baseline',
+        gap: designPx(40),
+      }}>
+      <div style={{ maxWidth: designPx(560) }}>
+        {card.artist && (
+          <div style={{ fontSize: nameSize, lineHeight: 1.12 }}>{card.artist}</div>
+        )}
+        <div
+          style={{
+            fontSize: nameSize,
+            lineHeight: 1.12,
+            fontWeight: 700,
+            fontStyle: 'italic',
+          }}>
+          {card.title}
+        </div>
+        {card.description && (
+          <div
+            style={{
+              marginTop: designPx(23),
+              maxWidth: designPx(500),
+              fontSize: designPx(21 * scale),
+              lineHeight: 1.32,
+              textWrap: 'pretty',
+              whiteSpace: 'pre-line',
+            }}>
+            {card.description}
+          </div>
+        )}
+      </div>
+      {card.link && (
+        <div
+          style={{
+            position: 'relative',
+            width: designPx(120 * scale),
+            flexShrink: 0,
+          }}>
+          <QRCodeSVG
+            value={card.link}
+            bgColor={tuning.cardBackground}
+            fgColor={tuning.cardColor}
+            marginSize={0}
+            style={{
+              display: 'block',
+              width: designPx(120 * scale),
+              height: designPx(120 * scale),
+            }}
+          />
+          {tuning.qrCaption && (
+            <div
+              style={{
+                // Hangs below the code so it does not move the alignment.
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                marginTop: designPx(8),
+                whiteSpace: 'nowrap',
+                color: tuning.cardMuted,
+                fontSize: designPx(13 * scale),
+                lineHeight: 1.25,
+              }}>
+              {tuning.qrCaption}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * Full-screen card drawn above the work. Presentational: the owning hook
  * (`useExhibitionCards`) decides which card is current and when it leaves.
@@ -194,12 +278,22 @@ export default function ExhibitionCard({
           color: tuning.cardMuted,
           letterSpacing: '0.02em',
         }}>
-        <span>{card.kind === 'opening' ? '' : card.exhibition}</span>
-        <span>{card.kind === 'opening' ? '' : card.position}</span>
+        <span>
+          {card.kind === 'opening' || card.kind === 'title' ? '' : card.exhibition}
+        </span>
+        <span>
+          {card.kind === 'opening'
+            ? ''
+            : card.kind === 'title'
+              ? card.exhibition
+              : card.position}
+        </span>
       </div>
       <div style={centered ? { margin: 'auto 0' } : undefined}>
         {card.kind === 'opening' ? (
           <Opening card={card} tuning={tuning} />
+        ) : card.kind === 'title' ? (
+          <Title card={card} tuning={tuning} />
         ) : (
           <Work card={card} tuning={tuning} />
         )}

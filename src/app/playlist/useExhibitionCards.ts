@@ -59,6 +59,22 @@ function noteSeconds(duration: number | undefined, tuning: LabelTuning): number 
     : tuning.noteSeconds;
 }
 
+/** A description cut to what a card holds: its first paragraphs, whole sentences. */
+export function cardDescription(text: string | undefined, limit = 420): string | undefined {
+  const clean = (text ?? '').replace(/\r/g, '').trim();
+  if (!clean) {
+    return undefined;
+  }
+  let out = '';
+  for (const sentence of clean.split(/(?<=[.!?])\s+/)) {
+    if (out && out.length + sentence.length + 1 > limit) {
+      break;
+    }
+    out = `${out} ${sentence}`.trim();
+  }
+  return out.length > limit ? `${out.slice(0, limit).trimEnd()}…` : out;
+}
+
 /** The cards owed before the work at `index`, in order. */
 export function stepsFor(
   call: DP1Call | undefined,
@@ -67,6 +83,13 @@ export function stepsFor(
   tuning: LabelTuning
 ): Step[] {
   const steps: Step[] = [];
+  if (tuning.form === 'off') {
+    // No label and no card per work: the title card alone, on its timer.
+    if (item) {
+      steps.push({ kind: 'title', seconds: tuning.titleSeconds });
+    }
+    return steps;
+  }
   if (index === 0 && call?.note?.text) {
     steps.push({
       kind: 'opening',
@@ -135,6 +158,28 @@ function useCardClock(showingKey: string, steps: Step[], workIsUp: boolean) {
   return { step: Math.min(current?.step ?? 0, stepCount - 1), covering };
 }
 
+/**
+ * Form `off`: counts the title card's showings for one playlist. 0 when the
+ * playlist starts, then one more every `episodeMinutes`, over whatever work
+ * is on (one work may run all day, so it cannot wait for a change of work).
+ */
+function useTitleCardTick(playlistId: string, tuning: LabelTuning): number {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    setTick(0);
+    if (tuning.form !== 'off' || tuning.episodeMinutes <= 0) {
+      return;
+    }
+    const timer = setInterval(() => {
+      setTick(previous => previous + 1);
+    }, tuning.episodeMinutes * 60000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [playlistId, tuning.form, tuning.episodeMinutes]);
+  return tick;
+}
+
 interface CardInputs {
   call: DP1Call | undefined;
   playlist: DP1Item[];
@@ -167,14 +212,32 @@ export function useExhibitionCards(inputs: CardInputs) {
   const { artistName, title } = useTombstoneInfo(
     inputs.enabled ? item : undefined
   );
+  const playlistId = call?.id ?? '';
+  const tick = useTitleCardTick(playlistId, tuning);
+  const off = tuning.form === 'off';
   const steps = useMemo(
-    () => (inputs.enabled ? stepsFor(call, item, index, tuning) : []),
-    [inputs.enabled, call, item, index, tuning]
+    () => {
+      if (!inputs.enabled) {
+        return [];
+      }
+      // Every other title card may stay a second length, to compare the two.
+      const alternate = tuning.titleSecondsAlt > 0 && tick % 2 === 1;
+      return stepsFor(call, item, index, tuning).map(owed =>
+        owed.kind === 'title' && alternate
+          ? { ...owed, seconds: tuning.titleSecondsAlt }
+          : owed
+      );
+    },
+    [inputs.enabled, call, item, index, tuning, tick]
   );
   const workIsUp =
     item !== undefined &&
     itemIdentityFor(playlist, index) === inputs.committedIdentity;
-  const { step, covering } = useCardClock(showingKey, steps, workIsUp);
+  const clockKey =
+    off && !tuning.titleEveryWork && showingKey !== ''
+      ? `${playlistId}:${String(tick)}`
+      : showingKey;
+  const { step, covering } = useCardClock(clockKey, steps, workIsUp);
   const exhibition = tuning.exhibitionLine
     ? exhibitionName(call, count)
     : undefined;
@@ -191,9 +254,19 @@ export function useExhibitionCards(inputs: CardInputs) {
     const note = current.kind === 'opening' ? call?.note : item?.note;
     return {
       kind: current.kind,
-      key: `${showingKey}:${String(step)}`,
+      key: `${clockKey}:${String(step)}`,
       seconds: current.seconds,
-      exhibition: current.kind === 'opening' ? call?.title : exhibition,
+      exhibition:
+        current.kind === 'opening' || current.kind === 'title'
+          ? call?.title
+          : exhibition,
+      description:
+        current.kind === 'title' && tuning.titleDescription
+          ? cardDescription(
+              item?.note?.text ?? item?.inlineManifest?.metadata?.description
+            )
+          : undefined,
+      link: current.kind === 'title' ? tuning.qrUrl || undefined : undefined,
       position,
       curators: curatorNames(call),
       artist: artistName,
@@ -202,7 +275,7 @@ export function useExhibitionCards(inputs: CardInputs) {
       text: note?.text,
       credit: note?.author?.name,
     };
-  }, [steps, step, call, item, showingKey, exhibition, position, artistName, title]);
+  }, [steps, step, call, item, clockKey, exhibition, position, artistName, title, tuning.qrUrl, tuning.titleDescription]);
 
   // A work card with nothing to name says nothing; skip it.
   const usable = card && (card.kind !== 'work' || card.title) ? card : null;
@@ -233,6 +306,7 @@ export function useExhibitionLabel(
   // card named the work, the label does not follow it.
   const held =
     cards.covering ||
+    labelTuning.form === 'off' ||
     (labelTuning.form === 'card' && cards.card?.kind === 'work');
   return {
     tombstoneMode: held ? TombstoneMode.Off : mode,

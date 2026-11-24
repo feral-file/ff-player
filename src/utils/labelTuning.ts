@@ -17,9 +17,29 @@ export interface LabelTuning {
   /**
    * What names a work that has no curator's note: `label` is the label over
    * the work, `card` is a full-screen card before it, `both` is the card and
-   * then the label.
+   * then the label. `off` names no work at all: no label and no work or note
+   * cards, only the title card every `episodeMinutes`.
    */
-  form: 'label' | 'card' | 'both';
+  form: 'label' | 'card' | 'both' | 'off';
+  /**
+   * With form `off`: minutes between showings of the title card (season and
+   * episode, the work on screen, its description, a QR code). It shows when
+   * the playlist starts, then on this timer for `titleSeconds`. 0 shows it
+   * only at the start.
+   */
+  episodeMinutes: number;
+  /** With form `off`: show the title card before every work instead of on the timer. */
+  titleEveryWork: boolean;
+  /** Seconds the title card stays. */
+  titleSeconds: number;
+  /** When above 0, every other title card stays this long instead, to compare two lengths. */
+  titleSecondsAlt: number;
+  /** Where the title card's QR code leads; empty draws no code. */
+  qrUrl: string;
+  /** Show the work's description on the title card; off leaves it to the page behind the QR code. */
+  titleDescription: boolean;
+  /** The line under the QR code; empty draws none. */
+  qrCaption: string;
   /** Seconds the full-screen card for a work stays. */
   cardSeconds: number;
   /** Seconds a note stays when the note sets no duration (spec default 20). */
@@ -46,6 +66,13 @@ export interface LabelTuning {
 
 export const DEFAULT_LABEL_TUNING: LabelTuning = {
   form: 'label',
+  episodeMinutes: 60,
+  titleEveryWork: false,
+  titleSeconds: 10,
+  titleSecondsAlt: 0,
+  qrUrl: '',
+  qrCaption: '',
+  titleDescription: false,
   cardSeconds: 6,
   noteSeconds: 20,
   labelSeconds: 30,
