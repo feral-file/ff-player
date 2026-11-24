@@ -9,9 +9,9 @@ import { useCardClock, type Step } from './useExhibitionCards';
 
 const TITLE: Step[] = [{ kind: 'title', seconds: 10 }];
 const advance = (ms: number) =>
-  act(() => {
+  { act(() => {
     vi.advanceTimersByTime(ms);
-  });
+  }); };
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -61,6 +61,19 @@ describe('useCardClock', () => {
     advance(9000);
     expect(result.current.covering).toBe(true);
     advance(1500);
+    expect(result.current.covering).toBe(false);
+  });
+
+  it('does not start over when a card that was up loses what it showed', () => {
+    const { result, rerender } = renderHook(
+      ({ steps }: { steps: Step[] }) => useCardClock('p:0', steps, true),
+      { initialProps: { steps: TITLE } }
+    );
+    advance(5000);
+    rerender({ steps: [] });
+    advance(100);
+    rerender({ steps: TITLE });
+    advance(100);
     expect(result.current.covering).toBe(false);
   });
 

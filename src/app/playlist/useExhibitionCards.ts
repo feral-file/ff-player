@@ -119,6 +119,7 @@ export function useCardClock(
     step: 0,
     timeUp: false,
     released: false,
+    started: false,
   });
   const current = state.key === showingKey ? state : null;
   const stepCount = steps.length;
@@ -128,11 +129,25 @@ export function useCardClock(
   // (the title card's showing spans many works) or a title that arrives late
   // must not bring the black back.
   useEffect(() => {
-    setState(previous =>
-      previous.key === showingKey && previous.released
-        ? previous
-        : { key: showingKey, step: 0, timeUp: false, released: false }
-    );
+    setState(previous => {
+      if (previous.key === showingKey) {
+        if (previous.released) {
+          return previous;
+        }
+        // A card that was up and lost what it had to show (the work changed
+        // to one with no title) has left; it does not start over.
+        if (previous.started && stepCount === 0) {
+          return { ...previous, released: true };
+        }
+      }
+      return {
+        key: showingKey,
+        step: 0,
+        timeUp: false,
+        released: false,
+        started: stepCount > 0,
+      };
+    });
   }, [showingKey, stepCount]);
 
   useEffect(() => {
@@ -186,14 +201,17 @@ export function useCardClock(
  * What makes two casts the same playlist for the title card's clock. The
  * playlist's own `id` when it has one, so sending the same playlist again
  * does not restart the card. A playlist with no `id` is known by its title
- * and its works, so a different one still starts its own card.
+ * and its works with their sources, so a different one still starts its own
+ * card.
  */
 function usePlaylistIdentity(call: DP1Call | undefined, items: DP1Item[]) {
   return useMemo(() => {
     if (call?.id) {
       return call.id;
     }
-    const works = items.map((_, at) => itemIdentityFor(items, at)).join(',');
+    const works = items
+      .map((item, at) => `${itemIdentityFor(items, at)}@${item.source}`)
+      .join(',');
     return `anon:${call?.title ?? ''}:${works}`;
   }, [call?.id, call?.title, items]);
 }
