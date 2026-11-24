@@ -22,21 +22,21 @@ export const TOMBSTONE_AUTO_DISMISS_SECONDS = 30;
 // vmin, not vh, because a rotated portrait wall reports a viewport whose
 // height is the artwork's long side (see designPx.test.ts for the contract).
 
-const containerStyle: CSSProperties = {
+const containerStyle = (scale: number): CSSProperties => ({
   position: 'absolute',
   left: 0,
   bottom: 0,
   display: 'flex',
   flexDirection: 'column',
-  gap: designPx(10),
-  padding: designPx(10),
+  gap: designPx(10 * scale),
+  padding: designPx(10 * scale),
   backgroundColor: '#FFFFFF',
   fontFamily: "'PP Mori', sans-serif",
   // Deviation from the frame's 12px, flagged for B&F review: the frame was
   // designed on a desktop canvas, and 12px-at-720 (18px on a 1080p wall)
   // sits below TV-distance legibility floors. 16px-at-720 (24px @1080p)
   // clears the floor while keeping the label quieter than a caption card.
-  fontSize: designPx(16),
+  fontSize: designPx(16 * scale),
   fontWeight: 400,
   lineHeight: 1.4,
   color: '#000000',
@@ -52,7 +52,7 @@ const containerStyle: CSSProperties = {
   pointerEvents: 'none',
   zIndex: 20,
   transition: 'opacity 300ms ease',
-};
+});
 
 const trackStyle: CSSProperties = {
   width: '100%',
@@ -135,6 +135,10 @@ export default function TombstoneOverlay({
   title,
   artistName,
   curatorName,
+  exhibitionLine,
+  seconds = TOMBSTONE_AUTO_DISMISS_SECONDS,
+  returnSeconds = 0,
+  scale = 1,
 }: {
   mode: TombstoneMode;
   // Stable identity of the playing item; every change restarts the
@@ -143,9 +147,19 @@ export default function TombstoneOverlay({
   title?: string;
   artistName?: string;
   curatorName?: string;
+  // The exhibition's name and the work's place in it ("Living Code · 2 / 18");
+  // replaces the "Curated by" line when present (feral-file#3615).
+  exhibitionLine?: string;
+  // Timed mode: how long the label stays, and how long after hiding it comes
+  // back (0 = it does not come back).
+  seconds?: number;
+  returnSeconds?: number;
+  scale?: number;
 }) {
   const [visible, setVisible] = useState(false);
+  const [showing, setShowing] = useState(0);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const returnTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   // The visibility window and the TimerBar depletion must share one clock.
   // Keying either on the title *string* would desync them: a ref-manifest
@@ -158,20 +172,30 @@ export default function TombstoneOverlay({
 
   useEffect(() => {
     clearTimeout(hideTimeoutRef.current);
+    clearTimeout(returnTimeoutRef.current);
     if (mode === TombstoneMode.Off || !hasTitle) {
       setVisible(false);
       return;
     }
-    setVisible(true);
-    if (mode === TombstoneMode.Timed) {
+    const show = () => {
+      setVisible(true);
+      setShowing(count => count + 1);
+      if (mode !== TombstoneMode.Timed) {
+        return;
+      }
       hideTimeoutRef.current = setTimeout(() => {
         setVisible(false);
-      }, TOMBSTONE_AUTO_DISMISS_SECONDS * 1000);
-    }
+        if (returnSeconds > 0) {
+          returnTimeoutRef.current = setTimeout(show, returnSeconds * 1000);
+        }
+      }, seconds * 1000);
+    };
+    show();
     return () => {
       clearTimeout(hideTimeoutRef.current);
+      clearTimeout(returnTimeoutRef.current);
     };
-  }, [mode, runKey, hasTitle]);
+  }, [mode, runKey, hasTitle, seconds, returnSeconds]);
 
   if (mode === TombstoneMode.Off || !title) {
     return null;
@@ -181,9 +205,9 @@ export default function TombstoneOverlay({
     <div
       data-testid="tombstone-overlay"
       aria-hidden={!visible}
-      style={{ ...containerStyle, opacity: visible ? 1 : 0 }}>
+      style={{ ...containerStyle(scale), opacity: visible ? 1 : 0 }}>
       {mode === TombstoneMode.Timed && visible && (
-        <TimerBar seconds={TOMBSTONE_AUTO_DISMISS_SECONDS} runKey={runKey} />
+        <TimerBar seconds={seconds} runKey={`${runKey}:${String(showing)}`} />
       )}
       {/* Timer bar, the artist+title info block, and the curated line are
           separate flex children per the design frame — the container's
@@ -192,7 +216,11 @@ export default function TombstoneOverlay({
         {artistName && <div>{artistName}</div>}
         <div style={titleStyle}>{title}</div>
       </div>
-      {curatorName && <div style={curatedStyle}>Curated by: {curatorName}</div>}
+      {exhibitionLine ? (
+        <div style={curatedStyle}>{exhibitionLine}</div>
+      ) : (
+        curatorName && <div style={curatedStyle}>Curated by: {curatorName}</div>
+      )}
     </div>
   );
 }

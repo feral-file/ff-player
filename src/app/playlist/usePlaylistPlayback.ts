@@ -4,12 +4,14 @@ import { canvasService } from '@/services/CanvasService';
 import { parseContentContext } from '@/services/contentPolicy';
 import { permitsCurrentPreview } from '@/services/contentRendering';
 import { useContentPolicy } from '@/services/custom-hooks/useContentPolicy';
+import { TombstoneMode } from '@/models/display_settings.model';
 import { useRef, useState } from 'react';
 import { useArtworkRefreshBridge } from './useArtworkRefreshBridge';
 import {
   useCurrentItemIdentity,
   useShowingKey,
 } from './useCurrentItemIdentity';
+import { useExhibitionLabel } from './useExhibitionCards';
 import { usePlaylistTimeline } from './usePlaylistTimeline';
 import { useRecentlyPlayedCommit } from './useRecentlyPlayedCommit';
 import { useTombstone } from './useTombstone';
@@ -56,14 +58,16 @@ export function usePlaylistPlayback() {
       castPreviewURL,
       contentPolicy
     );
-  const {
-    handleItemCommitted,
-    mode: tombstoneMode,
-    itemKey: tombstoneItemKey,
-    title: tombstoneTitle,
-    artistName: tombstoneArtist,
-  } = useTombstone(playlist, deviceDisplaySettings);
-  handleItemCommittedRef.current = handleItemCommitted;
+  const tombstone = useTombstone(playlist, deviceDisplaySettings);
+  handleItemCommittedRef.current = tombstone.handleItemCommitted;
+  const label = useExhibitionLabel({
+    call: castInfo?.playlist,
+    playlist,
+    currentIndex,
+    showingKey: currentShowingKey,
+    committedIdentity: tombstone.itemKey,
+    mode: permitted ? tombstone.mode : TombstoneMode.Off,
+  });
   const handleArtworkCommitted = useRecentlyPlayedCommit(
     playlist,
     playlistDefaultsSettings,
@@ -81,10 +85,10 @@ export function usePlaylistPlayback() {
     handleArtworkExhausted: timeline.artworkExhausted,
     notePreviewCommitted,
     handleArtworkCommitted,
-    tombstoneMode,
-    tombstoneItemKey,
-    tombstoneTitle,
-    tombstoneArtist,
+    ...label,
+    tombstoneItemKey: tombstone.itemKey,
+    tombstoneTitle: tombstone.title,
+    tombstoneArtist: tombstone.artistName,
     curatorName: castInfo?.playlist?.curator,
   };
 }
