@@ -1,5 +1,6 @@
 'use client';
 import ArtworkPlayer from '@/components/artwork-player/ArtworkPlayer';
+import ExhibitionCard from '@/components/tombstone/ExhibitionCard';
 import TombstoneOverlay from '@/components/tombstone/TombstoneOverlay';
 import { usePlaylistPlayback } from './usePlaylistPlayback';
 /** Presents the route snapshot; playback timing and command state live in their owners. */
@@ -21,6 +22,10 @@ export default function PlaylistClient() {
     tombstoneTitle,
     tombstoneArtist,
     curatorName,
+    labelTuning,
+    card,
+    cardVisible,
+    exhibitionLine,
   } = usePlaylistPlayback();
   return (
     <>
@@ -46,7 +51,14 @@ export default function PlaylistClient() {
             title={tombstoneTitle}
             artistName={tombstoneArtist}
             curatorName={curatorName}
+            exhibitionLine={exhibitionLine}
+            seconds={labelTuning.labelSeconds}
+            returnSeconds={labelTuning.labelReturnSeconds}
+            scale={labelTuning.labelScale}
           />
+        )}
+        {permitted && (
+          <ExhibitionCard card={card} visible={cardVisible} tuning={labelTuning} />
         )}
       </div>
     </>

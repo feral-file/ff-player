@@ -25,6 +25,29 @@ export interface DP1Call {
   // "Curated by" line (feral-file#3452); absent means the playlist did not
   // come from a curated source and the line is omitted.
   curator?: string;
+  // Playlists extension (dp1 extensions/playlists/playlist.md §3.3, §3.4):
+  // who curated the playlist, and the note shown before it begins. controld
+  // carries both through from the signed document (dp1-go models them).
+  curators?: DP1Entity[];
+  note?: DP1Note;
+}
+
+/** The fields of a DP-1 Entity (ref-manifest §4.2) the device displays. */
+export interface DP1Entity {
+  name?: string;
+  role?: string;
+}
+
+/**
+ * Playlists extension §3.4 note: text that travels with the playlist, shown
+ * before the playlist (playlist-level) or before one item (item-level).
+ * `duration` is seconds; the spec default when absent is 20.
+ */
+export interface DP1Note {
+  text: string;
+  title?: string;
+  duration?: number;
+  author?: DP1Entity;
 }
 
 export enum DP1Action {
@@ -93,6 +116,8 @@ export interface DP1Item {
   // Predates `inlineManifest` and is outranked by it; kept for playlists
   // already in the field. A resolved ref manifest outranks both.
   metadata?: RefManifestMetadata;
+  // Playlists extension §3.4: a note shown before this item.
+  note?: DP1Note;
 }
 
 export enum Scaling {
