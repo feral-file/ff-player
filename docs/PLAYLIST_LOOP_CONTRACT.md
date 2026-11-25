@@ -50,9 +50,11 @@ before expiry keeps the ordinary pacing. See `src/app/playlist/slotExpiry.ts`.
 
 A slot's duration resolves per DP-1 core §4: the item's own `duration`, then
 `playlist.defaults.duration`, and only when neither is set does the slot have
-no finite duration. That inheritance happens once, at cast/refresh admission
-(`normalizeItemDurations` in `src/services/canvas/playlistUpdates.ts`); the
-timeline and timers only see the resolved number.
+no finite duration. That inheritance happens where a list enters the player —
+cast and refresh admission, and restore of a stored boot/cast snapshot
+(`BootHydration`) — through `normalizeItemDurations` in
+`src/services/canvas/playlistUpdates.ts`; the timeline and timers only see the
+resolved number.
 
 An item with no finite duration has no slot timer. Natural media end or an
 explicit command can still advance it; absence of a timer does not itself mean
