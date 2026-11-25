@@ -31,6 +31,7 @@ import {
   filterContent,
   hasValidContentLabels,
   parseContentContext,
+  stripPlaylistSignature,
 } from '../contentPolicy';
 import { BootPlaylistStore } from './BootPlaylistStore';
 import { PlaybackSession } from './PlaybackSession';
@@ -382,11 +383,11 @@ export class PlaylistCommands {
     if (applied.ok) {
       this.boot.supersedeBootRecord(
         bootKey,
-        {
+        stripPlaylistSignature({
           ...playlist,
           defaults,
           items: normalizeItemDurations(playlist.items ?? [], defaults),
-        },
+        }),
         contentContext
       );
     }

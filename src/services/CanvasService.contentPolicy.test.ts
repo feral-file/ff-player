@@ -264,13 +264,18 @@ describe('a refresh that supersedes a boot-backed cast', () => {
     const refreshed = {
       ...playlist(item('b', 'general'), item('c', 'general')),
       defaults: { duration: 60 },
-    } as DP1Call;
+      signature: 'ed25519:refresh-sig',
+      signatures: [{ alg: 'ed25519', sig: 'refresh-sig' }],
+    } as unknown as DP1Call;
     expect(cast(refreshed, { refresh: true })?.ok).toBe(true);
 
     await vi.waitFor(() => {
       expect(read()?.playlist.items?.map(value => value.id)).toEqual(['b', 'c']);
     });
     expect(read()?.playlist.defaults?.duration).toBe(30);
+    // The rewritten projection no longer matches what was signed.
+    expect(read()?.playlist.signature).toBeUndefined();
+    expect((read()?.playlist as { signatures?: unknown }).signatures).toBeUndefined();
     expect(read()?.playlist.items?.map(value => value.duration)).toEqual([30, 30]);
   });
 
