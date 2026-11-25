@@ -27,7 +27,7 @@ vi.mock('@/utils/DeviceManager', () => ({
 /** Minimal playlist fixture for persistence assertions. */
 function makePlaylist(): DP1Call {
   return {
-    dpVersion: '1',
+    dpVersion: '1.1.0',
     id: 'active',
     title: 'active',
     items: [
@@ -44,7 +44,7 @@ const item = (id: string): DP1Item =>
   ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
 
 const playlist = (id: string): DP1Call => ({
-  dpVersion: '1',
+  dpVersion: '1.1.0',
   id,
   title: id,
   items: [item('a'), item('b')],

@@ -48,6 +48,12 @@ never report a fatal error), so a stream keeps its old pacing and the slot
 timer still ends it. A load that completes
 before expiry keeps the ordinary pacing. See `src/app/playlist/slotExpiry.ts`.
 
+A slot's duration resolves per DP-1 core §4: the item's own `duration`, then
+`playlist.defaults.duration`, and only when neither is set does the slot have
+no finite duration. That inheritance happens once, at cast/refresh admission
+(`normalizeItemDurations` in `src/services/canvas/playlistUpdates.ts`); the
+timeline and timers only see the resolved number.
+
 An item with no finite duration has no slot timer. Natural media end or an
 explicit command can still advance it; absence of a timer does not itself mean
 the route is holding the final slot. A failure at a held final slot still checks

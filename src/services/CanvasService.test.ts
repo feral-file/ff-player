@@ -1,4 +1,3 @@
-import { NO_DURATION_VALUE } from '@/constants';
 import { CastCommand } from '@/models';
 import { LoopMode } from '@/models/cast_info.model';
 import { DP1Action,type DP1Call,type DP1Item } from '@/models/dp1.model';
@@ -10,10 +9,12 @@ import { canvasService } from './CanvasService';
 const item = (id: string): DP1Item =>
   ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
 
+// Items without their own duration inherit `defaults.duration` (DP-1 core §4).
+const DEFAULT_DURATION = 10;
 const defaults = (background: string): NonNullable<DP1Call['defaults']> => ({
   display: { background },
   license: {} as NonNullable<DP1Call['defaults']>['license'],
-  duration: 10,
+  duration: DEFAULT_DURATION,
 });
 
 const playlist = (
@@ -318,7 +319,7 @@ describe('CanvasService deferred refresh', () => {
           ...currentPlaylist,
           items: currentPlaylist.items?.map(entry => ({
             ...entry,
-            duration: entry.duration ?? NO_DURATION_VALUE,
+            duration: entry.duration ?? DEFAULT_DURATION,
           })),
         },
         index: 0,
@@ -337,7 +338,7 @@ describe('CanvasService deferred refresh', () => {
       ...currentPlaylist,
       items: currentPlaylist.items?.map(entry => ({
         ...entry,
-        duration: entry.duration ?? NO_DURATION_VALUE,
+        duration: entry.duration ?? DEFAULT_DURATION,
       })),
     });
   });
@@ -367,7 +368,7 @@ describe('CanvasService deferred refresh', () => {
           ...currentPlaylist,
           items: currentPlaylist.items?.map(entry => ({
             ...entry,
-            duration: entry.duration ?? NO_DURATION_VALUE,
+            duration: entry.duration ?? DEFAULT_DURATION,
           })),
         },
         index: 1,
@@ -388,7 +389,7 @@ describe('CanvasService deferred refresh', () => {
       ...currentPlaylist,
       items: currentPlaylist.items?.map(entry => ({
         ...entry,
-        duration: entry.duration ?? NO_DURATION_VALUE,
+        duration: entry.duration ?? DEFAULT_DURATION,
       })),
     });
     expect(canvasService.getCastInfo()?.index).toBe(1);
@@ -425,7 +426,7 @@ describe('CanvasService deferred refresh', () => {
           ...currentPlaylist,
           items: currentPlaylist.items?.map(entry => ({
             ...entry,
-            duration: entry.duration ?? NO_DURATION_VALUE,
+            duration: entry.duration ?? DEFAULT_DURATION,
           })),
         },
         index: 0,
@@ -511,7 +512,7 @@ describe('CanvasService deferred refresh', () => {
           ...currentPlaylist,
           items: currentPlaylist.items?.map(entry => ({
             ...entry,
-            duration: entry.duration ?? NO_DURATION_VALUE,
+            duration: entry.duration ?? DEFAULT_DURATION,
           })),
         },
         index: 1,

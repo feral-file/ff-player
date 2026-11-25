@@ -10,7 +10,7 @@ const item = (id: string): DP1Item =>
   ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
 
 const playlist = (id: string, items: DP1Item[]): DP1Call => ({
-  dpVersion: '1',
+  dpVersion: '1.1.0',
   id,
   title: id,
   items,

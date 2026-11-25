@@ -34,6 +34,7 @@ import { findInvalidArtworkSource } from './artworkSourceValidation';
 import {
   isSamePlaylistContent,
   normalizeItemDurations,
+  sameResolvedItems,
   resolveRenderStatusForCastInfo,
   selectedPlaylistItem,
 } from './playlistUpdates';
@@ -621,9 +622,9 @@ export class PlaybackSession {
       prior?.shuffle && this.originalPlaylistItems?.length
         ? this.originalPlaylistItems
         : currentPlaylist.items;
-    const currentNormalizedItems = normalizeItemDurations(comparisonItems);
-    const normalizedItems = normalizeItemDurations(newItems ?? []);
-    if (deepEqual(currentNormalizedItems, normalizedItems)) {
+    const { defaults } = currentPlaylist;
+    const normalizedItems = normalizeItemDurations(newItems ?? [], defaults);
+    if (sameResolvedItems(comparisonItems, normalizedItems, defaults)) {
       // A refresh that matches the canonical unshuffled list during an active
       // shuffle session must not tear down the queued shuffled state or force
       // the player back to the unshuffled order.
@@ -653,13 +654,12 @@ export class PlaybackSession {
       this.originalPlaylistItems = [...normalizedItems];
     }
     const prevItems = currentPlaylist.items;
-    const prevIndex = prior.index;
     const playlistForRefresh = stripPlaylistSignature({
       ...currentPlaylist,
       items: normalizedItems,
     });
 
-    const currentItemId = selectedPlaylistItem(prevItems, prevIndex)?.id;
+    const currentItemId = selectedPlaylistItem(prevItems, prior.index)?.id;
 
     const stillInNew =
       currentItemId !== undefined &&
@@ -689,7 +689,7 @@ export class PlaybackSession {
     const index = resolveItemIndexInNewItems(
       normalizedItems,
       prevItems,
-      prevIndex
+      prior.index
     );
 
     this.setCastInfo({

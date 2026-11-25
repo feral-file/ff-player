@@ -12,7 +12,7 @@ function activeCast(): CastInfo {
     license: {},
   } as DP1Item;
   const playlist: DP1Call = {
-    dpVersion: '1',
+    dpVersion: '1.1.0',
     id: 'playlist',
     title: 'playlist',
     items: [item],

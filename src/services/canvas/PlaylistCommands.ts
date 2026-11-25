@@ -1,4 +1,3 @@
-import { NO_DURATION_VALUE } from '@/constants';
 import {
   CastCommand,
   DisplayPlaylistReply,
@@ -39,6 +38,7 @@ import { RecentPlaybackService } from './RecentPlaybackService';
 import { findInvalidArtworkSource } from './artworkSourceValidation';
 import {
   isSameSelectedArtworkIdentity,
+  normalizeItemDurations,
   refreshedSelectionIndex,
   selectedPlaylistItem,
 } from './playlistUpdates';
@@ -448,10 +448,10 @@ export class PlaylistCommands {
       contentContext,
       playlist: {
         ...request.dp1CallData,
-        items: playableItems.map(item => ({
-          ...item,
-          duration: item.duration ?? NO_DURATION_VALUE,
-        })),
+        items: normalizeItemDurations(
+          playableItems,
+          request.dp1CallData.defaults
+        ),
       },
       playlistUrl: request.playlistUrl,
       index: landing.index,

@@ -154,7 +154,7 @@ describe('AppContext persisted source compatibility', () => {
   it('restores a legacy boot playlist without revalidating its source', async () => {
     deviceManager.getItem.mockResolvedValue(null);
     deviceManager.getBootPlaylist.mockResolvedValue({
-      dpVersion: '1',
+      dpVersion: '1.1.0',
       id: 'legacy-boot',
       title: 'Legacy boot',
       items: [{ id: 'legacy-artwork', source: 'about:blank', license: {} }],
@@ -180,7 +180,7 @@ describe('AppContext persisted source compatibility', () => {
     deviceManager.getItem.mockResolvedValue(null);
     deviceManager.getBootPlaylistContentContext.mockResolvedValue('personal');
     deviceManager.getBootPlaylist.mockResolvedValue({
-      dpVersion: '1',
+      dpVersion: '1.1.0',
       id: 'personal-boot',
       title: 'Personal boot',
       items: [{ id: 'personal-artwork', source: 'about:blank', license: {} }],
@@ -207,7 +207,7 @@ describe('AppContext boot restore and Repeat', () => {
     deviceManager.getItem.mockResolvedValue(null);
     deviceManager.getLoopMode.mockResolvedValue('one');
     deviceManager.getBootPlaylist.mockResolvedValue({
-      dpVersion: '1',
+      dpVersion: '1.1.0',
       id: 'repeat-boot',
       title: 'Repeat boot',
       items: [{ id: 'kept-artwork', source: 'about:blank', license: {} }],
@@ -235,7 +235,7 @@ describe('AppContext boot restore and Repeat', () => {
     deviceManager.getCastInfo.mockResolvedValue({
       castCommand: CastCommand.displayPlaylist,
       playlist: {
-        dpVersion: '1',
+        dpVersion: '1.1.0',
         id: 'legacy-cast',
         title: 'Legacy cast',
         items: [{ id: 'legacy-artwork', source: 'about:blank', license: {} }],
@@ -270,7 +270,7 @@ describe('AppContext boot hydration — settings failure isolation', () => {
     deviceManager.getCastInfo.mockResolvedValue({
       castCommand: CastCommand.displayPlaylist,
       playlist: {
-        dpVersion: '1',
+        dpVersion: '1.1.0',
         id: 'settings-failure-cast',
         title: 'Settings failure cast',
         items: [{ id: 'artwork', source: 'https://example.com/a.png', license: {} }],
