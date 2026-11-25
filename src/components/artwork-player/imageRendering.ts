@@ -10,15 +10,22 @@ import { useEffect, useState } from 'react';
  * small factor duplicates a row or column every few pixels. A 2048 px square
  * still on a 2160 px tall screen is enlarged 1.05x, so hard edges would double
  * about every 18th line of a photograph or a fine-line drawing, where smoothing at
- * that size is barely visible. From 2x up, each source pixel covers at least
- * two device pixels and smoothing turns pixel art and low-resolution works to
- * mush, which is what this default exists to stop.
+ * that size is barely visible.
+ *
+ * Why 4x and not 2x: between 2x and 4x sit ordinary photographs and paintings
+ * of about 540 to 1080 px across, the size most wallet images arrive at. At
+ * 2x a portrait photograph cropped to a square display (Fill enlarges by the
+ * covering axis) was drawn in hard blocks (feral-file/feral-file#3645). Pixel
+ * art is far smaller (a 24 px punk is enlarged about 90x on a 2160 px screen),
+ * so from 4x up smoothing would turn it to mush, which is what this default
+ * exists to stop. Pixel art drawn larger than about 540 px is smoothed at this
+ * size unless the work says `imageRendering: "pixelated"`, which wins at any size.
  *
  * Why never on a reduction: Chromium's `pixelated` also uses nearest-neighbor
  * when shrinking, which drops source pixels outright and aliases any image
  * larger than the screen (moire, shimmering fine lines).
  */
-export const HARD_EDGE_MIN_ENLARGEMENT = 2;
+export const HARD_EDGE_MIN_ENLARGEMENT = 4;
 
 /** Natural or drawn size, in pixels. */
 export interface PixelSize {
