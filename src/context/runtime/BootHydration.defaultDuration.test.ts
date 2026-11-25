@@ -32,7 +32,7 @@ describe('BootHydration restores defaults.duration inheritance', () => {
     const setCastInfo = vi.fn();
 
     await new BootHydration({
-      initializeDisplaySettings: async () => undefined,
+      initializeDisplaySettings: () => Promise.resolve(),
       setInitialized: () => undefined,
       requestFallbackPlaylist: () => undefined,
       setCastInfo,
