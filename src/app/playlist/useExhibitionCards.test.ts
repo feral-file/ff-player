@@ -11,6 +11,7 @@ import {
   cardDescription,
   curatorNames,
   exhibitionName,
+  MAX_LINK_LENGTH,
   playlistLink,
   stepsFor,
 } from './useExhibitionCards';
@@ -89,6 +90,15 @@ describe('playlistLink', () => {
     expect(playlistLink(call(broken))).toBeUndefined();
     const noUrl = { links: [null, { type: 'article' }] } as unknown as Partial<DP1Call>;
     expect(playlistLink(call(noUrl))).toBeUndefined();
+  });
+});
+
+describe('playlistLink length', () => {
+  it('skips an address too long for a code and takes the next one', () => {
+    const long = `https://example.com/${'a'.repeat(MAX_LINK_LENGTH)}`;
+    expect(playlistLink(call({ links: [{ url: long }] }))).toBeUndefined();
+    const links = [{ url: long }, { url: 'https://feralfile.com/' }];
+    expect(playlistLink(call({ links }))).toBe('https://feralfile.com/');
   });
 });
 

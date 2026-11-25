@@ -54,9 +54,16 @@ export function exhibitionName(
 }
 
 /**
+ * The longest address the title card turns into a QR code. A longer one makes
+ * a code too dense to scan at the card's size, and past a few thousand
+ * characters the encoder throws, which would take the player down with it.
+ */
+export const MAX_LINK_LENGTH = 512;
+
+/**
  * Where the title card's QR code leads: the first of the playlist's `links`
- * that is a web address. The playlist's publisher orders them, so the first
- * is the page they want read first. No such link, no code.
+ * that is a web address short enough to scan. The playlist's publisher orders
+ * them, so the first is the page they want read first. No such link, no code.
  */
 export function playlistLink(playlist: DP1Call | undefined): string | undefined {
   const links: unknown = playlist?.links;
@@ -65,7 +72,7 @@ export function playlistLink(playlist: DP1Call | undefined): string | undefined 
   }
   for (const link of links as ({ url?: unknown } | null)[]) {
     const url = typeof link?.url === 'string' ? link.url.trim() : '';
-    if (/^https?:\/\/\S+$/i.test(url)) {
+    if (url.length <= MAX_LINK_LENGTH && /^https?:\/\/\S+$/i.test(url)) {
       return url;
     }
   }

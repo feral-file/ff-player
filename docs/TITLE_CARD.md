@@ -9,7 +9,7 @@ How the player names a work (feral-file#3615; settled by Sean and Casey on an FF
 - The card's seconds start when there is a title to show. A work whose title never arrives gets no card.
 - A playlist with no `id` is known by its title and its works, so a different one starts its own card.
 - Known limit: a new playlist that reuses an item's `id` with a different source can lose its first card after ten seconds while that work is still loading, because the committed work is known by `id` alone.
-- A QR code captioned "About this work" sits at bottom right, its foot on the baseline of the last line of text, when the playlist carries a link: the first web address in its `links` (DP-1 playlists extension). A playlist with no link gets no code. What page a publisher points it at is the publisher's choice.
+- A QR code captioned "About this work" sits at bottom right, its foot on the baseline of the last line of text, when the playlist carries a link: the first web address in its `links` (DP-1 playlists extension) of 512 characters or fewer, since a longer one makes a code too dense to scan. A playlist with no link gets no code. What page a publisher points it at is the publisher's choice.
 - A work's year is not a DP-1 field. A title shows a year only when the title carries it.
 - The owner's label setting still governs: with the label Off, no title card shows.
 - Sending the same playlist again (same `id`) does not show the card again at the start.
