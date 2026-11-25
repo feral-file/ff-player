@@ -53,6 +53,25 @@ export function exhibitionName(
   return itemCount > 1 || curated ? title : undefined;
 }
 
+/**
+ * Where the title card's QR code leads: the first of the playlist's `links`
+ * that is a web address. The playlist's publisher orders them, so the first
+ * is the page they want read first. No such link, no code.
+ */
+export function playlistLink(playlist: DP1Call | undefined): string | undefined {
+  const links: unknown = playlist?.links;
+  if (!Array.isArray(links)) {
+    return undefined;
+  }
+  for (const link of links as ({ url?: unknown } | null)[]) {
+    const url = typeof link?.url === 'string' ? link.url.trim() : '';
+    if (/^https?:\/\/\S+$/i.test(url)) {
+      return url;
+    }
+  }
+  return undefined;
+}
+
 function noteSeconds(duration: number | undefined, tuning: LabelTuning): number {
   return typeof duration === 'number' && duration > 0
     ? duration
@@ -329,7 +348,7 @@ export function useExhibitionCards(inputs: CardInputs) {
               item?.note?.text ?? item?.inlineManifest?.metadata?.description
             )
           : undefined,
-      link: current.kind === 'title' ? tuning.qrUrl || undefined : undefined,
+      link: current.kind === 'title' ? playlistLink(call) : undefined,
       position,
       curators: curatorNames(call),
       artist: artistName,
@@ -338,7 +357,7 @@ export function useExhibitionCards(inputs: CardInputs) {
       text: note?.text,
       credit: note?.author?.name,
     };
-  }, [steps, step, call, item, clockKey, exhibition, position, artistName, title, tuning.qrUrl, tuning.titleDescription]);
+  }, [steps, step, call, item, clockKey, exhibition, position, artistName, title, tuning.titleDescription]);
 
   // A work or title card with nothing to name says nothing; skip it.
   const names = card?.kind === 'work' || card?.kind === 'title';

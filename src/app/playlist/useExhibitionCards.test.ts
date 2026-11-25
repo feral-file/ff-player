@@ -11,6 +11,7 @@ import {
   cardDescription,
   curatorNames,
   exhibitionName,
+  playlistLink,
   stepsFor,
 } from './useExhibitionCards';
 
@@ -65,6 +66,29 @@ describe('stepsFor', () => {
       { kind: 'title', seconds: DEFAULT_LABEL_TUNING.titleSeconds },
     ]);
     expect(stepsFor(call(), undefined, 0, DEFAULT_LABEL_TUNING)).toEqual([]);
+  });
+});
+
+describe('playlistLink', () => {
+  it('leads to the first web address among the playlist links', () => {
+    const links = [
+      { type: 'other', url: 'ipfs://bafy' },
+      { type: 'article', url: ' https://feralfile.com/exhibitions/one ' },
+      { type: 'news', url: 'https://example.com/later' },
+    ];
+    expect(playlistLink(call({ links }))).toBe(
+      'https://feralfile.com/exhibitions/one'
+    );
+  });
+
+  it('has no link for a playlist with none, or with links of the wrong shape', () => {
+    expect(playlistLink(call())).toBeUndefined();
+    expect(playlistLink(undefined)).toBeUndefined();
+    expect(playlistLink(call({ links: [] }))).toBeUndefined();
+    const broken = { links: 'https://feralfile.com/' } as unknown as Partial<DP1Call>;
+    expect(playlistLink(call(broken))).toBeUndefined();
+    const noUrl = { links: [null, { type: 'article' }] } as unknown as Partial<DP1Call>;
+    expect(playlistLink(call(noUrl))).toBeUndefined();
   });
 });
 

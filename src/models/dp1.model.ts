@@ -30,6 +30,16 @@ export interface DP1Call {
   // carries both through from the signed document (dp1-go models them).
   curators?: DP1Entity[];
   note?: DP1Note;
+  // Playlists extension `links`: pages about the playlist, in the order to
+  // show them. The title card's QR code leads to the first one.
+  links?: DP1Link[];
+}
+
+/** A DP-1 Link (ref-manifest `Link`): a typed pointer to a page elsewhere. */
+export interface DP1Link {
+  type?: string;
+  url?: string;
+  title?: string;
 }
 
 /** The fields of a DP-1 Entity (ref-manifest §4.2) the device displays. */
