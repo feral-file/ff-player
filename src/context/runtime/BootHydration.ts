@@ -2,6 +2,7 @@ import { LocalStorageItem } from '@/constants';
 import { CastCommand, CastInfo } from '@/models';
 import { canvasService } from '@/services/CanvasService';
 import { contentPolicyStore } from '@/services/ContentPolicyStore';
+import { stripPlaylistSignature } from '@/services/contentPolicy';
 import { stripEphemeralCastInfoFields } from '@/utils/castInfo';
 import DeviceManager from '@/utils/DeviceManager';
 import { normalizePlaylistIndex } from '@/utils/playlist';
@@ -212,13 +213,15 @@ export class BootHydration {
       if (castInfo.playlist?.items?.length) {
         castInfo = {
           ...castInfo,
-          playlist: {
+          // Resolved durations change the signed content, so the signature
+          // would attest a document nobody signed.
+          playlist: stripPlaylistSignature({
             ...castInfo.playlist,
             items: normalizeItemDurations(
               castInfo.playlist.items,
               castInfo.playlist.defaults
             ),
-          },
+          }),
         };
       }
 

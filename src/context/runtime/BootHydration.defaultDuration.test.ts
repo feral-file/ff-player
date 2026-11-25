@@ -42,4 +42,35 @@ describe('BootHydration restores defaults.duration inheritance', () => {
     const restored = canvasService.getCastInfo();
     expect(restored?.playlist?.items?.map(i => i.duration)).toEqual([30, 5]);
   });
+
+  it('drops the signature once durations are resolved', async () => {
+    const stored = {
+      dpVersion: '1.1.0',
+      id: 'boot',
+      title: 'boot',
+      defaults: { duration: 30 },
+      items: [item('A')],
+      signature: 'ed25519:abc',
+      signatures: [{ alg: 'ed25519', sig: 'abc' }],
+    } as unknown as DP1Call;
+    vi.spyOn(DeviceManager, 'getBootPlaylist').mockResolvedValue(stored);
+    vi.spyOn(DeviceManager, 'getItem').mockResolvedValue(null);
+    vi.spyOn(DeviceManager, 'getLoopMode').mockResolvedValue(
+      undefined as never
+    );
+
+    await new BootHydration({
+      initializeDisplaySettings: () => Promise.resolve(),
+      setInitialized: () => undefined,
+      requestFallbackPlaylist: () => undefined,
+      setCastInfo: vi.fn(),
+      navigateToHomePage: () => undefined,
+    }).initialize();
+
+    const playlist = canvasService.getCastInfo()?.playlist as
+      | Record<string, unknown>
+      | undefined;
+    expect(playlist?.signature).toBeUndefined();
+    expect(playlist?.signatures).toBeUndefined();
+  });
 });
