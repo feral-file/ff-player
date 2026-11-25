@@ -65,8 +65,10 @@ export interface DP1Defaults {
   // autofix drop a real `?.` as "impossible", which then threw on exactly
   // this shape).
   display?: DP1DisplayPreference;
-  license: DP1License;
-  duration: number;
+  // Both optional per core §4 (`defaults` is OPTIONAL and every field in it
+  // is too); `duration` is inherited by items that omit their own.
+  license?: DP1License;
+  duration?: number;
 }
 
 export interface DP1Item {
@@ -75,7 +77,7 @@ export interface DP1Item {
   slug?: string;
   source: string;
   duration?: number;
-  license: DP1License;
+  license?: DP1License;
   ref?: string; // URL ipfs:// or https://... (content-addressed preferred)
   refHash?: string; // When "ref" uses HTTPS, the "refHash" field is required for integrity.
   // Curator judgments carried by the signed item, never manifest defaults.

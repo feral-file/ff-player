@@ -53,7 +53,7 @@ function select(index: number) {
   canvasService.setCastInfo(
     {
       castCommand: CastCommand.displayPlaylist,
-      playlist: { dpVersion: '1', title: 'Contract', items: works },
+      playlist: { dpVersion: '1.1.0', title: 'Contract', items: works },
       index,
     },
     false

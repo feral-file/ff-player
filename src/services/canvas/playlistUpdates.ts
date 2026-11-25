@@ -1,14 +1,37 @@
 import { NO_DURATION_VALUE } from '@/constants';
 import { CastInfo, RenderStatus } from '@/models';
-import { DP1Item } from '@/models/dp1.model';
+import { DP1Defaults, DP1Item } from '@/models/dp1.model';
 import { deepEqual } from '@/utils/helper';
 
-/** Normalize omitted durations identically for display and refresh comparisons. */
-export function normalizeItemDurations(items: DP1Item[]): DP1Item[] {
+/**
+ * Normalize omitted durations identically for display and refresh comparisons.
+ *
+ * DP-1 core §4 resolves a slot's duration from the item's own `duration`,
+ * then `playlist.defaults.duration`; only when neither is set does the player
+ * hold the slot (NO_DURATION_VALUE). This is the single admission-time place
+ * that inheritance happens: the timeline and timer paths downstream only ever
+ * see the resolved number.
+ */
+export function normalizeItemDurations(
+  items: DP1Item[],
+  defaults?: Pick<DP1Defaults, 'duration'> | null
+): DP1Item[] {
   return items.map(item => ({
     ...item,
-    duration: item.duration ?? NO_DURATION_VALUE,
+    duration: item.duration ?? defaults?.duration ?? NO_DURATION_VALUE,
   }));
+}
+
+/**
+ * True when `current` equals the already-normalized `next` once `current`'s
+ * own omitted durations are resolved the same way (refresh no-op check).
+ */
+export function sameResolvedItems(
+  current: DP1Item[],
+  next: DP1Item[],
+  defaults?: Pick<DP1Defaults, 'duration'> | null
+): boolean {
+  return deepEqual(normalizeItemDurations(current, defaults), next);
 }
 
 /**

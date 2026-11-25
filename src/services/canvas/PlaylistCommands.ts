@@ -1,4 +1,3 @@
-import { NO_DURATION_VALUE } from '@/constants';
 import {
   CastCommand,
   DisplayPlaylistReply,
@@ -32,6 +31,7 @@ import {
   filterContent,
   hasValidContentLabels,
   parseContentContext,
+  stripPlaylistSignature,
 } from '../contentPolicy';
 import { BootPlaylistStore } from './BootPlaylistStore';
 import { PlaybackSession } from './PlaybackSession';
@@ -39,6 +39,7 @@ import { RecentPlaybackService } from './RecentPlaybackService';
 import { findInvalidArtworkSource } from './artworkSourceValidation';
 import {
   isSameSelectedArtworkIdentity,
+  normalizeItemDurations,
   refreshedSelectionIndex,
   selectedPlaylistItem,
 } from './playlistUpdates';
@@ -360,12 +361,35 @@ export class PlaylistCommands {
       }
       return { ok: false, error: 'contentBlocked' };
     }
+    return this.applyRefresh(filtered.playlist, bootKey, contentContext);
+  }
+
+  /**
+   * Apply an accepted refresh live, then carry it into the boot record. The
+   * record keeps the ACTIVE playlist's defaults and resolved durations, as live
+   * playback does (`PlaybackSession.refreshPlaylist`); otherwise a restart
+   * would re-resolve the incoming document against its own, different defaults.
+   */
+  private applyRefresh(
+    playlist: DP1Call,
+    bootKey: Parameters<BootPlaylistStore['supersedeBootRecord']>[0],
+    contentContext: ContentContext
+  ): DisplayPlaylistReply {
+    const defaults = this.session.castInfo?.playlist?.defaults;
     const applied = this.session.refreshPlaylist(
-      filtered.playlist.items,
+      playlist.items,
       contentContext
     );
     if (applied.ok) {
-      this.boot.supersedeBootRecord(bootKey, filtered.playlist, contentContext);
+      this.boot.supersedeBootRecord(
+        bootKey,
+        stripPlaylistSignature({
+          ...playlist,
+          defaults,
+          items: normalizeItemDurations(playlist.items ?? [], defaults),
+        }),
+        contentContext
+      );
     }
     return applied;
   }
@@ -448,10 +472,10 @@ export class PlaylistCommands {
       contentContext,
       playlist: {
         ...request.dp1CallData,
-        items: playableItems.map(item => ({
-          ...item,
-          duration: item.duration ?? NO_DURATION_VALUE,
-        })),
+        items: normalizeItemDurations(
+          playableItems,
+          request.dp1CallData.defaults
+        ),
       },
       playlistUrl: request.playlistUrl,
       index: landing.index,

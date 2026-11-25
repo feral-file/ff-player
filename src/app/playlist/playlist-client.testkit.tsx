@@ -34,7 +34,7 @@ export function canvasInternals(): {
 
 export function dp1Call(id: string, items: DP1Item[]): DP1Call {
   return {
-    dpVersion: '1',
+    dpVersion: '1.1.0',
     id,
     title: id,
     items,

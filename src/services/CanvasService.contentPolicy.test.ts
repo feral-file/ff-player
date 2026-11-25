@@ -250,6 +250,35 @@ describe('a refresh that supersedes a boot-backed cast', () => {
     });
   });
 
+  it('stores refreshed items with the live defaults and resolved durations', async () => {
+    const read = bootStore();
+    const boot = {
+      ...playlist(item('a', 'general')),
+      defaults: { duration: 30 },
+    } as DP1Call;
+    expect(cast(boot, { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
+    await vi.waitFor(() => { expect(read()).not.toBeNull(); });
+
+    // The refresh omits item durations and brings its own, different defaults;
+    // live playback keeps the active playlist's 30s, so the record must too.
+    const refreshed = {
+      ...playlist(item('b', 'general'), item('c', 'general')),
+      defaults: { duration: 60 },
+      signature: 'ed25519:refresh-sig',
+      signatures: [{ alg: 'ed25519', sig: 'refresh-sig' }],
+    } as unknown as DP1Call;
+    expect(cast(refreshed, { refresh: true })?.ok).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(read()?.playlist.items?.map(value => value.id)).toEqual(['b', 'c']);
+    });
+    expect(read()?.playlist.defaults?.duration).toBe(30);
+    // The rewritten projection no longer matches what was signed.
+    expect(read()?.playlist.signature).toBeUndefined();
+    expect((read()?.playlist as { signatures?: unknown }).signatures).toBeUndefined();
+    expect(read()?.playlist.items?.map(value => value.duration)).toEqual([30, 30]);
+  });
+
   it('rewrites the boot record when a refresh narrows its content context', async () => {
     const read = bootStore();
     const boot = playlist(item('mature', 'mature'), item('general', 'general'));
