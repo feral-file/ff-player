@@ -100,6 +100,13 @@ describe('playlistLink length', () => {
     const links = [{ url: long }, { url: 'https://feralfile.com/' }];
     expect(playlistLink(call({ links }))).toBe('https://feralfile.com/');
   });
+
+  it('hands the encoder plain ASCII whatever the playlist wrote', () => {
+    const links = [{ url: 'https://example.com/\ud800 a' }];
+    const link = playlistLink(call({ links })) ?? '';
+    expect(link).toMatch(/^https:\/\/example\.com\/[\x21-\x7e]+$/);
+    expect(playlistLink(call({ links: [{ url: 'not an address' }] }))).toBeUndefined();
+  });
 });
 
 describe('cardDescription', () => {

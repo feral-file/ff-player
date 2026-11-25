@@ -71,12 +71,28 @@ export function playlistLink(playlist: DP1Call | undefined): string | undefined 
     return undefined;
   }
   for (const link of links as ({ url?: unknown } | null)[]) {
-    const url = typeof link?.url === 'string' ? link.url.trim() : '';
-    if (url.length <= MAX_LINK_LENGTH && /^https?:\/\/\S+$/i.test(url)) {
+    const url = webAddress(typeof link?.url === 'string' ? link.url : '');
+    if (url) {
       return url;
     }
   }
   return undefined;
+}
+
+/**
+ * The address as the URL parser writes it: ASCII only, so whatever a
+ * playlist puts in `url` (spaces, broken Unicode) cannot make the QR
+ * encoder throw. Not http(s), unparseable or too long: no address.
+ */
+function webAddress(raw: string): string | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw.trim());
+  } catch {
+    return undefined;
+  }
+  const web = parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  return web && parsed.href.length <= MAX_LINK_LENGTH ? parsed.href : undefined;
 }
 
 function noteSeconds(duration: number | undefined, tuning: LabelTuning): number {
