@@ -22,7 +22,7 @@ const playlist = (
   items: DP1Item[],
   playlistDefaults?: DP1Call['defaults']
 ): DP1Call => ({
-  dpVersion: '1',
+  dpVersion: '1.1.0',
   id,
   title: id,
   defaults: playlistDefaults,
