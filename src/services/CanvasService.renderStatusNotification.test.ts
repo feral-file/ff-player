@@ -1,22 +1,18 @@
 /** @vitest-environment jsdom */
 import { CastCommand, RenderStatus, type CastInfo } from '@/models';
-import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
 /** Render-status must remain a status-poll concern, not a replayed cast. */
 function activeCast(): CastInfo {
-  const item: DP1Item = {
-    id: 'artwork',
-    source: 'https://example.com/artwork.jpg',
-    license: {},
-  } as DP1Item;
-  const playlist: DP1Call = {
-    dpVersion: '1.1.0',
-    id: 'playlist',
+  const playlist = dp1Document({
+    id: fixtureId('playlist'),
     title: 'playlist',
-    items: [item],
-  };
+    items: [
+      { id: fixtureId('artwork'), source: 'https://example.com/artwork.jpg' },
+    ],
+  });
   return {
     castCommand: CastCommand.displayPlaylist,
     playlist,

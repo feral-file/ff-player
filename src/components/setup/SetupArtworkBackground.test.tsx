@@ -15,7 +15,6 @@
  */
 import { AppContext } from '@/context/AppContext';
 import { CastCommand, type CastInfo } from '@/models';
-import type { DP1Call } from '@/models/dp1.model';
 import { act, cleanup, render } from '@testing-library/react';
 import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -25,10 +24,13 @@ import SetupArtworkBackground, {
   RECOVERY_HANDOVER_MS,
   SAVED_WORK_RETRY_GRACE_MS,
 } from './SetupArtworkBackground';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
 const savedWork = {
   castCommand: CastCommand.displayPlaylist,
-  playlist: { items: [{ id: 'work-1' }] } as unknown as DP1Call,
+  playlist: dp1Document({
+    items: [{ id: fixtureId('work-1'), source: 'https://art.test/work-1' }],
+  }),
 } as CastInfo;
 // What `setLoop` persists on a unit with no artwork: cast state, no work.
 const loopOnlyCast = { castCommand: CastCommand.setLoop } as CastInfo;

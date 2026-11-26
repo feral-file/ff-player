@@ -7,9 +7,10 @@ import DeviceManager from '@/utils/DeviceManager';
 import { CastCommand } from '@/models';
 import { DP1Item, DP1License } from '@/models/dp1.model';
 import { RenderStatus } from '@/models/render_status.model';
+import { dp1Document, fixtureId, fixtureIds } from '@/testing/dp1Fixtures';
 
 const item = (id: string): DP1Item => ({
-  id, source: `https://art.test/${id}`, license: DP1License.Open,
+  id: fixtureId(id), source: `https://art.test/${id}`, license: DP1License.Open,
 });
 
 const history = () => canvasService.processMessage({
@@ -73,7 +74,7 @@ describe('recently played timestamps', () => {
     release();
 
     const delayedRecord = () => setRecentlyPlayed.mock.calls
-      .map(call => call[0].find(record => record.item.id === 'delayed'))
+      .map(call => call[0].find(record => record.item.id === fixtureId('delayed')))
       .find(Boolean);
     await vi.waitFor(() => { expect(delayedRecord()).toBeDefined(); });
 
@@ -173,7 +174,7 @@ describe('recently played active occurrence follows the wall', () => {
 describe('recently played active occurrence across cast replacement', () => {
   const castOf = (items: DP1Item[], index = 0, command = CastCommand.displayPlaylist) => ({
     castCommand: command, contentContext: 'curated' as const, index,
-    playlist: { dpVersion: '1.1.0', title: 'Set', items },
+    playlist: dp1Document({ title: 'Set', items }),
   });
 
   it('keeps the active occurrence while an allowed work is still painted', async () => {
@@ -253,7 +254,7 @@ describe('recently played active occurrence across cast replacement', () => {
       // The index already names the incoming work while `visible` is still
       // committed, which is why an index-derived check inspects the wrong item.
       index: 1,
-      playlist: { dpVersion: '1.1.0', title: 'Set', items: [visible, next] },
+      playlist: dp1Document({ title: 'Set', items: [visible, next] }),
     }, false);
     canvasService.recordRecentlyPlayed(visible);
     await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
@@ -262,7 +263,7 @@ describe('recently played active occurrence across cast replacement', () => {
     // selected slot does not change and only the displayed work disappears.
     await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
 
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['next']);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(fixtureIds('next'));
     expectNoActiveRecord();
   });
 
@@ -286,10 +287,10 @@ describe('recently played active occurrence under policy changes', () => {
       castCommand: CastCommand.displayPlaylist,
       contentContext: 'curated',
       index: 0,
-      playlist: { dpVersion: '1.1.0', title: 'Set', items: [
+      playlist: dp1Document({ title: 'Set', items: [
         item('unrated'),
         { ...item('allowed'), contentRating: 'general' },
-      ] },
+      ] }),
     }, false);
     canvasService.recordRecentlyPlayed(item('unrated'));
     await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });
@@ -298,7 +299,7 @@ describe('recently played active occurrence under policy changes', () => {
     // nothing else would retire the record for the work that just left.
     await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, blockUnratedCurated: true });
 
-    expect(canvasService.getCastInfo()?.playlist?.items?.[0].id).toBe('allowed');
+    expect(canvasService.getCastInfo()?.playlist?.items?.[0].id).toBe(fixtureId('allowed'));
     expectNoActiveRecord();
   });
 
@@ -307,8 +308,8 @@ describe('recently played active occurrence under policy changes', () => {
       castCommand: CastCommand.displayPlaylist,
       contentContext: 'curated',
       index: 0,
-      playlist: { dpVersion: '1.1.0', title: 'Set',
-        items: [{ ...item('allowed'), contentRating: 'general' }] },
+      playlist: dp1Document({ title: 'Set',
+        items: [{ ...item('allowed'), contentRating: 'general' }] }),
     }, false);
     canvasService.recordRecentlyPlayed({ ...item('allowed'), contentRating: 'general' });
     await vi.waitFor(() => { expect(history().activeOccurrenceKnown).toBe(true); });

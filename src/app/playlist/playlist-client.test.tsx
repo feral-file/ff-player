@@ -20,6 +20,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PlaylistClient from './playlist-client';
 import { prepareContentPolicy } from '@/services/contentPolicy.testkit';
+import { dp1Document, fixtureId, fixtureIds } from '@/testing/dp1Fixtures';
 
 beforeEach(prepareContentPolicy);
 
@@ -53,32 +54,26 @@ function canvasInternals(): {
   queuedPlaylistPending: boolean;
   deferredRefreshPlaylist: unknown;
   originalPlaylistItems: unknown;
-  refreshPlaylist: (newItems: DP1Item[] | undefined) => { ok: boolean };
+  refreshPlaylist: (incoming: DP1Call) => { ok: boolean };
 } {
   return (canvasService as unknown as { session: {
     queuedPlaylistPending: boolean;
     deferredRefreshPlaylist: unknown;
     originalPlaylistItems: unknown;
-    refreshPlaylist: (newItems: DP1Item[] | undefined) => { ok: boolean };
+    refreshPlaylist: (incoming: DP1Call) => { ok: boolean };
   } }).session;
 }
 
 function dp1Call(id: string, items: DP1Item[]): DP1Call {
-  return {
-    dpVersion: '1.1.0',
-    id,
-    title: id,
-    items,
-  };
+  return dp1Document({ id: fixtureId(id), title: id, items });
 }
 
 function item(id: string, durationSeconds: number): DP1Item {
   return {
-    id,
+    id: fixtureId(id),
     source: `https://example.com/${id}.jpg`,
-    license: {},
     duration: durationSeconds,
-  } as DP1Item;
+  };
 }
 
 function displayCast(
@@ -241,7 +236,9 @@ describe('PlaylistClient — hold completed final timed slot', () => {
       await advanceMs(1000);
       await advanceMs(1000);
 
-      const reply = canvasInternals().refreshPlaylist([item('a', 1), item('c', 1)]);
+      const reply = canvasInternals().refreshPlaylist(
+        dp1Call('pl', [item('a', 1), item('c', 1)])
+      );
       expect(reply).toEqual({ ok: true });
       expect(canvasService.hasDeferredRefreshPlaylist()).toBe(true);
 
@@ -253,10 +250,9 @@ describe('PlaylistClient — hold completed final timed slot', () => {
 
       expect(canvasService.hasQueuedPlaylistPending()).toBe(false);
       expect(canvasService.hasDeferredRefreshPlaylist()).toBe(false);
-      expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual([
-        'a',
-        'c',
-      ]);
+      expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual(
+        fixtureIds('a', 'c')
+      );
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 });

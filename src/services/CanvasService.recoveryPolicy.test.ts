@@ -5,19 +5,16 @@ import { DP1Action, DP1Call, DP1Item, DP1License } from '@/models/dp1.model';
 import DeviceManager from '@/utils/DeviceManager';
 import { canvasService } from './CanvasService';
 import { contentPolicyStore } from './ContentPolicyStore';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
 const works: DP1Item[] = ['a', 'b'].map(id => ({
-  id,
+  id: fixtureId(id),
   source: `https://art.test/${id}`,
   license: DP1License.Open,
   contentRating: 'general',
 }));
-const playlist = (items: DP1Item[]): DP1Call => ({
-  dpVersion: '1.1.0',
-  id: 'list',
-  title: 'Set',
-  items,
-});
+const playlist = (items: DP1Item[]): DP1Call =>
+  dp1Document({ id: fixtureId('list'), title: 'Set', items });
 const cast = (items: DP1Item[], refresh = false) =>
   canvasService.processMessage({
     command: CastCommand.displayPlaylist,

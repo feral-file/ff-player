@@ -6,16 +6,15 @@ import { CastCommand } from '@/models';
 import { CustomEventName } from '@/models/custom_event';
 import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
-const item = (id: string): DP1Item =>
-  ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
-
-const playlist = (id: string): DP1Call => ({
-  dpVersion: '1.1.0',
-  id,
-  title: id,
-  items: [item('A')],
+const item = (id: string): DP1Item => ({
+  id: fixtureId(id),
+  source: `https://example.com/${id}.jpg`,
 });
+
+const playlist = (id: string): DP1Call =>
+  dp1Document({ id: fixtureId(id), title: id, items: [item('A')] });
 
 // The hydration gate is one-way per page load by design, so each test gets a
 // fresh module registry (and therefore a fresh CanvasService singleton with

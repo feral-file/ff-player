@@ -24,6 +24,7 @@ import {
   item,
   teardownPlaylistWiringTest,
 } from './playlist-client.testkit';
+import { fixtureId } from '@/testing/dp1Fixtures';
 
 vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
   default: function MockArtworkPlayer(props: Record<string, unknown>) {
@@ -131,7 +132,7 @@ describe('PlaylistClient — device default duration vs ref-manifest gates', () 
     expect(canvasService.getCastInfo()?.index ?? 0).toBe(0);
 
     // End-of-stream is what advances it.
-    callSourceEnded('a');
+    callSourceEnded(fixtureId('a'));
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 

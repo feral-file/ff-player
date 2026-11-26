@@ -48,13 +48,26 @@ never report a fatal error), so a stream keeps its old pacing and the slot
 timer still ends it. A load that completes
 before expiry keeps the ordinary pacing. See `src/app/playlist/slotExpiry.ts`.
 
-A slot's duration resolves per DP-1 core §4: the item's own `duration`, then
-`playlist.defaults.duration`, and only when neither is set does the slot have
-no finite duration. That inheritance happens where a list enters the player —
-cast and refresh admission, and restore of a stored boot/cast snapshot
-(`BootHydration`) — through `normalizeItemDurations` in
-`src/services/canvas/playlistUpdates.ts`; the timeline and timers only see the
-resolved number.
+A slot's duration resolves per DP-1 core §3–§4: the item's own `duration`,
+then its `override.duration`, then `playlist.defaults.duration`, and only when
+none is set does the slot have no finite duration. It resolves at the point of
+use (`resolveItemDuration` in `src/utils/playlist.ts`) and is never written into
+the item. The playlist the player holds is the signed document it was handed,
+and `checkStatus` re-emits it, so cast, boot/cast snapshot restore, and the
+timeline all keep the items as received.
+
+A source refresh brings its own `defaults`: its items inherit those, never the
+ones of the playlist it replaces, and a change of `defaults` alone is a refresh
+too (an active shuffle keeps its order). New items and defaults are installed
+together at the next queued-promotion point, so the work on screen keeps the
+interval it was armed with. The rest of the active playlist's metadata stays,
+and the combined list no longer carries a signature. The boot record stores the
+refreshed document as received.
+
+Snapshots stored by older builds had durations written into the items under the
+original signature; restore drops the signature from any row whose items carry
+the hold sentinel or the playlist's own `defaults.duration`
+(`stripRewrittenSignature`).
 
 An item with no finite duration has no slot timer. Natural media end or an
 explicit command can still advance it; absence of a timer does not itself mean

@@ -8,9 +8,9 @@ import {
 } from '@/models/custom_event';
 import { AppContext } from '@/context/AppContext';
 import { CastCommand, CastInfo } from '@/models';
-import type { DP1Call } from '@/models/dp1.model';
 import SetupOverlay, { renderSetupPanel } from './SetupOverlay';
 import { FADE_OUT_MS } from './SetupArtworkBackground';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
 // Renders the QR value as a DOM attribute instead of drawing modules, so
 // tests can assert on the exact WIFI: payload without decoding a QR image.
@@ -386,7 +386,9 @@ describe('SetupOverlay hide and unknown-state behavior', () => {
 // SetupArtworkBackground for the design rationale.
 const savedCast = {
   castCommand: CastCommand.displayPlaylist,
-  playlist: { items: [{ id: 'work-1' }] } as unknown as DP1Call,
+  playlist: dp1Document({
+    items: [{ id: fixtureId('work-1'), source: 'https://art.test/work-1' }],
+  }),
 } as CastInfo;
 
 function overlayWithCastInfo(castInfo: CastInfo | null) {

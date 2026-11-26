@@ -14,6 +14,7 @@ import {
   itemIdentityFor,
   mergedDisplayForSlot,
   normalizePlaylistIndex,
+  resolveItemDuration,
   resolveQueuedPlaylistNextIndex,
   resolveSequentialPlaylistAdvance,
   resolveSlotDurationSeconds,
@@ -110,7 +111,8 @@ export class PlaylistTimeline {
       index,
       items: snapshot,
       loopMode: this.loop,
-      isBroken: source => canvasService.getMediaHealthHint(source) !== undefined,
+      isBroken: source =>
+        canvasService.getMediaHealthHint(source) !== undefined,
     });
     for (const item of skipped) {
       canvasService.recordPlaybackOutcome({
@@ -134,7 +136,7 @@ export class PlaylistTimeline {
       return;
     }
     const item = snapshot[normalizePlaylistIndex(index, snapshot.length)];
-    if (cause === 'sourceEnd' || isNoDurationItem(item)) {
+    if (cause === 'sourceEnd' || isNoDurationItem(item, this.defaults)) {
       this.ports.reload();
     }
   }
@@ -172,6 +174,9 @@ export class PlaylistTimeline {
       queuedPlaylist
     );
 
+    // The queued items inherit their own document's defaults, so the two are
+    // installed together (a refresh may change either).
+    this.installDefaults(canvasService.getQueuedPlaylistDefaults());
     this.ui.setPlaylist(queuedPlaylist);
     this.ui.setIndex(nextIndex);
     // Sync the selection immediately so a same-tick concurrent caller sees the
@@ -181,8 +186,6 @@ export class PlaylistTimeline {
 
     // consumeDeferredRefreshPlaylist atomically promotes the deferred refresh
     // onto castInfo so getStatus reflects the new list from the first frame.
-    // Queued refresh/shuffle only changes playlist items and index; defaults
-    // stay owned by the active playlist contract and are intentionally left as-is.
     const consumed = canvasService.consumeDeferredRefreshPlaylist(nextIndex);
     if (!consumed) {
       canvasService.clearQueuedPlaylistPending();
@@ -339,7 +342,7 @@ export class PlaylistTimeline {
         : null;
     const keepElapsed =
       preserveElapsed &&
-      duration === (currentItem.duration ?? NO_DURATION_VALUE);
+      duration === resolveItemDuration(currentItem, defaults);
     const delayMs =
       remainingMs ??
       Math.max(
@@ -357,7 +360,11 @@ export class PlaylistTimeline {
    * slot (re-checked on the same timer handle, so clearTimer and every
    * advance path cancel the wait), then gets a full slot once it is ready.
    */
-  private expire(index: number, snapshot: DP1Item[], deferredSince: number | null) {
+  private expire(
+    index: number,
+    snapshot: DP1Item[],
+    deferredSince: number | null
+  ) {
     // The timeout is firing now, so the previous handle is no longer active.
     // Clearing it lets later loop-mode changes detect a true "held on final
     // artwork" state after repeat-off stops progression.
@@ -440,13 +447,9 @@ export class PlaylistTimeline {
     this.ports.clearMergedDisplayForNewCast();
     this.loop = coerceLoopMode(castInfo.loopMode);
     if (castInfo.playlist?.items?.length) {
-      this.ui.setDefaults(castInfo.playlist.defaults ?? null);
-      this.ui.setPlaylist(
-        castInfo.playlist.items.map(item => ({
-          ...item,
-          duration: item.duration ?? NO_DURATION_VALUE,
-        }))
-      );
+      this.installDefaults(castInfo.playlist.defaults ?? null);
+      // A fresh array, so a re-issued cast of the same list re-enters its slot.
+      this.ui.setPlaylist([...castInfo.playlist.items]);
       const startIndex = normalizePlaylistIndex(
         castInfo.index ?? 0,
         castInfo.playlist.items.length
@@ -473,13 +476,8 @@ export class PlaylistTimeline {
           incoming
         )
       ) {
-        this.ui.setDefaults(castInfo.playlist.defaults ?? null);
-        this.ui.setPlaylist(
-          incoming.map(dp1Item => ({
-            ...dp1Item,
-            duration: dp1Item.duration ?? NO_DURATION_VALUE,
-          }))
-        );
+        this.installDefaults(castInfo.playlist.defaults ?? null);
+        this.ui.setPlaylist([...incoming]);
         // Canvas remaps the selection by id, so a refresh that also
         // reorders moves it. Installing the list without the resolved
         // index would render one work while the controller reports another.
@@ -533,7 +531,7 @@ export class PlaylistTimeline {
       this.ui.setIndex(castInfo.index);
       return;
     }
-    this.installCastItems(items);
+    this.installCastItems(items, castInfo.playlist?.defaults ?? null);
     const requested = normalizePlaylistIndex(castInfo.index, items.length);
     const playableIndex = this.playable(requested, items);
     if (playableIndex === requested) {
@@ -552,19 +550,22 @@ export class PlaylistTimeline {
    * mounts a different work than status names (an FF1 reported item 119 of
    * 1535 while showing item 119 % 50 = 19).
    */
-  private installCastItems(items: DP1Item[]) {
-    const installed = items.map(item => ({
-      ...item,
-      duration: item.duration ?? NO_DURATION_VALUE,
-    }));
+  private installCastItems(items: DP1Item[], defaults: DP1Defaults | null) {
+    const installed = [...items];
     // Whole items, not ids: a refresh can keep a work's id and replace its
     // source, and the screen must not keep the obsolete one.
     if (deepEqual(this.items, installed)) {
       return;
     }
     this.ports.clearMergedDisplay();
+    this.installDefaults(defaults);
     this.ui.setPlaylist(installed);
     this.items = installed;
+  }
+  /** Mirrored synchronously, like the index: a same-tick advance reads it. */
+  private installDefaults(defaults: DP1Defaults | null) {
+    this.defaults = defaults;
+    this.ui.setDefaults(defaults);
   }
   private changeLoop(castInfo: CastInfo) {
     const nextLoopMode = coerceLoopMode(castInfo.loopMode);

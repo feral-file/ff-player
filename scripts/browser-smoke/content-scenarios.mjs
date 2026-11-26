@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
+import { fixtureId } from './dp1-fixtures.mjs';
 import { pause } from './fixtures.mjs';
 import { directorySource, textDrawing } from './content-fixtures.mjs';
 
 /** Exercise native text contrast and seed-preserving navigation in the built player. */
 export async function checkArtworkContent(player) {
-  const work = (id, source) => ({
-    id,
+  const work = (name, source) => ({
+    id: fixtureId(name),
     source,
-    title: id,
+    title: name,
     duration: 120,
     license: 'open',
     contentRating: 'general',

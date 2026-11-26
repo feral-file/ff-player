@@ -15,6 +15,7 @@ import {
   daemonConnectivity,
   resetDaemonConnectivityForTests,
 } from '@/services/DaemonConnectivity';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
 type CDPTestWindow = Window & {
   handleCDPRequest: (payload: Record<string, unknown>) => string;
@@ -337,15 +338,13 @@ describe('CDPRequestHandler setup display command (rejected requests)', () => {
   });
 });
 
-const item = (id: string): DP1Item =>
-  ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
-
-const playlist = (id: string, items: DP1Item[]): DP1Call => ({
-  dpVersion: '1.1.0',
-  id,
-  title: id,
-  items,
+const item = (id: string): DP1Item => ({
+  id: fixtureId(id),
+  source: `https://example.com/${id}.jpg`,
 });
+
+const playlist = (id: string, items: DP1Item[]): DP1Call =>
+  dp1Document({ id: fixtureId(id), title: id, items });
 
 type StatusWindow = Window & { __ffosPlayerStatus?: (() => string) | null };
 

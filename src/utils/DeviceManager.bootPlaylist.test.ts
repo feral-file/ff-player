@@ -9,16 +9,23 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import DeviceManager from './DeviceManager';
 import indexedDBStorage from './IndexedDBStorage';
 import { DP1Call, DP1License } from '@/models/dp1.model';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
 /** The enum's string value; the storage mocks receive a plain string key. */
 const bootKey: string = LocalStorageItem.bootPlaylist;
 
-const playlist = (id: string): DP1Call => ({
-  dpVersion: '1.1.0',
-  id,
-  title: 'Boot set',
-  items: [{ id: `${id}-item`, source: 'https://art.test/a', license: DP1License.Open }],
-});
+const playlist = (id: string): DP1Call =>
+  dp1Document({
+    id: fixtureId(id),
+    title: 'Boot set',
+    items: [
+      {
+        id: fixtureId(`${id}-item`),
+        source: 'https://art.test/a',
+        license: DP1License.Open,
+      },
+    ],
+  });
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -56,7 +63,7 @@ describe('boot playlist and its content context', () => {
 
   it('keeps the signed document intact inside the envelope', async () => {
     vi.spyOn(indexedDBStorage, 'setItem').mockResolvedValue(undefined);
-    const signed = { ...playlist('signed-set'), signature: 'ed25519:original' };
+    const signed = { ...playlist('signed-set'), signature: 'ed25519:0123abcd' };
 
     await DeviceManager.setBootPlaylist(signed, 'curated');
 

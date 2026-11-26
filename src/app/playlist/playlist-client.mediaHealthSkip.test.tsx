@@ -17,6 +17,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PlaylistClient from './playlist-client';
 import { dp1Call, item, teardownPlaylistWiringTest } from './playlist-client.testkit';
+import { fixtureIds } from '@/testing/dp1Fixtures';
 
 beforeEach(prepareContentPolicy);
 
@@ -117,10 +118,9 @@ describe('PlaylistClient honours mediaHealth hints', () => {
 
     expect(mountedURL()).toBe(items[1].source);
     expect(canvasService.getStatus().index).toBe(1);
-    expect(canvasService.getStatus().items?.map(i => i.id)).toEqual([
-      'broken',
-      'fine',
-    ]);
+    expect(canvasService.getStatus().items?.map(i => i.id)).toEqual(
+      fixtureIds('broken', 'fine')
+    );
     expect(skipEntries().map(entry => entry.source)).toEqual([items[0].source]);
     expect(skipEntries()[0]).toMatchObject({
       kind: 'skip',
@@ -186,11 +186,9 @@ describe('PlaylistClient resolves hints on queued and replaced lists', () => {
     await advanceMs(1000);
     expect(mountedURL()).toBe(refreshed[2].source);
     expect(canvasService.getStatus().index).toBe(2);
-    expect(canvasService.getStatus().items?.map(i => i.id)).toEqual([
-      'a',
-      'x',
-      'c',
-    ]);
+    expect(canvasService.getStatus().items?.map(i => i.id)).toEqual(
+      fixtureIds('a', 'x', 'c')
+    );
     expect(skipEntries().map(entry => entry.source)).toEqual([
       refreshed[1].source,
     ]);

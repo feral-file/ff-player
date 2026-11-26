@@ -7,12 +7,19 @@ import { CastCommand } from '@/models';
 import { LocalStorageItem } from '@/constants';
 import { DP1Action, DP1Call, DP1Item, DP1License } from '@/models/dp1.model';
 import DP1ScheduleService from './DP1ScheduleService';
+import {
+  dp1Document,
+  fixtureId,
+  fixtureIds,
+  fixtureSignature,
+} from '@/testing/dp1Fixtures';
 
 const item = (id: string, contentRating?: 'general' | 'mature'): DP1Item => ({
-  id, source: `https://art.test/${id}`, license: DP1License.Open,
+  id: fixtureId(id), source: `https://art.test/${id}`, license: DP1License.Open,
   ...(contentRating ? { contentRating } : {}),
 });
-const playlist = (...items: DP1Item[]): DP1Call => ({ dpVersion: '1.1.0', title: 'Set', items });
+const playlist = (...items: DP1Item[]): DP1Call =>
+  dp1Document({ title: 'Set', items });
 const cast = (dp1_call: DP1Call, extra = {}) => canvasService.processMessage({
   command: CastCommand.displayPlaylist,
   request: { intent: { action: DP1Action.NowDisplay }, dp1_call, ...extra },
@@ -32,7 +39,7 @@ describe('content policy at playback boundaries', () => {
   it('rejects all-blocked new casts without replacing the current work', () => {
     expect(cast(playlist(item('a', 'general')))?.ok).toBe(true);
     expect(cast(playlist(item('b', 'mature')))).toEqual({ ok: false, error: 'contentBlocked' });
-    expect(canvasService.getCastInfo()?.playlist?.items?.[0].id).toBe('a');
+    expect(canvasService.getCastInfo()?.playlist?.items?.[0].id).toBe(fixtureId('a'));
   });
 
   it('filters before validating a blocked source and keeps artist controls', () => {
@@ -55,7 +62,7 @@ describe('content policy at playback boundaries', () => {
     expect(canvasService.getCastInfo()).toBeNull();
     canvasService.setCastInfo({ castCommand: CastCommand.displayPlaylist,
       playlist: playlist(item('mature', 'mature'), item('allowed', 'general')), index: 0 });
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['allowed']);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(fixtureIds('allowed'));
   });
 
   it('retires a newly mature current work on refresh even when no replacement remains', () => {
@@ -69,7 +76,7 @@ describe('content policy at playback boundaries', () => {
   it('immediately replaces newly blocked current work, never deferring it until the end', () => {
     cast(playlist(item('a'), item('b', 'general')));
     expect(cast(playlist(item('a', 'mature'), item('b', 'general')), { refresh: true })?.ok).toBe(true);
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['b']);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(fixtureIds('b'));
     expect(canvasService.getCastInfo()?.castCommand).toBe(CastCommand.displayPlaylist);
   });
 
@@ -77,7 +84,7 @@ describe('content policy at playback boundaries', () => {
 
 describe('content policy with repeated playlist slots', () => {
   const slot = (id: string, source: string, rating?: string): DP1Item => ({
-    id, source, license: DP1License.Open, ...(rating ? { contentRating: rating } : {}),
+    id: fixtureId(id), source, license: DP1License.Open, ...(rating ? { contentRating: rating } : {}),
   });
 
   // These set the on-screen work by calling recordRecentlyPlayed directly, so
@@ -164,14 +171,14 @@ describe('content policy and playlist projections', () => {
     const full = playlist(hidden, item('a', 'general'), item('b', 'general'), item('c', 'general'));
     expect(cast(full)?.ok).toBe(true);
     expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id))
-      .toEqual(['a', 'b', 'c']);
+      .toEqual(fixtureIds('a', 'b', 'c'));
     canvasService.setCastInfo({ ...canvasService.getCastInfo(), index: 1 }, false);
 
     const refreshed = playlist(hidden, item('a', 'general'),
       item('b', 'mature'), item('c', 'general'));
     expect(cast(refreshed, { refresh: true })?.ok).toBe(true);
 
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a', 'c']);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(fixtureIds('a', 'c'));
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 
@@ -184,7 +191,7 @@ describe('content policy and playlist projections', () => {
     expect(cast(playlist(item('a', 'general'), item('b', 'mature'), item('c', 'general')),
       { refresh: true })?.ok).toBe(true);
 
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a', 'c']);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(fixtureIds('a', 'c'));
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 
@@ -202,7 +209,7 @@ describe('content policy and playlist projections', () => {
     const unknown = { ...item('unknown'), contentRating: 'explicit' };
     expect(cast(playlist(unknown, item('b', 'general')))?.ok).toBe(true);
     expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id))
-      .toEqual(['unknown', 'b']);
+      .toEqual(fixtureIds('unknown', 'b'));
   });
 
   it('distinguishes malformed labels from valid content excluded by policy', () => {
@@ -214,7 +221,7 @@ describe('content policy and playlist projections', () => {
   it.each([{ items: [] }, { items: [item('b', 'general')] }])('honors daemon retirement after filtering out fresh blocked labels (%j)', ({ items }) => {
     cast(playlist(item('a')));
     expect(cast(playlist(...items), { refresh: true, retireBlockedCurrent: true })?.ok).toBe(true);
-    expect(canvasService.getCastInfo()?.playlist?.items?.some(value => value.id === 'a') ?? false).toBe(false);
+    expect(canvasService.getCastInfo()?.playlist?.items?.some(value => value.id === fixtureId('a')) ?? false).toBe(false);
   });
 
 });
@@ -246,11 +253,11 @@ describe('a refresh that supersedes a boot-backed cast', () => {
     // work returns on the next restart — content taken off the wall live comes
     // back by itself.
     await vi.waitFor(() => {
-      expect(read()?.playlist.items?.map(value => value.id)).toEqual(['keep']);
+      expect(read()?.playlist.items?.map(value => value.id)).toEqual(fixtureIds('keep'));
     });
   });
 
-  it('stores refreshed items with the live defaults and resolved durations', async () => {
+  it('stores the refreshed document as received', async () => {
     const read = bootStore();
     const boot = {
       ...playlist(item('a', 'general')),
@@ -259,24 +266,20 @@ describe('a refresh that supersedes a boot-backed cast', () => {
     expect(cast(boot, { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
     await vi.waitFor(() => { expect(read()).not.toBeNull(); });
 
-    // The refresh omits item durations and brings its own, different defaults;
-    // live playback keeps the active playlist's 30s, so the record must too.
+    // The refresh omits item durations and brings its own, different defaults:
+    // those govern its items, and nothing is written into the document.
     const refreshed = {
       ...playlist(item('b', 'general'), item('c', 'general')),
       defaults: { duration: 60 },
-      signature: 'ed25519:refresh-sig',
-      signatures: [{ alg: 'ed25519', sig: 'refresh-sig' }],
-    } as unknown as DP1Call;
+      signature: 'ed25519:ab12',
+      signatures: [{ ...fixtureSignature, sig: 'cmVmcmVzaA' }],
+    } as DP1Call;
     expect(cast(refreshed, { refresh: true })?.ok).toBe(true);
 
     await vi.waitFor(() => {
-      expect(read()?.playlist.items?.map(value => value.id)).toEqual(['b', 'c']);
+      expect(read()?.playlist.items?.map(value => value.id)).toEqual(fixtureIds('b', 'c'));
     });
-    expect(read()?.playlist.defaults?.duration).toBe(30);
-    // The rewritten projection no longer matches what was signed.
-    expect(read()?.playlist.signature).toBeUndefined();
-    expect((read()?.playlist as { signatures?: unknown }).signatures).toBeUndefined();
-    expect(read()?.playlist.items?.map(value => value.duration)).toEqual([30, 30]);
+    expect(read()?.playlist).toEqual(refreshed);
   });
 
   it('rewrites the boot record when a refresh narrows its content context', async () => {
@@ -290,7 +293,7 @@ describe('a refresh that supersedes a boot-backed cast', () => {
     expect(cast(boot, { refresh: true, contentContext: 'curated' })?.ok).toBe(true);
 
     await vi.waitFor(() => { expect(read()?.contentContext).toBe('curated'); });
-    expect(read()?.playlist.items?.map(value => value.id)).toEqual(['general']);
+    expect(read()?.playlist.items?.map(value => value.id)).toEqual(fixtureIds('general'));
   });
 
   it('keeps the boot record on the latest of successive refreshes', async () => {
@@ -307,7 +310,7 @@ describe('a refresh that supersedes a boot-backed cast', () => {
     expect(cast(playlist(item('d', 'general')), { refresh: true })?.ok).toBe(true);
 
     await vi.waitFor(() => {
-      expect(read()?.playlist.items?.map(value => value.id)).toEqual(['d']);
+      expect(read()?.playlist.items?.map(value => value.id)).toEqual(fixtureIds('d'));
     });
   });
 
@@ -323,7 +326,7 @@ describe('boot-record ownership across casts', () => {
     // that refresh's projection rather than the list it was written from.
     expect(cast(playlist(item('a', 'general')), { refresh: true })?.ok).toBe(true);
     await vi.waitFor(() => {
-      expect(read()?.playlist.items?.map(value => value.id)).toEqual(['a']);
+      expect(read()?.playlist.items?.map(value => value.id)).toEqual(fixtureIds('a'));
     });
 
     // An ordinary cast takes the wall, then is refreshed. It has nothing to do
@@ -333,7 +336,7 @@ describe('boot-record ownership across casts', () => {
     expect(cast(playlist(item('x', 'general')), { refresh: true })?.ok).toBe(true);
 
     await new Promise(resolve => { setTimeout(resolve, 30); });
-    expect(read()?.playlist.items?.map(value => value.id)).toEqual(['a']);
+    expect(read()?.playlist.items?.map(value => value.id)).toEqual(fixtureIds('a'));
   });
 
   it('does not let an unrelated clearing refresh delete the boot record', async () => {
@@ -344,7 +347,7 @@ describe('boot-record ownership across casts', () => {
     await vi.waitFor(() => { expect(read()).not.toBeNull(); });
     expect(cast(playlist(item('a', 'general')), { refresh: true })?.ok).toBe(true);
     await vi.waitFor(() => {
-      expect(read()?.playlist.items?.map(value => value.id)).toEqual(['a']);
+      expect(read()?.playlist.items?.map(value => value.id)).toEqual(fixtureIds('a'));
     });
 
     // Same shape, but the unrelated cast's refresh empties the playlist, which
@@ -355,7 +358,7 @@ describe('boot-record ownership across casts', () => {
     await new Promise(resolve => { setTimeout(resolve, 30); });
     // Scoped to the boot key: other state clears on an ordinary cast.
     expect(removed).not.toHaveBeenCalledWith(LocalStorageItem.bootPlaylist);
-    expect(read()?.playlist.items?.map(value => value.id)).toEqual(['a']);
+    expect(read()?.playlist.items?.map(value => value.id)).toEqual(fixtureIds('a'));
   });
 
   it('does not let a slow refresh overwrite a newer boot cast', async () => {
@@ -372,7 +375,7 @@ describe('boot-record ownership across casts', () => {
       { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
 
     await new Promise(resolve => { setTimeout(resolve, 30); });
-    expect(read()?.playlist.items?.map(value => value.id)).toEqual(['fresh']);
+    expect(read()?.playlist.items?.map(value => value.id)).toEqual(fixtureIds('fresh'));
   });
 
   it('leaves an unrelated boot record alone', async () => {
@@ -387,7 +390,7 @@ describe('boot-record ownership across casts', () => {
     expect(cast(playlist(item('other', 'general')), { refresh: true })?.ok).toBe(true);
 
     await new Promise(resolve => { setTimeout(resolve, 20); });
-    expect(read()?.playlist.items?.map(value => value.id)).toEqual(['booted']);
+    expect(read()?.playlist.items?.map(value => value.id)).toEqual(fixtureIds('booted'));
   });
 });
 
@@ -405,7 +408,7 @@ describe('content policy reconciliation and queued controller intent', () => {
 
     expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
     expect(canvasService.hasDeferredRefreshPlaylist()).toBe(true);
-    expect(canvasService.getQueuedPlaylistItems()?.map(value => value.id)).toEqual(['queued']);
+    expect(canvasService.getQueuedPlaylistItems()?.map(value => value.id)).toEqual(fixtureIds('queued'));
   });
 
   it('drops a deferred refresh only when policy leaves nothing in it', async () => {
@@ -445,7 +448,7 @@ describe('content policy at persistence and refresh boundaries', () => {
     expect(canvasService.getCastInfo()?.contentContext).toBe('curated');
 
     await contentPolicyStore.set({ ...DEFAULT_CONTENT_POLICY, strictPersonal: true });
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a', 'b']);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(fixtureIds('a', 'b'));
   });
 
   it('stores a reclassified context even when the refreshed items are identical', async () => {
@@ -485,7 +488,7 @@ describe('content policy during a slow handoff', () => {
       selected), { refresh: true })?.ok).toBe(true);
 
     expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id))
-      .toEqual(['selected']);
+      .toEqual(fixtureIds('selected'));
   });
 
 });
@@ -514,7 +517,7 @@ describe('content policy and the selected work moving on', () => {
     // Checking only the selection would filter `onScreen` out of the projection
     // and leave it rendering under its stale labels until `selected` commits.
     expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id))
-      .toEqual(['selected']);
+      .toEqual(fixtureIds('selected'));
     expect(canvasService.getCastInfo()?.castCommand).toBe(CastCommand.displayPlaylist);
   });
 
@@ -530,7 +533,7 @@ describe('content policy and the selected work moving on', () => {
       { refresh: true, contentContext: 'curated' })?.ok).toBe(true);
 
     expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id))
-      .toEqual(['b']);
+      .toEqual(fixtureIds('b'));
   });
 
   it('does not let a refresh upgrade a curated cast to personal', () => {
@@ -542,7 +545,7 @@ describe('content policy and the selected work moving on', () => {
     expect(cast(playlist(item('a', 'general'), item('b', 'mature')),
       { refresh: true, contentContext: 'personal' })?.ok).toBe(true);
     expect(canvasService.getCastInfo()?.contentContext).toBe('curated');
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a']);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(fixtureIds('a'));
   });
 
   it('lets a refresh narrow a personal cast to curated', () => {
@@ -581,7 +584,7 @@ describe('content policy and the selected work moving on', () => {
 
     expect(reply?.ok).toBe(true);
     const [stored] = store.mock.calls[0];
-    expect(stored.items?.map(value => value.id)).toEqual(['allowed']);
+    expect(stored.items?.map(value => value.id)).toEqual(fixtureIds('allowed'));
   });
 
   it('persists only boot items this version validated', async () => {
@@ -596,14 +599,14 @@ describe('content policy and the selected work moving on', () => {
       { intent: { action: DP1Action.DisplayAtBoot } })?.ok).toBe(true);
     await vi.waitFor(() => { expect(boot).toHaveBeenCalled(); });
     const [record] = boot.mock.calls[0];
-    expect(record.items?.map(value => value.id)).toEqual(['allowed']);
+    expect(record.items?.map(value => value.id)).toEqual(fixtureIds('allowed'));
     expect(record.signature).toBeUndefined();
   });
 
   it('does not attest a refreshed item list with the previous playlist signature', () => {
-    const signed = { ...playlist(item('a'), item('b', 'general')), signature: 'ed25519:original' };
+    const signed = { ...playlist(item('a'), item('b', 'general')), signature: 'ed25519:0123abcd' };
     expect(cast(signed)?.ok).toBe(true);
-    expect(canvasService.getCastInfo()?.playlist?.signature).toBe('ed25519:original');
+    expect(canvasService.getCastInfo()?.playlist?.signature).toBe('ed25519:0123abcd');
 
     expect(cast(playlist(item('a'), item('c', 'general')), { refresh: true })?.ok).toBe(true);
 
@@ -653,7 +656,7 @@ describe('admission when the policy mirror is not yet readable', () => {
     // the daemon's repair write lands in that same broken database — so "fail
     // closed" would mean fail forever. Nothing assumed, keep playing.
     expect(cast(playlist(item('a', 'general')))?.ok).toBe(true);
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a']);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(fixtureIds('a'));
   });
 
   it('still hides mature work under the fallback default', () => {
@@ -666,7 +669,7 @@ describe('admission when the policy mirror is not yet readable', () => {
     expect(cast(playlist(item('m', 'mature'))))
       .toEqual({ ok: false, error: 'contentBlocked' });
     expect(cast(playlist(item('m', 'mature'), item('a', 'general')))?.ok).toBe(true);
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a']);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(fixtureIds('a'));
   });
 
   it('admits a cast whole while the mirror is still being read, then reconciles it', async () => {
@@ -677,7 +680,7 @@ describe('admission when the policy mirror is not yet readable', () => {
     // Filtering against the built-in default here would reject this cast
     // outright, with nothing left to reconcile once the real policy lands.
     expect(cast(playlist(item('a', 'mature')))?.ok).toBe(true);
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(['a']);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(value => value.id)).toEqual(fixtureIds('a'));
 
     snapshot.mockRestore();
     // Stand in for the hydration publish: any policy the store publishes

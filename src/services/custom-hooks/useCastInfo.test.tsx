@@ -11,6 +11,7 @@ import { canvasService } from '@/services/CanvasService';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useCastInfo from './useCastInfo';
+import { dp1Document, fixtureId, fixtureIds } from '@/testing/dp1Fixtures';
 
 const { setDeviceInfo } = vi.hoisted(() => ({
   setDeviceInfo: vi.fn<(castInfo: CastInfo | null) => Promise<void>>(() =>
@@ -26,29 +27,24 @@ vi.mock('@/utils/DeviceManager', () => ({
 
 /** Minimal playlist fixture for persistence assertions. */
 function makePlaylist(): DP1Call {
-  return {
-    dpVersion: '1.1.0',
-    id: 'active',
+  return dp1Document({
+    id: fixtureId('active'),
     title: 'active',
-    items: [
-      {
-        id: 'A',
-        source: 'https://example.com/a.jpg',
-        license: {},
-      } as DP1Item,
-    ],
-  } as DP1Call;
+    items: [{ id: fixtureId('A'), source: 'https://example.com/a.jpg' }],
+  });
 }
 
-const item = (id: string): DP1Item =>
-  ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
-
-const playlist = (id: string): DP1Call => ({
-  dpVersion: '1.1.0',
-  id,
-  title: id,
-  items: [item('a'), item('b')],
+const item = (id: string): DP1Item => ({
+  id: fixtureId(id),
+  source: `https://example.com/${id}.jpg`,
 });
+
+const playlist = (id: string): DP1Call =>
+  dp1Document({
+    id: fixtureId(id),
+    title: id,
+    items: [item('a'), item('b')],
+  });
 
 /** A two-item cast at index 1 carrying [castCommand]. */
 function castWith(castCommand: CastCommand): CastInfo {
@@ -139,10 +135,7 @@ describe('useCastInfo persistence rewrite', () => {
 
     const persisted = setDeviceInfo.mock.calls.at(-1)?.[0];
     expect(persisted?.castCommand).toBe(CastCommand.displayPlaylist);
-    expect(persisted?.playlist?.items?.map(entry => entry.id)).toEqual([
-      'a',
-      'b',
-    ]);
+    expect(persisted?.playlist?.items?.map(entry => entry.id)).toEqual(fixtureIds('a', 'b'));
     expect(persisted?.index).toBe(1);
   });
 

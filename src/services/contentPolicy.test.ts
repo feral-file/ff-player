@@ -7,9 +7,10 @@ import {
   parseContentContext,
   parseContentPolicy,
 } from './contentPolicy';
+import { dp1Document, fixtureId, fixtureIds } from '@/testing/dp1Fixtures';
 
 const work = (id: string, rating?: string): DP1Item => ({
-  id, source: `https://art.test/${id}`, license: DP1License.Open,
+  id: fixtureId(id), source: `https://art.test/${id}`, license: DP1License.Open,
   ...(rating === undefined ? {} : { contentRating: rating }),
 });
 
@@ -42,7 +43,7 @@ describe('content viewing policy', () => {
     // >= 3, so the projection silently fell back to the first work instead of
     // the one the controller asked for.
     const items = [work('a', 'general'), work('b', 'general')];
-    const source = { dpVersion: '1.1.0', title: 'Set', items };
+    const source = dp1Document({ title: 'Set', items });
 
     expect(filterContent(source, DEFAULT_CONTENT_POLICY, 'curated', 3).index).toBe(1);
     expect(filterContent(source, DEFAULT_CONTENT_POLICY, 'curated', 4).index).toBe(0);
@@ -78,13 +79,12 @@ describe('content viewing policy', () => {
   });
 
   it('filters a projection, preserves order and never reuses modified signatures', () => {
-    const source = { dpVersion: '1.1.0', title: 'Set', signature: 'signature',
-      signatures: [{ sig: 'signed-original' }],
+    const source = dp1Document({ title: 'Set', signature: 'ed25519:0123abcd',
       items: [work('a', 'general'), work('b', 'mature'), work('c')],
-    };
+    });
     const snapshot = structuredClone(source);
     const result = filterContent(source, DEFAULT_CONTENT_POLICY, 'curated', 2);
-    expect(result.playlist?.items?.map(item => item.id)).toEqual(['a', 'c']);
+    expect(result.playlist?.items?.map(item => item.id)).toEqual(fixtureIds('a', 'c'));
     expect(result.index).toBe(1);
     expect(result.playlist).not.toHaveProperty('signature');
     expect(result.playlist).not.toHaveProperty('signatures');
@@ -92,7 +92,7 @@ describe('content viewing policy', () => {
   });
 
   it('keeps an unchanged document and reports all-filtered explicitly', () => {
-    const source: DP1Call = { dpVersion: '1.1.0', title: 'Set', items: [work('a', 'general')] };
+    const source: DP1Call = dp1Document({ title: 'Set', items: [work('a', 'general')] });
     expect(filterContent(source, DEFAULT_CONTENT_POLICY, 'curated').playlist).toBe(source);
     expect(filterContent({ ...source, items: [work('b', 'mature')] },
       DEFAULT_CONTENT_POLICY, 'curated').playlist).toBeNull();

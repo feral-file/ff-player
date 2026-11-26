@@ -4,13 +4,14 @@ import { DP1Item, DP1License } from '@/models/dp1.model';
 import { ContentPolicySnapshot } from './ContentPolicyStore';
 import { DEFAULT_CONTENT_POLICY } from './contentPolicy';
 import { permitsCurrentPreview } from './contentRendering';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
-const a: DP1Item = { id: 'a', source: 'https://art.test/a', license: DP1License.Open };
-const b: DP1Item = { ...a, id: 'b', source: 'https://art.test/b' };
+const a: DP1Item = { id: fixtureId('a'), source: 'https://art.test/a', license: DP1License.Open };
+const b: DP1Item = { ...a, id: fixtureId('b'), source: 'https://art.test/b' };
 const snapshot: ContentPolicySnapshot = { policy: DEFAULT_CONTENT_POLICY, active: true,
   epoch: 1, retireEpoch: 0, hydrationFailed: false };
 const cast = (items: DP1Item[], index = 0) => ({ castCommand: CastCommand.displayPlaylist,
-  playlist: { dpVersion: '1.1.0', title: 'Art', items }, index });
+  playlist: dp1Document({ title: 'Art', items }), index });
 
 describe('final current-preview admission', () => {
   it('permits the showing work whether or not the cast has advanced past it', () => {

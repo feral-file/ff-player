@@ -11,6 +11,7 @@ import { contentPolicyStore } from '@/services/ContentPolicyStore';
 import { DEFAULT_CONTENT_POLICY } from '@/services/contentPolicy';
 import { prepareContentPolicy } from '@/services/contentPolicy.testkit';
 import PlaylistClient from './playlist-client';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
 const { getItemRef, unmounted, onCastInfo } = vi.hoisted(() => ({
   getItemRef: vi.fn(), unmounted: vi.fn(), onCastInfo: vi.fn() }));
@@ -43,12 +44,12 @@ function Harness({ initial }: { initial: CastInfo | null }) {
   return <AppContext.Provider value={value as never}><PlaylistClient /></AppContext.Provider>;
 }
 
-const mature: DP1Item = { id: 'a', source: 'https://art.test/a',
+const mature: DP1Item = { id: fixtureId('a'), source: 'https://art.test/a',
   contentRating: 'mature', license: DP1License.Open, duration: 60 };
 const cast = (item: DP1Item, personal = false): CastInfo => ({
   castCommand: CastCommand.displayPlaylist,
   contentContext: personal ? 'personal' : 'curated', index: 0,
-  playlist: { dpVersion: '1.1.0', title: 'Art', items: [item] },
+  playlist: dp1Document({ title: 'Art', items: [item] }),
 });
 
 beforeEach(prepareContentPolicy);
@@ -97,7 +98,7 @@ describe('playlist content policy media boundary', () => {
   });
 
   it('does not reload allowed artwork when an unrelated setting changes', async () => {
-    const allowed: DP1Item = { id: 'a', source: 'https://art.test/a',
+    const allowed: DP1Item = { id: fixtureId('a'), source: 'https://art.test/a',
       contentRating: 'general', license: DP1License.Open, duration: 60 };
     const initial = cast(allowed);
     canvasService.setCastInfo(initial, false);
@@ -119,13 +120,13 @@ describe('playlist content policy media boundary', () => {
 
   it('keeps the renderer mounted through an ordinary slot handoff', async () => {
     vi.useFakeTimers();
-    const first: DP1Item = { id: 'first', source: 'https://art.test/first',
+    const first: DP1Item = { id: fixtureId('first'), source: 'https://art.test/first',
       contentRating: 'general', license: DP1License.Open, duration: 1 };
-    const second: DP1Item = { id: 'second', source: 'https://art.test/second',
+    const second: DP1Item = { id: fixtureId('second'), source: 'https://art.test/second',
       contentRating: 'general', license: DP1License.Open, duration: 1 };
     const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
       contentContext: 'curated', index: 0,
-      playlist: { dpVersion: '1.1.0', title: 'Art', items: [first, second] } };
+      playlist: dp1Document({ title: 'Art', items: [first, second] }) };
     canvasService.setCastInfo(initial, false);
     render(<Harness initial={initial} />);
     await act(async () => { await Promise.resolve(); });
@@ -146,11 +147,11 @@ describe('playlist content policy media boundary', () => {
 
 describe('same-id source refresh', () => {
   it('installs a new source for the current work without blanking the wall', async () => {
-    const v1: DP1Item = { id: 'a', source: 'https://art.test/a-v1',
+    const v1: DP1Item = { id: fixtureId('a'), source: 'https://art.test/a-v1',
       contentRating: 'general', license: DP1License.Open };
     const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
       contentContext: 'curated', index: 0,
-      playlist: { dpVersion: '1.1.0', title: 'Art', items: [v1] } };
+      playlist: dp1Document({ title: 'Art', items: [v1] }) };
     canvasService.setCastInfo(initial, false);
     render(<Harness initial={initial} />);
     await act(async () => { await Promise.resolve(); });
@@ -162,8 +163,8 @@ describe('same-id source refresh', () => {
     await act(async () => {
       canvasService.processMessage({ command: CastCommand.displayPlaylist,
         request: { intent: { action: DP1Action.NowDisplay }, refresh: true,
-          dp1_call: { dpVersion: '1.1.0', title: 'Art',
-            items: [{ ...v1, source: 'https://art.test/a-v2' }] } } });
+          dp1_call: dp1Document({ title: 'Art',
+            items: [{ ...v1, source: 'https://art.test/a-v2' }] }) } });
       await Promise.resolve();
     });
 
@@ -177,13 +178,13 @@ describe('policy change during a delayed transition', () => {
     // The mock renderer never reports a commit for the second work, so the
     // first stays on screen exactly as ArtworkPlayer would keep it there
     // while the incoming slot loads.
-    const onScreen: DP1Item = { id: 'on-screen', source: 'https://art.test/on-screen',
+    const onScreen: DP1Item = { id: fixtureId('on-screen'), source: 'https://art.test/on-screen',
       license: DP1License.Open, duration: 1 };
-    const selected: DP1Item = { id: 'selected', source: 'https://art.test/selected',
+    const selected: DP1Item = { id: fixtureId('selected'), source: 'https://art.test/selected',
       contentRating: 'general', license: DP1License.Open, duration: 1 };
     const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
       contentContext: 'curated', index: 0,
-      playlist: { dpVersion: '1.1.0', title: 'Art', items: [onScreen, selected] } };
+      playlist: dp1Document({ title: 'Art', items: [onScreen, selected] }) };
     canvasService.setCastInfo(initial, false);
     render(<Harness initial={initial} />);
     await act(async () => { await Promise.resolve(); });
@@ -204,11 +205,11 @@ describe('policy change during a delayed transition', () => {
 describe('a policy write that changes nothing on screen', () => {
   it('does not restart the current slot or re-resolve its display preference', async () => {
     vi.useFakeTimers();
-    const allowed: DP1Item = { id: 'a', source: 'https://art.test/a',
+    const allowed: DP1Item = { id: fixtureId('a'), source: 'https://art.test/a',
       contentRating: 'general', license: DP1License.Open, duration: 10 };
     const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
       contentContext: 'curated', index: 0,
-      playlist: { dpVersion: '1.1.0', title: 'Art', items: [allowed] } };
+      playlist: dp1Document({ title: 'Art', items: [allowed] }) };
     canvasService.setCastInfo(initial, false);
     render(<Harness initial={initial} />);
     await act(async () => { await Promise.resolve(); });
@@ -230,13 +231,13 @@ describe('a policy write that changes nothing on screen', () => {
 
 describe('policy retiring the on-screen work mid-transition', () => {
   it('ends up showing the allowed replacement, never a stuck black wall', async () => {
-    const onScreen: DP1Item = { id: 'on-screen', source: 'https://art.test/on-screen',
+    const onScreen: DP1Item = { id: fixtureId('on-screen'), source: 'https://art.test/on-screen',
       license: DP1License.Open, duration: 1 };
-    const allowed: DP1Item = { id: 'allowed', source: 'https://art.test/allowed',
+    const allowed: DP1Item = { id: fixtureId('allowed'), source: 'https://art.test/allowed',
       contentRating: 'general', license: DP1License.Open, duration: 1 };
     const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
       contentContext: 'curated', index: 0,
-      playlist: { dpVersion: '1.1.0', title: 'Art', items: [onScreen, allowed] } };
+      playlist: dp1Document({ title: 'Art', items: [onScreen, allowed] }) };
     canvasService.setCastInfo(initial, false);
     render(<Harness initial={initial} />);
     await act(async () => { await Promise.resolve(); });
@@ -259,13 +260,13 @@ describe('policy retiring the on-screen work mid-transition', () => {
 
 describe('cross-playlist handoff', () => {
   it('keeps the outgoing renderer through an ordinary playlist replacement', async () => {
-    const a: DP1Item = { id: 'a', source: 'https://art.test/a',
+    const a: DP1Item = { id: fixtureId('a'), source: 'https://art.test/a',
       contentRating: 'general', license: DP1License.Open };
-    const b: DP1Item = { id: 'b', source: 'https://art.test/b',
+    const b: DP1Item = { id: fixtureId('b'), source: 'https://art.test/b',
       contentRating: 'general', license: DP1License.Open };
     const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
       contentContext: 'curated', index: 0,
-      playlist: { dpVersion: '1.1.0', title: 'Art', items: [a] } };
+      playlist: dp1Document({ title: 'Art', items: [a] }) };
     canvasService.setCastInfo(initial, false);
     render(<Harness initial={initial} />);
     await act(async () => { await Promise.resolve(); });
@@ -273,7 +274,7 @@ describe('cross-playlist handoff', () => {
 
     await act(async () => {
       canvasService.setCastInfo({ ...initial,
-        playlist: { dpVersion: '1.1.0', title: 'Art', items: [b] } }, true);
+        playlist: dp1Document({ title: 'Art', items: [b] }) }, true);
       await Promise.resolve();
     });
 
@@ -285,13 +286,13 @@ describe('cross-playlist handoff', () => {
   });
 
   it('renders the selection the controller reports after a reordering refresh', async () => {
-    const a: DP1Item = { id: 'a', source: 'https://art.test/a',
+    const a: DP1Item = { id: fixtureId('a'), source: 'https://art.test/a',
       contentRating: 'general', license: DP1License.Open };
-    const b: DP1Item = { id: 'b', source: 'https://art.test/b',
+    const b: DP1Item = { id: fixtureId('b'), source: 'https://art.test/b',
       contentRating: 'general', license: DP1License.Open };
     const initial: CastInfo = { castCommand: CastCommand.displayPlaylist,
       contentContext: 'curated', index: 1,
-      playlist: { dpVersion: '1.1.0', title: 'Art', items: [a, b] } };
+      playlist: dp1Document({ title: 'Art', items: [a, b] }) };
     canvasService.setCastInfo(initial, false);
     render(<Harness initial={initial} />);
     await act(async () => { await Promise.resolve(); });
@@ -303,8 +304,8 @@ describe('cross-playlist handoff', () => {
     await act(async () => {
       canvasService.processMessage({ command: CastCommand.displayPlaylist,
         request: { intent: { action: DP1Action.NowDisplay }, refresh: true,
-          dp1_call: { dpVersion: '1.1.0', title: 'Art',
-            items: [{ ...b, source: 'https://art.test/b-v2' }, a] } } });
+          dp1_call: dp1Document({ title: 'Art',
+            items: [{ ...b, source: 'https://art.test/b-v2' }, a] }) } });
       await Promise.resolve();
     });
 

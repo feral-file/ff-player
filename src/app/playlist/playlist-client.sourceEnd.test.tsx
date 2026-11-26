@@ -30,6 +30,7 @@ import {
   PlaylistHarness,
   teardownPlaylistWiringTest,
 } from './playlist-client.testkit';
+import { fixtureId } from '@/testing/dp1Fixtures';
 
 vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
   default: function MockArtworkPlayer(props: Record<string, unknown>) {
@@ -149,7 +150,7 @@ describe('PlaylistClient — source-end advance (DP-1 §4.1)', () => {
     canvasService.setCastInfo(reorderedCast, false);
     rerender(<PlaylistHarness castInfo={reorderedCast} />);
 
-    callSourceEnded('a');
+    callSourceEnded(fixtureId('a'));
     // Sequential advance from the last slot wraps back to the start.
     expect(canvasService.getCastInfo()?.index).toBe(0);
   });

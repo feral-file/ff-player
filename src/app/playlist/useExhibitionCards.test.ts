@@ -13,13 +13,18 @@ import {
   exhibitionName,
   stepsFor,
 } from './useExhibitionCards';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
 const item = (extra: Partial<DP1Item> = {}) =>
-  ({ id: 'a', source: 'https://art.test/a', ...extra }) as DP1Item;
+  ({
+    id: fixtureId('a'),
+    source: 'https://art.test/a',
+    ...extra,
+  }) as DP1Item;
 // The earlier forms, still reachable by changing the default.
 const LABEL_FORM = mergeLabelTuning({ form: 'label' });
 const call = (extra: Partial<DP1Call> = {}) =>
-  ({ dpVersion: '1.1.0', title: 'Living Code', ...extra }) as DP1Call;
+  dp1Document({ title: 'Living Code', items: [item()], ...extra });
 
 describe('stepsFor', () => {
   it('opens the exhibition with the playlist note, then the first item note', () => {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { dp1Document, fixtureId } from './dp1-fixtures.mjs';
 import { pause } from './fixtures.mjs';
 
 /** Poll actual browser state; failures identify the contract that did not settle. */
@@ -15,10 +16,10 @@ export async function until(check, label, timeout = 12000) {
   throw new Error(`Timeout: ${label}`);
 }
 
-const item = (id, source, display = {}) => ({
-  id,
+const item = (name, source, display = {}) => ({
+  id: fixtureId(name),
   source,
-  title: id,
+  title: name,
   duration: 120,
   license: 'open',
   contentRating: 'general',
@@ -53,7 +54,7 @@ export class PlayerProbe {
   async cast(items) {
     const reply = await this.command('displayPlaylist', {
       intent: { action: 'now_display' },
-      dp1_call: { dpVersion: '1.1.0', id: 'smoke', title: 'Smoke', items },
+      dp1_call: dp1Document({ id: fixtureId('smoke'), title: 'Smoke', items }),
     });
     assert.equal(reply.ok, true, JSON.stringify(reply));
   }
@@ -168,7 +169,7 @@ export async function checkImages(player) {
   assert.equal(history.records.filter(record => record.isActive).length, 1);
   assert.equal(
     history.records.find(record => record.isActive).itemId,
-    'image-b'
+    fixtureId('image-b')
   );
   player.record('overlap-end', { status: end, history });
 }

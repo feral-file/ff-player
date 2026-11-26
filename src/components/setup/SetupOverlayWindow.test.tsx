@@ -6,12 +6,12 @@
  */
 import { AppContext } from '@/context/AppContext';
 import { CastCommand, type CastInfo } from '@/models';
-import type { DP1Call } from '@/models/dp1.model';
 import { CustomEventName, SetupDisplayState } from '@/models/custom_event';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SetupOverlay from './SetupOverlay';
 import { SETUP_PANEL_WINDOW_MS } from './setupPanelWindow';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
 vi.mock('qrcode.react', () => ({
   QRCodeSVG: ({ value }: { value: string }) => <svg data-qr-value={value} />,
@@ -19,7 +19,9 @@ vi.mock('qrcode.react', () => ({
 
 const savedCast = {
   castCommand: CastCommand.displayPlaylist,
-  playlist: { items: [{ id: 'work-1' }] } as unknown as DP1Call,
+  playlist: dp1Document({
+    items: [{ id: fixtureId('work-1'), source: 'https://art.test/work-1' }],
+  }),
 } as CastInfo;
 // What `setLoop` persists on a unit with no artwork: cast state, no work.
 const loopOnlyCast = { castCommand: CastCommand.setLoop } as CastInfo;

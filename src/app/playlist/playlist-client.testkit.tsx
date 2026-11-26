@@ -17,37 +17,32 @@ import { act, cleanup } from '@testing-library/react';
 import * as React from 'react';
 import { vi } from 'vitest';
 import PlaylistClient from './playlist-client';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
 export function canvasInternals(): {
   queuedPlaylistPending: boolean;
   deferredRefreshPlaylist: unknown;
   originalPlaylistItems: unknown;
-  refreshPlaylist: (newItems: DP1Item[] | undefined) => { ok: boolean };
+  refreshPlaylist: (incoming: DP1Call) => { ok: boolean };
 } {
   return (canvasService as unknown as { session: {
     queuedPlaylistPending: boolean;
     deferredRefreshPlaylist: unknown;
     originalPlaylistItems: unknown;
-    refreshPlaylist: (newItems: DP1Item[] | undefined) => { ok: boolean };
+    refreshPlaylist: (incoming: DP1Call) => { ok: boolean };
   } }).session;
 }
 
 export function dp1Call(id: string, items: DP1Item[]): DP1Call {
-  return {
-    dpVersion: '1.1.0',
-    id,
-    title: id,
-    items,
-  };
+  return dp1Document({ id: fixtureId(id), title: id, items });
 }
 
 export function item(id: string, durationSeconds: number): DP1Item {
   return {
-    id,
+    id: fixtureId(id),
     source: `https://example.com/${id}.jpg`,
-    license: {},
     duration: durationSeconds,
-  } as DP1Item;
+  };
 }
 
 export function displayCast(

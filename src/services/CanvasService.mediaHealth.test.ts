@@ -5,16 +5,15 @@ import { DP1Action, type DP1Call, type DP1Item } from '@/models/dp1.model';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { canvasService } from './CanvasService';
 import { prepareContentPolicy } from './contentPolicy.testkit';
+import { dp1Document, fixtureId, fixtureIds } from '@/testing/dp1Fixtures';
 
-const item = (id: string): DP1Item =>
-  ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
-
-const playlist = (id: string, items: DP1Item[]): DP1Call => ({
-  dpVersion: '1.1.0',
-  id,
-  title: id,
-  items,
+const item = (id: string): DP1Item => ({
+  id: fixtureId(id),
+  source: `https://example.com/${id}.jpg`,
 });
+
+const playlist = (id: string, items: DP1Item[]): DP1Call =>
+  dp1Document({ id: fixtureId(id), title: id, items });
 
 const hintFor = (id: string) => ({
   [`https://example.com/${id}.jpg`]: {
@@ -68,7 +67,7 @@ describe('CanvasService mediaHealth contract v1', () => {
       reason: 'http_status',
     });
     expect(canvasService.getMediaHealthHint(item('a').source)).toBeUndefined();
-    expect(canvasService.getStatus().items?.map(i => i.id)).toEqual(['a', 'b']);
+    expect(canvasService.getStatus().items?.map(i => i.id)).toEqual(fixtureIds('a', 'b'));
   });
 
   it('replaces the map on every push, and an absent field on a refresh means no hints', () => {
