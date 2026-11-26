@@ -184,12 +184,12 @@ function FactoryResetPanel() {
  * user later asks to pair another phone (`showPairingQRCode` from the app),
  * so the copy must read as a general "pair the app with this frame" page —
  * not as a final setup step. The code on screen is the only way to set up
- * the first owner: its invitation makes the scanning phone the first owner,
- * on the device's Wi-Fi. The app only auto-prompts to pair when the frame has
- * no pairing yet (first claim); on an already-claimed frame the code carries
- * no invitation and is for adding another phone. The claim will only complete
- * on the LAN once the legacy relayer is gone (until then a code from this
- * screen can also enroll over it, ffos-user docs/ff1-control-v1.md §5.1).
+ * the first owner: its invitation makes the scanning phone the first owner.
+ * The phone needs sight of this screen and nothing else; it does not have to
+ * be on the device's Wi-Fi, so the panel must not ask for that (ffos-user
+ * docs/ff1-control-v1.md §5.1). The app only auto-prompts to pair when the
+ * frame has no pairing yet (first claim); on an already-claimed frame the
+ * code carries no invitation and is for adding another phone.
  */
 function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
   return (
@@ -198,21 +198,14 @@ function ClaimQrPanel({ display }: { display: SetupDisplayDetail }) {
         <p className={styles.title}>Pair with the Feral File app</p>
         {/* The code on screen is the only way to set up the first owner;
             the app does not lead from LAN discovery to setup. */}
-        {/* The same-Wi-Fi requirement leads, as its own line: the app sets
-            up a first owner only on the frame's Wi-Fi, so a phone on mobile
-            data or another network cannot finish here. The last line asks
-            to keep the code private, and must not promise more: while the
-            legacy relayer exists the QR carries its topic, and the
-            invitation in it can enroll over that relayer from anywhere
-            (ffos-user docs/ff1-control-v1.md §5.1, §11). It must also stay
-            true on every QR this panel shows: first claim, "Secure this Art
-            Computer", and an owned frame's code for another phone, which
-            carries no invitation and expires in no minutes. */}
-        <p className={styles.subtitle}>
-          Connect your phone to the same Wi-Fi as this Art Computer.
-        </p>
+        {/* The line under the QR asks to keep the code private, and must
+            not promise more: seeing the code is all it takes to become the
+            first owner, from any network. It must also stay true on every QR
+            this panel shows: first claim, "Secure this Art Computer", and an
+            owned frame's code for another phone, which carries no
+            invitation. */}
         <p className={styles.stepLabel}>
-          Then scan this code with your phone&apos;s camera or the Feral File app.
+          Scan this code with your phone&apos;s camera or the Feral File app.
         </p>
         {display.url ? (
           <>
