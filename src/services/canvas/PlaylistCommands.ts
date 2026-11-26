@@ -369,8 +369,10 @@ export class PlaylistCommands {
 
   /**
    * Apply an accepted refresh live, then carry it into the boot record. The
-   * record takes the list the session composed, not the incoming document, so
-   * metadata, order, defaults and signature state match live playback.
+   * record takes the document the session composed, not the incoming one, so
+   * metadata, defaults and signature state match the live cast. It carries no
+   * play order: while shuffled the record keeps document order, because the
+   * boot display is a Now Display and starts unshuffled.
    *
    * While the swap is deferred, the record already holds the NEW list although
    * the wall still shows the removed work: a restart in that window must not
