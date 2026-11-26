@@ -9,15 +9,40 @@ import {
 } from '@/models/dp1.model';
 
 /**
- * True when a playlist item has no usable duration set — the duration timer
- * is a no-op for these items, so same-slot replay paths must restart media
+ * The seconds a slot is authored to last: the item's own `duration`, then
+ * `override.duration`, then the playlist's `defaults.duration` (DP-1 core
+ * §3.1–§3.2, §4.1), else NO_DURATION_VALUE (hold the slot).
+ *
+ * Resolved here, at the point of use, and never written into the item: the
+ * playlist the player holds is the signed document it was handed, and
+ * `checkStatus` re-emits it, so an injected duration would publish a signature
+ * over content nobody signed (DP-1 §7.1).
+ */
+export function resolveItemDuration(
+  item: DP1Item,
+  defaults?: Pick<DP1Defaults, 'duration'> | null
+): number {
+  return (
+    item.duration ??
+    item.override?.duration ??
+    defaults?.duration ??
+    NO_DURATION_VALUE
+  );
+}
+
+/**
+ * True when a playlist slot has no usable duration — the duration timer is a
+ * no-op for these items, so same-slot replay paths must restart media
  * playback explicitly through the artwork-refresh hook.
  */
-export function isNoDurationItem(item: DP1Item | undefined): boolean {
+export function isNoDurationItem(
+  item: DP1Item | undefined,
+  defaults?: Pick<DP1Defaults, 'duration'> | null
+): boolean {
   if (!item) {
     return false;
   }
-  const duration = item.duration ?? 0;
+  const duration = resolveItemDuration(item, defaults);
   return duration <= 0 || duration >= NO_DURATION_VALUE;
 }
 
@@ -142,9 +167,8 @@ interface ResolveSlotDurationSecondsOptions {
 /**
  * Effective duration (seconds) for the slot's advance timer.
  *
- * Baseline is the item's own duration (already normalized by CanvasService:
- * missing durations arrive as NO_DURATION_VALUE, meaning the timer never
- * fires). On top of that, a device-level default duration — the viewer's
+ * Baseline is the authored duration (resolveItemDuration; NO_DURATION_VALUE
+ * means the timer never fires). On top of that, a device-level default duration — the viewer's
  * "each work displays this long" setting — replaces the baseline per DP-1
  * §4.1's device-level override rule, with two deliberate exceptions:
  *
@@ -188,7 +212,7 @@ export function resolveSlotDurationSeconds({
   deviceDefaultDurationSeconds,
   mergedDisplay = null,
 }: ResolveSlotDurationSecondsOptions): number {
-  const baseline = item.duration ?? NO_DURATION_VALUE;
+  const baseline = resolveItemDuration(item, playlistDefaults);
 
   if (deviceDefaultDurationSeconds === null) {
     return baseline;

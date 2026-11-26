@@ -5,15 +5,20 @@ import DeviceManager from '@/utils/DeviceManager';
 import { afterEach,describe,expect,it,vi } from 'vitest';
 import type { PlaybackSession } from './canvas/PlaybackSession';
 import { canvasService } from './CanvasService';
+import { dp1Document, fixtureId, fixtureIds } from '@/testing/dp1Fixtures';
 
-const item = (id: string): DP1Item =>
-  ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
+const item = (id: string): DP1Item => ({
+  id: fixtureId(id),
+  source: `https://example.com/${id}.jpg`,
+});
 
 // Items without their own duration inherit `defaults.duration` (DP-1 core §4).
 const DEFAULT_DURATION = 10;
-const defaults = (background: string): NonNullable<DP1Call['defaults']> => ({
-  display: { background },
-  license: {} as NonNullable<DP1Call['defaults']>['license'],
+const BACKGROUNDS = { red: '#ff0000', blue: '#0000ff' };
+const defaults = (
+  background: keyof typeof BACKGROUNDS
+): NonNullable<DP1Call['defaults']> => ({
+  display: { background: BACKGROUNDS[background] },
   duration: DEFAULT_DURATION,
 });
 
@@ -21,16 +26,16 @@ const playlist = (
   id: string,
   items: DP1Item[],
   playlistDefaults?: DP1Call['defaults']
-): DP1Call => ({
-  dpVersion: '1.1.0',
-  id,
-  title: id,
-  defaults: playlistDefaults,
-  items,
-});
+): DP1Call =>
+  dp1Document({
+    id: fixtureId(id),
+    title: id,
+    defaults: playlistDefaults,
+    items,
+  });
 
 const service = canvasService as unknown as {
-  refreshPlaylist(newItems: DP1Item[] | undefined): { ok: boolean };
+  refreshPlaylist(incoming: Pick<DP1Call, 'items' | 'defaults'>): { ok: boolean };
   setShuffle(request: { enabled: boolean }): { ok: boolean };
   session: PlaybackSession;
   onRefreshArtwork: (() => boolean) | null;
@@ -65,7 +70,7 @@ describe('CanvasService Now Display defaults', () => {
     const next = canvasService.getCastInfo();
     expect(next?.shuffle).toBe(false);
     expect(next?.loopMode).toBe(LoopMode.playlist);
-    expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['B', 'C']);
+    expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(fixtureIds('B', 'C'));
   });
 
   it('does not persist a rejected Display At Boot playlist', () => {
@@ -117,7 +122,7 @@ describe('CanvasService refreshArtwork', () => {
     expect(refreshSpy).toHaveBeenCalledTimes(1);
     const next = canvasService.getCastInfo();
     expect(next?.castCommand).toBe(CastCommand.displayPlaylist);
-    expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['A', 'B']);
+    expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(fixtureIds('A', 'B'));
     expect(next?.index).toBe(1);
   });
 
@@ -231,44 +236,34 @@ describe('CanvasService deferred refresh', () => {
       ['A', 'C', 'D'].map(item),
       defaults('blue')
     );
-    service.refreshPlaylist(refreshedPlaylist.items);
+    service.refreshPlaylist(refreshedPlaylist);
 
     expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
     expect(canvasService.hasDeferredRefreshPlaylist()).toBe(true);
-    expect(canvasService.getQueuedPlaylistItems()?.map(entry => entry.id)).toEqual([
-      'A',
-      'C',
-      'D',
-    ]);
+    expect(canvasService.getQueuedPlaylistItems()?.map(entry => entry.id)).toEqual(fixtureIds('A', 'C', 'D'));
 
     const castInfo = canvasService.getCastInfo();
     expect(castInfo?.castCommand).toBe(CastCommand.refreshPlaylist);
-    expect(castInfo?.playlist?.items?.map(entry => entry.id)).toEqual([
-      'A',
-      'B',
-      'C',
-    ]);
+    expect(castInfo?.playlist?.items?.map(entry => entry.id)).toEqual(fixtureIds('A', 'B', 'C'));
     expect(castInfo?.playlist?.defaults).toEqual(oldPlaylist.defaults);
     expect(castInfo?.index).toBe(1);
 
     const consumed = canvasService.consumeDeferredRefreshPlaylist(0);
-    expect(consumed?.items?.map(entry => entry.id)).toEqual(['A', 'C', 'D']);
-    expect(consumed?.defaults).toEqual(oldPlaylist.defaults);
+    expect(consumed?.items?.map(entry => entry.id)).toEqual(fixtureIds('A', 'C', 'D'));
+    expect(consumed?.defaults).toEqual(refreshedPlaylist.defaults);
     expect(canvasService.hasQueuedPlaylistPending()).toBe(false);
     expect(canvasService.hasDeferredRefreshPlaylist()).toBe(false);
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual([
-      'A',
-      'C',
-      'D',
-    ]);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual(fixtureIds('A', 'C', 'D'));
     expect(canvasService.getCastInfo()?.playlist?.defaults).toEqual(
-      oldPlaylist.defaults
+      refreshedPlaylist.defaults
     );
     expect(canvasService.getCastInfo()?.index).toBe(0);
   });
 
   it('rejects refresh when there is no active playlist', () => {
-    const result = service.refreshPlaylist(['A', 'B'].map(item));
+    const result = service.refreshPlaylist(
+      playlist('new', ['A', 'B'].map(item))
+    );
 
     expect(result).toEqual({ ok: false });
     expect(canvasService.getCastInfo()).toBeNull();
@@ -292,17 +287,13 @@ describe('CanvasService deferred refresh', () => {
       ['C', 'A', 'D'].map(item),
       defaults('blue')
     );
-    service.refreshPlaylist(refreshedPlaylist.items);
+    service.refreshPlaylist(refreshedPlaylist);
 
     expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
     expect(canvasService.hasDeferredRefreshPlaylist()).toBe(false);
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual([
-      'C',
-      'A',
-      'D',
-    ]);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual(fixtureIds('C', 'A', 'D'));
     expect(canvasService.getCastInfo()?.playlist?.defaults).toEqual(
-      oldPlaylist.defaults
+      refreshedPlaylist.defaults
     );
     expect(canvasService.getCastInfo()?.index).toBe(0);
     expect(canvasService.getCastInfo()?.castCommand).toBe(
@@ -327,7 +318,7 @@ describe('CanvasService deferred refresh', () => {
       false
     );
 
-    service.refreshPlaylist(playlist('same', ['A', 'B'].map(item), defaults('blue')).items);
+    service.refreshPlaylist(playlist('same', ['A', 'B'].map(item), defaults('red')));
 
     expect(canvasService.hasQueuedPlaylistPending()).toBe(false);
     expect(canvasService.hasDeferredRefreshPlaylist()).toBe(false);
@@ -349,14 +340,14 @@ describe('CanvasService deferred refresh', () => {
       { castCommand: CastCommand.displayPlaylist, playlist: current, index: 0 },
       false
     );
-    const grown = playlist('grow', ['A', 'B', 'C'].map(item), defaults('red')).items;
+    const grown = playlist('grow', ['A', 'B', 'C'].map(item), defaults('red'));
     service.refreshPlaylist(grown);
     expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
 
     // castInfo already holds the grown list; the player has not installed it.
     service.refreshPlaylist(grown);
     expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
-    expect(canvasService.getQueuedPlaylistItems()?.map(entry => entry.id)).toEqual(['A', 'B', 'C']);
+    expect(canvasService.getQueuedPlaylistItems()?.map(entry => entry.id)).toEqual(fixtureIds('A', 'B', 'C'));
   });
 
   it('ignores refresh payloads when only non-item metadata changes', () => {
@@ -377,7 +368,7 @@ describe('CanvasService deferred refresh', () => {
     );
 
     service.refreshPlaylist(
-      playlist('same', ['A', 'B'].map(item), defaults('red')).items
+      playlist('same', ['A', 'B'].map(item), defaults('red'))
     );
 
     expect(canvasService.hasQueuedPlaylistPending()).toBe(false);
@@ -406,7 +397,7 @@ describe('CanvasService deferred refresh', () => {
       false
     );
 
-    service.refreshPlaylist(playlist('legacy', ['A', 'B'].map(item), defaults('blue')).items);
+    service.refreshPlaylist(playlist('legacy', ['A', 'B'].map(item), defaults('red')));
 
     expect(canvasService.hasQueuedPlaylistPending()).toBe(false);
     expect(canvasService.hasDeferredRefreshPlaylist()).toBe(false);
@@ -417,7 +408,7 @@ describe('CanvasService deferred refresh', () => {
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 
-  it('keeps defaults unset when item-only refresh updates the list', () => {
+  it('takes the new document defaults when a refresh updates the list', () => {
     const currentPlaylist = playlist('same', ['A', 'B'].map(item));
     canvasService.setCastInfo(
       {
@@ -434,9 +425,9 @@ describe('CanvasService deferred refresh', () => {
       false
     );
 
-    service.refreshPlaylist(playlist('new', ['A', 'C'].map(item), defaults('blue')).items);
+    service.refreshPlaylist(playlist('new', ['A', 'C'].map(item), defaults('blue')));
 
-    expect(canvasService.getCastInfo()?.playlist?.defaults).toBeUndefined();
+    expect(canvasService.getCastInfo()?.playlist?.defaults).toEqual(defaults('blue'));
     expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
   });
 
@@ -454,22 +445,14 @@ describe('CanvasService deferred refresh', () => {
 
     expect(service.setShuffle({ enabled: true })).toEqual({ ok: true });
 
-    const refreshedItems = ['A', 'B', 'D'].map(item);
-    expect(service.refreshPlaylist(refreshedItems)).toEqual({ ok: true });
+    const refreshed = playlist('old', ['A', 'B', 'D'].map(item), defaults('red'));
+    expect(service.refreshPlaylist(refreshed)).toEqual({ ok: true });
     expect(canvasService.getCastInfo()?.shuffle).toBe(true);
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual([
-      'A',
-      'B',
-      'D',
-    ]);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual(fixtureIds('A', 'B', 'D'));
 
     expect(service.setShuffle({ enabled: false })).toEqual({ ok: true });
     expect(canvasService.getCastInfo()?.shuffle).toBe(false);
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual([
-      'A',
-      'B',
-      'D',
-    ]);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual(fixtureIds('A', 'B', 'D'));
     expect(canvasService.getCastInfo()?.index).toBe(1);
   });
 
@@ -489,7 +472,7 @@ describe('CanvasService deferred refresh', () => {
     const shuffledItems =
       canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id) ?? [];
 
-    expect(service.refreshPlaylist(['A', 'B', 'C'].map(item))).toEqual({ ok: true });
+    expect(service.refreshPlaylist(oldPlaylist)).toEqual({ ok: true });
 
     expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
     expect(canvasService.hasDeferredRefreshPlaylist()).toBe(false);
@@ -521,23 +504,19 @@ describe('CanvasService deferred refresh', () => {
     );
 
     service.refreshPlaylist(
-      playlist('deferred', ['A', 'C', 'D'].map(item), defaults('blue')).items
+      playlist('deferred', ['A', 'C', 'D'].map(item), defaults('blue'))
     );
     expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
     expect(canvasService.hasDeferredRefreshPlaylist()).toBe(true);
 
     service.refreshPlaylist(
-      playlist('noop', ['A', 'B', 'C'].map(item), defaults('red')).items
+      playlist('noop', ['A', 'B', 'C'].map(item), defaults('red'))
     );
 
     expect(canvasService.hasQueuedPlaylistPending()).toBe(false);
     expect(canvasService.hasDeferredRefreshPlaylist()).toBe(false);
     expect(canvasService.consumeDeferredRefreshPlaylist(0)).toBeNull();
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual([
-      'A',
-      'B',
-      'C',
-    ]);
+    expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual(fixtureIds('A', 'B', 'C'));
     expect(canvasService.getCastInfo()?.castCommand).toBe(
       CastCommand.refreshPlaylist
     );

@@ -2,11 +2,10 @@ import { LocalStorageItem } from '@/constants';
 import { CastCommand, CastInfo } from '@/models';
 import { canvasService } from '@/services/CanvasService';
 import { contentPolicyStore } from '@/services/ContentPolicyStore';
-import { stripPlaylistSignature } from '@/services/contentPolicy';
 import { stripEphemeralCastInfoFields } from '@/utils/castInfo';
 import DeviceManager from '@/utils/DeviceManager';
 import { normalizePlaylistIndex } from '@/utils/playlist';
-import { normalizeItemDurations } from '@/services/canvas/playlistUpdates';
+import { stripRewrittenSignature } from '@/services/canvas/playlistUpdates';
 interface BootPorts {
   initializeDisplaySettings: () => Promise<void>;
   setInitialized: (value: boolean) => void;
@@ -207,21 +206,12 @@ export class BootHydration {
         return;
       }
 
-      // Stored records keep the document as accepted, so durations are
-      // resolved again here (item, then defaults.duration — DP-1 core §4);
-      // the timers only ever see the resolved number.
+      // Stored records are restored as they are — durations are resolved by
+      // the timers at the point of use, never written into the document.
       if (castInfo.playlist?.items?.length) {
         castInfo = {
           ...castInfo,
-          // Resolved durations change the signed content, so the signature
-          // would attest a document nobody signed.
-          playlist: stripPlaylistSignature({
-            ...castInfo.playlist,
-            items: normalizeItemDurations(
-              castInfo.playlist.items,
-              castInfo.playlist.defaults
-            ),
-          }),
+          playlist: stripRewrittenSignature(castInfo.playlist),
         };
       }
 

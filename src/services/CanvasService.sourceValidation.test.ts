@@ -3,16 +3,15 @@ import { DP1Action, type DP1Call, type DP1Item } from '@/models/dp1.model';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
 import DP1ScheduleService from './DP1ScheduleService';
+import { dp1Document, fixtureId, fixtureIds } from '@/testing/dp1Fixtures';
 
-const item = (id: string): DP1Item =>
-  ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
-
-const playlist = (id: string, items: DP1Item[]): DP1Call => ({
-  dpVersion: '1.1.0',
-  id,
-  title: id,
-  items,
+const item = (id: string): DP1Item => ({
+  id: fixtureId(id),
+  source: `https://example.com/${id}.jpg`,
 });
+
+const playlist = (id: string, items: DP1Item[]): DP1Call =>
+  dp1Document({ id: fixtureId(id), title: id, items });
 
 describe('CanvasService source validation', () => {
   afterEach(() => {
@@ -30,7 +29,7 @@ describe('CanvasService source validation', () => {
       request: {
         intent: { action: DP1Action.NowDisplay },
         dp1_call: playlist('valid', [
-          { id: 'valid-source', source, license: {} } as DP1Item,
+          { id: fixtureId('valid-source'), source },
         ]),
       },
     });
@@ -78,10 +77,9 @@ describe('CanvasService data URL validation', () => {
           intent: { action: DP1Action.NowDisplay },
           dp1_call: playlist('base64-valid', [
             {
-              id: 'base64-valid',
+              id: fixtureId('base64-valid'),
               source: `data:text/plain;base64,${payload}`,
-              license: {},
-            } as DP1Item,
+            },
           ]),
         },
       });
@@ -183,10 +181,7 @@ describe('CanvasService rejected source state preservation', () => {
     });
 
     expect(reply).toEqual({ ok: false });
-    expect(canvasService.getCastInfo()?.playlist?.id).toBe('active');
-    expect(canvasService.getQueuedPlaylistItems()?.map(entry => entry.id)).toEqual([
-      'A',
-      'C',
-    ]);
+    expect(canvasService.getCastInfo()?.playlist?.id).toBe(fixtureId('active'));
+    expect(canvasService.getQueuedPlaylistItems()?.map(entry => entry.id)).toEqual(fixtureIds('A', 'C'));
   });
 });

@@ -4,21 +4,24 @@ import { LoopMode } from '@/models/cast_info.model';
 import { DP1Action, type DP1Call, type DP1Item } from '@/models/dp1.model';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
+import { dp1Document, fixtureId, fixtureIds } from '@/testing/dp1Fixtures';
 
-const item = (id: string): DP1Item =>
-  ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
+const item = (id: string): DP1Item => ({
+  id: fixtureId(id),
+  source: `https://example.com/${id}.jpg`,
+});
 
 const playlist = (
   id: string,
   items: DP1Item[],
   playlistDefaults?: DP1Call['defaults']
-): DP1Call => ({
-  dpVersion: '1.1.0',
-  id,
-  title: id,
-  defaults: playlistDefaults,
-  items,
-});
+): DP1Call =>
+  dp1Document({
+    id: fixtureId(id),
+    title: id,
+    defaults: playlistDefaults,
+    items,
+  });
 
 beforeEach(() => {
   vi.stubGlobal('window', {
@@ -55,7 +58,7 @@ it('a fresh Now Display resets shuffle, and starts in playlist when Repeat was n
   const next = canvasService.getCastInfo();
   expect(next?.shuffle).toBe(false);
   expect(next?.loopMode).toBe(LoopMode.playlist);
-  expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['B', 'C']);
+  expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(fixtureIds('B', 'C'));
   expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
 });
 
@@ -84,7 +87,7 @@ it('a fresh Now Display starts in the Repeat mode last set on the device', async
     const next = canvasService.getCastInfo();
     expect(next?.loopMode).toBe(LoopMode.one);
     expect(next?.shuffle).toBe(false);
-    expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['C', 'D']);
+    expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(fixtureIds('C', 'D'));
 
     // And it survives the cast being cleared, as after a restart.
     canvasService.setCastInfo(null, false);
@@ -154,7 +157,7 @@ it('returns ok:false when a playlist item source uses an unsupported URL', () =>
   );
   expect(
     canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)
-  ).toEqual(['A']);
+  ).toEqual(fixtureIds('A'));
   expect(canvasService.getStatus().renderStatus).toBeUndefined();
 });
 
@@ -330,8 +333,8 @@ it('resets render status when a deferred playlist promotion selects a new item',
   );
   service.session.setDeferredRefreshPlaylist(deferred);
 
-  expect(canvasService.consumeDeferredRefreshPlaylist(0)?.id).toBe('new');
-  expect(canvasService.getCastInfo()?.playlist?.id).toBe('new');
+  expect(canvasService.consumeDeferredRefreshPlaylist(0)?.id).toBe(fixtureId('new'));
+  expect(canvasService.getCastInfo()?.playlist?.id).toBe(fixtureId('new'));
   expect(canvasService.getCastInfo()?.renderStatus).toBe(RenderStatus.pending);
   expect(canvasService.getStatus().renderStatus).toBe(RenderStatus.pending);
 });
@@ -364,7 +367,7 @@ it('preserves render status when cast info updates without changing artwork', ()
 
 it('resets render status to pending when refresh replaces source for the same item id', () => {
   const service = canvasService as unknown as {
-    refreshPlaylist(newItems: DP1Item[] | undefined): { ok: boolean };
+    refreshPlaylist(incoming: DP1Call): { ok: boolean };
   };
   const previousItem = {
     ...item('A'),
@@ -386,7 +389,9 @@ it('resets render status to pending when refresh replaces source for the same it
   );
   canvasService.setRenderStatus(RenderStatus.ready);
 
-  expect(service.refreshPlaylist([refreshedItem])).toEqual({ ok: true });
+  expect(
+    service.refreshPlaylist(playlist('active', [refreshedItem]))
+  ).toEqual({ ok: true });
   expect(canvasService.getCastInfo()?.playlist?.items?.[0]?.source).toBe(
     'https://example.com/new.jpg'
   );
@@ -409,7 +414,7 @@ it('does not report persisted ready after cast info recovery hydrate', async () 
 
   expect(canvasService.getStatus().renderStatus).toBeUndefined();
   expect(canvasService.getCastInfo()?.renderStatus).toBeUndefined();
-  expect(canvasService.getCastInfo()?.playlist?.id).toBe('recovered');
+  expect(canvasService.getCastInfo()?.playlist?.id).toBe(fixtureId('recovered'));
 
   getCachedCastInfo.mockRestore();
 });

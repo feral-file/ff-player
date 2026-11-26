@@ -9,6 +9,7 @@ import { CastCommand, type CastInfo } from '@/models';
 import { CustomEventName } from '@/models/custom_event';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
 const { axiosGet, canvasServiceMocks, deviceManager, reactSetCastInfo } =
   vi.hoisted(() => {
@@ -179,12 +180,13 @@ describe('AppContext persisted source compatibility', () => {
   it('restores the boot cast under the context it was accepted with', async () => {
     deviceManager.getItem.mockResolvedValue(null);
     deviceManager.getBootPlaylistContentContext.mockResolvedValue('personal');
-    deviceManager.getBootPlaylist.mockResolvedValue({
-      dpVersion: '1.1.0',
-      id: 'personal-boot',
-      title: 'Personal boot',
-      items: [{ id: 'personal-artwork', source: 'about:blank', license: {} }],
-    });
+    deviceManager.getBootPlaylist.mockResolvedValue(
+      dp1Document({
+        id: fixtureId('personal-boot'),
+        title: 'Personal boot',
+        items: [{ id: fixtureId('personal-artwork'), source: 'about:blank' }],
+      })
+    );
 
     render(
       <AppProvider>
@@ -206,12 +208,13 @@ describe('AppContext boot restore and Repeat', () => {
   it('restores the boot cast in the Repeat mode kept on the device', async () => {
     deviceManager.getItem.mockResolvedValue(null);
     deviceManager.getLoopMode.mockResolvedValue('one');
-    deviceManager.getBootPlaylist.mockResolvedValue({
-      dpVersion: '1.1.0',
-      id: 'repeat-boot',
-      title: 'Repeat boot',
-      items: [{ id: 'kept-artwork', source: 'about:blank', license: {} }],
-    });
+    deviceManager.getBootPlaylist.mockResolvedValue(
+      dp1Document({
+        id: fixtureId('repeat-boot'),
+        title: 'Repeat boot',
+        items: [{ id: fixtureId('kept-artwork'), source: 'about:blank' }],
+      })
+    );
 
     render(
       <AppProvider>
@@ -269,12 +272,13 @@ describe('AppContext boot hydration — settings failure isolation', () => {
     );
     deviceManager.getCastInfo.mockResolvedValue({
       castCommand: CastCommand.displayPlaylist,
-      playlist: {
-        dpVersion: '1.1.0',
-        id: 'settings-failure-cast',
+      playlist: dp1Document({
+        id: fixtureId('settings-failure-cast'),
         title: 'Settings failure cast',
-        items: [{ id: 'artwork', source: 'https://example.com/a.png', license: {} }],
-      },
+        items: [
+          { id: fixtureId('artwork'), source: 'https://example.com/a.png' },
+        ],
+      }),
       index: 0,
     });
 

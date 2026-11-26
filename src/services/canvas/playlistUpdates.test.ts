@@ -1,28 +1,52 @@
 import { NO_DURATION_VALUE } from '@/constants';
 import type { DP1Item } from '@/models/dp1.model';
+import { resolveItemDuration } from '@/utils/playlist';
 import { describe, expect, it } from 'vitest';
-import { normalizeItemDurations } from './playlistUpdates';
+import { isUnchangedRefresh } from './playlistUpdates';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
-const item = (id: string, duration?: number): DP1Item =>
-  ({ id, source: `https://example.com/${id}.jpg`, duration }) as DP1Item;
+const item = (id: string, extra: Partial<DP1Item> = {}): DP1Item => ({
+  id: fixtureId(id),
+  source: `https://example.com/${id}.jpg`,
+  ...extra,
+});
 
-describe('normalizeItemDurations (DP-1 core §4 duration inheritance)', () => {
-  it('keeps an item duration over the playlist default', () => {
-    const [a] = normalizeItemDurations([item('a', 7)], { duration: 30 });
-    expect(a.duration).toBe(7);
+describe('resolveItemDuration (DP-1 core §3 inheritance)', () => {
+  it('prefers the item, then override, then defaults', () => {
+    const defaults = { duration: 30 };
+    const override = { duration: 12 };
+
+    expect(
+      resolveItemDuration(item('a', { duration: 7, override }), defaults)
+    ).toBe(7);
+    expect(resolveItemDuration(item('a', { override }), defaults)).toBe(12);
+    expect(resolveItemDuration(item('a'), defaults)).toBe(30);
   });
 
-  it('inherits defaults.duration when the item omits its own', () => {
-    const [a] = normalizeItemDurations([item('a')], { duration: 30 });
-    expect(a.duration).toBe(30);
+  it('holds the slot when nothing sets a duration', () => {
+    expect(resolveItemDuration(item('a'))).toBe(NO_DURATION_VALUE);
+    expect(resolveItemDuration(item('a'), {})).toBe(NO_DURATION_VALUE);
+  });
+});
+
+describe('isUnchangedRefresh', () => {
+  const document = dp1Document({
+    items: [item('a')],
+    defaults: { duration: 30 },
   });
 
-  it('holds the slot when neither item nor defaults set a duration', () => {
-    expect(normalizeItemDurations([item('a')])[0].duration).toBe(
-      NO_DURATION_VALUE
-    );
-    expect(normalizeItemDurations([item('a')], {})[0].duration).toBe(
-      NO_DURATION_VALUE
-    );
+  it('ignores durations an older build wrote into the held items', () => {
+    const held = { ...document, items: [item('a', { duration: 30 })] };
+
+    expect(isUnchangedRefresh(held, document)).toBe(true);
+  });
+
+  it('sees a change of defaults alone', () => {
+    expect(
+      isUnchangedRefresh(document, {
+        ...document,
+        defaults: { duration: 7 },
+      })
+    ).toBe(false);
   });
 });

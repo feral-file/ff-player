@@ -10,16 +10,15 @@ import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
 import { prepareContentPolicy } from './contentPolicy.testkit';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
-const item = (id: string): DP1Item =>
-  ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
-
-const playlist = (id: string, items: DP1Item[]): DP1Call => ({
-  dpVersion: '1.1.0',
-  id,
-  title: id,
-  items,
+const item = (id: string): DP1Item => ({
+  id: fixtureId(id),
+  source: `https://example.com/${id}.jpg`,
 });
+
+const playlist = (id: string, items: DP1Item[]): DP1Call =>
+  dp1Document({ id: fixtureId(id), title: id, items });
 
 const freshCanvasService = async () => {
   vi.resetModules();

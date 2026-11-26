@@ -33,8 +33,8 @@ import { RecentPlaybackService } from './RecentPlaybackService';
 import { findInvalidArtworkSource } from './artworkSourceValidation';
 import {
   isSamePlaylistContent,
-  normalizeItemDurations,
-  sameResolvedItems,
+  isUnchangedRefresh,
+  refreshedPlaylist,
   resolveRenderStatusForCastInfo,
   selectedPlaylistItem,
 } from './playlistUpdates';
@@ -313,17 +313,19 @@ export class PlaybackSession {
   }
 
   /**
-   * Returns the items the player should apply when advancing past the current
-   * artwork. For a deferred refresh (current item absent from new list) this is
-   * the new list stored privately; for an immediate refresh or shuffle it is the
-   * current castInfo.playlist.items (already updated on castInfo).
+   * The playlist the player should apply when advancing past the current
+   * artwork: the privately held one for a deferred refresh (current item absent
+   * from the new list), else castInfo's (immediate refresh or shuffle). Its
+   * items and `defaults` are installed together.
    */
+  public queuedPlaylist(): DP1Call | undefined {
+    return this.deferredRefreshPlaylist?.items?.length
+      ? this.deferredRefreshPlaylist
+      : this.currentCast?.playlist;
+  }
+
   public getQueuedPlaylistItems(): DP1Item[] | null {
-    const deferred = this.deferredRefreshPlaylist?.items;
-    if (deferred?.length) {
-      return deferred;
-    }
-    return this.currentCast?.playlist?.items ?? null;
+    return this.queuedPlaylist()?.items ?? null;
   }
 
   public consumeDeferredRefreshPlaylist(nextIndex: number): DP1Call | null {
@@ -591,7 +593,9 @@ export class PlaybackSession {
   // Keep deferred-refresh, shuffle restoration, and index remapping together
   // because they all amend the same compatibility-sensitive cast contract.
   public refreshPlaylist(
-    newItems: DP1Item[] | undefined,
+    // The refreshed document: its items inherit its own `defaults` (DP-1 core
+    // §3.1), never those of the playlist they replace.
+    incoming: Pick<DP1Call, 'items' | 'defaults'>,
     // The origin the caller actually filtered under. It must travel with the
     // refreshed state: admission used this value, and setCastInfo re-applies
     // policy from what is stored, so leaving the previous cast's context in
@@ -599,6 +603,7 @@ export class PlaybackSession {
     // them on the next policy change.
     contentContext?: ContentContext
   ): Reply {
+    const newItems = incoming.items ?? [];
     const currentPlaylist = this.currentCast?.playlist;
     const prior = this.currentCast
       ? { ...this.currentCast, ...(contentContext ? { contentContext } : {}) }
@@ -614,17 +619,16 @@ export class PlaybackSession {
       return { ok: false };
     }
 
-    // Normalize durations like nowDisplay; index is remapped by id so getStatus
-    // matches the artwork still playing until the player applies the queued list.
-    // Refresh only replaces playlist items. Keep the current playlist metadata
-    // and defaults untouched so the remote intent stays narrowly scoped.
+    // Index is remapped by id so getStatus matches the artwork still playing
+    // until the player applies the queued list. Refresh replaces items and
+    // defaults only; the rest of the active playlist's metadata stays, so the
+    // remote intent stays narrowly scoped.
     const comparisonItems =
       prior?.shuffle && this.originalPlaylistItems?.length
         ? this.originalPlaylistItems
         : currentPlaylist.items;
-    const { defaults } = currentPlaylist;
-    const normalizedItems = normalizeItemDurations(newItems ?? [], defaults);
-    if (sameResolvedItems(comparisonItems, normalizedItems, defaults)) {
+    const comparison = { ...currentPlaylist, items: comparisonItems };
+    if (isUnchangedRefresh(comparison, incoming)) {
       // A refresh that matches the canonical unshuffled list during an active
       // shuffle session must not tear down the queued shuffled state or force
       // the player back to the unshuffled order.
@@ -639,7 +643,7 @@ export class PlaybackSession {
       return { ok: true };
     }
 
-    console.log('newPlaylist', normalizedItems.length);
+    console.log('newPlaylist', newItems.length);
 
     if (!prior) {
       console.error(
@@ -651,26 +655,28 @@ export class PlaybackSession {
       // While shuffle is active, keep the unshuffled snapshot aligned with the
       // latest refresh payload so toggling shuffle off restores the refreshed
       // playlist instead of an older pre-refresh order.
-      this.originalPlaylistItems = [...normalizedItems];
+      this.originalPlaylistItems = [...newItems];
     }
     const prevItems = currentPlaylist.items;
-    const playlistForRefresh = stripPlaylistSignature({
-      ...currentPlaylist,
-      items: normalizedItems,
-    });
+    const playlistForRefresh = refreshedPlaylist(
+      comparison,
+      prevItems,
+      incoming
+    );
+    const items = playlistForRefresh.items ?? [];
 
     const currentItemId = selectedPlaylistItem(prevItems, prior.index)?.id;
 
     const stillInNew =
       currentItemId !== undefined &&
-      normalizedItems.some(item => item.id === currentItemId);
+      items.some(item => item.id === currentItemId);
 
     // Current artwork is absent from the new list: keep playlist + index so
     // getStatus still describes what is on screen. Defer the new list privately
     // until the player calls consumeDeferredRefreshPlaylist() after the item ends.
     if (
       prevItems.length &&
-      normalizedItems.length &&
+      items.length &&
       currentItemId !== undefined &&
       !stillInNew
     ) {
@@ -683,14 +689,10 @@ export class PlaybackSession {
       return { ok: true };
     }
 
-    this.queuedPlaylistPending = normalizedItems.length > 0;
+    this.queuedPlaylistPending = items.length > 0;
     this.setDeferredRefreshPlaylist(null);
 
-    const index = resolveItemIndexInNewItems(
-      normalizedItems,
-      prevItems,
-      prior.index
-    );
+    const index = resolveItemIndexInNewItems(items, prevItems, prior.index);
 
     this.setCastInfo({
       ...prior,

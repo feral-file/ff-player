@@ -31,7 +31,6 @@ import {
   filterContent,
   hasValidContentLabels,
   parseContentContext,
-  stripPlaylistSignature,
 } from '../contentPolicy';
 import { BootPlaylistStore } from './BootPlaylistStore';
 import { PlaybackSession } from './PlaybackSession';
@@ -39,7 +38,6 @@ import { RecentPlaybackService } from './RecentPlaybackService';
 import { findInvalidArtworkSource } from './artworkSourceValidation';
 import {
   isSameSelectedArtworkIdentity,
-  normalizeItemDurations,
   refreshedSelectionIndex,
   selectedPlaylistItem,
 } from './playlistUpdates';
@@ -353,7 +351,10 @@ export class PlaylistCommands {
       // every work is blocked. Reporting contentBlocked for it would leave the
       // old artwork on the wall against the source's own update.
       if (!dp1CallData.items?.length) {
-        const cleared = this.session.refreshPlaylist([], contentContext);
+        const cleared = this.session.refreshPlaylist(
+          { items: [] },
+          contentContext
+        );
         if (cleared.ok) {
           this.boot.supersedeBootRecord(bootKey, null, contentContext);
         }
@@ -366,30 +367,22 @@ export class PlaylistCommands {
 
   /**
    * Apply an accepted refresh live, then carry it into the boot record. The
-   * record keeps the ACTIVE playlist's defaults and resolved durations, as live
-   * playback does (`PlaybackSession.refreshPlaylist`); otherwise a restart
-   * would re-resolve the incoming document against its own, different defaults.
+   * record takes the list the session composed, not the incoming document, so
+   * metadata, order, defaults and signature state match live playback.
+   *
+   * While the swap is deferred, the record already holds the NEW list although
+   * the wall still shows the removed work: a restart in that window must not
+   * bring a removed work back.
    */
   private applyRefresh(
     playlist: DP1Call,
     bootKey: Parameters<BootPlaylistStore['supersedeBootRecord']>[0],
     contentContext: ContentContext
   ): DisplayPlaylistReply {
-    const defaults = this.session.castInfo?.playlist?.defaults;
-    const applied = this.session.refreshPlaylist(
-      playlist.items,
-      contentContext
-    );
+    const applied = this.session.refreshPlaylist(playlist, contentContext);
     if (applied.ok) {
-      this.boot.supersedeBootRecord(
-        bootKey,
-        stripPlaylistSignature({
-          ...playlist,
-          defaults,
-          items: normalizeItemDurations(playlist.items ?? [], defaults),
-        }),
-        contentContext
-      );
+      const installed = this.session.queuedPlaylist() ?? playlist;
+      this.boot.supersedeBootRecord(bootKey, installed, contentContext);
     }
     return applied;
   }
@@ -470,13 +463,9 @@ export class PlaylistCommands {
     this.session.setCastInfo({
       castCommand: CastCommand.displayPlaylist,
       contentContext,
-      playlist: {
-        ...request.dp1CallData,
-        items: normalizeItemDurations(
-          playableItems,
-          request.dp1CallData.defaults
-        ),
-      },
+      // The document as admitted, untouched: status re-emits it, so nothing
+      // may be written into a signed playlist (DP-1 §7.1).
+      playlist: request.dp1CallData,
       playlistUrl: request.playlistUrl,
       index: landing.index,
       playlistId: request.dp1CallData.id,

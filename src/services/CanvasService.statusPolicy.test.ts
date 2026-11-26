@@ -7,9 +7,10 @@ import { DEFAULT_CONTENT_POLICY } from './contentPolicy';
 import DeviceManager from '@/utils/DeviceManager';
 import { CastCommand } from '@/models';
 import { DP1Action, DP1Call, DP1Item, DP1License } from '@/models/dp1.model';
+import { dp1Document, fixtureId, fixtureIds } from '@/testing/dp1Fixtures';
 
 const item = (id: string): DP1Item => ({
-  id, source: `https://art.test/${id}`, license: DP1License.Open,
+  id: fixtureId(id), source: `https://art.test/${id}`, license: DP1License.Open,
 });
 
 const status = () => canvasService.processMessage({
@@ -46,7 +47,7 @@ describe('checkStatus and content policy admission', () => {
     const persistedCast = {
       castCommand: CastCommand.displayPlaylist,
       index: 0,
-      playlist: { dpVersion: '1.1.0', title: 'Set', items: [item('blocked')] },
+      playlist: dp1Document({ title: 'Set', items: [item('blocked')] }),
     };
     vi.spyOn(DeviceManager, 'getCachedCastInfo').mockImplementation(
       () => structuredClone(persistedCast)
@@ -67,7 +68,7 @@ describe('checkStatus and content policy admission', () => {
     vi.spyOn(DeviceManager, 'getCachedCastInfo').mockReturnValue({
       castCommand: CastCommand.displayPlaylist,
       index: 0,
-      playlist: { dpVersion: '1.1.0', title: 'Set', items: [item('unrated')] },
+      playlist: dp1Document({ title: 'Set', items: [item('unrated')] }),
     });
     canvasService.setCastInfo(null, false);
 
@@ -86,7 +87,7 @@ describe('checkStatus and content policy admission', () => {
     canvasService.setCastInfo({
       castCommand: CastCommand.displayPlaylist,
       index: 0,
-      playlist: { dpVersion: '1.1.0', title: 'Set', items: [item('a')] },
+      playlist: dp1Document({ title: 'Set', items: [item('a')] }),
     }, false);
     vi.spyOn(contentPolicyStore, 'getSnapshot').mockReturnValue({
       policy: DEFAULT_CONTENT_POLICY, active: false, epoch: 1, retireEpoch: 0,
@@ -100,7 +101,7 @@ describe('checkStatus and content policy admission', () => {
     expect(canvasService.hasActiveArtwork()).toBe(true);
     const reply = status();
     expect(reply.ok).toBe(true);
-    expect(reply.playlist?.items?.map(value => value.id)).toEqual(['a']);
+    expect(reply.playlist?.items?.map(value => value.id)).toEqual(fixtureIds('a'));
     expect(reply.index).toBe(0);
   });
 
@@ -109,14 +110,14 @@ describe('checkStatus and content policy admission', () => {
     vi.spyOn(DeviceManager, 'getCachedCastInfo').mockReturnValue({
       castCommand: CastCommand.displayPlaylist,
       index: 0,
-      playlist: { dpVersion: '1.1.0', title: 'Set', items: [allowed] },
+      playlist: dp1Document({ title: 'Set', items: [allowed] }),
     });
     canvasService.setCastInfo(null, false);
 
     const reply = status();
 
     expect(reply.ok).toBe(true);
-    expect(reply.playlist?.items?.map(value => value.id)).toEqual(['allowed']);
+    expect(reply.playlist?.items?.map(value => value.id)).toEqual(fixtureIds('allowed'));
     expect(reply.castCommand).toBe(CastCommand.displayPlaylist);
   });
 });

@@ -7,6 +7,7 @@ import { CustomEventName } from '@/models/custom_event';
 import { DP1Action, type DP1Call, type DP1Item } from '@/models/dp1.model';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canvasService } from './CanvasService';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
 // Hoisted so the mock fn can be both injected into the module factory and
 // configured per test without an unbound method reference off DP1Service.
@@ -18,15 +19,13 @@ vi.mock('./DP1Service', () => ({
   DP1Service: { getPlaylist: getPlaylistMock },
 }));
 
-const item = (id: string): DP1Item =>
-  ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
-
-const playlist = (id: string): DP1Call => ({
-  dpVersion: '1.1.0',
-  id,
-  title: id,
-  items: [item('A')],
+const item = (id: string): DP1Item => ({
+  id: fixtureId(id),
+  source: `https://example.com/${id}.jpg`,
 });
+
+const playlist = (id: string): DP1Call =>
+  dp1Document({ id: fixtureId(id), title: id, items: [item('A')] });
 
 const dispatchedEvents = (spy: { mock: { calls: [Event][] } }) =>
   spy.mock.calls.map(([event]) => event.type);

@@ -259,6 +259,10 @@ class CanvasService {
     return this.session.getQueuedPlaylistItems();
   }
 
+  public getQueuedPlaylistDefaults() {
+    return this.session.queuedPlaylist()?.defaults ?? null;
+  }
+
   public consumeDeferredRefreshPlaylist(nextIndex: number): DP1Call | null {
     return this.session.consumeDeferredRefreshPlaylist(nextIndex);
   }
@@ -476,7 +480,7 @@ class CanvasService {
   }
 
   private refreshPlaylist(
-    newItems: DP1Item[] | undefined,
+    incoming: Pick<DP1Call, 'items' | 'defaults'>,
     // The origin the caller actually filtered under. It must travel with the
     // refreshed state: admission used this value, and setCastInfo re-applies
     // policy from what is stored, so leaving the previous cast's context in
@@ -484,7 +488,7 @@ class CanvasService {
     // them on the next policy change.
     contentContext?: ContentContext
   ): Reply {
-    return this.session.refreshPlaylist(newItems, contentContext);
+    return this.session.refreshPlaylist(incoming, contentContext);
   }
 
   private displayDefaultPlaylist(

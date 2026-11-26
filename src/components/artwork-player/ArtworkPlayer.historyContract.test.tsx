@@ -11,6 +11,7 @@ import { contentPolicyStore } from '@/services/ContentPolicyStore';
 import DeviceManager from '@/utils/DeviceManager';
 import ArtworkPlayer from './ArtworkPlayer';
 import { WebGLRecovery } from './useWebGLRecovery';
+import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 
 vi.mock('@/context/AppContext', () => ({
   useAppContext: () => ({
@@ -28,7 +29,7 @@ vi.mock('@/services/custom-hooks/useArtworkSettings', () => ({
 }));
 
 const works: DP1Item[] = ['a', 'b'].map(id => ({
-  id,
+  id: fixtureId(id),
   source: `https://feralfile.com/${id}.jpg`,
   license: DP1License.Open,
 }));
@@ -53,7 +54,7 @@ function select(index: number) {
   canvasService.setCastInfo(
     {
       castCommand: CastCommand.displayPlaylist,
-      playlist: { dpVersion: '1.1.0', title: 'Contract', items: works },
+      playlist: dp1Document({ title: 'Contract', items: works }),
       index,
     },
     false
@@ -136,7 +137,7 @@ it('preserves fade-start history, fade-end composition, and restores history aft
     await Promise.resolve();
   });
   await settle();
-  expect(played).toHaveBeenLastCalledWith('b');
+  expect(played).toHaveBeenLastCalledWith(fixtureId('b'));
   expect(played).toHaveBeenCalledTimes(2);
   expect(canvasService.getStatus()).toMatchObject({
     renderStatus: RenderStatus.pending,

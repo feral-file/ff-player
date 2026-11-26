@@ -1,37 +1,69 @@
 import { NO_DURATION_VALUE } from '@/constants';
 import { CastInfo, RenderStatus } from '@/models';
-import { DP1Defaults, DP1Item } from '@/models/dp1.model';
+import { DP1Call, DP1Item } from '@/models/dp1.model';
 import { deepEqual } from '@/utils/helper';
+import { resolveItemDuration } from '@/utils/playlist';
+import { stripPlaylistSignature } from '../contentPolicy';
+
+type RefreshContent = Pick<DP1Call, 'items' | 'defaults'>;
 
 /**
- * Normalize omitted durations identically for display and refresh comparisons.
- *
- * DP-1 core §4 resolves a slot's duration from the item's own `duration`,
- * then `playlist.defaults.duration`; only when neither is set does the player
- * hold the slot (NO_DURATION_VALUE). This is the single admission-time place
- * that inheritance happens: the timeline and timer paths downstream only ever
- * see the resolved number.
+ * Whether a refresh leaves playback as it is: the same playlist `defaults`, and
+ * item lists that match once each side's durations are resolved. Resolution
+ * happens on throwaway copies — neither document is rewritten. It is what
+ * keeps a snapshot written by an older build (durations injected into the
+ * items) from looking changed against the same document re-sent.
  */
-export function normalizeItemDurations(
-  items: DP1Item[],
-  defaults?: Pick<DP1Defaults, 'duration'> | null
-): DP1Item[] {
-  return items.map(item => ({
-    ...item,
-    duration: item.duration ?? defaults?.duration ?? NO_DURATION_VALUE,
-  }));
+export function isUnchangedRefresh(
+  current: RefreshContent,
+  next: RefreshContent
+): boolean {
+  const resolved = ({ items, defaults }: RefreshContent) =>
+    (items ?? []).map(item => ({
+      ...item,
+      duration: resolveItemDuration(item, defaults),
+    }));
+  return (
+    deepEqual(current.defaults ?? {}, next.defaults ?? {}) &&
+    deepEqual(resolved(current), resolved(next))
+  );
 }
 
 /**
- * True when `current` equals the already-normalized `next` once `current`'s
- * own omitted durations are resolved the same way (refresh no-op check).
+ * The list a refresh installs: the active playlist's metadata with the new
+ * document's items and `defaults`. It is a mix nobody signed, so the signature
+ * goes. `comparison` holds the unshuffled items: when only `defaults` changed,
+ * the order on screen (`showing`) is kept, so a shuffle is not undone.
  */
-export function sameResolvedItems(
-  current: DP1Item[],
-  next: DP1Item[],
-  defaults?: Pick<DP1Defaults, 'duration'> | null
-): boolean {
-  return deepEqual(normalizeItemDurations(current, defaults), next);
+export function refreshedPlaylist(
+  comparison: DP1Call,
+  showing: DP1Item[],
+  next: RefreshContent
+): DP1Call {
+  const defaultsOnly = deepEqual(comparison.items ?? [], next.items ?? []);
+  return stripPlaylistSignature({
+    ...comparison,
+    defaults: next.defaults,
+    items: defaultsOnly ? showing : (next.items ?? []),
+  });
+}
+
+/**
+ * Drop the signature from a stored snapshot whose items an older build rewrote.
+ *
+ * Builds before this one wrote the resolved `duration` into the items and kept
+ * the signature, and a stored row does not say which build wrote it. The two
+ * values they injected are the marker: the internal hold sentinel, or the
+ * playlist's own `defaults.duration`. A document that authored either value
+ * itself loses its signature on restore too — the safe direction, since a
+ * missing signature claims nothing while a stale one claims a lie.
+ */
+export function stripRewrittenSignature(playlist: DP1Call): DP1Call {
+  const injected = [NO_DURATION_VALUE, playlist.defaults?.duration];
+  const rewritten = playlist.items?.some(
+    item => item.duration !== undefined && injected.includes(item.duration)
+  );
+  return rewritten ? stripPlaylistSignature(playlist) : playlist;
 }
 
 /**

@@ -3,16 +3,15 @@ import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DeviceManager from '@/utils/DeviceManager';
 import { canvasService } from './CanvasService';
+import { dp1Document, fixtureId, fixtureIds } from '@/testing/dp1Fixtures';
 
-const item = (id: string): DP1Item =>
-  ({ id, source: `https://example.com/${id}.jpg`, license: {} }) as DP1Item;
-
-const playlist = (id: string, items: DP1Item[]): DP1Call => ({
-  dpVersion: '1.1.0',
-  id,
-  title: id,
-  items,
+const item = (id: string): DP1Item => ({
+  id: fixtureId(id),
+  source: `https://example.com/${id}.jpg`,
 });
+
+const playlist = (id: string, items: DP1Item[]): DP1Call =>
+  dp1Document({ id: fixtureId(id), title: id, items });
 
 describe('CanvasService updateDefaultDuration', () => {
   beforeEach(() => {
@@ -55,7 +54,7 @@ describe('CanvasService updateDefaultDuration', () => {
 
     const next = canvasService.getCastInfo();
     expect(next?.castCommand).toBe(CastCommand.updateDefaultDuration);
-    expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(['A', 'B']);
+    expect(next?.playlist?.items?.map(entry => entry.id)).toEqual(fixtureIds('A', 'B'));
     expect(next?.index).toBe(1);
   });
 
