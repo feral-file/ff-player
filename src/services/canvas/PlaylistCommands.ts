@@ -367,9 +367,12 @@ export class PlaylistCommands {
 
   /**
    * Apply an accepted refresh live, then carry it into the boot record. The
-   * record takes what the session installed (the deferred list when the swap
-   * waits for the work on screen), not the incoming document, so a restart
-   * restores the same metadata, order, defaults and signature state.
+   * record takes the list the session composed, not the incoming document, so
+   * metadata, order, defaults and signature state match live playback.
+   *
+   * While the swap is deferred, the record already holds the NEW list although
+   * the wall still shows the removed work: a restart in that window must not
+   * bring a removed work back.
    */
   private applyRefresh(
     playlist: DP1Call,

@@ -62,8 +62,10 @@ too (an active shuffle keeps its order). New items and defaults are installed
 together at the next queued-promotion point, so the work on screen keeps the
 interval it was armed with. The rest of the active playlist's metadata stays,
 and the combined list no longer carries a signature. The boot record stores that
-same combined list (the held-back one when the swap is deferred), so a restart
-restores what the refresh installed.
+same combined list. When the swap is deferred (the work on screen was removed),
+the record takes the new list at once: a restart in that window opens on the new
+list, not on the work still showing, so a removed work never returns after a
+reboot.
 
 Snapshots stored by older builds had durations written into the items under the
 original signature; restore drops the signature from any row whose items carry
