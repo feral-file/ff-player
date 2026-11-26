@@ -243,22 +243,16 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
     expect(
       await screen.findByText('Pair with the Feral File app')
     ).toBeTruthy();
-    // The same-Wi-Fi requirement leads on its own line (first-owner
-    // enrollment is LAN-only), pinned as the full sentence.
+    // The panel must not ask for the same Wi-Fi: the code is all the phone
+    // needs, on any network.
+    expect(screen.queryByText(/same Wi-Fi/)).toBeNull();
     expect(
       screen.getByText(
-        'Connect your phone to the same Wi-Fi as this Art Computer.'
+        "Scan this code with your phone's camera or the Feral File app."
       )
     ).toBeTruthy();
-    expect(
-      screen.getByText(
-        "Then scan this code with your phone's camera or the Feral File app."
-      )
-    ).toBeTruthy();
-    // Ask to keep the code private, and never claim the same-Wi-Fi rule
-    // alone protects it (while the legacy relayer exists it does not). The
-    // sentence must hold on every QR this panel shows, an owned frame's
-    // code included.
+    // Ask to keep the code private. The sentence must hold on every QR
+    // this panel shows, an owned frame's code included.
     expect(
       screen.getByText(
         'Keep this code private: it can be used to pair with this Art Computer.'
@@ -281,7 +275,7 @@ describe('SetupOverlay known states (claim, scanning, reset)', () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Then scan this code with your phone's camera or the Feral File app."
+        "Scan this code with your phone's camera or the Feral File app."
       )
     ).toBeTruthy();
     expect(container.querySelector('svg')).not.toBeNull();
