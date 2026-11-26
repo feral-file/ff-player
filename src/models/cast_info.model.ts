@@ -49,6 +49,12 @@ export interface CastInfo {
   isPaused?: boolean;
   loopMode?: LoopMode;
   shuffle?: boolean;
+  /**
+   * The order a shuffled cast plays in, as positions in `playlist.items`; the
+   * document itself is never reordered. Absent means document order. `index`
+   * counts in this order — read works through `playItems` (utils/playOrder).
+   */
+  playOrder?: number[];
   renderStatus?: RenderStatus;
 
   // DP1

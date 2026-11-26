@@ -42,6 +42,7 @@ import type {
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
 import { resolveHintedSkip } from '@/utils/mediaHealthSkip';
+import { playItems } from '@/utils/playOrder';
 import { BootPlaylistStore } from './canvas/BootPlaylistStore';
 import { CanvasStatus } from './canvas/CanvasStatus';
 import { CursorService } from './canvas/CursorService';
@@ -393,7 +394,7 @@ class CanvasService {
    */
   private moveToArtwork(request: MoveToItemRequest): MoveToItemReply {
     const cast = this.session.castInfo;
-    const items = cast?.playlist?.items ?? [];
+    const items = playItems(cast);
     if (request.index < 0 || !items.length) {
       return this.session.moveToArtwork(request);
     }

@@ -6,6 +6,7 @@ import MessageModal from '@/components/MessageModal';
 import { ErrorType } from '@/models/error.model';
 import { canvasService } from '@/services/CanvasService';
 import { CastCommand } from '@/models';
+import { playItems } from '@/utils/playOrder';
 
 const ErrorPage = () => {
   const searchParams = useSearchParams();
@@ -23,7 +24,7 @@ const ErrorPage = () => {
       return undefined;
     }
 
-    const playingArtwork = castInfo.playlist.items[castInfo.index ?? 0];
+    const playingArtwork = playItems(castInfo)[castInfo.index ?? 0];
     return playingArtwork.title?.trim() ?? undefined;
   }
 

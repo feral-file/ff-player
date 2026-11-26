@@ -56,6 +56,19 @@ the item. The playlist the player holds is the signed document it was handed,
 and `checkStatus` re-emits it, so cast, boot/cast snapshot restore, and the
 timeline all keep the items as received.
 
+Shuffle never reorders the document. The play order lives beside it, as
+`castInfo.playOrder` (positions in `playlist.items`; absent means document
+order, see `src/utils/playOrder.ts`), so the signed playlist is re-emitted and
+persisted as received while shuffled, and `castInfo.index` counts in play order.
+`checkStatus` reports the document as `playlist` and the works in play order as
+`items`: `index` and `skippedIndices` address `items`, and `playlist.items[index]`
+is a different work while shuffled. The play order is persisted with the cast, so
+a restart keeps it and turning shuffle off still restores the document's order.
+A refresh that changes only `defaults` keeps the play order; one with different
+items plays them in their own order. The boot record is a document and carries
+no play order. A stored cast an older build had shuffled in place (`shuffle` with
+no `playOrder`) is restored without its signature.
+
 A source refresh brings its own `defaults`: its items inherit those, never the
 ones of the playlist it replaces, and a change of `defaults` alone is a refresh
 too (an active shuffle keeps its order). New items and defaults are installed

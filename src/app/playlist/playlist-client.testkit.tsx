@@ -22,13 +22,11 @@ import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
 export function canvasInternals(): {
   queuedPlaylistPending: boolean;
   deferredRefreshPlaylist: unknown;
-  originalPlaylistItems: unknown;
   refreshPlaylist: (incoming: DP1Call) => { ok: boolean };
 } {
   return (canvasService as unknown as { session: {
     queuedPlaylistPending: boolean;
     deferredRefreshPlaylist: unknown;
-    originalPlaylistItems: unknown;
     refreshPlaylist: (incoming: DP1Call) => { ok: boolean };
   } }).session;
 }
@@ -102,7 +100,6 @@ export function teardownPlaylistWiringTest(): void {
   const s = canvasInternals();
   s.queuedPlaylistPending = false;
   s.deferredRefreshPlaylist = null;
-  s.originalPlaylistItems = null;
   const g = globalThis as {
     __artworkPlayerProps?: Record<string, unknown>;
     __artworkReloadInvocations?: number;

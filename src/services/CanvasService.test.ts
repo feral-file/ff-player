@@ -6,6 +6,7 @@ import { afterEach,describe,expect,it,vi } from 'vitest';
 import type { PlaybackSession } from './canvas/PlaybackSession';
 import { canvasService } from './CanvasService';
 import { dp1Document, fixtureId, fixtureIds } from '@/testing/dp1Fixtures';
+import { playItems } from '@/utils/playOrder';
 
 const item = (id: string): DP1Item => ({
   id: fixtureId(id),
@@ -470,14 +471,14 @@ describe('CanvasService deferred refresh', () => {
 
     expect(service.setShuffle({ enabled: true })).toEqual({ ok: true });
     const shuffledItems =
-      canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id) ?? [];
+      playItems(canvasService.getCastInfo()).map(entry => entry.id);
 
     expect(service.refreshPlaylist(oldPlaylist)).toEqual({ ok: true });
 
     expect(canvasService.hasQueuedPlaylistPending()).toBe(true);
     expect(canvasService.hasDeferredRefreshPlaylist()).toBe(false);
     expect(canvasService.getCastInfo()?.shuffle).toBe(true);
-    expect(canvasService.getCastInfo()?.playlist?.items?.map(entry => entry.id)).toEqual(
+    expect(playItems(canvasService.getCastInfo()).map(entry => entry.id)).toEqual(
       shuffledItems
     );
   });
