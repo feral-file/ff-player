@@ -61,8 +61,9 @@ ones of the playlist it replaces, and a change of `defaults` alone is a refresh
 too (an active shuffle keeps its order). New items and defaults are installed
 together at the next queued-promotion point, so the work on screen keeps the
 interval it was armed with. The rest of the active playlist's metadata stays,
-and the combined list no longer carries a signature. The boot record stores the
-refreshed document as received.
+and the combined list no longer carries a signature. The boot record stores that
+same combined list (the held-back one when the swap is deferred), so a restart
+restores what the refresh installed.
 
 Snapshots stored by older builds had durations written into the items under the
 original signature; restore drops the signature from any row whose items carry

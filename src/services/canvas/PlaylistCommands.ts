@@ -367,8 +367,9 @@ export class PlaylistCommands {
 
   /**
    * Apply an accepted refresh live, then carry it into the boot record. The
-   * record stores the incoming document as received, so a restart resolves it
-   * against its own defaults, as live playback does.
+   * record takes what the session installed (the deferred list when the swap
+   * waits for the work on screen), not the incoming document, so a restart
+   * restores the same metadata, order, defaults and signature state.
    */
   private applyRefresh(
     playlist: DP1Call,
@@ -377,7 +378,8 @@ export class PlaylistCommands {
   ): DisplayPlaylistReply {
     const applied = this.session.refreshPlaylist(playlist, contentContext);
     if (applied.ok) {
-      this.boot.supersedeBootRecord(bootKey, playlist, contentContext);
+      const installed = this.session.queuedPlaylist() ?? playlist;
+      this.boot.supersedeBootRecord(bootKey, installed, contentContext);
     }
     return applied;
   }

@@ -257,7 +257,7 @@ describe('a refresh that supersedes a boot-backed cast', () => {
     });
   });
 
-  it('stores the refreshed document as received', async () => {
+  it('stores what the refresh installed, deferred or not', async () => {
     const read = bootStore();
     const boot = {
       ...playlist(item('a', 'general')),
@@ -279,7 +279,15 @@ describe('a refresh that supersedes a boot-backed cast', () => {
     await vi.waitFor(() => {
       expect(read()?.playlist.items?.map(value => value.id)).toEqual(fixtureIds('b', 'c'));
     });
-    expect(read()?.playlist).toEqual(refreshed);
+    // The work on screen (`a`) is gone from the new list, so the swap is
+    // deferred: the record takes the held-back list, not the one still live.
+    expect(read()?.playlist).toEqual({
+      ...boot,
+      items: refreshed.items,
+      defaults: refreshed.defaults,
+      signature: undefined,
+      signatures: undefined,
+    });
   });
 
   it('rewrites the boot record when a refresh narrows its content context', async () => {
