@@ -1,18 +1,19 @@
 import type { CastInfo } from '@/models/cast_info.model';
-import type { DP1Item } from '@/models/dp1.model';
+import type { DP1Call, DP1Item } from '@/models/dp1.model';
 import {
   ContentContext,
   ContentPolicy,
   filterContent,
+  stripPlaylistSignature,
 } from '@/services/contentPolicy';
 
 /**
  * The order the wall plays a cast in, kept OUTSIDE its DP-1 document.
  *
- * `cast.playlist` is the signed document as it was admitted: `checkStatus`
- * re-emits it and persistence stores it, so reordering its `items` would
- * publish a signature over bytes nobody signed (DP-1 §7.1). Shuffle therefore
- * writes `cast.playOrder` instead: `playOrder[slot]` is the position in
+ * `cast.playlist` is the signed document as it was admitted and persistence
+ * stores it, so reordering its `items` in place would keep a signature over
+ * bytes nobody signed (DP-1 §7.1). Shuffle therefore writes `cast.playOrder`
+ * instead: `playOrder[slot]` is the position in
  * `playlist.items` played at that slot. Absent means document order.
  *
  * `cast.index` counts slots in PLAY order. Anything that pairs `index` with a
@@ -39,6 +40,20 @@ export function playItems(cast: OrderedCast | null | undefined): DP1Item[] {
   const items = cast?.playlist?.items ?? [];
   const order = cast ? validOrder(cast) : undefined;
   return order ? order.map(at => items[at]) : items;
+}
+
+/**
+ * The playlist as `checkStatus` reports it: the works in the order they play.
+ * While that differs from the document it is a copy nobody signed, so it
+ * carries no signature; otherwise it is the document itself.
+ */
+export function playedPlaylist(cast: OrderedCast): DP1Call | undefined {
+  const document = cast.playlist;
+  const items = playItems(cast);
+  const reordered = items.some((item, at) => item !== document?.items?.[at]);
+  return document && reordered
+    ? stripPlaylistSignature({ ...document, items })
+    : document;
 }
 
 /** Where a play slot sits in the document. */

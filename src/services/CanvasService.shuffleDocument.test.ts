@@ -72,12 +72,14 @@ afterEach(async () => {
 });
 
 describe('shuffle and the signed document', () => {
-  it('reports the document as received and the play order beside it', () => {
+  it('reports an unsigned playlist in play order and keeps the document', () => {
     cast(document());
     shuffle(true);
 
     const status = canvasService.getStatus();
-    expect(status.playlist).toEqual(document());
+    expect(status.playlist?.items).toEqual(status.items);
+    expect(status.playlist).not.toHaveProperty('signatures');
+    expect(canvasService.getCastInfo()?.playlist).toEqual(document());
     // Math.random() === 0 rotates the tail behind the current work.
     expect(ids(status.items)).toEqual(idsOf('a', 'c', 'd', 'b'));
     expect(status.index).toBe(0);
@@ -113,13 +115,26 @@ describe('shuffle and the signed document', () => {
     expect(ids(canvasService.getStatus().items)).toEqual(
       idsOf('a', 'c', 'd', 'b')
     );
-    expect(canvasService.getStatus().playlist).toEqual(document());
+    expect(canvasService.getCastInfo()?.playlist).toEqual(document());
     shuffle(false);
     restart();
     expect(canvasService.getStatus().items).toEqual(document().items);
     expect(canvasService.getStatus().playlist).toEqual(document());
   });
+});
 
+describe('a reported playlist sent back', () => {
+  it('is unchanged content to a refresh', () => {
+    cast(document());
+    shuffle(true);
+    const echoed = canvasService.getStatus().playlist ?? document();
+    refresh(echoed);
+
+    expect(canvasService.getCastInfo()?.playlist).toEqual(document());
+    expect(canvasService.getStatus().playlist).toEqual(echoed);
+    shuffle(false);
+    expect(canvasService.getStatus().playlist).toEqual(document());
+  });
 });
 
 describe('refresh, policy and boot record while shuffled', () => {
@@ -129,8 +144,9 @@ describe('refresh, policy and boot record while shuffled', () => {
     refresh({ ...document(), defaults: { duration: 9 } });
 
     const status = canvasService.getStatus();
-    expect(ids(status.playlist?.items)).toEqual(idsOf(...names));
-    expect(status.playlist).not.toHaveProperty('signatures');
+    const stored = canvasService.getCastInfo()?.playlist;
+    expect(ids(stored?.items)).toEqual(idsOf(...names));
+    expect(stored).not.toHaveProperty('signatures');
     expect(ids(status.items)).toEqual(idsOf('a', 'c', 'd', 'b'));
   });
 
@@ -179,7 +195,9 @@ describe('refresh, policy and boot record while shuffled', () => {
     await contentPolicyStore.set(DEFAULT_CONTENT_POLICY);
 
     const status = canvasService.getStatus();
-    expect(ids(status.playlist?.items)).toEqual(idsOf('a', 'b', 'd'));
+    expect(ids(canvasService.getCastInfo()?.playlist?.items)).toEqual(
+      idsOf('a', 'b', 'd')
+    );
     expect(status.playlist).not.toHaveProperty('signatures');
     expect(ids(status.items)).toEqual(idsOf('a', 'd', 'b'));
     expect(status.index).toBe(0);

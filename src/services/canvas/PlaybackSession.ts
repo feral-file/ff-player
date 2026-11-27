@@ -605,10 +605,15 @@ export class PlaybackSession {
     // defaults only; the rest of the active playlist's metadata stays, so the
     // remote intent stays narrowly scoped. Compared document to document: a
     // shuffle is not a content change. While shuffled, a deferred list is the
-    // latest accepted one, so a re-send of it leaves it pending.
+    // latest accepted one, so a re-send of it leaves it pending. A controller
+    // may also send back what `checkStatus` reported, which is in play order.
     const comparison =
       (prior?.shuffle ? this.deferredRefreshPlaylist : null) ?? currentPlaylist;
-    if (isUnchangedRefresh(comparison, incoming)) {
+    const isEcho = isUnchangedRefresh(
+      { items: playItems(prior), defaults: currentPlaylist.defaults },
+      incoming
+    );
+    if (isEcho || isUnchangedRefresh(comparison, incoming)) {
       // A refresh that matches the document during an active shuffle session
       // must not tear down the queued shuffled state or force the player back
       // to the unshuffled order.

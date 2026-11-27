@@ -9,7 +9,7 @@ import { stripEphemeralCastInfoFields } from '@/utils/castInfo';
 import { deviceFraming } from '@/utils/deviceFraming';
 import { coerceLoopMode } from '@/utils/loopMode';
 import { hintSkippedIndices } from '@/utils/mediaHealthSkip';
-import { playItems } from '@/utils/playOrder';
+import { playedPlaylist, playItems } from '@/utils/playOrder';
 import { coerceTombstoneMode } from '@/utils/tombstoneMode';
 import { contentPolicyStore } from '../ContentPolicyStore';
 import { DisplaySettingsService } from './DisplaySettingsService';
@@ -83,12 +83,11 @@ export class CanvasStatus {
           : undefined,
         contentContext: activeCastInfo?.contentContext,
 
-        playlist: activeCastInfo?.playlist,
+        // The playlist and `items` are what the wall plays, in play order,
+        // which is what `index` counts in. See playedPlaylist for signatures.
+        playlist: activeCastInfo ? playedPlaylist(activeCastInfo) : undefined,
         playlistUrl: activeCastInfo?.playlistUrl,
 
-        // `playlist` is the document as admitted; `items` is what the wall
-        // plays, in play order, and is what `index` counts in. They differ
-        // only while shuffled.
         items: activeCastInfo?.playlist && playItems(activeCastInfo),
         index: activeCastInfo?.index,
         // Never fall back to a persisted castInfo.renderStatus — that value
