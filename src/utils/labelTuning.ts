@@ -30,8 +30,6 @@ export interface LabelTuning {
   titleSeconds: number;
   /** When above 0, every other title card stays this long instead, to compare two lengths. */
   titleSecondsAlt: number;
-  /** Where the title card's QR code leads; empty draws no code. */
-  qrUrl: string;
   /** Show the work's description on the title card; off leaves it to the page behind the QR code. */
   titleDescription: boolean;
   /** The line under the QR code; empty draws none. */
@@ -66,8 +64,7 @@ export const DEFAULT_LABEL_TUNING: LabelTuning = {
   titleEveryWork: false,
   titleSeconds: 10,
   titleSecondsAlt: 0,
-  qrUrl: '',
-  qrCaption: '',
+  qrCaption: 'About this work',
   titleDescription: false,
   cardSeconds: 6,
   noteSeconds: 20,

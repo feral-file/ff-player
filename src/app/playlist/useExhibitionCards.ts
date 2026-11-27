@@ -53,6 +53,48 @@ export function exhibitionName(
   return itemCount > 1 || curated ? title : undefined;
 }
 
+/**
+ * The longest address the title card turns into a QR code. A longer one makes
+ * a code too dense to scan at the card's size, and past a few thousand
+ * characters the encoder throws, which would take the player down with it.
+ */
+export const MAX_LINK_LENGTH = 512;
+
+/**
+ * Where the title card's QR code leads: the first of the playlist's `links`
+ * that is a web address short enough to scan. The playlist's publisher orders
+ * them, so the first is the page they want read first. No such link, no code.
+ */
+export function playlistLink(playlist: DP1Call | undefined): string | undefined {
+  const links: unknown = playlist?.links;
+  if (!Array.isArray(links)) {
+    return undefined;
+  }
+  for (const link of links as ({ url?: unknown } | null)[]) {
+    const url = webAddress(typeof link?.url === 'string' ? link.url : '');
+    if (url) {
+      return url;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The address as the URL parser writes it: ASCII only, so whatever a
+ * playlist puts in `url` (spaces, broken Unicode) cannot make the QR
+ * encoder throw. Not http(s), unparseable or too long: no address.
+ */
+function webAddress(raw: string): string | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw.trim());
+  } catch {
+    return undefined;
+  }
+  const web = parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  return web && parsed.href.length <= MAX_LINK_LENGTH ? parsed.href : undefined;
+}
+
 function noteSeconds(duration: number | undefined, tuning: LabelTuning): number {
   return typeof duration === 'number' && duration > 0
     ? duration
@@ -329,7 +371,7 @@ export function useExhibitionCards(inputs: CardInputs) {
               item?.note?.text ?? item?.inlineManifest?.metadata?.description
             )
           : undefined,
-      link: current.kind === 'title' ? tuning.qrUrl || undefined : undefined,
+      link: current.kind === 'title' ? playlistLink(call) : undefined,
       position,
       curators: curatorNames(call),
       artist: artistName,
@@ -338,7 +380,7 @@ export function useExhibitionCards(inputs: CardInputs) {
       text: note?.text,
       credit: note?.author?.name,
     };
-  }, [steps, step, call, item, clockKey, exhibition, position, artistName, title, tuning.qrUrl, tuning.titleDescription]);
+  }, [steps, step, call, item, clockKey, exhibition, position, artistName, title, tuning.titleDescription]);
 
   // A work or title card with nothing to name says nothing; skip it.
   const names = card?.kind === 'work' || card?.kind === 'title';

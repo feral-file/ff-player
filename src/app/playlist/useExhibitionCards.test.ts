@@ -11,6 +11,8 @@ import {
   cardDescription,
   curatorNames,
   exhibitionName,
+  MAX_LINK_LENGTH,
+  playlistLink,
   stepsFor,
 } from './useExhibitionCards';
 import { dp1Document, fixtureId } from '@/testing/dp1Fixtures';
@@ -70,6 +72,45 @@ describe('stepsFor', () => {
       { kind: 'title', seconds: DEFAULT_LABEL_TUNING.titleSeconds },
     ]);
     expect(stepsFor(call(), undefined, 0, DEFAULT_LABEL_TUNING)).toEqual([]);
+  });
+});
+
+describe('playlistLink', () => {
+  it('leads to the first web address among the playlist links', () => {
+    const links = [
+      { type: 'other', url: 'ipfs://bafy' },
+      { type: 'article', url: ' https://feralfile.com/exhibitions/one ' },
+      { type: 'news', url: 'https://example.com/later' },
+    ];
+    expect(playlistLink(call({ links }))).toBe(
+      'https://feralfile.com/exhibitions/one'
+    );
+  });
+
+  it('has no link for a playlist with none, or with links of the wrong shape', () => {
+    expect(playlistLink(call())).toBeUndefined();
+    expect(playlistLink(undefined)).toBeUndefined();
+    expect(playlistLink(call({ links: [] }))).toBeUndefined();
+    const broken = { links: 'https://feralfile.com/' } as unknown as Partial<DP1Call>;
+    expect(playlistLink(call(broken))).toBeUndefined();
+    const noUrl = { links: [null, { type: 'article' }] } as unknown as Partial<DP1Call>;
+    expect(playlistLink(call(noUrl))).toBeUndefined();
+  });
+});
+
+describe('playlistLink length', () => {
+  it('skips an address too long for a code and takes the next one', () => {
+    const long = `https://example.com/${'a'.repeat(MAX_LINK_LENGTH)}`;
+    expect(playlistLink(call({ links: [{ url: long }] }))).toBeUndefined();
+    const links = [{ url: long }, { url: 'https://feralfile.com/' }];
+    expect(playlistLink(call({ links }))).toBe('https://feralfile.com/');
+  });
+
+  it('hands the encoder plain ASCII whatever the playlist wrote', () => {
+    const links = [{ url: 'https://example.com/\ud800 a' }];
+    const link = playlistLink(call({ links })) ?? '';
+    expect(link).toMatch(/^https:\/\/example\.com\/[\x21-\x7e]+$/);
+    expect(playlistLink(call({ links: [{ url: 'not an address' }] }))).toBeUndefined();
   });
 });
 
