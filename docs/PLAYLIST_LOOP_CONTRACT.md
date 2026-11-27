@@ -53,8 +53,23 @@ then its `override.duration`, then `playlist.defaults.duration`, and only when
 none is set does the slot have no finite duration. It resolves at the point of
 use (`resolveItemDuration` in `src/utils/playlist.ts`) and is never written into
 the item. The playlist the player holds is the signed document it was handed,
-and `checkStatus` re-emits it, so cast, boot/cast snapshot restore, and the
-timeline all keep the items as received.
+and `checkStatus` re-emits it (reordered while shuffled, see below), so cast,
+boot/cast snapshot restore, and the timeline all keep the items as received.
+
+Shuffle never reorders the stored document. The play order lives beside it, as
+`castInfo.playOrder` (positions in `playlist.items`; absent means document
+order, see `src/utils/playOrder.ts`), so the signed playlist is persisted as
+received while shuffled, and `castInfo.index` counts in play order.
+`checkStatus` reports what the wall plays: `playlist.items` and `items` are both
+in play order, which is what `index` and `skippedIndices` address. While that
+order differs from the document, the reported `playlist` carries no signature,
+because nobody signed it. A refresh that sends the reported list back is
+unchanged content. The play order is persisted with the cast, so
+a restart keeps it and turning shuffle off still restores the document's order.
+A refresh that changes only `defaults` keeps the play order; one with different
+items plays them in their own order. The boot record is a document and carries
+no play order. A stored cast an older build had shuffled in place (`shuffle` with
+no `playOrder`) is restored without its signature.
 
 A source refresh brings its own `defaults`: its items inherit those, never the
 ones of the playlist it replaces, and a change of `defaults` alone is a refresh

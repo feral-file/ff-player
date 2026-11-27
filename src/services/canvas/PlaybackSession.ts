@@ -17,6 +17,12 @@ import { stripLegacyCastPlaybackTimeline } from '@/utils/castInfo';
 import { deepEqual } from '@/utils/helper';
 import { coerceLoopMode } from '@/utils/loopMode';
 import {
+  admitCast,
+  documentIndex,
+  playItems,
+  shuffledOrder,
+} from '@/utils/playOrder';
+import {
   normalizePlaylistIndex,
   resolveItemIndexInNewItems,
 } from '@/utils/playlist';
@@ -43,8 +49,6 @@ export class PlaybackSession {
   private currentCast: CastInfo | null = null;
 
   private currentRenderStatus: RenderStatus | undefined;
-
-  private originalPlaylistItems: DP1Item[] | null = null;
 
   private queuedPlaylistPending = false;
 
@@ -81,15 +85,11 @@ export class PlaybackSession {
     const incoming = castInfo;
     const inForce = policyInForce(contentPolicyStore.getSnapshot());
     if (castInfo?.playlist?.items?.length && inForce) {
-      const filtered = filterContent(
-        castInfo.playlist,
+      castInfo = admitCast(
+        castInfo,
         inForce,
-        parseContentContext(castInfo.contentContext),
-        castInfo.index ?? 0
+        parseContentContext(castInfo.contentContext)
       );
-      castInfo = filtered.playlist
-        ? { ...castInfo, playlist: filtered.playlist, index: filtered.index }
-        : null;
     }
     // AFTER filtering, so this sees what the cast actually became: a policy
     // reconciliation that drops the visible work while keeping another is a
@@ -155,10 +155,7 @@ export class PlaybackSession {
     // Queued controller intent is RE-FILTERED, never discarded. A refresh the
     // device accepted is a replacement it promised to make; dropping it because
     // an unrelated setting changed loses that replacement silently and leaves
-    // the stale list playing. The same goes for the unshuffled-order snapshot,
-    // without which a later shuffle-off cannot restore the real order.
-    this.originalPlaylistItems =
-      this.originalPlaylistItems?.filter(keep) ?? null;
+    // the stale list playing.
     const deferred = this.deferredRefreshPlaylist;
     const deferredItems = deferred?.items?.filter(keep) ?? [];
     if (deferred && deferredItems.length) {
@@ -203,7 +200,12 @@ export class PlaybackSession {
     if (!playlist?.items?.length || policy === null) {
       return null;
     }
-    const filtered = filterContent(playlist, policy, context, cast.index ?? 0);
+    const filtered = filterContent(
+      { ...playlist, items: playItems(cast) },
+      policy,
+      context,
+      cast.index ?? 0
+    );
     return filtered.playlist
       ? { items: filtered.playlist.items ?? [], index: filtered.index }
       : null;
@@ -216,13 +218,13 @@ export class PlaybackSession {
   }): boolean {
     return (
       projected.index === (this.currentCast?.index ?? 0) &&
-      deepEqual(projected.items, this.currentCast?.playlist?.items ?? [])
+      deepEqual(projected.items, playItems(this.currentCast))
     );
   }
 
   /** The work the current cast has selected, for displacement detection. */
   public selectedItem(): DP1Item | undefined {
-    const items = this.currentCast?.playlist?.items ?? [];
+    const items = playItems(this.currentCast);
     if (!items.length) {
       return undefined;
     }
@@ -315,8 +317,9 @@ export class PlaybackSession {
   /**
    * The playlist the player should apply when advancing past the current
    * artwork: the privately held one for a deferred refresh (current item absent
-   * from the new list), else castInfo's (immediate refresh or shuffle). Its
-   * items and `defaults` are installed together.
+   * from the new list), else castInfo's (immediate refresh or shuffle). This is
+   * the document; the items to install come from getQueuedPlaylistItems, in
+   * play order, and are installed together with its `defaults`.
    */
   public queuedPlaylist(): DP1Call | undefined {
     return this.deferredRefreshPlaylist?.items?.length
@@ -325,7 +328,10 @@ export class PlaybackSession {
   }
 
   public getQueuedPlaylistItems(): DP1Item[] | null {
-    return this.queuedPlaylist()?.items ?? null;
+    if (this.deferredRefreshPlaylist?.items?.length) {
+      return this.deferredRefreshPlaylist.items;
+    }
+    return this.currentCast?.playlist ? playItems(this.currentCast) : null;
   }
 
   public consumeDeferredRefreshPlaylist(nextIndex: number): DP1Call | null {
@@ -338,6 +344,8 @@ export class PlaybackSession {
     this.setCastInfo({
       ...(this.currentCast ?? {}),
       playlist: pending,
+      // A deferred list is a new document: it plays in its own order.
+      playOrder: undefined,
       index: nextIndex,
       castCommand: CastCommand.updateIndex,
     });
@@ -481,58 +489,31 @@ export class PlaybackSession {
     return { ok: true };
   }
 
+  /**
+   * Shuffle writes a play order beside the document and never touches the
+   * document, so the signed playlist is re-emitted and persisted as received,
+   * and turning shuffle off still restores its order after a restart.
+   */
   public setShuffle(request: SetShuffleRequest): Reply {
-    const currentItems = this.currentCast?.playlist?.items;
-    if (!currentItems?.length || !this.currentCast?.playlist) {
+    const cast = this.currentCast;
+    const length = cast?.playlist?.items?.length ?? 0;
+    if (!cast || !length) {
       console.error('[CanvasService] No playlist to shuffle');
       return { ok: false };
     }
 
     const enabled = (request as unknown as { enabled: boolean }).enabled;
+    // The currently playing slot, so the work on screen stays selected.
+    const slot = normalizePlaylistIndex(cast.index ?? 0, length);
 
-    // Identify the currently playing item so it can be anchored in the new order
-    const currentIndex = normalizePlaylistIndex(
-      this.currentCast.index ?? 0,
-      currentItems.length
-    );
-    const currentItem = currentItems[currentIndex];
-
-    if (enabled) {
-      this.originalPlaylistItems ??= [...currentItems];
-      // Shuffle everything except the current item, keep it at position 0
-      const remaining = currentItems.filter((_, i) => i !== currentIndex);
-      for (let i = remaining.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
-      }
-      this.queuedPlaylistPending = true;
-      this.setCastInfo({
-        ...this.currentCast,
-        castCommand: CastCommand.setShuffle,
-        shuffle: true,
-        index: 0,
-        playlist: {
-          ...this.currentCast.playlist,
-          items: [currentItem, ...remaining],
-        },
-      });
-    } else {
-      const restored = this.originalPlaylistItems ?? currentItems;
-      this.originalPlaylistItems = null;
-      // Find the current item's position in the restored original order
-      const newIndex = Math.max(
-        0,
-        restored.findIndex(item => item.id === currentItem.id)
-      );
-      this.queuedPlaylistPending = true;
-      this.setCastInfo({
-        ...this.currentCast,
-        castCommand: CastCommand.setShuffle,
-        shuffle: false,
-        index: newIndex,
-        playlist: { ...this.currentCast.playlist, items: restored },
-      });
-    }
+    this.queuedPlaylistPending = true;
+    this.setCastInfo({
+      ...cast,
+      castCommand: CastCommand.setShuffle,
+      shuffle: enabled,
+      index: enabled ? 0 : documentIndex(cast, slot),
+      playOrder: enabled ? shuffledOrder(cast, slot) : undefined,
+    });
 
     return { ok: true };
   }
@@ -622,16 +603,20 @@ export class PlaybackSession {
     // Index is remapped by id so getStatus matches the artwork still playing
     // until the player applies the queued list. Refresh replaces items and
     // defaults only; the rest of the active playlist's metadata stays, so the
-    // remote intent stays narrowly scoped.
-    const comparisonItems =
-      prior?.shuffle && this.originalPlaylistItems?.length
-        ? this.originalPlaylistItems
-        : currentPlaylist.items;
-    const comparison = { ...currentPlaylist, items: comparisonItems };
-    if (isUnchangedRefresh(comparison, incoming)) {
-      // A refresh that matches the canonical unshuffled list during an active
-      // shuffle session must not tear down the queued shuffled state or force
-      // the player back to the unshuffled order.
+    // remote intent stays narrowly scoped. Compared document to document: a
+    // shuffle is not a content change. While shuffled, a deferred list is the
+    // latest accepted one, so a re-send of it leaves it pending. A controller
+    // may also send back what `checkStatus` reported, which is in play order.
+    const comparison =
+      (prior?.shuffle ? this.deferredRefreshPlaylist : null) ?? currentPlaylist;
+    const isEcho = isUnchangedRefresh(
+      { items: playItems(prior), defaults: currentPlaylist.defaults },
+      incoming
+    );
+    if (isEcho || isUnchangedRefresh(comparison, incoming)) {
+      // A refresh that matches the document during an active shuffle session
+      // must not tear down the queued shuffled state or force the player back
+      // to the unshuffled order.
       // Identical items can still arrive under a DIFFERENT origin, and that
       // reclassification is the whole point of the refresh. Returning here
       // without publishing it would leave the cast judged under the old
@@ -651,19 +636,14 @@ export class PlaybackSession {
       );
       return { ok: false };
     }
-    if (prior.shuffle) {
-      // While shuffle is active, keep the unshuffled snapshot aligned with the
-      // latest refresh payload so toggling shuffle off restores the refreshed
-      // playlist instead of an older pre-refresh order.
-      this.originalPlaylistItems = [...newItems];
-    }
-    const prevItems = currentPlaylist.items;
-    const playlistForRefresh = refreshedPlaylist(
-      comparison,
-      prevItems,
-      incoming
-    );
-    const items = playlistForRefresh.items ?? [];
+    const prevItems = playItems(prior);
+    const playlistForRefresh = refreshedPlaylist(comparison, incoming);
+    // The play order outlives a refresh of `defaults` alone. New items are a
+    // new list, played in its own order.
+    const playOrder = deepEqual(currentPlaylist.items, newItems)
+      ? prior.playOrder
+      : undefined;
+    const items = playItems({ playlist: playlistForRefresh, playOrder });
 
     const currentItemId = selectedPlaylistItem(prevItems, prior.index)?.id;
 
@@ -697,6 +677,7 @@ export class PlaybackSession {
     this.setCastInfo({
       ...prior,
       playlist: playlistForRefresh,
+      playOrder,
       castCommand: CastCommand.refreshPlaylist,
       index,
     });
@@ -716,10 +697,7 @@ export class PlaybackSession {
     // moveToArtwork(119) mounted item 119 % 50 = 19).
     const queuedInCastInfo =
       this.queuedPlaylistPending && this.deferredRefreshPlaylist === null;
-    if (
-      !(prior?.shuffle && this.originalPlaylistItems?.length) &&
-      !queuedInCastInfo
-    ) {
+    if (!prior?.shuffle && !queuedInCastInfo) {
       this.queuedPlaylistPending = false;
       this.setDeferredRefreshPlaylist(null);
     }
@@ -759,8 +737,8 @@ export class PlaybackSession {
   get renderStatus() {
     return this.currentRenderStatus;
   }
+  /** A new display supersedes anything queued against the previous cast. */
   resetPlaylistOrder(): void {
-    this.originalPlaylistItems = null;
     this.queuedPlaylistPending = false;
     this.setDeferredRefreshPlaylist(null);
   }

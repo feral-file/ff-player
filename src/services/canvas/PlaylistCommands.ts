@@ -18,6 +18,7 @@ import { DP1Action, DP1Call, DP1Item } from '@/models/dp1.model';
 import type { PlaybackOutcomeInput } from '@/models/media_health.model';
 import DeviceManager from '@/utils/DeviceManager';
 import { resolveHintedSkip } from '@/utils/mediaHealthSkip';
+import { playItems } from '@/utils/playOrder';
 import { startItemIndex } from '@/utils/startItem';
 import { normalizePlaylistIndex } from '@/utils/playlist';
 import { contentPolicyStore, policyInForce } from '../ContentPolicyStore';
@@ -258,7 +259,7 @@ export class PlaylistCommands {
     contentContext: ContentContext
   ): DisplayPlaylistReply {
     const policy = this.admissionPolicy();
-    const currentItems = this.session.castInfo?.playlist?.items ?? [];
+    const currentItems = playItems(this.session.castInfo);
     const currentItem = currentItems.at(
       normalizePlaylistIndex(
         this.session.castInfo?.index ?? 0,
@@ -323,7 +324,8 @@ export class PlaylistCommands {
         : filterContent(dp1CallData, policy, contentContext, selected);
     const bootKey = {
       id: this.session.castInfo?.playlistId,
-      items: currentItems,
+      // The boot record is a document, so it is matched in document order.
+      items: this.session.castInfo?.playlist?.items ?? [],
     };
     if (retireCurrent || request.retireBlockedCurrent === true) {
       const currentPlaylistUrl = this.session.castInfo?.playlistUrl;
@@ -367,8 +369,10 @@ export class PlaylistCommands {
 
   /**
    * Apply an accepted refresh live, then carry it into the boot record. The
-   * record takes the list the session composed, not the incoming document, so
-   * metadata, order, defaults and signature state match live playback.
+   * record takes the document the session composed, not the incoming one, so
+   * metadata, defaults and signature state match the live cast. It carries no
+   * play order: while shuffled the record keeps document order, because the
+   * boot display is a Now Display and starts unshuffled.
    *
    * While the swap is deferred, the record already holds the NEW list although
    * the wall still shows the removed work: a restart in that window must not
@@ -442,7 +446,7 @@ export class PlaylistCommands {
     // the same slot. The slots passed over are reported as skip outcomes
     // here, so the timeline, which finds nothing left to skip, does not.
     const currentSelectedItem = selectedPlaylistItem(
-      this.session.castInfo?.playlist?.items,
+      playItems(this.session.castInfo),
       this.session.castInfo?.index
     );
     // A controller's start work is resolved here, against the admitted list:

@@ -53,13 +53,11 @@ vi.mock('@/components/artwork-player/ArtworkPlayer', () => ({
 function canvasInternals(): {
   queuedPlaylistPending: boolean;
   deferredRefreshPlaylist: unknown;
-  originalPlaylistItems: unknown;
   refreshPlaylist: (incoming: DP1Call) => { ok: boolean };
 } {
   return (canvasService as unknown as { session: {
     queuedPlaylistPending: boolean;
     deferredRefreshPlaylist: unknown;
-    originalPlaylistItems: unknown;
     refreshPlaylist: (incoming: DP1Call) => { ok: boolean };
   } }).session;
 }
@@ -141,7 +139,6 @@ function teardownPlaylistWiringTest(): void {
   const s = canvasInternals();
   s.queuedPlaylistPending = false;
   s.deferredRefreshPlaylist = null;
-  s.originalPlaylistItems = null;
   const g = globalThis as {
     __artworkPlayerProps?: Record<string, unknown>;
     __artworkReloadInvocations?: number;
@@ -225,6 +222,32 @@ describe('PlaylistClient — hold completed final timed slot', () => {
       rerender(<PlaylistHarness castInfo={shuffled} />);
 
     expect(canvasService.hasQueuedPlaylistPending()).toBe(false);
+  });
+
+  it('plays a real shuffle in its play order and keeps the document', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const items = [item('a', 1), item('b', 1), item('c', 1)];
+    const initial = displayCast(items, 0, LoopMode.playlist);
+    canvasService.setCastInfo(initial, false);
+    const { rerender } = render(<PlaylistHarness castInfo={initial} />);
+    await advanceMs(0);
+
+    canvasService.processMessage({
+      command: CastCommand.setShuffle,
+      request: { enabled: true },
+    });
+    const shuffled = canvasService.getCastInfo();
+    rerender(<PlaylistHarness castInfo={shuffled} />);
+    await advanceMs(1000);
+
+    // Play order is a, c, b: the slot after the first work is the third item.
+    expect(canvasService.getStatus().index).toBe(1);
+    expect(
+      (globalThis as { __artworkPlayerProps?: Record<string, unknown> })
+        .__artworkPlayerProps?.previewURL
+    ).toContain('/c.jpg');
+    expect(canvasService.getCastInfo()?.playlist?.items).toEqual(items);
+    vi.mocked(Math.random).mockRestore();
   });
 
   it('promotes deferred refreshPlaylist on cast when holding final slot', async () => {

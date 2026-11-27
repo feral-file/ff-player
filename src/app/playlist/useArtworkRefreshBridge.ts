@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { canvasService } from '@/services/CanvasService';
 import { normalizePlaylistIndex } from '@/utils/playlist';
+import { playItems } from '@/utils/playOrder';
 import { DP1Item } from '@/models/dp1.model';
 
 /**
@@ -79,9 +80,9 @@ export function useArtworkRefreshBridge(
   }, [setPreviewURL]);
   const triggerArtworkRefresh = useCallback((): boolean => {
     const cast = canvasService.getCastInfo();
-    const items = cast?.playlist?.items;
+    const items = playItems(cast);
     const rawIndex = cast?.index;
-    if (!items?.length || rawIndex === undefined) {return false;}
+    if (!items.length || rawIndex === undefined) {return false;}
     const currentItem = items.at(normalizePlaylistIndex(rawIndex, items.length));
     const performReload = artworkPerformReloadRef.current;
     if (!currentItem?.source || !performReload) {return false;}

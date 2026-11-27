@@ -9,12 +9,14 @@ import { stripEphemeralCastInfoFields } from '@/utils/castInfo';
 import { deviceFraming } from '@/utils/deviceFraming';
 import { coerceLoopMode } from '@/utils/loopMode';
 import { hintSkippedIndices } from '@/utils/mediaHealthSkip';
+import { playedPlaylist, playItems } from '@/utils/playOrder';
 import { coerceTombstoneMode } from '@/utils/tombstoneMode';
 import { contentPolicyStore } from '../ContentPolicyStore';
 import { DisplaySettingsService } from './DisplaySettingsService';
 import type { MediaHealthHintStore } from './MediaHealthHints';
 import type { PlaybackOutcomeRing } from './PlaybackOutcomes';
 import { PlaybackSession } from './PlaybackSession';
+import { repairStoredCast } from './playlistUpdates';
 /** Projects current device status after the existing synchronous cached-cast recovery step. Render status, outcomes, hint skips, and composition are never restored from storage. */
 export class CanvasStatus {
   // DeviceManager parses persisted JSON on every read, so object identity is
@@ -51,7 +53,7 @@ export class CanvasStatus {
         // Use the shared strip helper so future ephemeral fields stay aligned
         // with AppContext boot and useCastInfo persistence.
         this.session.setCastInfo(
-          stripEphemeralCastInfoFields(storedCastInfo),
+          repairStoredCast(stripEphemeralCastInfoFields(storedCastInfo)),
           false
         );
         this.rejectedCachedCastFingerprint = this.session.renderableCastInfo()
@@ -81,10 +83,12 @@ export class CanvasStatus {
           : undefined,
         contentContext: activeCastInfo?.contentContext,
 
-        playlist: activeCastInfo?.playlist,
+        // The playlist and `items` are what the wall plays, in play order,
+        // which is what `index` counts in. See playedPlaylist for signatures.
+        playlist: activeCastInfo ? playedPlaylist(activeCastInfo) : undefined,
         playlistUrl: activeCastInfo?.playlistUrl,
 
-        items: activeCastInfo?.playlist?.items,
+        items: activeCastInfo?.playlist && playItems(activeCastInfo),
         index: activeCastInfo?.index,
         // Never fall back to a persisted castInfo.renderStatus — that value
         // describes a previous page render, not the current mount lifecycle.
@@ -156,7 +160,7 @@ export class CanvasStatus {
     cast: CastInfo | null = this.session.renderableCastInfo()
   ): number[] {
     return hintSkippedIndices({
-      items: cast?.playlist?.items ?? [],
+      items: playItems(cast),
       index: cast?.index,
       loopMode: coerceLoopMode(cast?.loopMode),
       isBroken: source => this.hints.hint(source) !== undefined,

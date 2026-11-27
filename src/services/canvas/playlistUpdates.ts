@@ -2,6 +2,7 @@ import { NO_DURATION_VALUE } from '@/constants';
 import { CastInfo, RenderStatus } from '@/models';
 import { DP1Call, DP1Item } from '@/models/dp1.model';
 import { deepEqual } from '@/utils/helper';
+import { playItems } from '@/utils/playOrder';
 import { resolveItemDuration } from '@/utils/playlist';
 import { stripPlaylistSignature } from '../contentPolicy';
 
@@ -30,21 +31,18 @@ export function isUnchangedRefresh(
 }
 
 /**
- * The list a refresh installs: the active playlist's metadata with the new
+ * The document a refresh installs: the active playlist's metadata with the new
  * document's items and `defaults`. It is a mix nobody signed, so the signature
- * goes. `comparison` holds the unshuffled items: when only `defaults` changed,
- * the order on screen (`showing`) is kept, so a shuffle is not undone.
+ * goes. A play order is not part of it (see utils/playOrder).
  */
 export function refreshedPlaylist(
-  comparison: DP1Call,
-  showing: DP1Item[],
+  current: DP1Call,
   next: RefreshContent
 ): DP1Call {
-  const defaultsOnly = deepEqual(comparison.items ?? [], next.items ?? []);
   return stripPlaylistSignature({
-    ...comparison,
+    ...current,
     defaults: next.defaults,
-    items: defaultsOnly ? showing : (next.items ?? []),
+    items: next.items ?? [],
   });
 }
 
@@ -58,12 +56,32 @@ export function refreshedPlaylist(
  * itself loses its signature on restore too — the safe direction, since a
  * missing signature claims nothing while a stale one claims a lie.
  */
-export function stripRewrittenSignature(playlist: DP1Call): DP1Call {
+function stripRewrittenSignature(playlist: DP1Call): DP1Call {
   const injected = [NO_DURATION_VALUE, playlist.defaults?.duration];
   const rewritten = playlist.items?.some(
     item => item.duration !== undefined && injected.includes(item.duration)
   );
   return rewritten ? stripPlaylistSignature(playlist) : playlist;
+}
+
+/**
+ * A stored cast as it may be re-emitted: signatures an older build left on a
+ * document it had rewritten are dropped. Besides the injected durations, older
+ * builds shuffled `playlist.items` themselves; such a row is `shuffle` with no
+ * `playOrder`. This build never signs-and-reorders, and its own rows in that
+ * shape (new items arrived while shuffled) already carry no signature. A row an
+ * older build saved after shuffle was turned off again cannot be told apart.
+ */
+export function repairStoredCast(cast: CastInfo): CastInfo {
+  const playlist = cast.playlist;
+  if (!playlist?.items?.length) {
+    return cast;
+  }
+  const reordered = cast.shuffle === true && cast.playOrder === undefined;
+  const repaired = reordered
+    ? stripPlaylistSignature(playlist)
+    : stripRewrittenSignature(playlist);
+  return repaired === playlist ? cast : { ...cast, playlist: repaired };
 }
 
 /**
@@ -113,10 +131,10 @@ export function resolveRenderStatusForCastInfo(
   currentRenderStatus: RenderStatus | undefined
 ): RenderStatus | undefined {
   const previousItem = selectedPlaylistItem(
-    previous?.playlist?.items,
+    playItems(previous),
     previous?.index
   );
-  const nextItem = selectedPlaylistItem(next.playlist?.items, next.index);
+  const nextItem = selectedPlaylistItem(playItems(next), next.index);
 
   if (
     previousItem !== undefined &&

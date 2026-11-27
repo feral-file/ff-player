@@ -8,6 +8,7 @@ import { deepEqual } from '@/utils/helper';
 import DeviceManager from '@/utils/DeviceManager';
 import { coerceLoopMode } from '@/utils/loopMode';
 import { resolveHintedSkip } from '@/utils/mediaHealthSkip';
+import { playItems } from '@/utils/playOrder';
 import type { SlotMergedDisplay } from '@/utils/playlist';
 import {
   isNoDurationItem,
@@ -166,7 +167,7 @@ export class PlaylistTimeline {
       resolveQueuedPlaylistNextIndex({
         targetIndex,
         queuedPlaylist,
-        previousItems: currentCastInfo?.playlist?.items,
+        previousItems: playItems(currentCastInfo),
         hasDeferredRefresh,
         currentItemId: this.currentItem?.id,
         keepCurrent,
@@ -446,15 +447,16 @@ export class PlaylistTimeline {
     this.holding = false;
     this.ports.clearMergedDisplayForNewCast();
     this.loop = coerceLoopMode(castInfo.loopMode);
-    if (castInfo.playlist?.items?.length) {
-      this.installDefaults(castInfo.playlist.defaults ?? null);
+    const items = playItems(castInfo);
+    if (items.length) {
+      this.installDefaults(castInfo.playlist?.defaults ?? null);
       // A fresh array, so a re-issued cast of the same list re-enters its slot.
-      this.ui.setPlaylist([...castInfo.playlist.items]);
+      this.ui.setPlaylist([...items]);
       const startIndex = normalizePlaylistIndex(
         castInfo.index ?? 0,
-        castInfo.playlist.items.length
+        items.length
       );
-      const playableIndex = this.playable(startIndex, castInfo.playlist.items);
+      const playableIndex = this.playable(startIndex, items);
       if (playableIndex === startIndex) {
         this.ui.setIndex(startIndex);
       } else {
@@ -467,16 +469,16 @@ export class PlaylistTimeline {
     }
   }
   private replaceQueued(castInfo: CastInfo) {
-    if (castInfo.playlist?.items?.length) {
+    const incoming = playItems(castInfo);
+    if (incoming.length) {
       // See isSourceReplacement: a same-id source swap must hand over now.
-      const incoming = castInfo.playlist.items;
       if (
         isSourceReplacement(
           this.items[normalizePlaylistIndex(this.index, this.items.length)],
           incoming
         )
       ) {
-        this.installDefaults(castInfo.playlist.defaults ?? null);
+        this.installDefaults(castInfo.playlist?.defaults ?? null);
         this.ui.setPlaylist([...incoming]);
         // Canvas remaps the selection by id, so a refresh that also
         // reorders moves it. Installing the list without the resolved
@@ -526,8 +528,8 @@ export class PlaylistTimeline {
     }
 
     this.holding = false;
-    const items = castInfo.playlist?.items;
-    if (!items?.length) {
+    const items = playItems(castInfo);
+    if (!items.length) {
       this.ui.setIndex(castInfo.index);
       return;
     }

@@ -5,7 +5,7 @@ import { contentPolicyStore } from '@/services/ContentPolicyStore';
 import { stripEphemeralCastInfoFields } from '@/utils/castInfo';
 import DeviceManager from '@/utils/DeviceManager';
 import { normalizePlaylistIndex } from '@/utils/playlist';
-import { stripRewrittenSignature } from '@/services/canvas/playlistUpdates';
+import { repairStoredCast } from '@/services/canvas/playlistUpdates';
 interface BootPorts {
   initializeDisplaySettings: () => Promise<void>;
   setInitialized: (value: boolean) => void;
@@ -208,12 +208,7 @@ export class BootHydration {
 
       // Stored records are restored as they are — durations are resolved by
       // the timers at the point of use, never written into the document.
-      if (castInfo.playlist?.items?.length) {
-        castInfo = {
-          ...castInfo,
-          playlist: stripRewrittenSignature(castInfo.playlist),
-        };
-      }
+      castInfo = repairStoredCast(castInfo);
 
       if (castInfo.playlist?.items?.length && castInfo.index !== undefined) {
         const normalizedIndex = normalizePlaylistIndex(
