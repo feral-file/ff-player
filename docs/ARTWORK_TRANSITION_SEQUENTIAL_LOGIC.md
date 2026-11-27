@@ -135,8 +135,9 @@ A still's or a video's resampling is decided per source: the work's
 measures the source (an image's natural size, a video's frame size) against
 its box in device pixels on every load, frame-size change (an HLS rendition
 switch fires `resize`), box resize and pixel-density change, and draws hard
-edges from a 2x enlargement up (`HARD_EDGE_MIN_ENLARGEMENT`) and smooths below
-it. Never hard edges on a reduction: Chromium's `pixelated` uses
+edges from a 4x enlargement up (`HARD_EDGE_MIN_ENLARGEMENT`) and smooths below
+it, so a photograph of 540 to 1080 px across stays smooth at Fill while pixel
+art keeps its edges. Never hard edges on a reduction: Chromium's `pixelated` uses
 nearest-neighbor when shrinking too, which aliases any source larger than the
 screen. Software works keep the browser's own resampling.
 

@@ -2,7 +2,7 @@
  * Contract for how a still is resampled. Smoothing turns enlarged pixel art
  * and low-resolution works to mush; nearest-neighbor on a reduction aliases
  * any image larger than the screen, because Chromium's `pixelated` applies to
- * shrinking too. So the player draws hard edges from a 2x enlargement up,
+ * shrinking too. So the player draws hard edges from a 4x enlargement up,
  * smooths below it, and lets a work's own `pixelated` win in every case.
  */
 import { act, renderHook } from '@testing-library/react';
@@ -66,6 +66,36 @@ describe('resolveImageRendering', () => {
     expect(resolveImageRendering(undefined, slight)).toBe('auto');
     expect(resolveImageRendering(undefined, 0.5)).toBe('auto');
     expect(resolveImageRendering(undefined, 0)).toBe('auto');
+  });
+
+  it('smooths a portrait photograph cropped to a square display', () => {
+    // feral-file/feral-file#3645: a 1000 x 1500 photo at Fill on a 2160 px
+    // square is enlarged 2.16x by its width and was drawn in hard blocks.
+    const square = { width: 2160, height: 2160 };
+    const photo = { width: 1000, height: 1500 };
+    const fill = imageEnlargement(photo, square, 'cover');
+    expect(fill).toBeCloseTo(2.16, 2);
+    expect(resolveImageRendering(undefined, fill)).toBe('auto');
+    // Just under the line stays smooth; a 540 px wide one crosses it.
+    expect(resolveImageRendering(undefined, 3.99)).toBe('auto');
+    const narrow = imageEnlargement(
+      { width: 540, height: 810 },
+      square,
+      'cover'
+    );
+    expect(resolveImageRendering(undefined, narrow)).toBe('pixelated');
+  });
+
+  it('keeps pixel art hard-edged on a 4K screen', () => {
+    // A 24 px punk and a 64 px sprite, fitted.
+    for (const side of [24, 64, 256]) {
+      const art = imageEnlargement(
+        { width: side, height: side },
+        screen4K,
+        'contain'
+      );
+      expect(resolveImageRendering(undefined, art)).toBe('pixelated');
+    }
   });
 
   it("lets the work's pixelated win at any size", () => {
@@ -175,8 +205,8 @@ describe('useImageRendering', () => {
       const dpr = vi
         .spyOn(window, 'devicePixelRatio', 'get')
         .mockReturnValue(1);
-      // 480 px drawn into 720 CSS px: 1.5x at density 1, 3x at density 2.
-      const { img } = sizedImage(480, 720);
+      // 240 px drawn into 720 CSS px: 3x at density 1, 6x at density 2.
+      const { img } = sizedImage(240, 720);
       const ref = { current: img }; // stable, like the slot's createRef
       const { result, unmount } = renderHook(() =>
         useImageRendering(ref, undefined, 'contain')
